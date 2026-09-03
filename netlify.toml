@@ -1,0 +1,33 @@
+# OpenTakeoff — one-click static deploy.
+# The app lives in web/ and builds to web/dist/. The only server code is the
+# gated schedule-scan function (web/netlify/functions/); it stays dark unless
+# GEMINI_API_KEY is set, so a default deploy is still fully static.
+[build]
+  base    = "web"
+  command = "npm run build"
+  publish = "dist"
+
+# Serverless functions live under the build base (web/netlify/functions).
+[functions]
+  directory    = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Gated "Import from scanned schedule" — must precede the SPA catch-all, else
+# /* swallows it and the POST returns index.html.
+[[redirects]]
+  from   = "/ai/parse-schedule"
+  to     = "/.netlify/functions/parse-schedule"
+  status = 200
+
+# Single-page app: serve index.html for any path.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+# Security headers live in web/public/_headers (copied into dist/ at build) —
+# the ONE source of truth. Do not add a [[headers]] block here: two CSP
+# headers on the same response are each enforced by the browser (an
+# intersection), and this block used to lack the Google sign-in origins
+# _headers allows, which silently broke sign-in/webfonts via that
+# intersection. See web/public/_headers for the full policy + rationale.
