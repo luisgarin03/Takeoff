@@ -5103,17 +5103,19 @@ export default function TakeoffCanvas() {
         </div>
       )}
 
-      <button
-        type="button"
-        className={`toolbar-visibility-toggle${toolbarHidden ? " is-hidden" : ""}`}
-        onClick={() => setToolbarHidden((hidden) => !hidden)}
-        title={toolbarHidden ? "Show toolbar" : "Hide toolbar"}
-        aria-label={toolbarHidden ? "Show toolbar" : "Hide toolbar"}
-        aria-pressed={toolbarHidden}
-        style={{ top: toolbarHidden ? 10 : Math.max(toolbarHeight + 6, 10) }}
-      >
-        <Icon name={toolbarHidden ? "chevronDown" : "chevronUp"} size={16} />
-      </button>
+      {view === "canvas" && sheets.length > 0 && (
+        <button
+          type="button"
+          className={`toolbar-visibility-toggle${toolbarHidden ? " is-hidden" : ""}`}
+          onClick={() => setToolbarHidden((hidden) => !hidden)}
+          title={toolbarHidden ? "Show toolbar" : "Hide toolbar"}
+          aria-label={toolbarHidden ? "Show toolbar" : "Hide toolbar"}
+          aria-pressed={toolbarHidden}
+          style={{ top: toolbarHidden ? 10 : Math.max(toolbarHeight + 6, 10) }}
+        >
+          <Icon name={toolbarHidden ? "chevronDown" : "chevronUp"} size={16} />
+        </button>
+      )}
 
       {/* canvas + issue desk */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
@@ -5726,7 +5728,7 @@ export default function TakeoffCanvas() {
               and the composed click never reaches these buttons. Right/middle/
               Space presses still bubble so a pan can start on top of the stack,
               and dblclick is stopped so rapid zoom clicks can't finishShape() */}
-          <div onPointerDown={(e) => { if (e.button === 0 && !spaceRef.current) e.stopPropagation(); }} onDoubleClick={(e) => e.stopPropagation()}
+          <div className="canvas-zoom-rail" onPointerDown={(e) => { if (e.button === 0 && !spaceRef.current) e.stopPropagation(); }} onDoubleClick={(e) => e.stopPropagation()}
             style={{ position: "absolute", left: 14, bottom: 14, display: "flex", flexDirection: "column", gap: 6 }}>
             {[["+", 1.25], ["−", 0.8]].map(([lbl, f]) => (
               <button key={lbl} onClick={() => { const r = containerRef.current.getBoundingClientRect(); zoomAround(r.width / 2, r.height / 2, f); }}
@@ -5898,7 +5900,7 @@ export default function TakeoffCanvas() {
             style). Moved out of the toolbar so it never wraps a third row. The
             takeoffs toggle mirrors the DOCKED panel's collapsed pref — the rail
             rides the canvas edge, so it stays visible either way. */}
-        <div style={{ position: "absolute", right: 14, bottom: 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
+        <div className="canvas-panel-rail" style={{ position: "absolute", right: 14, bottom: 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
           {panelBtn(() => setLeftTab((t) => (t === "markup" ? null : "markup")), "markup", "Markups on these sheets (clouds, callouts, notes)", leftTab === "markup", markupCount)}
           {panelBtn(() => setLeftTab((t) => (t === "stamp" ? null : "stamp")), "stamp", "Stamps — reusable annotations dropped click-to-place", leftTab === "stamp", stampLib.stamps.length)}
           {panelBtn(() => setLeftTab((t) => (t === "rfi" ? null : "rfi")), "rfi", "RFI register — raise, track, and export Requests For Information", leftTab === "rfi", rfis.length)}

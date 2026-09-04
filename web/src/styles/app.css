@@ -454,6 +454,10 @@ select {
 }
 
 @media (max-width: 760px) {
+  .app-shell {
+    height: 100dvh !important;
+  }
+
   .glass-toolbar-stack {
     left: 0 !important;
     right: 0 !important;
@@ -473,6 +477,20 @@ select {
   .glass-toolbar-strip {
     padding-left: 10px !important;
     padding-right: 10px !important;
+  }
+
+  .canvas-zoom-rail,
+  .canvas-panel-rail {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+    gap: 5px !important;
+  }
+
+  .canvas-zoom-rail {
+    left: 10px !important;
+  }
+
+  .canvas-panel-rail {
+    right: 10px !important;
   }
 }
 
