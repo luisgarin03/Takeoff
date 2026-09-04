@@ -4773,7 +4773,7 @@ export default function TakeoffCanvas() {
             />
             {/* highlighter style popover — visible while the tool is armed (hatch-picker chrome) */}
             {tool === "highlighter" && (
-              <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 30, background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "0 6px 22px rgba(0,0,0,.16)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 7 }}>
+              <div className="tool-menu-popover" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 90, background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "0 6px 22px rgba(0,0,0,.16)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 7 }}>
                 <div style={{ display: "flex", gap: 6 }} title="Ink">
                   {HL_INKS.map((c) => (
                     <button key={c} onClick={() => setHlStyle((st) => ({ ...st, color: c }))}

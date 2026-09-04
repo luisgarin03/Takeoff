@@ -286,7 +286,19 @@ function AddValueInput({ onAdd }) {
 // hatch-popover open state; everything else flows through the passed handlers.
 export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondParam, onAssignAttr, conditionColumns = [], layout = "stack" }) {
   const [hatchOpen, setHatchOpen] = useState(false);
+  const hatchRef = useRef(null);
   const activeColor = c.color || "#c96442";
+  useEffect(() => {
+    if (!hatchOpen) return;
+    const onDown = (e) => { if (hatchRef.current && !hatchRef.current.contains(e.target)) setHatchOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setHatchOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [hatchOpen]);
   // Two layouts, one editor. "stack" (docked panel, narrow) stacks the groups
   // vertically; "row" (top-bar band, wide) flows them left-to-right so they use
   // the horizontal space instead of clumping in a corner, split by thin rules.
@@ -326,14 +338,14 @@ export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondPara
       </div>
       {isRow && rule()}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, position: "relative" }}>
+        <span ref={hatchRef} style={{ display: "flex", alignItems: "center", gap: 4, position: "relative" }}>
           <button onClick={() => setHatchOpen((v) => !v)} title="Choose a hatch pattern"
             style={{ display: "flex", alignItems: "center", gap: 5, padding: "2px 7px 2px 2px", borderRadius: 0, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", lineHeight: 0 }}>
             <span style={{ borderRadius: 4, overflow: "hidden", lineHeight: 0 }}><HatchSwatch type={c.hatch || "solid"} line={c.color} fill={c.fill} /></span>
             <span style={{ fontSize: 10.5, color: "var(--ink-muted)", lineHeight: 1 }}>{(HATCHES.find((h) => h.id === (c.hatch || "solid")) || {}).label || "Solid"} ▾</span>
           </button>
           {hatchOpen && (
-            <div style={{ position: "absolute", top: 26, left: 0, zIndex: 30, display: "grid", gridTemplateColumns: "repeat(6, auto)", gap: 4, padding: 8, background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "var(--shadow-pop)" }}>
+            <div className="tool-menu-popover" style={{ position: "absolute", top: 26, left: 0, zIndex: 90, display: "grid", gridTemplateColumns: "repeat(6, auto)", gap: 4, padding: 8, background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "var(--shadow-pop)" }}>
               {HATCHES.map((h) => {
                 const hOn = (c.hatch || "solid") === h.id;
                 return <button key={h.id} title={h.label} onClick={() => { onUpdateCond({ hatch: h.id }); setHatchOpen(false); }} style={{ padding: 1, borderRadius: 0, border: hOn ? `2px solid ${activeColor}` : "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", lineHeight: 0 }}><HatchSwatch type={h.id} line={c.color} fill={c.fill} /></button>;
