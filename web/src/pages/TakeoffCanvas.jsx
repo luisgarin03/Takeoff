@@ -4539,8 +4539,8 @@ export default function TakeoffCanvas() {
   // ── two-deck toolbar (issue #61) ───────────────────────────────────────────
   // drafting-style group caption floated above a deck-2 cluster
   const cluster = (cap, children, style) => (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 7, position: "relative", paddingTop: 2, ...style }}>
-      <span style={{ position: "absolute", top: -13, left: 1, fontFamily: "var(--f-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--ink-muted)", whiteSpace: "nowrap", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{cap}</span>
+    <span className="toolbar-cluster" style={{ display: "inline-flex", alignItems: "center", gap: 7, position: "relative", paddingTop: 2, ...style }}>
+      <span className="toolbar-cluster-label" style={{ position: "absolute", top: -13, left: 1, fontFamily: "var(--f-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--ink-muted)", whiteSpace: "nowrap", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{cap}</span>
       {children}
     </span>
   );
@@ -4713,7 +4713,7 @@ export default function TakeoffCanvas() {
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page >= pageCount) ? 0.4 : 1 }}><Icon name="chevronRight" size={12} /></button>
           </span>
         )}
-        <div style={{ flex: 1 }} />
+        <div className="toolbar-spacer" style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>{saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}</span>
         <button onClick={toggleTheme} title="App theme — light / dark chrome (sheets unaffected; use ☾ on the canvas to invert the print)"
           aria-label="App theme — light / dark chrome" aria-pressed={theme === "dark"}
@@ -5094,7 +5094,7 @@ export default function TakeoffCanvas() {
        {/* docked LEFT panel — one of Markups/Stamps/RFIs at a time. Reflows the
            canvas (a flex sibling), mirroring the docked Takeoffs panel on the right. */}
        {leftTab && (
-         <div style={{ width: 360, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--ink-faint)", background: "var(--paper-bright)", overflow: "hidden", minHeight: 0 }}>
+         <div className="glass-drawer glass-drawer-markups" style={{ width: 360, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--ink-faint)", background: "var(--paper-bright)", overflow: "hidden", minHeight: 0 }}>
            {/* tab strip */}
            <div style={{ display: "flex", alignItems: "stretch", background: "var(--cobalt)", color: "var(--accent-contrast)" }}>
              {[{ id: "markup", label: "Markups", n: markupCount }, { id: "stamp", label: "Stamps", n: stampLib.stamps.length }, { id: "rfi", label: "RFIs", n: rfis.length }].map((t) => (

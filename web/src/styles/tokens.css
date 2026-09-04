@@ -56,6 +56,11 @@
   --glass-control-border: rgba(255, 255, 255, .20);
   --glass-control-text: #ffffff;
   --glass-control-muted: rgba(255, 255, 255, .70);
+  --glass-drawer-bg: rgba(250, 252, 255, .72);
+  --glass-drawer-header: rgba(248, 250, 255, .50);
+  --glass-drawer-border: rgba(112, 124, 145, .34);
+  --glass-drawer-highlight: rgba(255, 255, 255, .70);
+  --glass-drawer-shadow: 0 18px 42px rgba(31, 42, 68, .14);
 
   /* type */
   --f-display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
@@ -150,6 +155,11 @@
     --glass-control-border: rgba(255, 255, 255, .18);
     --glass-control-text: #ffffff;
     --glass-control-muted: rgba(255, 255, 255, .68);
+    --glass-drawer-bg: rgba(27, 28, 30, .74);
+    --glass-drawer-header: rgba(34, 36, 39, .70);
+    --glass-drawer-border: rgba(255, 255, 255, .18);
+    --glass-drawer-highlight: rgba(255, 255, 255, .14);
+    --glass-drawer-shadow: 0 18px 46px rgba(0, 0, 0, .34);
   }
 }
 

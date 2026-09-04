@@ -647,7 +647,7 @@ function TakeoffsPanel({
 
   if (!open) return null;
   return (
-    <div ref={rootRef} style={{ width, flexShrink: 0, display: "flex", background: "var(--paper-bright)", borderLeft: "1px solid var(--ink-faint)", fontSize: 12.5 }}>
+    <div ref={rootRef} className="glass-drawer glass-drawer-conditions" style={{ width, flexShrink: 0, display: "flex", background: "var(--paper-bright)", borderLeft: "1px solid var(--ink-faint)", fontSize: 12.5 }}>
       <div onPointerDown={onResizeDown} onPointerMove={onResizeMove} onPointerUp={onResizeEnd}
         onPointerCancel={onResizeEnd} onLostPointerCapture={onResizeEnd}
         title="Drag to resize"

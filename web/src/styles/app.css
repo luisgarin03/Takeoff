@@ -304,6 +304,52 @@ select {
   z-index: 90 !important;
 }
 
+.glass-drawer {
+  position: relative;
+  z-index: 120;
+  background:
+    linear-gradient(180deg, var(--glass-drawer-highlight), transparent 34%),
+    var(--glass-drawer-bg) !important;
+  border-color: var(--glass-drawer-border) !important;
+  box-shadow:
+    inset 0 1px 0 var(--glass-drawer-highlight),
+    var(--glass-drawer-shadow);
+  backdrop-filter: blur(22px) saturate(1.28);
+  -webkit-backdrop-filter: blur(22px) saturate(1.28);
+  color: var(--ink);
+}
+
+.glass-drawer-markups > div:first-child,
+.glass-drawer-agent > div:first-child,
+.glass-drawer-conditions > div:nth-child(2) > div:first-child {
+  background:
+    linear-gradient(180deg, var(--glass-drawer-highlight), transparent 52%),
+    var(--glass-drawer-header) !important;
+  border-bottom: 1px solid var(--glass-drawer-border);
+  color: var(--ink) !important;
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+}
+
+.glass-drawer-markups > div:first-child button,
+.glass-drawer-agent > div:first-child button,
+.glass-drawer-conditions > div:nth-child(2) > div:first-child button,
+.glass-drawer-markups > div:first-child strong,
+.glass-drawer-agent > div:first-child strong {
+  color: var(--ink) !important;
+}
+
+:root[data-theme="dark"] .glass-drawer-markups > div:first-child,
+:root[data-theme="dark"] .glass-drawer-agent > div:first-child,
+:root[data-theme="dark"] .glass-drawer-conditions > div:nth-child(2) > div:first-child,
+:root[data-theme="dark"] .glass-drawer-markups > div:first-child button,
+:root[data-theme="dark"] .glass-drawer-agent > div:first-child button,
+:root[data-theme="dark"] .glass-drawer-conditions > div:nth-child(2) > div:first-child button,
+:root[data-theme="dark"] .glass-drawer-markups > div:first-child strong,
+:root[data-theme="dark"] .glass-drawer-agent > div:first-child strong {
+  color: var(--glass-control-text) !important;
+}
+
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-toolbar {
     background: var(--paper-bright) !important;
@@ -311,16 +357,52 @@ select {
   .glass-toolbar-primary {
     background: var(--paper-shadow) !important;
   }
+  .glass-drawer {
+    background: var(--paper-bright) !important;
+  }
 }
 
 @media (max-width: 1100px) {
   .glass-toolbar {
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    row-gap: 10px;
+    white-space: normal !important;
+    overflow: visible;
   }
-  .glass-toolbar::-webkit-scrollbar {
-    display: none;
+
+  .glass-toolbar > * {
+    max-width: 100%;
+  }
+
+  .glass-toolbar-secondary {
+    padding-top: 14px !important;
+  }
+
+  .glass-toolbar .toolbar-cluster {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+    row-gap: 5px;
+    padding-top: 16px !important;
+  }
+
+  .glass-toolbar .toolbar-cluster-label {
+    top: 0 !important;
+    max-width: calc(100vw - 32px) !important;
+    line-height: 1;
+  }
+
+  .glass-toolbar > div[style*="flex: 1"] {
+    flex-basis: 18px;
+    min-width: 18px;
+  }
+}
+
+@media (max-width: 900px) {
+  .glass-toolbar-primary .toolbar-spacer {
+    flex-basis: 100% !important;
+    min-width: 100% !important;
+    height: 0;
   }
 }
 
