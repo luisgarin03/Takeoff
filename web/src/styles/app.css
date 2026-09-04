@@ -286,6 +286,16 @@ select {
   color: var(--ink-muted) !important;
 }
 
+:root:not([data-theme="dark"]) .glass-toolbar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .42), rgba(245, 248, 252, .18)),
+    linear-gradient(180deg, var(--glass-toolbar-highlight), transparent 42%),
+    var(--glass-toolbar-secondary) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .86),
+    0 14px 34px rgba(31, 42, 68, .14);
+}
+
 :root[data-theme="dark"] .glass-toolbar button:not([title^="#"]):not(.sheet-tab-button):not(.sheet-tab-icon),
 :root[data-theme="dark"] .glass-toolbar input,
 :root[data-theme="dark"] .glass-toolbar select {
@@ -308,6 +318,16 @@ select {
   background: var(--cobalt) !important;
   border-color: var(--cobalt) !important;
   color: var(--accent-contrast) !important;
+}
+
+:root[data-theme="dark"] .glass-toolbar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(0, 0, 0, .18)),
+    linear-gradient(180deg, var(--glass-toolbar-highlight), transparent 42%),
+    var(--glass-toolbar-secondary) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 14px 34px rgba(0, 0, 0, .28);
 }
 
 :root[data-theme="dark"] .glass-toolbar input::placeholder {
