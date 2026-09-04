@@ -51,7 +51,7 @@
   --glass-toolbar-border: rgba(112, 124, 145, .34);
   --glass-toolbar-highlight: rgba(255, 255, 255, .88);
   --glass-toolbar-shadow: 0 14px 34px rgba(31, 42, 68, .16);
-  --glass-toolbar-blur: 34px;
+  --glass-toolbar-blur: 50px;
   --glass-toolbar-saturate: 1.45;
   --glass-control-bg: rgba(32, 34, 38, .86);
   --glass-control-bg-hover: rgba(21, 23, 27, .92);
