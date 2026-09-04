@@ -221,6 +221,9 @@ export default function TakeoffCanvas() {
   const [err, setErr] = useState("");
 
   const [tool, setTool] = useState("pan");
+  const [toolbarHidden, setToolbarHidden] = useState(false);
+  const [toolbarHeight, setToolbarHeight] = useState(0);
+  const toolbarStackRef = useRef(null);
   const [panelImgs, setPanelImgs] = useState({}); // { sheetKey: {w,h} } rendered bitmap dims per panel
   const [tf, setTf] = useState({ x: 0, y: 0, scale: 1 }); // render mirror of tfRef
 
@@ -305,6 +308,16 @@ export default function TakeoffCanvas() {
   const [agentRunning, setAgentRunning] = useState(false);
   const [showAiSettings, setShowAiSettings] = useState(false); // BYO-key config modal (ai.js seam)
   const agentAbortRef = useRef(null);                     // live AbortController while a run is in flight
+  useEffect(() => {
+    const el = toolbarStackRef.current;
+    if (!el) return;
+    const read = () => setToolbarHeight(el.getBoundingClientRect().height || 0);
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    window.addEventListener("resize", read);
+    return () => { ro.disconnect(); window.removeEventListener("resize", read); };
+  }, []);
   // Live mirror of the render-scope state the agent's capability closures read:
   // the loop runs across many awaits, so closures must read CURRENT state, not
   // the run-click render's. Updated every render (cheap object build).
@@ -4663,7 +4676,8 @@ export default function TakeoffCanvas() {
           conditional UI renders only into deck 2's reserved ACTION slot, so no
           control ever changes position. */}
       <div
-        className="glass-toolbar-stack"
+        ref={toolbarStackRef}
+        className={`glass-toolbar-stack${toolbarHidden ? " is-hidden" : ""}`}
         style={{
           left: leftTab ? 360 : 0,
           right: (takeoffsOpen ? panelW : 0) + (agentOpen ? 340 : 0),
@@ -5088,6 +5102,18 @@ export default function TakeoffCanvas() {
           )}
         </div>
       )}
+
+      <button
+        type="button"
+        className={`toolbar-visibility-toggle${toolbarHidden ? " is-hidden" : ""}`}
+        onClick={() => setToolbarHidden((hidden) => !hidden)}
+        title={toolbarHidden ? "Show toolbar" : "Hide toolbar"}
+        aria-label={toolbarHidden ? "Show toolbar" : "Hide toolbar"}
+        aria-pressed={toolbarHidden}
+        style={{ top: toolbarHidden ? 10 : Math.max(toolbarHeight + 6, 10) }}
+      >
+        <Icon name={toolbarHidden ? "chevronDown" : "chevronUp"} size={16} />
+      </button>
 
       {/* canvas + issue desk */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
@@ -5872,7 +5898,7 @@ export default function TakeoffCanvas() {
             style). Moved out of the toolbar so it never wraps a third row. The
             takeoffs toggle mirrors the DOCKED panel's collapsed pref — the rail
             rides the canvas edge, so it stays visible either way. */}
-        <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
+        <div style={{ position: "absolute", right: 14, bottom: 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
           {panelBtn(() => setLeftTab((t) => (t === "markup" ? null : "markup")), "markup", "Markups on these sheets (clouds, callouts, notes)", leftTab === "markup", markupCount)}
           {panelBtn(() => setLeftTab((t) => (t === "stamp" ? null : "stamp")), "stamp", "Stamps — reusable annotations dropped click-to-place", leftTab === "stamp", stampLib.stamps.length)}
           {panelBtn(() => setLeftTab((t) => (t === "rfi" ? null : "rfi")), "rfi", "RFI register — raise, track, and export Requests For Information", leftTab === "rfi", rfis.length)}

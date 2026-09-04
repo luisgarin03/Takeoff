@@ -43,6 +43,7 @@ export const icons = {
   sheets: (s) => <I size={s}><rect x="4" y="4" width="7" height="7" /><rect x="13" y="4" width="7" height="7" /><rect x="4" y="13" width="7" height="7" /><rect x="13" y="13" width="7" height="7" /></I>,
   sideBySide: (s) => <I size={s}><rect x="4" y="5" width="7" height="14" /><rect x="13" y="5" width="7" height="14" /></I>,
   close: (s) => <I size={s}><path d="M6 6 L 18 18 M18 6 L 6 18" /></I>,
+  chevronUp: (s) => <I size={s}><path d="M6 15 L 12 9 L 18 15" /></I>,
   chevronDown: (s) => <I size={s}><path d="M6 9 L 12 15 L 18 9" /></I>,
   chevronLeft: (s) => <I size={s}><path d="M15 6 L 9 12 L 15 18" /></I>,
   chevronRight: (s) => <I size={s}><path d="M9 6 L 15 12 L 9 18" /></I>,

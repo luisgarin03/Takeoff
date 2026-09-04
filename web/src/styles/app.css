@@ -180,18 +180,64 @@ select {
   right: 0;
   z-index: 40;
   pointer-events: none;
+  transition: transform var(--t) var(--ease), opacity var(--t) var(--ease);
+  will-change: transform, opacity;
+}
+
+.glass-toolbar-stack.is-hidden {
+  opacity: 0;
+  transform: translateY(calc(-100% - 8px));
+}
+
+.glass-toolbar-stack.is-hidden .glass-toolbar {
+  pointer-events: none;
 }
 
 .glass-toolbar {
   position: relative;
   background:
+    linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .04)),
     linear-gradient(180deg, var(--glass-toolbar-highlight), transparent 42%),
     var(--glass-toolbar-secondary) !important;
   border-color: var(--glass-toolbar-border) !important;
-  box-shadow: inset 0 1px 0 var(--glass-toolbar-highlight);
-  backdrop-filter: blur(22px) saturate(1.35);
-  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  box-shadow:
+    inset 0 1px 0 var(--glass-toolbar-highlight),
+    0 10px 28px rgba(0, 0, 0, .10);
+  backdrop-filter: blur(var(--glass-toolbar-blur)) saturate(var(--glass-toolbar-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-toolbar-blur)) saturate(var(--glass-toolbar-saturate));
   pointer-events: auto;
+}
+
+.toolbar-visibility-toggle {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 140;
+  width: 34px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--glass-toolbar-border);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, var(--glass-toolbar-highlight), transparent 50%),
+    var(--glass-control-bg);
+  color: var(--glass-control-text);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 8px 22px rgba(0, 0, 0, .16);
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+}
+
+.toolbar-visibility-toggle:hover {
+  background:
+    linear-gradient(180deg, var(--glass-toolbar-highlight), transparent 50%),
+    var(--glass-control-bg-hover);
 }
 
 .glass-toolbar:has(.tool-menu-popover) {
@@ -201,6 +247,7 @@ select {
 
 .glass-toolbar-primary {
   background:
+    linear-gradient(180deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, .04)),
     linear-gradient(180deg, var(--glass-toolbar-highlight), transparent 46%),
     var(--glass-toolbar-primary) !important;
   box-shadow:
@@ -210,7 +257,7 @@ select {
 
 .glass-toolbar-strip {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .08), transparent 52%),
+    linear-gradient(180deg, rgba(255, 255, 255, .18), transparent 52%),
     var(--glass-toolbar-strip) !important;
 }
 

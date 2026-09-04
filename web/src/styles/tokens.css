@@ -45,12 +45,14 @@
   --grain-inverse-rgb: 255, 255, 255;
 
   /* frosted toolbar glass */
-  --glass-toolbar-primary: rgba(248, 250, 255, .58);
-  --glass-toolbar-secondary: rgba(255, 255, 255, .46);
-  --glass-toolbar-strip: rgba(255, 255, 255, .38);
+  --glass-toolbar-primary: rgba(248, 250, 255, .86);
+  --glass-toolbar-secondary: rgba(250, 252, 255, .78);
+  --glass-toolbar-strip: rgba(250, 252, 255, .72);
   --glass-toolbar-border: rgba(112, 124, 145, .34);
-  --glass-toolbar-highlight: rgba(255, 255, 255, .74);
-  --glass-toolbar-shadow: 0 14px 34px rgba(31, 42, 68, .12);
+  --glass-toolbar-highlight: rgba(255, 255, 255, .88);
+  --glass-toolbar-shadow: 0 14px 34px rgba(31, 42, 68, .16);
+  --glass-toolbar-blur: 34px;
+  --glass-toolbar-saturate: 1.45;
   --glass-control-bg: rgba(32, 34, 38, .86);
   --glass-control-bg-hover: rgba(21, 23, 27, .92);
   --glass-control-border: rgba(255, 255, 255, .20);
@@ -150,6 +152,8 @@
     --glass-toolbar-border: rgba(255, 255, 255, .18);
     --glass-toolbar-highlight: rgba(255, 255, 255, .18);
     --glass-toolbar-shadow: 0 16px 44px rgba(0, 0, 0, .34);
+    --glass-toolbar-blur: 34px;
+    --glass-toolbar-saturate: 1.42;
     --glass-control-bg: rgba(28, 29, 31, .92);
     --glass-control-bg-hover: rgba(42, 44, 47, .96);
     --glass-control-border: rgba(255, 255, 255, .18);
