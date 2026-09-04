@@ -406,6 +406,29 @@ select {
   }
 }
 
+@media (max-width: 760px) {
+  .glass-toolbar-stack {
+    left: 0 !important;
+    right: 0 !important;
+  }
+
+  .glass-toolbar {
+    overflow-x: hidden !important;
+  }
+
+  .glass-toolbar > * {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .glass-toolbar-primary,
+  .glass-toolbar-secondary,
+  .glass-toolbar-strip {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}
+
 .row {
   transition: background var(--t-fast) var(--ease);
 }
