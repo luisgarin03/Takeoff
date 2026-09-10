@@ -223,6 +223,7 @@ export default function TakeoffCanvas() {
   const [tool, setTool] = useState("pan");
   const [toolbarHidden, setToolbarHidden] = useState(false);
   const [toolbarHeight, setToolbarHeight] = useState(0);
+  const toolbarOverlayTop = toolbarHidden ? 10 : Math.max(toolbarHeight + 6, 10);
   const toolbarStackRef = useRef(null);
   const [panelImgs, setPanelImgs] = useState({}); // { sheetKey: {w,h} } rendered bitmap dims per panel
   const [tf, setTf] = useState({ x: 0, y: 0, scale: 1 }); // render mirror of tfRef
@@ -5111,7 +5112,7 @@ export default function TakeoffCanvas() {
           title={toolbarHidden ? "Show toolbar" : "Hide toolbar"}
           aria-label={toolbarHidden ? "Show toolbar" : "Hide toolbar"}
           aria-pressed={toolbarHidden}
-          style={{ top: toolbarHidden ? 10 : Math.max(toolbarHeight + 6, 10) }}
+          style={{ top: toolbarOverlayTop }}
         >
           <Icon name={toolbarHidden ? "chevronDown" : "chevronUp"} size={16} />
         </button>
@@ -5760,9 +5761,8 @@ export default function TakeoffCanvas() {
           </button>
         )}
 
-        {/* live readout — top-right. Height is capped short of the panel rail's centered
-            band (same right:14 column) so populated totals never cover the rail buttons. */}
-        <div style={{ position: "absolute", right: 14, top: 14, background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, padding: "12px 16px", minWidth: 200, maxWidth: 260, maxHeight: "calc(50% - 110px)", overflowY: "auto", boxShadow: "0 4px 18px rgba(0,0,0,.12)", fontVariantNumeric: "tabular-nums", zIndex: 6 }}>
+        {/* Keep the live readout aligned with the toolbar toggle as the toolbar wraps. */}
+        <div className="canvas-live-readout" style={{ position: "absolute", right: 14, top: toolbarOverlayTop, background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, padding: "12px 16px", minWidth: 200, maxWidth: 260, maxHeight: `max(0px, min(50% - 110px, 100% - ${toolbarOverlayTop + 40}px))`, overflowY: "auto", boxShadow: "0 4px 18px rgba(0,0,0,.12)", fontVariantNumeric: "tabular-nums", zIndex: 6 }}>
           <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.55, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tool === "zone" ? "Zone check" : (aCond?.finish_tag || "No condition")}</div>
           {tool === "oneclick" && proposal?.regions.length ? (() => {
             const pos = proposal.regions.filter((r) => r.kind === "pos");
