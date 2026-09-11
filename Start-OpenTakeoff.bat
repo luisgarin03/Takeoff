@@ -3,7 +3,8 @@ setlocal
 
 set "ROOT=%~dp0"
 set "WEB=%ROOT%web"
-set "URL=http://127.0.0.1:5173/"
+set "URL=http://127.0.0.1:517set "URL=http://127.0.0.1:5173/"
+3/"
 
 if not exist "%WEB%\package.json" (
   echo OpenTakeoff web app was not found at "%WEB%".
