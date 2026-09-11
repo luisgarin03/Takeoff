@@ -1,2 +1,2 @@
-//display name across platforms.
-export const APP_NAME = "ESTIMATING by luis garin";
+// Display name across platforms.
+export const APP_NAME = "ESTIMATING by Luis Gari55n";
