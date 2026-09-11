@@ -22,7 +22,7 @@ if (process.platform === "win32" && process.env.LOCALAPPDATA) {
   app.setPath("userData", path.join(process.env.LOCALAPPDATA, "OpenTakeoff"));
 }
 
-app.setName("OpenTakeoff");
+
 
 function distPath() {
   return path.join(app.getAppPath(), "dist");
@@ -149,7 +149,9 @@ function createWindow() {
   win.loadURL(`${APP_SCHEME}://${APP_HOST}/`);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const { APP_NAME } = await import("../src/brand/appName.js");
+  app.setName(APP_NAME);
   protocol.handle(APP_SCHEME, appResponse);
   applySecurityHeaders();
   createWindow();

@@ -1,3 +1,12 @@
+import { APP_NAME } from "./appName.js";
+
+export function BrandText() {
+  const split = APP_NAME.search(/[a-z][A-Z]/);
+  const head = split < 0 ? APP_NAME : APP_NAME.slice(0, split + 1);
+  const tail = split < 0 ? "" : APP_NAME.slice(split + 1);
+  return <>{head.toLowerCase()}<span style={{ fontStyle: "italic", color: "var(--cobalt)" }}>{tail.toLowerCase()}</span></>;
+}
+
 // OpenTakeoff brand marks. Neutral, paper/ink/cobalt — the same token palette as
 // the rest of the app. (No relation to any private branding.)
 
@@ -17,7 +26,7 @@ export function Wordmark({ size = 96, color = "var(--ink)", weight = 800, letter
         fontOpticalSizing: "auto",
       }}
     >
-      open<span style={{ fontStyle: "italic", color: "var(--cobalt)" }}>takeoff</span>
+      <BrandText />
     </span>
   );
 }

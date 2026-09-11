@@ -1,3 +1,4 @@
+import { APP_NAME } from "../brand/appName.js";
 // Takeoff Canvas — Phase 1 (+ pan/zoom + standard scales).
 // Persistent, condition-driven 2D takeoff. Pick a color-coded condition (finish
 // tag), click to trace areas; each shape computes SF + perimeter from geometry ×
@@ -46,6 +47,7 @@ import { sanitizeShapeLabels, sanitizeShapeLabelsOnShapes, renameShapeLabel, sha
 import { buildMarkedSetPdf, downloadBytes } from "../lib/markedset.js";
 import { loadProfiles } from "../lib/identity.js";
 import { resolveBranding, loadBrandingSelection } from "../lib/branding.js";
+import { BrandText } from "../brand/marks.jsx";
 import { starPath, cloudPath, thinStroke, strokePathD, chiselRibbon, buildSnapGrid, nearestSnap, ANGLE_TOL, angleSnap, closedMetrics, openLen, pointInPoly, hitShape, arrowheadPath, distToSeg, reflectVertsNorm } from "../lib/geometry.js";
 import { flattenCurve } from "../lib/curve.js";
 import { dashArrayFor, boostForDark, clampWeight, snapWeight, LINE_STYLES, LINE_STYLE_IDS, WEIGHT_STEPS } from "../lib/lineStyles.js";
@@ -454,9 +456,18 @@ export default function TakeoffCanvas() {
   const renderScalesRef = useRef(new Map()); // sheetKey → base raster pdf scale (detail view renders at a multiple of it)
   const detailCanvasRef = useRef(null);      // single high-res viewport detail canvas (positioned imperatively)
   const detailTaskRef = useRef(null);        // in-flight detail render task (cancel stale on re-zoom)
-  const detailBackRef = useRef(null);        // offscreen back buffer — the visible crop is never wiped mid-render
+  const detailGenerationRef = useRef(0);    // stale completions must never resurrect a hidden crop
   const detailKeyRef = useRef("");           // last requested crop — identical re-requests are dropped (sync churn fires the effect several times per settle)
   const detailWatchdogRef = useRef(0);       // recovers a render stuck by a backgrounded/throttled tab (see DETAIL_STALL_MS)
+  const invalidateDetail = useCallback(() => {
+    ++detailGenerationRef.current;
+    const task = detailTaskRef.current;
+    detailTaskRef.current = null;
+    clearTimeout(detailWatchdogRef.current);
+    detailWatchdogRef.current = 0;
+    detailKeyRef.current = "";
+    try { task?.cancel(); } catch { /* already settled */ }
+  }, []);
   const renderTasksRef = useRef(new Map());  // sheetKey → pdf.js RenderTask
   const pdfDocsRef = useRef(new Map());      // file name → pdf.js loading task (doc cache)
   const renderSeqRef = useRef(0);            // monotonic token — stale render chains bail out
@@ -780,7 +791,7 @@ export default function TakeoffCanvas() {
     catch (e) { setCommitMsg(`Couldn't read those files: ${e.message || e}`); return; }
     if (!pdfs.length) {
       setCommitMsg(skipped.length
-        ? `Nothing to open — ${skipped.length} file${skipped.length === 1 ? "" : "s"} skipped. OpenTakeoff reads PDFs, images, and .zip plan sets.`
+        ? `Nothing to open — ${skipped.length} file${skipped.length === 1 ? "" : "s"} skipped. ${APP_NAME} reads PDFs, images, and .zip plan sets.`
         : "No supported files found. Drop a PDF, an image, or a .zip plan set.");
       return;
     }
@@ -1134,7 +1145,7 @@ export default function TakeoffCanvas() {
     canvasInvertedRef.current.clear();
     pageObjsRef.current.clear();
     renderScalesRef.current.clear();
-    try { detailTaskRef.current?.cancel(); } catch { /* done */ }
+    invalidateDetail();
     if (detailCanvasRef.current) detailCanvasRef.current.style.display = "none";
     (async () => {
       // phase A — dimensions for every panel
@@ -1251,6 +1262,13 @@ export default function TakeoffCanvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupSig, hiResKeys.join(" ")]);
 
+  // Invalidate before a new sheet can publish, and cancel owned work on unmount.
+  useLayoutEffect(() => {
+    invalidateDetail();
+    if (detailCanvasRef.current) detailCanvasRef.current.style.display = "none";
+    return invalidateDetail;
+  }, [groupSig, focusKey, invalidateDetail]);
+
   // ── detail view: re-render the visible region at the current zoom ───────────
   // The base panel bitmap is the fast first paint and the zoomed-out view. Once
   // zoomed past DETAIL_ENGAGE we overlay a crop of JUST what's on screen (+margin),
@@ -1260,7 +1278,7 @@ export default function TakeoffCanvas() {
   // sibling ABOVE this canvas, and quantities never touch render pixels: both untouched.
   useEffect(() => {
     const cv = detailCanvasRef.current, cont = containerRef.current, fp = focusPanel;
-    const hide = () => { if (cv) cv.style.display = "none"; detailKeyRef.current = ""; };
+    const hide = () => { invalidateDetail(); if (cv) cv.style.display = "none"; };
     if (!cv || !cont || status !== "ready" || !fp || !fp.img.w) return hide();
     const t = tfRef.current;
     if (window.__OT_DETAIL_DEBUG) console.log("[detail] tick " + JSON.stringify({ scale: +t.scale.toFixed(2), dpr: window.devicePixelRatio, pan: !!panRef.current, hold: +(gestureUntilRef.current - performance.now()).toFixed(0) }));
@@ -1306,40 +1324,58 @@ export default function TakeoffCanvas() {
     // full-viewport pdf.js render (in dark mode plus a full-canvas inversion)
     const renderKey = `${fp.key}|${x0.toFixed(1)},${y0.toFixed(1)}|${bw}x${bh}`;
     if (renderKey === detailKeyRef.current) return;
+    invalidateDetail();
+    const generation = detailGenerationRef.current;
+    const isCurrent = () => generation === detailGenerationRef.current;
     detailKeyRef.current = renderKey;
-    const back = detailBackRef.current || (detailBackRef.current = document.createElement("canvas"));
+    // Each task owns its buffer until settlement, including asynchronous cancellation.
+    const back = document.createElement("canvas");
     back.width = bw; back.height = bh;
-    try { detailTaskRef.current?.cancel(); } catch { /* done */ }
-    clearTimeout(detailWatchdogRef.current);
-    const rt = pageObj.render({ canvasContext: back.getContext("2d"), viewport: vp, transform: [1, 0, 0, 1, -x0 * factor, -y0 * factor] });
+    let rt;
+    try {
+      rt = pageObj.render({ canvasContext: back.getContext("2d"), viewport: vp, transform: [1, 0, 0, 1, -x0 * factor, -y0 * factor] });
+    } catch (e) {
+      back.width = back.height = 0;
+      detailKeyRef.current = "";
+      console.error("[detail] render failed:", e);
+      return;
+    }
     detailTaskRef.current = rt;
     // Backstop watchdog — NOT the primary fix (that's the visibilitychange retry
     // below, which targets the actual documented cause). This only covers some
     // OTHER wedge with no visibility signal, so it deliberately skips firing while
     // still hidden (retrying then would just wedge the same way) and is tuned long
     // enough to never race a merely slow render.
-    detailWatchdogRef.current = setTimeout(() => {
-      if (detailTaskRef.current !== rt) return;              // already superseded — nothing to recover
+    const watchdog = setTimeout(() => {
+      if (!isCurrent() || detailTaskRef.current !== rt) return;
       if (document.visibilityState !== "visible") return;    // still hidden — visibilitychange will recover it on return
-      if (detailKeyRef.current === renderKey) detailKeyRef.current = "";   // let the next tick retry this crop
+      invalidateDetail();
       if (window.__OT_DETAIL_DEBUG) console.log("[detail] stalled, retrying", renderKey);
       scheduleSync();
     }, DETAIL_STALL_MS);
+    detailWatchdogRef.current = watchdog;
     rt.promise.then(() => {
-      clearTimeout(detailWatchdogRef.current);
+      // Zoom-out may have hidden the layer while PDF.js was still painting.
+      if (!isCurrent()) return;
+      if (tfRef.current.scale * (window.devicePixelRatio || 1) <= DETAIL_ENGAGE) { hide(); return; }
       if (darkModeRef.current) invertCanvasPixels(back);   // negative view baked into pixels before it's ever visible
       cv.style.left = `${fp.xOffset + x0}px`; cv.style.top = `${y0}px`;
       cv.style.width = `${regW}px`; cv.style.height = `${regH}px`;
       cv.width = bw; cv.height = bh;
       cv.getContext("2d").drawImage(back, 0, 0);           // clear + repaint inside one task: no blank frame
-      back.width = back.height = 0;
       canvasInvertedRef.current.set(cv, !!darkModeRef.current);
       cv.style.display = "block"; cv.style.visibility = "";
       if (window.__OT_DETAIL_DEBUG) console.log("[detail] swapped", bw, "x", bh);
     }).catch((e) => {   // RenderingCancelledException on rapid re-zoom is expected
-      clearTimeout(detailWatchdogRef.current);
+      if (!isCurrent()) return;
       if (detailKeyRef.current === renderKey) detailKeyRef.current = "";   // let the next tick retry this crop
       if (e?.name !== "RenderingCancelledException") console.error("[detail] render failed:", e);
+    }).finally(() => {
+      clearTimeout(watchdog); // never clear a newer generation's watchdog
+      back.width = back.height = 0;
+      if (!isCurrent()) return;
+      detailWatchdogRef.current = 0;
+      if (detailTaskRef.current === rt) detailTaskRef.current = null;
     });
     // panelW/takeoffsOpen: docking or resizing the Takeoffs panel changes the
     // container rect without a transform change — re-run so the crop resyncs
@@ -1354,12 +1390,12 @@ export default function TakeoffCanvas() {
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState !== "visible" || !detailKeyRef.current) return;
-      detailKeyRef.current = "";   // let the next tick re-request the pending crop
+      invalidateDetail();
       scheduleSync();
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [scheduleSync]);
+  }, [scheduleSync, invalidateDetail]);
 
   // the doc cache holds whole PDFs in the worker — tear it down when the
   // project view unmounts or the project changes
@@ -4685,7 +4721,7 @@ export default function TakeoffCanvas() {
         }}
       >
         <div className="glass-toolbar glass-toolbar-primary" style={{ display: "flex", gap: 7, alignItems: "center", padding: "6px 14px", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-shadow)", whiteSpace: "nowrap" }}>
-        <strong style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}>open<span style={{ fontStyle: "italic", color: "var(--cobalt)" }}>takeoff</span></strong>
+        <strong style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}><BrandText /></strong>
         {/* team cloud mode: always a way to leave this project, plus a way to
             browse the rest of the team's projects when the build names a root
             — fixed presence for the whole session (cloudMode is set before the

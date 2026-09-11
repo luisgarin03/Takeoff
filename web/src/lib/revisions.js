@@ -1,3 +1,4 @@
+import { APP_NAME } from "../brand/appName.js";
 // Revision compare — bid revisions and addenda as QUANTITY deltas.
 //
 // The diff is deliberately quantity-level, not geometric: shape uids don't
@@ -178,7 +179,7 @@ export function diffToCsv(diff, { aName = "baseline", bName = "current", units =
   };
   const row = (cells) => cells.map(esc).join(",");
   const lines = [];
-  if (projectName) lines.push(`# ${projectName} — OpenTakeoff revision compare`);
+  if (projectName) lines.push(`# ${projectName} — ${APP_NAME} revision compare`);
   lines.push(`# ${aName} -> ${bName}`);
   lines.push(row(["Finish", "Status", `d Floor ${AU}`, `d Wall ${AU}`, `d Border ${AU}`, `d ${LU}`, "d EA", `d Total ${AU}`,
     `${AU} ordered (${aName})`, `${AU} ordered (${bName})`, `d ${AU} ordered`]));

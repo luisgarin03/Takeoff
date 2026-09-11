@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+// Read the central display name during native builds, including Android Studio.
+def displayName = providers.exec {
+    workingDir rootProject.projectDir.parentFile
+    commandLine 'node', 'scripts/android-display-name.mjs'
+}.standardOutput.asText.get().trim()
+
 android {
     namespace = "com.opentakeoff.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -9,6 +15,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        resValue "string", "app_name", displayName
+        resValue "string", "title_activity_main", displayName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

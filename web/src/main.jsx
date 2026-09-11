@@ -1,3 +1,4 @@
+import { BrandText } from "./brand/marks.jsx";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
@@ -39,7 +40,7 @@ const centered = {
 };
 const brand = (
   <strong style={{ fontFamily: "var(--f-display)", fontSize: 20, letterSpacing: "-0.02em" }}>
-    open<span style={{ fontStyle: "italic", color: "var(--cobalt)" }}>takeoff</span>
+    <BrandText />
   </strong>
 );
 

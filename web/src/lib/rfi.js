@@ -1,3 +1,4 @@
+import { APP_NAME } from "../brand/appName.js";
 // RFI (Request For Information) helpers — pure, node-testable (see
 // test/rfi.test.ts). The RFI register turns the dormant markup.rfi_id hook into
 // a real deliverable: a markup links to an RFI via markup.rfi_id === rfi.id
@@ -60,7 +61,7 @@ export function linkedMarkups(rfi, markups = []) {
  * @param {string} [projectName]
  * @param {((sheetId: any) => string)|null} [sheetLabel]
  */
-export function rfisToCsv(rfis = [], markups = [], projectName = "", sheetLabel = null, brandName = "OpenTakeoff") {
+export function rfisToCsv(rfis = [], markups = [], projectName = "", sheetLabel = null, brandName = APP_NAME) {
   const label = (id) => (sheetLabel ? sheetLabel(id) : id);
   const header = [
     "Number", "Subject", "Status", "Ball in court", "Priority",

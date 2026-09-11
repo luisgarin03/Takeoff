@@ -1,3 +1,4 @@
+import { APP_NAME } from "./src/brand/appName.js";
 import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -17,7 +18,13 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 // model AI sandbox in `../server` (see server/README.md). Without it, the app
 // works fully; the AI hooks just stay dormant.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), {
+    name: "app-display-name",
+    transformIndexHtml(html) {
+      const escaped = APP_NAME.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      return html.replaceAll("%APP_NAME%", escaped);
+    },
+  }],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   server: {
     port: 5173,

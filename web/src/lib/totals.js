@@ -1,3 +1,4 @@
+import { APP_NAME } from "../brand/appName.js";
 // Role-aware takeoff totaling — the same rules the original commit endpoint used
 // (see the reference test in the project history), reimplemented client-side:
 //
@@ -296,7 +297,7 @@ export function grandTotals(rows) {
  *   (SF/LF-based). "imperial" (default) is byte-identical to the frozen export.
  * @returns {string}
  */
-export function totalsToCsv(rows, projectName = "", bySheet = null, sheetLabel = null, cols = null, ctx = null, byLabel = null, brandName = "OpenTakeoff", units = "imperial") {
+export function totalsToCsv(rows, projectName = "", bySheet = null, sheetLabel = null, cols = null, ctx = null, byLabel = null, brandName = APP_NAME, units = "imperial") {
   // the caller passes RAW descriptors; conversion happens here (one site per
   // output) through the same applyUnits seam the report table uses
   const columns = applyUnits(cols || CSV_PROFILE.filter((c) => c.defaultVisible), units, METRIC_CSV_LABELS);

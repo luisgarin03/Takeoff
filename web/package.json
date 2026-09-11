@@ -10,8 +10,8 @@
     "dev": "vite",
     "build": "vite build",
     "start:desktop": "npm run build && electron .",
-    "pack:win": "npm run build && electron-builder --win nsis --x64 --dir",
-    "dist:win": "npm run build && electron-builder --win nsis --x64",
+    "pack:win": "npm run build && electron-builder --config electron-builder.config.mjs --win nsis --x64 --dir",
+    "dist:win": "npm run build && electron-builder --config electron-builder.config.mjs --win nsis --x64",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
@@ -49,7 +49,6 @@
   },
   "build": {
     "appId": "io.kentuckyai.opentakeoff.desktop",
-    "productName": "OpenTakeoff",
     "copyright": "Copyright (c) 2026 Kentucky AI",
     "directories": {
       "output": "../release",
@@ -58,6 +57,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "src/brand/appName.js",
       "package.json"
     ],
     "asar": true,
@@ -74,14 +74,12 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
-      "artifactName": "OpenTakeoff-Setup-x64.exe",
       "oneClick": false,
       "perMachine": false,
       "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "OpenTakeoff",
       "deleteAppDataOnUninstall": false
     }
   }
