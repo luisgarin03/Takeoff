@@ -2,6 +2,20 @@
 
 All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
+## Unreleased
+
+### Changed
+- Added minimal Android PWA support: manifest metadata, branded 192px/512px home-screen icons, and a network-only service worker that never caches drawings or project data.
+- Report now layers above the canvas toolbar arrow and floating controls; its menus and dialogs retain their internal stacking order.
+- Mobile Report layout (screens up to 768px): wrapped controls, viewport-bounded menus, and labelled cards for condition totals, By Sheet, revisions, and materials. Desktop/print layout and report calculations/exports are unchanged.
+- Hid the original top Theme, Mode, Draw, and Edit controls and their empty separators. Side rails retain the shared actions and shortcuts; highlighter ink, size, and tip controls remain accessible in the side Draw menu.
+
+### Added
+- Synchronized black-and-gray palette Theme icon below Revisions in the bottom-right canvas rail, using the toolbar theme handler and current light/dark state.
+- Icon-only Draw (pencil) and Edit menus above Finish/Pan in the canvas rail, sharing toolbar tool choices, edit actions, availability, and active tool state. Rail menus stay within the viewport and isolate canvas pointer events.
+- Conditional checkmark Finish button above Pan in the bottom-left canvas controls, sharing the toolbar completion action and visibility, with a live accessible point count and isolated pointer events.
+- Pan and Select square buttons above the bottom-left zoom controls, synchronized with toolbar MODE controls and existing keyboard shortcuts.
+
 ## 2026-07-21 — opentakeoff-mcp 0.6.0: sheet vision
 
 ### Added

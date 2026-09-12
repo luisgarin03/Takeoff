@@ -15,6 +15,17 @@ import { initTheme } from "./lib/theme.js";
 
 initTheme();   // index.html set data-theme pre-paint; this keeps it live
 
+// Keep the PWA installable on localhost without taking ownership of app data.
+// The worker has a pass-through fetch handler: it never caches PDFs, project
+// files, API responses, or the app shell.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {
+      // PWA support is optional; a blocked/unsupported worker must not affect the app.
+    });
+  }, { once: true });
+}
+
 // Client-only SPA. By default there is no backend: the canvas runs entirely in
 // the browser and persists to IndexedDB / localStorage (anonymous local mode).
 // Bare `/` ALWAYS lands here first — open the bundled demo plan or drop your

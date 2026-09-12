@@ -330,12 +330,12 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
     // notes cell below). Custom and labor columns stay nowrap.
     if (col.custom || col.spec || col.labor) {
       const cell = col.spec ? { ...td, textAlign: "left", whiteSpace: "normal", maxWidth: 240 } : { ...td, textAlign: "left" };
-      return <td key={col.key} style={cell}>{v || "—"}</td>;
+      return <td className="report-wide-cell" data-label={col.header} key={col.key} style={cell}>{v || "—"}</td>;
     }
     switch (col.key) {
       case "finish":
         return (
-          <td key={col.key} style={{ ...td, textAlign: "left" }}>
+          <td data-label={col.header} key={col.key} style={{ ...td, textAlign: "left" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 12, height: 12, background: r.color, display: "inline-block", border: "1px solid var(--ink-faint)" }} />
               <strong style={{ fontFamily: "var(--f-mono)", fontWeight: 600 }}>{r.finish_tag}</strong>
@@ -344,19 +344,19 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
           </td>
         );
       case "shapes":
-        return <td key={col.key} style={td}>{v}</td>;
+        return <td data-label={col.header} key={col.key} style={td}>{v}</td>;
       case "waste_pct":
-        return <td key={col.key} style={td}>{v ? `${num(v, 0)}%` : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={td}>{v ? `${num(v, 0)}%` : "—"}</td>;
       case "ea":
-        return <td key={col.key} style={td}>{v ? num(v, 0) : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={td}>{v ? num(v, 0) : "—"}</td>;
       case "total_sf_net":
-        return <td key={col.key} style={{ ...td, fontWeight: 700, color: "var(--cobalt)" }}>{r.total_sf ? num(v) : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={{ ...td, fontWeight: 700, color: "var(--cobalt)" }}>{r.total_sf ? num(v) : "—"}</td>;
       case "sy_net":
-        return <td key={col.key} style={{ ...td, color: "var(--cobalt)" }}>{r.total_sf ? num(v) : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={{ ...td, color: "var(--cobalt)" }}>{r.total_sf ? num(v) : "—"}</td>;
       case "perimeter_ref":
-        return <td key={col.key} style={{ ...td, color: "var(--ink-muted)" }}>{v ? num(v) : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={{ ...td, color: "var(--ink-muted)" }}>{v ? num(v) : "—"}</td>;
       default: // floor_sf, wall_sf, border_sf, lf, waste_sf, waste_lf, …
-        return <td key={col.key} style={td}>{v ? num(v) : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={td}>{v ? num(v) : "—"}</td>;
     }
   };
 
@@ -374,13 +374,14 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
   );
 
   return (
-    <div className="report-panel" style={{ ...theme.vars, position: "absolute", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", background: "var(--paper-cream)" }}>
+    // Foreground app layer: canvas drawers reach 120; the toolbar toggle is 140.
+    <div className="report-panel" style={{ ...theme.vars, position: "absolute", inset: 0, zIndex: 150, display: "flex", flexDirection: "column", background: "var(--paper-cream)" }}>
       <div className="report-toolbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 18px", borderBottom: "1px solid var(--ink)", background: "var(--paper-bright)" }}>
         <Icon name="takeoffs" size={18} />
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>Takeoff report</strong>
         <input name="project-name" value={projectName} onChange={(e) => onProjectName(e.target.value)} placeholder="Project name (optional)"
           className="field-input" style={{ width: 260, padding: "5px 9px", fontSize: 13 }} />
-        <div style={{ flex: 1 }} />
+        <div className="report-toolbar-spacer" style={{ flex: 1 }} />
         <button className="btn-ghost" onClick={() => setShowInfo(true)}
           title="Your company identity and the client/job details for the print header and marked-set cover">Project info</button>
         {/* always rendered, even with zero custom columns — Sheet grouping
@@ -668,7 +669,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
               Grouped by <strong>{groupCol ? columnLabel(groupCol) : groupBy === "label" ? "label" : "sheet"}</strong>
             </p>
           )}
-          <table style={{ width: "100%", maxWidth: 980, margin: "0 auto", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+          <table className="report-data-table" style={{ width: "100%", maxWidth: 980, margin: "0 auto", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
             <thead>
               <tr>
                 {tableCols.map((c) => (
@@ -716,7 +717,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                           muted color; same foot mechanism on the group's
                           own grandTotals */}
                       {tableCols.slice(1).map((c) => (
-                        <td key={c.key} style={{ ...td, borderTop: "1px solid var(--ink-soft)", color: "var(--ink-muted)" }}>
+                        <td data-label={c.header} key={c.key} style={{ ...td, borderTop: "1px solid var(--ink-soft)", color: "var(--ink-muted)" }}>
                           {c.foot && !c.ref ? num(c.foot(sub)) : ""}
                         </td>
                       ))}
@@ -732,9 +733,9 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                     own td — footed columns render foot(g), ref columns never foot */}
                 {tableCols.slice(1).map((c) => (
                   c.foot && !c.ref ? (
-                    <td key={c.key} style={{ ...td, borderTop: "2px solid var(--ink)", borderBottom: "2px solid var(--ink)", background: "var(--paper-cream)", fontWeight: 700, ...(c.accent ? { color: "var(--cobalt)" } : {}) }}>{num(c.foot(g))}</td>
+                    <td data-label={c.header} key={c.key} style={{ ...td, borderTop: "2px solid var(--ink)", borderBottom: "2px solid var(--ink)", background: "var(--paper-cream)", fontWeight: 700, ...(c.accent ? { color: "var(--cobalt)" } : {}) }}>{num(c.foot(g))}</td>
                   ) : (
-                    <td key={c.key} style={{ ...td, borderTop: "2px solid var(--ink)", borderBottom: "2px solid var(--ink)", background: "var(--paper-cream)" }}></td>
+                    <td data-label={c.header} key={c.key} style={{ ...td, borderTop: "2px solid var(--ink)", borderBottom: "2px solid var(--ink)", background: "var(--paper-cream)" }}></td>
                   )
                 ))}
               </tr>
@@ -762,7 +763,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
             {bySheet.map((gp) => (
               <div key={gp.sheet_id} style={{ margin: "0 0 14px" }}>
                 <h3 style={{ fontFamily: "var(--f-mono)", fontSize: 11, letterSpacing: "0.06em", color: "var(--ink-muted)", margin: "0 0 6px" }}>{sheetLabel ? sheetLabel(gp.sheet_id) : gp.sheet_id}</h3>
-                <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+                <table className="report-data-table" style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
                   <thead>
                     <tr>
                       <th style={{ ...th, textAlign: "left" }}>Finish</th>
@@ -783,11 +784,11 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                             {r.multiplier > 1 && <span style={{ color: "var(--ink-muted)", fontSize: 11 }}>×{r.multiplier}</span>}
                           </span>
                         </td>
-                        <td style={td}>{sheetNum(areaVal(r.floor_sf, units))}</td>
-                        <td style={td}>{sheetNum(areaVal(r.wall_sf, units))}</td>
-                        <td style={td}>{sheetNum(areaVal(r.border_sf, units))}</td>
-                        <td style={td}>{sheetNum(lenVal(r.lf, units))}</td>
-                        <td style={td}>{sheetNum(r.ea, 0)}</td>
+                        <td data-label={`Floor ${AU}`} style={td}>{sheetNum(areaVal(r.floor_sf, units))}</td>
+                        <td data-label={`Wall ${AU}`} style={td}>{sheetNum(areaVal(r.wall_sf, units))}</td>
+                        <td data-label={`Border ${AU}`} style={td}>{sheetNum(areaVal(r.border_sf, units))}</td>
+                        <td data-label={LU} style={td}>{sheetNum(lenVal(r.lf, units))}</td>
+                        <td data-label="EA" style={td}>{sheetNum(r.ea, 0)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -807,7 +808,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
           <div style={{ maxWidth: 980, margin: "26px auto 0" }}>
             {/* svg symbols are decorative vector stamps, not revision notes — excluded */}
             <h3 style={{ fontFamily: "var(--f-display)", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink)", margin: "0 0 10px", paddingBottom: 5, borderBottom: "1.25px solid var(--ink)" }}>Revisions noted</h3>
-            <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+            <table className="report-data-table" style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
               <thead>
                 <tr>
                   <th style={{ ...th, textAlign: "left" }}>Type</th>
@@ -823,8 +824,8 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                         {m.type === "cloud" ? "CLOUD" : m.type === "callout" ? "CALLOUT" : "NOTE"}
                       </span>
                     </td>
-                    <td style={{ ...td, textAlign: "left", fontFamily: "var(--f-mono)", fontSize: 11.5 }}>{sheetLabel ? sheetLabel(m.sheet_id) : m.sheet_id}</td>
-                    <td style={{ ...td, textAlign: "left", whiteSpace: "normal", width: "60%" }}>{m.text || "—"}</td>
+                    <td data-label="Sheet" style={{ ...td, textAlign: "left", fontFamily: "var(--f-mono)", fontSize: 11.5 }}>{sheetLabel ? sheetLabel(m.sheet_id) : m.sheet_id}</td>
+                    <td className="report-wide-cell" data-label="Note" style={{ ...td, textAlign: "left", whiteSpace: "normal", width: "60%" }}>{m.text || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -837,7 +838,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
         {matSummary.length > 0 && (
           <div style={{ maxWidth: 980, margin: "26px auto 0" }}>
             <h3 style={{ fontFamily: "var(--f-display)", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink)", margin: "0 0 10px", paddingBottom: 5, borderBottom: "1.25px solid var(--ink)" }}>Supporting materials — buy list</h3>
-            <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+            <table className="report-data-table" style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
               <thead>
                 <tr>
                   <th style={{ ...th, textAlign: "left" }}>Material</th>
@@ -849,8 +850,8 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                 {matSummary.map((m, i) => (
                   <tr key={i}>
                     <td style={{ ...td, textAlign: "left" }}>{m.name}</td>
-                    <td style={{ ...td, fontWeight: 700 }}>{num(m.qty, 2)}</td>
-                    <td style={{ ...td, textAlign: "left", paddingLeft: 16, color: "var(--ink-muted)" }}>{m.unit || "—"}</td>
+                    <td data-label="Quantity" style={{ ...td, fontWeight: 700 }}>{num(m.qty, 2)}</td>
+                    <td data-label="Unit" style={{ ...td, textAlign: "left", paddingLeft: 16, color: "var(--ink-muted)" }}>{m.unit || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1014,7 +1015,7 @@ function ProjectInfoModal({ clientInfo = {}, onClientInfo, onSaved, onClose }) {
           </label>
           <div style={row}>
             <span className="field-label">Logo</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
+            <div className="report-logo-fields" style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
               <input name="company-logo" type="file" accept="image/*" onChange={onLogoFile} style={{ fontSize: 12, minWidth: 0 }} />
               {active.logo && (
                 <>

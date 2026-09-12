@@ -1,2 +1,2 @@
 // Display name across platforms.
-export const APP_NAME = "ESTIMATING by Luis Garin";
+export const APP_NAME = "Estimating by Luis Garin";

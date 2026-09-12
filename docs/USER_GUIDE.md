@@ -2,6 +2,8 @@
 
 OpenTakeoff is a takeoff canvas that runs in your browser. Open a plan, set the scale, trace the finishes — or let an AI agent stage the tracing while you keep the accept button — and walk away with a priced-out quantity report, a materials buy list, and a marked set you can send to a GC. Everything happens on your machine: no account, no upload, no install.
 
+On Android Chrome, you can use the browser menu's **Install app** or **Add to home screen** action when running the hosted app or a local server reachable from the phone. The install uses the app manifest and branded icon; it does not make PDFs or project data available offline, so the browser remains the source of truth.
+
 This manual takes you from a blank browser tab to a finished, exported takeoff, and covers every shipped feature along the way. Shortcuts appear inline as you meet each tool; the complete table is in [§15](#15-keyboard-reference).
 
 **Contents**
@@ -70,6 +72,8 @@ In the gallery, select sheets and hit **Assign level…** (`"L1"`, `"Level 2"`, 
 
 ### Pan & zoom
 
+The fixed bottom-left canvas controls are **Draw (pencil icon)**, **Edit (pen icon)**, **Pan**, **Select**, **+ Zoom**, **− Zoom**, **fit**, and **☾**, in that order. Draw opens the shared Measure, Cut Out, and Markup choices; Edit opens the existing editing actions with the same availability rules. When Highlighter is armed, reopen Draw to adjust ink, size, and tip. The original top Theme, Mode, Draw, and Edit controls are hidden; their actions remain available through the rails and existing keyboard shortcuts. Rail menus open beside the controls and scroll within the viewport; taps on them do not reach the canvas. A **✓ Finish** button appears above Pan only when the toolbar Finish action is available: at least three points for Area, Deduct, or a single-sheet Zone, or two for Linear, Curve, or Surface. Its tooltip and accessible label show the live point count. Either Finish button completes the same trace; finishing or cancelling removes the extra button without moving the six controls below it. Pan and Select use the existing mode state and `P` / `V` shortcuts, with the active mode filled in ink.
+
 Panning is always at hand, whatever tool is armed:
 
 - **Trackpad**: two-finger scroll pans both axes; pinch zooms.
@@ -81,6 +85,10 @@ Panning is always at hand, whatever tool is armed:
 ### Rendering: crisp at any zoom
 
 Past ~115% zoom the visible region re-renders straight from the PDF vectors at your current zoom, so fine callouts and hatching stay razor-sharp at any depth. Per sheet, the **Render & fill settings** menu (the sliders icon beside the 45° and Snap toggles) offers **Hi-Res render (this sheet)** — a higher base raster quality budget (~28 MP) for dense sheets. Hi-Res is a display setting, saved per sheet per browser; **quantities are never affected by render quality**.
+
+### App theme
+
+The palette icon below Revisions at the bottom of the right canvas rail toggles the existing light/dark app theme and reflects the current theme. It shares the saved browser preference with the original, now-hidden top toolbar control. This changes app chrome, not sheet inversion or report theme settings.
 
 ### Dark view (☾)
 
@@ -311,7 +319,7 @@ Arm **Select** (`V`) and click a shape. Selection is one shape at a time on the 
 - **Drag the body** to move the whole shape. Moving never re-prices — translation doesn't change area.
 - **`⌫` with nothing else picked** deletes the shape.
 
-Quantities recompute live as you edit. Every completed gesture is one undo step (a drag that ends where it started records nothing), and editing a machine-made shape — One-Click or agent — grades it as *corrected* in its provenance, with the machine's original boundary frozen the first time you touch it. The **Edit** menu in the toolbar carries the same verbs — Copy, Paste, Duplicate, **Flip Horizontal**, **Flip Vertical**, Delete selected, Undo last point, Undo last shape, Redo — with their shortcuts beside them. Flip mirrors the selected shape about its own center (an isometry — SF/LF never change); it has no keyboard shortcut, only the menu.
+Quantities recompute live as you edit. Every completed gesture is one undo step (a drag that ends where it started records nothing), and editing a machine-made shape — One-Click or agent — grades it as *corrected* in its provenance, with the machine's original boundary frozen the first time you touch it. The **Edit** menu in the bottom-left rail carries the same verbs — Copy, Paste, Duplicate, **Flip Horizontal**, **Flip Vertical**, Delete selected, Undo last point, Undo last shape, Redo — with their shortcuts beside them. Flip mirrors the selected shape about its own center (an isometry — SF/LF never change); it has no keyboard shortcut, only the menu.
 
 ### Copy, paste, duplicate
 
@@ -361,7 +369,7 @@ The markup layer is communication, never quantity: clouds, callouts, notes, high
 
 ### The markup tools
 
-The **Markup** menu holds five tools:
+The **Markup** section of the bottom-left Draw menu holds five tools:
 
 - **Highlighter** (`H`) — freehand marker ink. Press and **drag to paint**, stroke after stroke, no dialog between them. While it's armed, a style popover hangs under the menu: five inks (yellow default), **F / M / B** tip sizes, and a **chisel or round** nib — remembered per browser. Because press-drag paints, press-drag panning is off while the highlighter is armed; pan with `Space`-drag, middle-drag, or right-drag. Strokes stick to their sheet, scale like real ink, and are real objects: with Select, click one (it glows), drag to move it, `⌫` deletes it.
 - **Revision cloud** — two corner clicks; the cloud lands immediately, then an optional note editor opens (`Esc` keeps the cloud, skips the note). Clouds can carry a **Rev △** revision number from the panel.
@@ -392,6 +400,8 @@ RFIs export as **RFI CSV** and **RFI JSON** from the Report, and they ride the M
 <img src="img/report.png" alt="The takeoff report — per-condition breakdown and materials buy list" width="780"/>
 
 Open **Report** for the whole takeoff on one page: a per-condition table, the supporting-materials buy list, per-sheet base quantities, and your markups noted — with a project-name field and a print masthead up top (client, reference, date, prepared-by, and an optional trade-name identity so the output brands as your company).
+
+On screens up to 768px wide, Report controls wrap and the project name uses its own row. Condition totals, By Sheet, revisions, and materials reflow into labelled cards with all selected values preserved. Long names wrap, and menus scroll within the viewport. Desktop and printed reports keep their existing table layout.
 
 ### The numbers, honestly
 

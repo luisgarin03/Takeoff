@@ -70,6 +70,7 @@ import AccountChip from "../components/AccountChip.jsx";
 import { useGoogleAuth } from "../lib/google/AuthContext.jsx";
 import { projectHomeFolderId } from "../lib/projectHome.js";
 import { getTheme, toggleTheme, onThemeChange } from "../lib/theme.js";
+import { useFullscreen } from "../lib/fullscreen.js";
 // Pure data constants (render/zoom budgets, snap tuning, tool descriptors,
 // starter conditions) live in lib/canvasConstants.js; the pure
 // module-scope helpers (autoRenderScale, invertCanvasPixels, uid, clamp,
@@ -224,6 +225,7 @@ export default function TakeoffCanvas() {
 
   const [tool, setTool] = useState("pan");
   const [toolbarHidden, setToolbarHidden] = useState(false);
+  const [viewportEpoch, setViewportEpoch] = useState(0);
   const [toolbarHeight, setToolbarHeight] = useState(0);
   const toolbarOverlayTop = toolbarHidden ? 10 : Math.max(toolbarHeight + 6, 10);
   const toolbarStackRef = useRef(null);
@@ -738,6 +740,14 @@ export default function TakeoffCanvas() {
       setTf({ ...t });
     }, wait);
   }, []);
+  // Fullscreen changes only the viewport. Keep the existing transform so zoom,
+  // pan, selection, and any in-progress takeoff are not reset.
+  const onFullscreenViewportChange = useCallback(() => {
+    invalidateDetail();
+    scheduleSync();
+    setViewportEpoch((epoch) => epoch + 1);
+  }, [invalidateDetail, scheduleSync]);
+  const { isFullscreen, toggleFullscreen } = useFullscreen(onFullscreenViewportChange);
   const setTfNow = useCallback((next) => { tfRef.current = next; applyTf(); setTf({ ...next }); }, [applyTf]);
 
   // ── local PDFs (dropped into this browser) ─────────────────────────────────
@@ -1380,7 +1390,7 @@ export default function TakeoffCanvas() {
     // panelW/takeoffsOpen: docking or resizing the Takeoffs panel changes the
     // container rect without a transform change — re-run so the crop resyncs
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tf, groupSig, status, focusKey, panelW, takeoffsOpen]);
+  }, [tf, groupSig, status, focusKey, panelW, takeoffsOpen, viewportEpoch]);
 
   // Primary recovery for the detail-view stall: a hidden tab can suspend pdf.js's
   // render scheduling indefinitely (the promise above neither resolves nor rejects,
@@ -4339,6 +4349,53 @@ export default function TakeoffCanvas() {
   const faceTool = MEASURE_TOOLS.find((t) => t.id === (measureActive ? tool : lastMeasureRef.current)) || MEASURE_TOOLS[0];
   const finishOk = ((tool === "area" || tool === "deduct") && poly.length >= 3) || (tool === "zone" && poly.length >= 3 && !zoneTraceCross) || ((tool === "linear" || tool === "surface" || tool === "curve") && poly.length >= 2);
 
+  // Toolbar and canvas rail share the exact action objects and availability gates.
+  const measureMenuItems = MEASURE_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, onSelect: () => setTool(t.id) }));
+  const cutMenuItems = CUT_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, tint: "var(--c-danger)", onSelect: () => setTool(t.id) }));
+  const markupMenuItems = MARKUP_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, onSelect: () => { setTool(t.id); setMarkupDraft(null); } }));
+  const editMenuItems = [
+    { id: "copy", icon: "copy", label: "Copy", shortcut: "⌘C", disabled: !selectedId, onSelect: copySelected },
+    { id: "paste", icon: "paste", label: "Paste", shortcut: "⌘V", disabled: !clipRef.current.length, onSelect: () => pasteClipboard() },
+    { id: "dup", icon: "duplicate", label: "Duplicate", shortcut: "⌘D", disabled: !selectedId, onSelect: duplicateSelected },
+    "divider",
+    { id: "flipH", label: "Flip Horizontal", disabled: !selectedId, onSelect: () => flipSelected("h") },
+    { id: "flipV", label: "Flip Vertical", disabled: !selectedId, onSelect: () => flipSelected("v") },
+    "divider",
+    { id: "finish", icon: "check", label: `Finish shape${poly.length ? ` (${poly.length} pts)` : ""}`, shortcut: "↵", disabled: !finishOk, onSelect: finishShape },
+    { id: "undopt", icon: "undo", label: "Undo last point", shortcut: "⌘Z", disabled: !poly.length, onSelect: () => setPoly((q) => q.slice(0, -1)) },
+    { id: "undoshape", icon: "undo", label: "Undo last shape", disabled: !visibleShapes.length, onSelect: undoLast },
+    { id: "redo", label: "Redo", shortcut: "⇧⌘Z", onSelect: redoShapeCommand },
+    "divider",
+    { id: "del", icon: "close", label: "Delete selected", shortcut: "⌫", disabled: !selectedId, tint: "var(--c-danger)", onSelect: deleteSelected },
+  ];
+
+  // Shared highlighter settings stay reachable after hiding the original Draw group.
+  const highlighterStyleControls = tool === "highlighter" ? (
+    <div className="tool-menu-popover" style={{ background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "0 6px 22px rgba(0,0,0,.16)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 7 }}>
+      <div style={{ display: "flex", gap: 6 }} title="Ink">
+        {HL_INKS.map((c) => (
+          <button key={c} onClick={() => setHlStyle((st) => ({ ...st, color: c }))}
+            style={{ width: 16, height: 16, padding: 0, background: c, border: hlStyle.color === c ? "2px solid var(--ink)" : "1px solid var(--ink-faint)", cursor: "pointer" }} />
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        {HL_SIZES.map(([lbl, px]) => (
+          <button key={lbl} onClick={() => setHlStyle((st) => ({ ...st, size: px }))} title={`${lbl === "F" ? "Fine" : lbl === "M" ? "Medium" : "Broad"} tip`}
+            style={{ width: 22, height: 20, padding: 0, fontFamily: "var(--f-mono)", fontSize: 10, cursor: "pointer", border: hlStyle.size === px ? "1px solid var(--ink)" : "1px solid var(--ink-faint)", background: hlStyle.size === px ? "var(--ink)" : "transparent", color: hlStyle.size === px ? "var(--paper-bright)" : "var(--ink)" }}>{lbl}</button>
+        ))}
+        <span style={{ width: 1, alignSelf: "stretch", background: "var(--ink-faint)" }} />
+        {[["chisel", "M4 16 L14 6 L18 10 L8 20 Z"], ["round", "M5 17 Q12 3 19 13"]].map(([tip, d]) => (
+          <button key={tip} onClick={() => setHlStyle((st) => ({ ...st, tip }))} title={`${tip} tip`}
+            style={{ width: 24, height: 20, padding: 1, cursor: "pointer", border: hlStyle.tip === tip ? "1px solid var(--ink)" : "1px solid var(--ink-faint)", background: "transparent" }}>
+            <svg viewBox="0 0 24 24" width="18" height="14">{tip === "chisel"
+              ? <path d={d} fill="currentColor" stroke="none" />
+              : <path d={d} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />}</svg>
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
   // panel-toggle for the right-edge rail — square like the zoom cluster, count as a
   // tiny mono line under the icon. Lives on the canvas, costs the toolbar zero rows.
   const panelBtn = (onClick, iconName, label, isOn, count) => (
@@ -4596,9 +4653,9 @@ export default function TakeoffCanvas() {
   );
   // MODE segmented control — shared border, ink-filled active (cobalt stays
   // reserved for the armed DRAW face so only one control ever claims it)
-  const segBtn = (key, iconName, hint, last = false) => (
-    <button key={key} type="button" onClick={() => setTool(key)} title={hint}
-      style={{ display: "inline-flex", alignItems: "center", padding: "6px 9px", border: "none", borderRight: last ? "none" : "1px solid var(--ink-faint)", background: tool === key ? "var(--ink)" : "transparent", color: tool === key ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", lineHeight: 1 }}>
+  const segBtn = (key, iconName, hint, last = false, rail = false) => (
+    <button key={key} type="button" onClick={() => setTool(key)} title={hint} aria-pressed={tool === key}
+      style={{ display: "inline-flex", alignItems: "center", padding: "6px 9px", border: "none", borderRight: last ? "none" : "1px solid var(--ink-faint)", background: tool === key ? "var(--ink)" : "transparent", color: tool === key ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", lineHeight: 1, ...(rail ? { justifyContent: "center", padding: 0, width: 34, height: 34, borderRadius: 0, border: "1px solid var(--ink-faint)", background: tool === key ? "var(--ink)" : "var(--paper-bright)" } : {}) }}>
       <Icon name={iconName} size={15} />
     </button>
   );
@@ -4766,9 +4823,16 @@ export default function TakeoffCanvas() {
         )}
         <div className="toolbar-spacer" style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>{saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}</span>
+        <button type="button" onClick={toggleFullscreen}
+          title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          aria-pressed={isFullscreen}
+          style={{ display: "inline-flex", alignItems: "center", padding: "6px 9px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", lineHeight: 1 }}>
+          <Icon name={isFullscreen ? "fullscreenExit" : "fullscreen"} size={15} />
+        </button>
         <button onClick={toggleTheme} title="App theme — light / dark chrome (sheets unaffected; use ☾ on the canvas to invert the print)"
           aria-label="App theme — light / dark chrome" aria-pressed={theme === "dark"}
-          style={{ display: "inline-flex", alignItems: "center", padding: "6px 9px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>
+          style={{ display: "none", alignItems: "center", padding: "6px 9px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>
           {theme === "dark" ? "◐" : "◑"}
         </button>
         <button onClick={() => { setScheduleAnchor(null); setTool((t) => (t === "schedule" ? "select" : "schedule")); }}
@@ -4792,85 +4856,49 @@ export default function TakeoffCanvas() {
 
       {/* deck 2 — the work bar: drafting-style captions above each cluster */}
       <div className="glass-toolbar glass-toolbar-secondary" style={{ display: "flex", gap: 7, alignItems: "center", padding: "20px 14px 8px", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-bright)", whiteSpace: "nowrap" }}>
-        {cluster("Mode",
-          <span style={{ display: "inline-flex", border: "1px solid var(--ink-faint)" }}>
-            {segBtn("pan", "pan", "Pan (P) — or hold right-click / Space mid-measure")}
-            {segBtn("select", "select", "Select (V) — pick a takeoff, drag points", true)}
-          </span>
-        )}
-        {vRule}
-        {cluster("Draw", <>
-          <ToolMenu
-            title="Measure — the face shows the armed tool"
-            active={measureActive}
-            onOpenChange={onMenuDepth}
-            face={<><Icon name={faceTool.icon} size={15} /><span style={{ opacity: measureActive ? 1 : 0.6 }}>{faceTool.label}</span></>}
-            items={MEASURE_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, onSelect: () => setTool(t.id) }))}
-          />
-          <ToolMenu
-            title="Cut Out — subtract voids/columns (counts negative)"
-            active={tool === "deduct"} accent="danger"
-            onOpenChange={onMenuDepth}
-            face={<><Icon name="deduct" size={15} /><span>Cut Out</span></>}
-            items={CUT_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, tint: "var(--c-danger)", onSelect: () => setTool(t.id) }))}
-          />
-          <span style={{ position: "relative", display: "inline-flex" }}>
+        {/* Presentation only: rail controls own their anchors and share these actions. */}
+        <div style={{ display: "none" }}>
+          {cluster("Mode",
+            <span style={{ display: "inline-flex", border: "1px solid var(--ink-faint)" }}>
+              {segBtn("pan", "pan", "Pan (P) — or hold right-click / Space mid-measure")}
+              {segBtn("select", "select", "Select (V) — pick a takeoff, drag points", true)}
+            </span>
+          )}
+          {vRule}
+          {cluster("Draw", <>
             <ToolMenu
-              title="Markup — annotations, not measurements"
-              active={MARKUP_IDS.includes(tool)}
+              title="Measure — the face shows the armed tool"
+              active={measureActive}
               onOpenChange={onMenuDepth}
-              face={<><Icon name="markup" size={15} /><span>Markup</span></>}
-              items={MARKUP_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, onSelect: () => { setTool(t.id); setMarkupDraft(null); } }))}
+              face={<><Icon name={faceTool.icon} size={15} /><span style={{ opacity: measureActive ? 1 : 0.6 }}>{faceTool.label}</span></>}
+              items={measureMenuItems}
             />
-            {/* highlighter style popover — visible while the tool is armed (hatch-picker chrome) */}
-            {tool === "highlighter" && (
-              <div className="tool-menu-popover" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 90, background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "0 6px 22px rgba(0,0,0,.16)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 7 }}>
-                <div style={{ display: "flex", gap: 6 }} title="Ink">
-                  {HL_INKS.map((c) => (
-                    <button key={c} onClick={() => setHlStyle((st) => ({ ...st, color: c }))}
-                      style={{ width: 16, height: 16, padding: 0, background: c, border: hlStyle.color === c ? "2px solid var(--ink)" : "1px solid var(--ink-faint)", cursor: "pointer" }} />
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  {HL_SIZES.map(([lbl, px]) => (
-                    <button key={lbl} onClick={() => setHlStyle((st) => ({ ...st, size: px }))} title={`${lbl === "F" ? "Fine" : lbl === "M" ? "Medium" : "Broad"} tip`}
-                      style={{ width: 22, height: 20, padding: 0, fontFamily: "var(--f-mono)", fontSize: 10, cursor: "pointer", border: hlStyle.size === px ? "1px solid var(--ink)" : "1px solid var(--ink-faint)", background: hlStyle.size === px ? "var(--ink)" : "transparent", color: hlStyle.size === px ? "var(--paper-bright)" : "var(--ink)" }}>{lbl}</button>
-                  ))}
-                  <span style={{ width: 1, alignSelf: "stretch", background: "var(--ink-faint)" }} />
-                  {[["chisel", "M4 16 L14 6 L18 10 L8 20 Z"], ["round", "M5 17 Q12 3 19 13"]].map(([tip, d]) => (
-                    <button key={tip} onClick={() => setHlStyle((st) => ({ ...st, tip }))} title={`${tip} tip`}
-                      style={{ width: 24, height: 20, padding: 1, cursor: "pointer", border: hlStyle.tip === tip ? "1px solid var(--ink)" : "1px solid var(--ink-faint)", background: "transparent" }}>
-                      <svg viewBox="0 0 24 24" width="18" height="14">{tip === "chisel"
-                        ? <path d={d} fill="currentColor" stroke="none" />
-                        : <path d={d} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />}</svg>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </span>
-          <ToolMenu
-            title="Edit takeoffs"
-            onOpenChange={onMenuDepth}
-            face={<span>Edit</span>}
-            items={[
-              { id: "copy", icon: "copy", label: "Copy", shortcut: "⌘C", disabled: !selectedId, onSelect: copySelected },
-              { id: "paste", icon: "paste", label: "Paste", shortcut: "⌘V", disabled: !clipRef.current.length, onSelect: () => pasteClipboard() },
-              { id: "dup", icon: "duplicate", label: "Duplicate", shortcut: "⌘D", disabled: !selectedId, onSelect: duplicateSelected },
-              "divider",
-              { id: "flipH", label: "Flip Horizontal", disabled: !selectedId, onSelect: () => flipSelected("h") },
-              { id: "flipV", label: "Flip Vertical", disabled: !selectedId, onSelect: () => flipSelected("v") },
-              "divider",
-              { id: "finish", icon: "check", label: `Finish shape${poly.length ? ` (${poly.length} pts)` : ""}`, shortcut: "↵", disabled: !finishOk, onSelect: finishShape },
-              { id: "undopt", icon: "undo", label: "Undo last point", shortcut: "⌘Z", disabled: !poly.length, onSelect: () => setPoly((q) => q.slice(0, -1)) },
-              { id: "undoshape", icon: "undo", label: "Undo last shape", disabled: !visibleShapes.length, onSelect: undoLast },
-              { id: "redo", label: "Redo", shortcut: "⇧⌘Z", onSelect: redoShapeCommand },
-              "divider",
-              { id: "del", icon: "close", label: "Delete selected", shortcut: "⌫", disabled: !selectedId, tint: "var(--c-danger)", onSelect: deleteSelected },
-            ]}
-          />
-        </>)}
-        {vRule}
+            <ToolMenu
+              title="Cut Out — subtract voids/columns (counts negative)"
+              active={tool === "deduct"} accent="danger"
+              onOpenChange={onMenuDepth}
+              face={<><Icon name="deduct" size={15} /><span>Cut Out</span></>}
+              items={cutMenuItems}
+            />
+            <span style={{ position: "relative", display: "inline-flex" }}>
+              <ToolMenu
+                title="Markup — annotations, not measurements"
+                active={MARKUP_IDS.includes(tool)}
+                onOpenChange={onMenuDepth}
+                face={<><Icon name="markup" size={15} /><span>Markup</span></>}
+                items={markupMenuItems}
+              />
+              {highlighterStyleControls}
+            </span>
+            <ToolMenu
+              title="Edit takeoffs"
+              onOpenChange={onMenuDepth}
+              face={<span>Edit</span>}
+              items={editMenuItems}
+            />
+          </>)}
+          {vRule}
+        </div>
         {cluster("Aids", <>
           <button onClick={() => setTool((t) => (t === "zone" ? "select" : "zone"))}
             title="Zone check — trace a region (an apartment, a wing) to read every condition's quantities inside it, materials included. Nothing is saved; the outline clears when you leave the tool."
@@ -5760,13 +5788,31 @@ export default function TakeoffCanvas() {
             </div>
           )}
 
-          {/* zoom buttons — stop left presses here: the container's onPointerDown
+          {/* mode and zoom buttons — stop left presses here: the container's onPointerDown
               setPointerCapture()s every left press, which retargets the pointerup
               and the composed click never reaches these buttons. Right/middle/
               Space presses still bubble so a pan can start on top of the stack,
               and dblclick is stopped so rapid zoom clicks can't finishShape() */}
           <div className="canvas-zoom-rail" onPointerDown={(e) => { if (e.button === 0 && !spaceRef.current) e.stopPropagation(); }} onDoubleClick={(e) => e.stopPropagation()}
             style={{ position: "absolute", left: 14, bottom: 14, display: "flex", flexDirection: "column", gap: 6 }}>
+            <ToolMenu rail title="Draw — measurement, cut out, and markup tools"
+              face={<Icon name="pencil" size={15} />}
+              active={measureActive || tool === "deduct" || MARKUP_IDS.includes(tool)}
+              onOpenChange={onMenuDepth}
+              items={[{ section: "Measure" }, ...measureMenuItems, { section: "Cut Out" }, ...cutMenuItems, { section: "Markup" }, ...markupMenuItems, ...(highlighterStyleControls ? [{ id: "highlighter-style", custom: highlighterStyleControls }] : [])]} />
+            <ToolMenu rail title="Edit takeoffs" face={<Icon name="markup" size={15} />}
+              onOpenChange={onMenuDepth} items={editMenuItems} />
+            {/* Share the toolbar gate/commit; isolate Finish presses even while Space is held. */}
+            {finishOk && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); finishShape(); }}
+                onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
+                title={`Finish shape (${poly.length} points)`} aria-label={`Finish shape (${poly.length} points)`}
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, width: 34, height: 34, borderRadius: 0, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", color: "var(--ink)", cursor: "pointer", lineHeight: 1 }}>
+                <Icon name="check" size={15} />
+              </button>
+            )}
+            {segBtn("pan", "pan", "Pan (P) — or hold right-click / Space mid-measure", false, true)}
+            {segBtn("select", "select", "Select (V) — pick a takeoff, drag points", false, true)}
             {[["+", 1.25], ["−", 0.8]].map(([lbl, f]) => (
               <button key={lbl} onClick={() => { const r = containerRef.current.getBoundingClientRect(); zoomAround(r.width / 2, r.height / 2, f); }}
                 style={{ width: 34, height: 34, borderRadius: 0, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", fontSize: 18, fontWeight: 700 }}>{lbl}</button>
@@ -5943,6 +5989,14 @@ export default function TakeoffCanvas() {
           {panelBtn(toggleTakeoffs, "takeoffs", "Takeoffs — conditions + running totals", takeoffsOpen, visibleShapes.length)}
           {panelBtn(() => setAgentOpen((o) => !o), "target", "Agent — describe a takeoff; it stages dashed proposals you accept or reject (bring your own AI key)", agentOpen, agentProposals.length)}
           {panelBtn(() => setShowRevisions(true), "revisions", "Revisions — save the takeoff at each bid revision, compare what moved", showRevisions)}
+          <button type="button" onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
+            onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            title="App theme — light / dark chrome (sheets unaffected; use ☾ on the canvas to invert the print)"
+            aria-label="App theme — light / dark chrome" aria-pressed={theme === "dark"}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 34, minHeight: 34, padding: "5px 0 4px", border: `1px solid ${theme === "dark" ? "var(--ink)" : "var(--ink-faint)"}`, background: theme === "dark" ? "var(--ink)" : "var(--paper-bright)", color: theme === "dark" ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 14, lineHeight: 1 }}>
+            <Icon name="palette" size={18} />
+          </button>
         </div>
 
        </div>

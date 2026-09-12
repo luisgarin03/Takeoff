@@ -14,6 +14,8 @@ export const icons = {
   document: (s) => <I size={s}><path d="M6 3 H 16 L 19 6 V 21 H 6 Z" /><path d="M16 3 V 6 H 19" /><line x1="9" y1="12" x2="16" y2="12" /><line x1="9" y1="16" x2="16" y2="16" /></I>,
   product: (s) => <I size={s}><rect x="3" y="7" width="18" height="13" /><path d="M3 7 L 12 3 L 21 7" /><line x1="12" y1="3" x2="12" y2="20" /></I>,
   takeoff: (s) => <I size={s}><rect x="3" y="3" width="18" height="18" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="3" x2="9" y2="21" /><circle cx="15" cy="15" r="1.2" fill="currentColor" /></I>,
+  palette: (s) => <I size={s} color="#242424"><path d="M12 3 C6.5 3 3 6.8 3 12 C3 17 7 21 12 21 H14 C16 21 17 19 15.5 17.5 C14 16 15 14 17 14 H18 C20 14 21 12.5 21 10.5 C21 6.5 17 3 12 3 Z" fill="#b3b3b3" /><circle cx="7" cy="10" r="1.4" fill="#242424" stroke="none" /><circle cx="11" cy="6.8" r="1.4" fill="#595959" stroke="none" /><circle cx="16" cy="7.5" r="1.4" fill="#808080" stroke="none" /><circle cx="7.5" cy="15" r="1.4" fill="#595959" stroke="none" /></I>,
+  pencil: (s) => <I size={s}><path d="M4 20 L5 15 L16 4 L20 8 L9 19 Z M14 6 L18 10 M5 15 L9 19" /></I>,
   plus: (s) => <I size={s}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></I>,
 
   // ── takeoff canvas set — drafting monoline, vertex-dot motif on measure tools ──
@@ -60,6 +62,8 @@ export const icons = {
   thickness: (s) => <I size={s}><line x1="5" y1="5" x2="5" y2="19" /><line x1="19" y1="5" x2="19" y2="19" /><path d="M7.5 12 H 16.5 M7.5 12 L 9.7 9.8 M7.5 12 L 9.7 14.2 M16.5 12 L 14.3 9.8 M16.5 12 L 14.3 14.2" /></I>,
   oneClick: (s) => <I size={s}><path d="M9 3 H 3 V 9" /><path d="M15 3 H 21 V 9" /><path d="M3 15 V 21 H 9" /><path d="M21 15 V 21 H 15" /><path d="M12 7.4 L 13.2 10.8 L 16.6 12 L 13.2 13.2 L 12 16.6 L 10.8 13.2 L 7.4 12 L 10.8 10.8 Z" /></I>,
   hiRes: (s) => <I size={s}><rect x="3" y="5" width="18" height="14" /><path d="M7 15 V 9 M7 12 H 10.5 M10.5 9 V 15" /><path d="M14 9 V 15 M14 9 H 15.6 A 3 3 0 0 1 15.6 15 H 14" /></I>,
+  fullscreen: (s) => <I size={s}><path d="M4 9 V 4 H 9 M15 4 H 20 V 9 M20 15 V 20 H 15 M9 20 H 4 V 15" /></I>,
+  fullscreenExit: (s) => <I size={s}><path d="M9 4 V 9 H 4 M15 4 V 9 H 20 M20 15 H 15 V 20 M4 15 H 9 V 20" /></I>,
   // pushpin / thumbtack — the quick-access palette "pin this condition" action.
   // Cap bar at top, tapered body to a collar, needle to the point.
   pin: (s) => <I size={s}><line x1="8" y1="3" x2="16" y2="3" /><path d="M10 3 V 8 L 7 11 H 17 L 14 8 V 3" /><line x1="12" y1="11" x2="12" y2="20" /></I>,

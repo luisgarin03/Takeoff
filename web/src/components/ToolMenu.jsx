@@ -11,22 +11,27 @@
 // preview its effect while pointed at (the scale menu's plan-says item shows
 // the calibrated guide bar on the sheet behind the open menu).
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "../brand/icons.jsx";
 
 const MENU_W = 232;
 
-export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false }) {
+export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false, rail = false }) {
   const [open, setOpen] = useState(false);
   const [flip, setFlip] = useState(false);
   const rootRef = useRef(null);
+  const menuRef = useRef(null);
+  const [railPosition, setRailPosition] = useState({});
+  const stopCanvasEvent = rail ? (e) => e.stopPropagation() : undefined;
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+    const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target) && !menuRef.current?.contains(e.target)) setOpen(false); };
     const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("pointerdown", onDown);
+    // Capture sees outside presses even when a canvas control stops bubbling.
+    document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
+    return () => { document.removeEventListener("pointerdown", onDown, true); document.removeEventListener("keydown", onKey); };
   }, [open]);
 
   // Notify strictly in open/close PAIRS: fire true only when opening, and repay
@@ -47,13 +52,26 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
     if (!open && rootRef.current) {
       const r = rootRef.current.getBoundingClientRect();
       setFlip(r.left + menuW > window.innerWidth - 16);
+      if (rail) {
+        const width = Math.min(menuW, window.innerWidth - 24);
+        const top = Math.max(12, Math.min(r.top, window.innerHeight - 320));
+        setRailPosition({ position: "fixed", top, left: Math.max(12, Math.min(r.right + 8, window.innerWidth - width - 12)),
+          right: "auto", width, minWidth: 0, maxHeight: Math.max(0, window.innerHeight - top - 12),
+          overflowY: "auto", overscrollBehavior: "contain", touchAction: "pan-y", boxSizing: "border-box", zIndex: 1000 });
+      }
     }
     setOpen((v) => !v);
   };
 
+  // A portal keeps rail menus outside the clipped canvas; React events still
+  // bubble through the rail wrapper, which isolates every menu interaction.
+  const renderMenu = (node) => rail ? createPortal(node, document.body) : node;
+
   return (
-    <span ref={rootRef} style={{ position: "relative", display: "inline-flex" }}>
-      <button type="button" onClick={toggle} title={title} disabled={disabled}
+    <span ref={rootRef} style={{ position: "relative", display: "inline-flex" }}
+      onPointerDown={stopCanvasEvent} onPointerUp={stopCanvasEvent} onClick={stopCanvasEvent}
+      onPointerMove={stopCanvasEvent} onPointerCancel={stopCanvasEvent} onDoubleClick={stopCanvasEvent}>
+      <button type="button" onClick={toggle} title={title} aria-label={title || undefined} aria-expanded={open} disabled={disabled}
         style={{
           display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 10px", cursor: disabled ? "default" : "pointer",
           border: `1px solid ${active ? accentColor : "var(--ink-faint)"}`,
@@ -62,16 +80,19 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
           opacity: disabled ? 0.38 : 1,
           fontFamily: "var(--f-body)", fontSize: 12.5, fontWeight: 600, lineHeight: 1,
           ...faceStyle,
+          ...(rail ? { justifyContent: "center", padding: 0, width: 34, height: 34, gap: 0,
+            background: active ? accentColor : (open ? "var(--paper-shadow)" : "var(--paper-bright)") } : {}),
         }}>
         {face}
-        <span style={{ display: "inline-flex", opacity: 0.7 }}><Icon name="chevronDown" size={11} /></span>
+        {!rail && <span style={{ display: "inline-flex", opacity: 0.7 }}><Icon name="chevronDown" size={11} /></span>}
       </button>
-      {open && (
-        <div className="tool-menu-popover" style={{
+      {open && renderMenu(
+        <div ref={menuRef} className="tool-menu-popover" style={{
           position: "absolute", top: "calc(100% + 4px)", [flip ? "right" : "left"]: 0, zIndex: 90,
           minWidth: MENU_W, background: "var(--paper-bright)", border: "1px solid var(--ink)",
           boxShadow: "var(--shadow-2)", padding: "4px 0",
           ...menuStyle,
+          ...(rail ? railPosition : {}),
         }}>
           {items.map((it, i) => {
             if (it === "divider") return <div key={i} style={{ height: 1, background: "var(--ink-faint)", margin: "4px 0" }} />;
