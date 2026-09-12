@@ -7,6 +7,8 @@
   "description": "OpenTakeoff — a free, open-source PDF takeoff canvas for flooring contractors.",
   "license": "Apache-2.0",
   "scripts": {
+    "preinstall": "node scripts/check-lockfile.mjs",
+    "check:lockfile": "node scripts/check-lockfile.mjs",
     "dev": "vite",
     "build": "vite build",
     "start:desktop": "npm run build && electron .",
