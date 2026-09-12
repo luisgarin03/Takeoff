@@ -22,6 +22,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - run: node scripts/check-lockfile.mjs
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
@@ -42,6 +43,8 @@ jobs:
           cache-dependency-path: |
             web/package-lock.json
             mcp/package-lock.json
+      - run: node scripts/check-lockfile.mjs
+        working-directory: web
       - run: npm ci
         working-directory: web
       - run: npm ci
