@@ -29,6 +29,13 @@ export const autoRenderScale = (wPt, hPt) => {
   return Math.min(Math.max(RENDER_SCALE, Math.min(QUALITY_CEILING, cap)), cap);
 };
 
+// Low-zoom previews keep the base canvas's logical stage footprint while their
+// backing store is reduced. Kept pure so the dimension contract is testable.
+export const previewRasterDimensions = (width, height, scale) => ({
+  width: Math.max(1, Math.round(width * scale)),
+  height: Math.max(1, Math.round(height * scale)),
+});
+
 // Invert a canvas's pixels in place: one difference-with-white pass (an
 // involution — applying it again flips back). This is how the negative/dark
 // view works: pixel inversion costs one pass at draw time, where a CSS

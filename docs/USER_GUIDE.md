@@ -84,7 +84,7 @@ Panning is always at hand, whatever tool is armed:
 
 ### Rendering: crisp at any zoom
 
-Past ~115% zoom the visible region re-renders straight from the PDF vectors at your current zoom, so fine callouts and hatching stay razor-sharp at any depth. At very low overview zoom, OpenTakeoff displays a prebuilt quarter-resolution preview of the same finished sheet raster; it switches back to the full-resolution base after zooming in, and quantities, coordinates, and vector overlays are unchanged. Per sheet, the **Render & fill settings** menu (the sliders icon beside the 45° and Snap toggles) offers **Hi-Res render (this sheet)** — a higher base raster quality budget (~28 MP) for dense sheets. Hi-Res is a display setting, saved per sheet per browser; **quantities are never affected by render quality**.
+Past ~115% zoom the visible region re-renders straight from the PDF vectors at your current zoom, so fine callouts and hatching stay razor-sharp at any depth. At very low overview zoom, OpenTakeoff displays a prebuilt preview of the same finished sheet raster; it switches back to the full-resolution base after zooming in, and quantities, coordinates, and vector overlays are unchanged. The Diagnostics panel’s **Preview Resolution** control selects 10–100% of the base raster (50% by default) and shows its size plus an RGBA-memory estimate; it is saved per browser and never re-renders the PDF. Per sheet, the **Render & fill settings** menu (the sliders icon beside the 45° and Snap toggles) offers **Hi-Res render (this sheet)** — a higher base raster quality budget (~28 MP) for dense sheets. Hi-Res is a display setting, saved per sheet per browser; **quantities are never affected by render quality**.
 
 ### App theme
 

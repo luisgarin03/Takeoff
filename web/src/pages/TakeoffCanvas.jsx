@@ -81,11 +81,12 @@ import { useFullscreen } from "../lib/fullscreen.js";
 import {
   PANEL_GAP, MAX_CANVAS_DIM, MAX_CANVAS_AREA,
   DETAIL_ENGAGE, DETAIL_MARGIN, SYNC_MS, GESTURE_MS, DETAIL_STALL_MS, SNAP_CELL,
-  LOW_ZOOM_PREVIEW_SCALE, LOW_ZOOM_ENTER, LOW_ZOOM_EXIT,
+  LOW_ZOOM_PREVIEW_MIN_SCALE, LOW_ZOOM_PREVIEW_MAX_SCALE, LOW_ZOOM_PREVIEW_STEP,
+  LOW_ZOOM_PREVIEW_DEFAULT_SCALE, LOW_ZOOM_PREVIEW_DEBOUNCE_MS, LOW_ZOOM_ENTER, LOW_ZOOM_EXIT,
   MEASURE_TOOLS, CUT_TOOLS, MARKUP_TOOLS, MARKUP_IDS, HL_INKS, HL_SIZES,
 } from "../lib/canvasConstants.js";
-import { autoRenderScale, invertCanvasPixels, uid, clamp, isDangerMsg, instantiateTemplate, seedConditions } from "../lib/canvasUtil.js";
-import { diagnosticsRenderCancel, diagnosticsRenderComplete, diagnosticsRenderError, diagnosticsRenderStart, diagnosticsZoom } from "../lib/renderDiagnostics.js";
+import { autoRenderScale, previewRasterDimensions, invertCanvasPixels, uid, clamp, isDangerMsg, instantiateTemplate, seedConditions } from "../lib/canvasUtil.js";
+import { diagnosticsEvent, diagnosticsRenderCancel, diagnosticsRenderComplete, diagnosticsRenderError, diagnosticsRenderStart, diagnosticsZoom } from "../lib/renderDiagnostics.js";
 // Shape provenance policy now lives in ONE place: lib/shapeCommands.js. Every
 // meaningful mutation of `shapes` (create / reshape / reassign / relabel /
 // delete) is a COMMAND applied through dispatchShape below — the chokepoint
@@ -104,6 +105,17 @@ import * as panelGeom from "../lib/panelGeometry.js";
 // Carpet roll width — a run reaching this needs a seam. The live cursor readout
 // turns amber at/past it so the estimator sees where seams fall while tracing.
 const CARPET_ROLL_FT = 12;
+const PREVIEW_RESOLUTION_KEY = "opentakeoff_preview_resolution";
+const normalizePreviewResolution = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return LOW_ZOOM_PREVIEW_DEFAULT_SCALE;
+  const bounded = Math.min(LOW_ZOOM_PREVIEW_MAX_SCALE, Math.max(LOW_ZOOM_PREVIEW_MIN_SCALE, n));
+  return Math.round(bounded / LOW_ZOOM_PREVIEW_STEP) * LOW_ZOOM_PREVIEW_STEP;
+};
+const storedPreviewResolution = () => {
+  try { const value = localStorage.getItem(PREVIEW_RESOLUTION_KEY); return value == null ? LOW_ZOOM_PREVIEW_DEFAULT_SCALE : normalizePreviewResolution(value); }
+  catch { return LOW_ZOOM_PREVIEW_DEFAULT_SCALE; }
+};
 
 // Click-select against a curved line's DRAWN path: flatten the control points and
 // hand hitShape a stand-in shape (lib/geometry.js stays byte-identical with Spline's).
@@ -462,8 +474,13 @@ export default function TakeoffCanvas() {
   const panelCanvasRefs = useRef(new Map()); // sheetKey → <canvas>
   const previewCanvasRefs = useRef(new Map()); // sheetKey → low-zoom canvas in the same stage space
   const previewReadyRef = useRef(new Map());   // sheetKey → base-render generation that produced it
+  const previewBaseGenerationsRef = useRef(new Map()); // sheetKey → completed base-render generation
   const previewJobsRef = useRef(new Map());    // sheetKey → idle callback/timeout handle
   const previewModeRef = useRef(false);        // hysteretic representation choice; never drives a React render
+  const previewResolutionRef = useRef(storedPreviewResolution());
+  const previewResolutionVersionRef = useRef(0);
+  const previewResolutionTimerRef = useRef(0);
+  const previewDiagnosticsRef = useRef({ scale: previewResolutionRef.current, width: 0, height: 0, bytes: 0, generationMs: 0 });
   const zoomWillChangeTimerRef = useRef(0);
   const pageObjsRef = useRef(new Map());     // sheetKey → pdf.js page object (kept for on-demand detail-view re-render)
   const renderScalesRef = useRef(new Map()); // sheetKey → base raster pdf scale (detail view renders at a multiple of it)
@@ -755,7 +772,7 @@ export default function TakeoffCanvas() {
     }
     previewJobsRef.current.clear();
   }, []);
-  const queuePreview = useCallback((key, base, generation) => {
+  const queuePreview = useCallback((key, base, generation, resolution = previewResolutionRef.current, resolutionVersion = previewResolutionVersionRef.current) => {
     const previous = previewJobsRef.current.get(key);
     if (previous) {
       if (previous.kind === "idle") window.cancelIdleCallback?.(previous.id);
@@ -768,24 +785,36 @@ export default function TakeoffCanvas() {
         // absent or idle time is scarce.
         if (!deadline.didTimeout && deadline.timeRemaining?.() < 8) return schedule();
         previewJobsRef.current.delete(key);
-        if (generation !== renderSeqRef.current || panelCanvasRefs.current.get(key) !== base) return;
+        if (generation !== renderSeqRef.current || resolutionVersion !== previewResolutionVersionRef.current || panelCanvasRefs.current.get(key) !== base) return;
         const preview = previewCanvasRefs.current.get(key);
         if (!preview || !base.width || !base.height) return;
-        const w = Math.max(1, Math.round(base.width * LOW_ZOOM_PREVIEW_SCALE));
-        const h = Math.max(1, Math.round(base.height * LOW_ZOOM_PREVIEW_SCALE));
+        const { width: w, height: h } = previewRasterDimensions(base.width, base.height, resolution);
+        const started = performance.now();
+        const back = document.createElement("canvas");
         try {
-          preview.width = w; preview.height = h;
-          preview.getContext("2d").drawImage(base, 0, 0, w, h);
-          if (generation !== renderSeqRef.current || panelCanvasRefs.current.get(key) !== base) {
-            preview.width = preview.height = 0;
+          // Do the expensive resample offscreen. The currently visible preview
+          // remains untouched until this replacement is complete.
+          back.width = w; back.height = h;
+          back.getContext("2d").drawImage(base, 0, 0, w, h);
+          if (generation !== renderSeqRef.current || resolutionVersion !== previewResolutionVersionRef.current || panelCanvasRefs.current.get(key) !== base) {
+            back.width = back.height = 0;
             return;
           }
+          // Resize + copy are synchronous in one task: no frame can present the
+          // cleared target between them, so the old valid preview swaps atomically.
+          preview.width = w; preview.height = h;
+          preview.getContext("2d").drawImage(back, 0, 0);
+          back.width = back.height = 0;
           previewReadyRef.current.set(key, generation);
           canvasInvertedRef.current.set(preview, !!darkModeRef.current);
+          previewDiagnosticsRef.current = { scale: resolution, width: w, height: h, bytes: w * h * 4, generationMs: performance.now() - started };
+          diagnosticsEvent("PREVIEW READY", `${key}: ${w}×${h} · ${(resolution * 100).toFixed(0)}% · ${Math.round(previewDiagnosticsRef.current.generationMs)}ms`);
           syncRasterRepresentation();
         } catch {
-          preview.width = preview.height = 0;
-          previewReadyRef.current.delete(key);
+          back.width = back.height = 0;
+          // Retain the existing preview on replacement failure; only a first
+          // generation has no valid preview to preserve.
+          if (!previewReadyRef.current.has(key)) preview.width = preview.height = 0;
         }
       };
       if ("requestIdleCallback" in window) {
@@ -798,6 +827,22 @@ export default function TakeoffCanvas() {
     };
     schedule();
   }, [syncRasterRepresentation]);
+  const requestPreviewResolution = useCallback((value) => {
+    const resolution = normalizePreviewResolution(value);
+    clearTimeout(previewResolutionTimerRef.current);
+    previewResolutionTimerRef.current = setTimeout(() => {
+      if (resolution === previewResolutionRef.current) return;
+      previewResolutionRef.current = resolution;
+      previewResolutionVersionRef.current++;
+      try { localStorage.setItem(PREVIEW_RESOLUTION_KEY, String(resolution)); } catch { /* private mode */ }
+      const version = previewResolutionVersionRef.current;
+      for (const [key, base] of panelCanvasRefs.current) {
+        const generation = previewBaseGenerationsRef.current.get(key);
+        if (generation != null) queuePreview(key, base, generation, resolution, version);
+      }
+    }, LOW_ZOOM_PREVIEW_DEBOUNCE_MS);
+  }, [queuePreview]);
+  const previewStatus = useCallback(() => previewDiagnosticsRef.current, []);
   // Keep the large stage promoted only while an actual zoom gesture is active.
   // The timer is deliberately independent of React state and of preview work.
   const markZoomCompositing = useCallback(() => {
@@ -807,7 +852,7 @@ export default function TakeoffCanvas() {
       if (stageRef.current) stageRef.current.style.willChange = "auto";
     }, GESTURE_MS);
   }, []);
-  useEffect(() => () => { cancelPreviewJobs(); clearTimeout(zoomWillChangeTimerRef.current); }, [cancelPreviewJobs]);
+  useEffect(() => () => { cancelPreviewJobs(); clearTimeout(previewResolutionTimerRef.current); clearTimeout(zoomWillChangeTimerRef.current); }, [cancelPreviewJobs]);
   // Re-apply after every React render so an unrelated re-render mid-drag can't
   // snap the transform back to a stale value.
   useLayoutEffect(() => { applyTf(); });
@@ -1245,6 +1290,7 @@ export default function TakeoffCanvas() {
     setStatus("rendering"); setErr(""); setPoly([]); setCalib([]); setPendingLen(""); setCheck([]); setCheckStated(""); setScaleGuide(null); setPrevScale(null); selectShape(null); setProposal(null); resetZone();
     cancelPreviewJobs();
     previewReadyRef.current.clear();
+    previewBaseGenerationsRef.current.clear();
     for (const [, preview] of previewCanvasRefs.current) {
       preview.style.display = "none";
       preview.width = preview.height = 0;
@@ -1309,6 +1355,7 @@ export default function TakeoffCanvas() {
         // Build exactly one inexpensive overview raster from these finished
         // pixels. It never invokes pdf.js and is ignored if this render chain
         // becomes stale before the browser has idle time to make it.
+        previewBaseGenerationsRef.current.set(m.key, seq);
         queuePreview(m.key, canvas, seq);
         // snap-to-vector index per panel (best-effort; off until the user enables it)
         m.pageObj.getOperatorList().then((ol) => {
@@ -5526,9 +5573,9 @@ export default function TakeoffCanvas() {
           <div ref={stageRef} style={{ position: "absolute", transformOrigin: "0 0", willChange: "auto", width: stage.w || undefined, height: stage.h || undefined }}>
             {panels.map((p) => (
               <React.Fragment key={p.key}>
-                <canvas ref={(el) => { if (el) panelCanvasRefs.current.set(p.key, el); else panelCanvasRefs.current.delete(p.key); }}
+                <canvas data-diagnostics-id={`base-${p.key}`} ref={(el) => { if (el) panelCanvasRefs.current.set(p.key, el); else panelCanvasRefs.current.delete(p.key); }}
                   style={{ position: "absolute", left: p.xOffset, top: 0, boxShadow: "0 2px 20px rgba(0,0,0,.18)" }} />
-                <canvas ref={(el) => { if (el) previewCanvasRefs.current.set(p.key, el); else previewCanvasRefs.current.delete(p.key); }}
+                <canvas data-diagnostics-id={`preview-${p.key}`} ref={(el) => { if (el) previewCanvasRefs.current.set(p.key, el); else previewCanvasRefs.current.delete(p.key); }}
                   aria-hidden="true" style={{ position: "absolute", left: p.xOffset, top: 0, width: p.img.w || undefined, height: p.img.h || undefined, display: "none", boxShadow: "0 2px 20px rgba(0,0,0,.18)", pointerEvents: "none" }} />
               </React.Fragment>
             ))}
@@ -6328,7 +6375,8 @@ export default function TakeoffCanvas() {
           (the Agent panel links here; closing re-renders, so `configured`
           re-reads immediately). */}
       {showAiSettings && <AiSettings onClose={() => setShowAiSettings(false)} />}
-      <DiagnosticsMonitor open={diagnosticsOpen} onClose={() => setDiagnosticsOpen(false)} zoom={tf.scale} />
+      <DiagnosticsMonitor open={diagnosticsOpen} onClose={() => setDiagnosticsOpen(false)} zoom={tf.scale}
+        initialPreviewResolution={previewResolutionRef.current} onPreviewResolutionChange={requestPreviewResolution} previewStatus={previewStatus} />
     </div>
   );
 }

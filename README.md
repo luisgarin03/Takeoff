@@ -4,7 +4,7 @@ A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF
 
 ## Features
 
-Measure construction plans with existing canvas tools, snapping, and reports. The optional **Trackpad** control adds relative touch or mouse aiming and tap-to-place without covering the target with your finger. At overview zoom, each finished sheet also has a small local preview raster; the full-resolution sheet remains available for normal and detailed viewing.
+Measure construction plans with existing canvas tools, snapping, and reports. The optional **Trackpad** control adds relative touch or mouse aiming and tap-to-place without covering the target with your finger. At overview zoom, each finished sheet also has a local preview raster; its Diagnostics control is adjustable from 10–100% of the base raster (50% default), while the full-resolution sheet remains available for normal and detailed viewing.
 
 ## What's in the box
 

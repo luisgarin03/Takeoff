@@ -39,7 +39,11 @@ export const DETAIL_STALL_MS = 25000;
 // Overview mode keeps the full-resolution base raster intact, but displays this
 // prebuilt downsample while the whole stage is very small. The gap between enter
 // and exit prevents compositor-visible representation churn around the boundary.
-export const LOW_ZOOM_PREVIEW_SCALE = 0.25;
+export const LOW_ZOOM_PREVIEW_MIN_SCALE = 0.10;
+export const LOW_ZOOM_PREVIEW_MAX_SCALE = 1.00;
+export const LOW_ZOOM_PREVIEW_STEP = 0.05;
+export const LOW_ZOOM_PREVIEW_DEFAULT_SCALE = 0.50;
+export const LOW_ZOOM_PREVIEW_DEBOUNCE_MS = 250;
 export const LOW_ZOOM_ENTER = 0.30;
 export const LOW_ZOOM_EXIT = 0.40;
 
