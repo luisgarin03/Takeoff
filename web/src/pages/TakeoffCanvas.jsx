@@ -24,6 +24,9 @@ import { extractSvgPrimitives, svgToStamp } from "../lib/svgImport.js";
 import { transformPath, svgPlacedBox } from "../lib/svgpath.js";
 import { ingestFiles } from "../lib/ingest.js";
 import ToolMenu from "../components/ToolMenu.jsx";
+import VirtualTrackpad from "../components/VirtualTrackpad.jsx";
+import TrackpadSettings from "../components/TrackpadSettings.jsx";
+import DiagnosticsMonitor from "../components/DiagnosticsMonitor.jsx";
 import PlanNavigator from "../components/PlanNavigator.jsx";
 import ReportPanel from "../components/ReportPanel.jsx";
 import RevisionsPanel from "../components/RevisionsPanel.jsx";
@@ -81,6 +84,7 @@ import {
   MEASURE_TOOLS, CUT_TOOLS, MARKUP_TOOLS, MARKUP_IDS, HL_INKS, HL_SIZES,
 } from "../lib/canvasConstants.js";
 import { autoRenderScale, invertCanvasPixels, uid, clamp, isDangerMsg, instantiateTemplate, seedConditions } from "../lib/canvasUtil.js";
+import { diagnosticsRenderCancel, diagnosticsRenderComplete, diagnosticsRenderError, diagnosticsRenderStart, diagnosticsZoom } from "../lib/renderDiagnostics.js";
 // Shape provenance policy now lives in ONE place: lib/shapeCommands.js. Every
 // meaningful mutation of `shapes` (create / reshape / reassign / relabel /
 // delete) is a COMMAND applied through dispatchShape below — the chokepoint
@@ -225,6 +229,7 @@ export default function TakeoffCanvas() {
 
   const [tool, setTool] = useState("pan");
   const [toolbarHidden, setToolbarHidden] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [viewportEpoch, setViewportEpoch] = useState(0);
   const [toolbarHeight, setToolbarHeight] = useState(0);
   const toolbarOverlayTop = toolbarHidden ? 10 : Math.max(toolbarHeight + 6, 10);
@@ -468,7 +473,7 @@ export default function TakeoffCanvas() {
     clearTimeout(detailWatchdogRef.current);
     detailWatchdogRef.current = 0;
     detailKeyRef.current = "";
-    try { task?.cancel(); } catch { /* already settled */ }
+    try { if (task) diagnosticsRenderCancel(task); task?.cancel(); } catch { /* already settled */ }
   }, []);
   const renderTasksRef = useRef(new Map());  // sheetKey → pdf.js RenderTask
   const pdfDocsRef = useRef(new Map());      // file name → pdf.js loading task (doc cache)
@@ -498,6 +503,14 @@ export default function TakeoffCanvas() {
   const rasterMaskCacheRef = useRef(new Map()); // sheetKey → Promise<MaskObj|null> — scan-pixel mask (lazy, shared across clicks)
   const snapMarkRef = useRef(null);    // SVG snap indicator
   const angleRef = useRef(null);       // current angle-locked image point (or null) — the click commits it
+  const [trackpadVisible, setTrackpadVisible] = useState(false);
+  const [trackpadWidth, setTrackpadWidth] = useState(75);
+  const [trackpadHeight, setTrackpadHeight] = useState(60);
+  const [trackpadOpacity, setTrackpadOpacity] = useState(90);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const trackpadStartedRef = useRef(false);
+  const trackpadPointRef = useRef(null);
+  const trackpadPaintRef = useRef("");
   const aimMarkRef = useRef(null);     // four floating liquid-glass pickets thickening the crosshair crossing
   const aimChipRef = useRef(null);     // readout chip by the cursor (locked angle · live segment length)
   const dragRef = useRef(null);        // {kind:'move'|'vertex'|'edge'|'markupMove', shapeId?/markupId?, vIndex?, start:[x,y], orig:verts_norm/markup coords, moved?, prev: grab-time geomSnapshot (shape drags), shape: grab-time shape, lastVerts/lastComputed: latest preview frame — the release commit's geom command payload}
@@ -1144,7 +1157,7 @@ export default function TakeoffCanvas() {
     const seq = ++renderSeqRef.current;
     const stale = () => seq !== renderSeqRef.current;
     setStatus("rendering"); setErr(""); setPoly([]); setCalib([]); setPendingLen(""); setCheck([]); setCheckStated(""); setScaleGuide(null); setPrevScale(null); selectShape(null); setProposal(null); resetZone();
-    for (const [, rt] of renderTasksRef.current) { try { rt.cancel(); } catch { /* done */ } }
+    for (const [, rt] of renderTasksRef.current) { try { diagnosticsRenderCancel(rt); rt.cancel(); } catch { /* done */ } }
     renderTasksRef.current.clear();
     snapGridsRef.current.clear();
     vectorSegsRef.current.clear();
@@ -1194,8 +1207,9 @@ export default function TakeoffCanvas() {
         // and reveal it already-inverted, or every render flashes white-on-dark
         canvas.style.visibility = darkModeRef.current ? "hidden" : "";
         const rt = m.pageObj.render({ canvasContext: canvas.getContext("2d"), viewport: m.viewport });
+        diagnosticsRenderStart(rt, `base ${m.key}`, renderScalesRef.current.get(m.key));
         renderTasksRef.current.set(m.key, rt);
-        await rt.promise; if (stale()) return;
+        try { await rt.promise; diagnosticsRenderComplete(rt); } catch (e) { diagnosticsRenderError(rt, e); throw e; } if (stale()) return;
         if (darkModeRef.current) invertCanvasPixels(canvas);   // negative view baked into pixels
         canvasInvertedRef.current.set(canvas, !!darkModeRef.current);
         canvas.style.visibility = "";
@@ -1268,7 +1282,7 @@ export default function TakeoffCanvas() {
     // renderTasksRef set is the whole point. Copying to a variable (the rule's
     // suggestion) would cancel the stale mount-time set and leak the live one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    return () => { renderSeqRef.current++; for (const [, rt] of renderTasksRef.current) { try { rt.cancel(); } catch { /* done */ } } };
+    return () => { renderSeqRef.current++; for (const [, rt] of renderTasksRef.current) { try { diagnosticsRenderCancel(rt); rt.cancel(); } catch { /* done */ } } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupSig, hiResKeys.join(" ")]);
 
@@ -1344,6 +1358,7 @@ export default function TakeoffCanvas() {
     let rt;
     try {
       rt = pageObj.render({ canvasContext: back.getContext("2d"), viewport: vp, transform: [1, 0, 0, 1, -x0 * factor, -y0 * factor] });
+      diagnosticsRenderStart(rt, `detail ${fp.key}`, rs * factor);
     } catch (e) {
       back.width = back.height = 0;
       detailKeyRef.current = "";
@@ -1365,6 +1380,7 @@ export default function TakeoffCanvas() {
     }, DETAIL_STALL_MS);
     detailWatchdogRef.current = watchdog;
     rt.promise.then(() => {
+      diagnosticsRenderComplete(rt);
       // Zoom-out may have hidden the layer while PDF.js was still painting.
       if (!isCurrent()) return;
       if (tfRef.current.scale * (window.devicePixelRatio || 1) <= DETAIL_ENGAGE) { hide(); return; }
@@ -1377,6 +1393,7 @@ export default function TakeoffCanvas() {
       cv.style.display = "block"; cv.style.visibility = "";
       if (window.__OT_DETAIL_DEBUG) console.log("[detail] swapped", bw, "x", bh);
     }).catch((e) => {   // RenderingCancelledException on rapid re-zoom is expected
+      diagnosticsRenderError(rt, e);
       if (!isCurrent()) return;
       if (detailKeyRef.current === renderKey) detailKeyRef.current = "";   // let the next tick retry this crop
       if (e?.name !== "RenderingCancelledException") console.error("[detail] render failed:", e);
@@ -1641,6 +1658,7 @@ export default function TakeoffCanvas() {
   const zoomAround = useCallback((cx, cy, factor) => {
     const t = tfRef.current;
     const next = clamp(t.scale * factor);
+    diagnosticsZoom(t.scale, next);
     const k = next / t.scale;
     tfRef.current = { scale: next, x: cx - (cx - t.x) * k, y: cy - (cy - t.y) * k };
     applyTf(); scheduleSync();
@@ -1851,6 +1869,49 @@ export default function TakeoffCanvas() {
     if (prevToolRef.current === "zone" && tool !== "zone") setPoly([]);
     prevToolRef.current = tool;
   }, [tool]);
+
+  // Keep a client-CSS-pixel cursor; toImage remains the only inverse transform.
+  // Intersect each sheet with the viewport so gaps between sheets are excluded.
+  function moveTrackpad(dx = 0, dy = 0, source = {}) {
+    const el = containerRef.current;
+    if (!el || status !== "ready" || editingRef.current) return null;
+    const r = el.getBoundingClientRect(), t = tfRef.current;
+    const bounds = panels.map((p) => ({
+      l: Math.max(r.left, r.left + t.x + p.xOffset * t.scale),
+      r: Math.min(r.right, r.left + t.x + (p.xOffset + p.img.w) * t.scale),
+      t: Math.max(r.top, r.top + t.y),
+      b: Math.min(r.bottom, window.innerHeight - (trackpadVisible ? trackpadHeight + 5 : 0), r.top + t.y + p.img.h * t.scale),
+    })).filter((b) => b.r > b.l && b.b > b.t);
+    if (!bounds.length) { hideCrosshair(); return null; }
+    const initial = bounds[0];
+    const prev = trackpadPointRef.current || lastPtrRef.current || [(initial.l + initial.r) / 2, (initial.t + initial.b) / 2];
+    const x = prev[0] + dx, y = prev[1] + dy;
+    const points = bounds.map((b) => [Math.max(b.l, Math.min(b.r - 0.5, x)), Math.max(b.t, Math.min(b.b - 0.5, y))]);
+    points.sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y));
+    const point = points[0];
+    trackpadPointRef.current = point;
+    const e = { clientX: point[0], clientY: point[1], shiftKey: !!source.shiftKey };
+    const signature = [point, t.x, t.y, t.scale, r.left, r.top, tool, poly.length, calib.length, check.length, snapOn, angleOn, e.shiftKey].join();
+    if (signature !== trackpadPaintRef.current || aimMarkRef.current?.style.display === "none") {
+      trackpadPaintRef.current = signature;
+      lastPtrRef.current = point;
+      aimSeqRef.current++;
+      moveCrosshair(e);
+    }
+    return e;
+  }
+  function tapTrackpad(source) {
+    const point = moveTrackpad(0, 0, source);
+    if (!point || panRef.current || dragRef.current || pendingClickRef.current || hlRef.current) return;
+    // Capture stays on the real pad pointer. Both existing canvas handlers get
+    // the virtual client coordinates, including their normal snap/angle logic.
+    const e = { ...point, button: 0, pointerId: source.pointerId, currentTarget: source.currentTarget,
+      shiftKey: source.shiftKey, ctrlKey: source.ctrlKey, metaKey: source.metaKey, altKey: source.altKey,
+      preventDefault: () => source.preventDefault(), stopPropagation: () => source.stopPropagation() };
+    onPointerDown(e);
+    onPointerUp(e);
+    trackpadPaintRef.current = "";
+  }
 
   // ── pointer ────────────────────────────────────────────────────────────────
   function onPointerDown(e) {
@@ -2155,7 +2216,15 @@ export default function TakeoffCanvas() {
   }
   function moveCrosshair(e) {
     if (editingRef.current) return;   // inline editor open — no aim crosshair (ref check, never per-mousemove state)
-    if (tool === "pan" || tool === "select" || status !== "ready" || !containerRef.current) return;
+    if (status !== "ready" || !containerRef.current) return;
+    if (tool === "pan" || tool === "select") {
+      if (trackpadVisible && aimMarkRef.current) {
+        const r = containerRef.current.getBoundingClientRect();
+        aimMarkRef.current.style.transform = `translate3d(${e.clientX - r.left}px, ${e.clientY - r.top}px, 0)`;
+        aimMarkRef.current.style.display = "block";
+      }
+      return;
+    }
     // snap-to-vector: nearest PDF endpoint within threshold becomes the active
     // point — looked up in the hovered panel's grid, in that panel's local frame
     let cur = toImage(e.clientX, e.clientY);
@@ -2312,6 +2381,7 @@ export default function TakeoffCanvas() {
   // (Other hideCrosshair callers — e.g. the inline editor — keep the aim: the
   // pointer is still parked on the sheet there.)
   function leaveCanvas() {
+    if (trackpadVisible) return;
     hideCrosshair();
     voiceAimMarkRef.current = aimSeqRef.current;
   }
@@ -2350,6 +2420,7 @@ export default function TakeoffCanvas() {
     el.style.display = "block";
   }
   function onPointerMove(e) {
+    if (trackpadVisible) trackpadPointRef.current = [e.clientX, e.clientY];
     lastPtrRef.current = [e.clientX, e.clientY];   // paste targets the sheet under the cursor
     aimSeqRef.current++;                           // deixis freshness tick — see getAimSeed
     if (hlRef.current) {
@@ -2754,9 +2825,14 @@ export default function TakeoffCanvas() {
         const ctx = cv.getContext("2d", { willReadFrequently: true });
         if (!ctx) throw new Error("2d canvas context unavailable"); // caught below like any other render failure — clear message over a cryptic null-deref
         const rt = pageObj.render({ canvasContext: ctx, viewport: pageObj.getViewport({ scale: rs * ws }), background: "#ffffff" });
+        diagnosticsRenderStart(rt, `raster mask ${key}`, rs * ws);
         renderTasksRef.current.set(taskKey, rt);
         try {
           await rt.promise;
+          diagnosticsRenderComplete(rt);
+        } catch (e) {
+          diagnosticsRenderError(rt, e);
+          throw e;
         } finally {
           renderTasksRef.current.delete(taskKey);
         }
@@ -4398,8 +4474,8 @@ export default function TakeoffCanvas() {
 
   // panel-toggle for the right-edge rail — square like the zoom cluster, count as a
   // tiny mono line under the icon. Lives on the canvas, costs the toolbar zero rows.
-  const panelBtn = (onClick, iconName, label, isOn, count) => (
-    <button onClick={onClick} title={label}
+  const panelBtn = (onClick, iconName, label, isOn, count, extra = {}) => (
+    <button type="button" onClick={onClick} title={label} {...extra}
       style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 34, minHeight: 34, padding: "5px 0 4px", border: `1px solid ${isOn ? "var(--ink)" : "var(--ink-faint)"}`, background: isOn ? "var(--ink)" : "var(--paper-bright)", color: isOn ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, lineHeight: 1 }}>
       <Icon name={iconName} size={15} />{count ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5 }}>{count}</span> : null}
     </button>
@@ -5794,7 +5870,7 @@ export default function TakeoffCanvas() {
               Space presses still bubble so a pan can start on top of the stack,
               and dblclick is stopped so rapid zoom clicks can't finishShape() */}
           <div className="canvas-zoom-rail" onPointerDown={(e) => { if (e.button === 0 && !spaceRef.current) e.stopPropagation(); }} onDoubleClick={(e) => e.stopPropagation()}
-            style={{ position: "absolute", left: 14, bottom: 14, display: "flex", flexDirection: "column", gap: 6 }}>
+            style={{ position: "absolute", left: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6 }}>
             <ToolMenu rail title="Draw — measurement, cut out, and markup tools"
               face={<Icon name="pencil" size={15} />}
               active={measureActive || tool === "deduct" || MARKUP_IDS.includes(tool)}
@@ -5982,13 +6058,19 @@ export default function TakeoffCanvas() {
             style). Moved out of the toolbar so it never wraps a third row. The
             takeoffs toggle mirrors the DOCKED panel's collapsed pref — the rail
             rides the canvas edge, so it stays visible either way. */}
-        <div className="canvas-panel-rail" style={{ position: "absolute", right: 14, bottom: 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
+        <div className="canvas-panel-rail" style={{ position: "absolute", right: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
+          {panelBtn(() => {
+            if (!trackpadStartedRef.current) { trackpadStartedRef.current = true; setTrackpadVisible(true); }
+            setSettingsOpen((v) => !v); trackpadPaintRef.current = "";
+          }, "trackpad", "Trackpad settings", settingsOpen, null, { "aria-label": "Trackpad settings", "aria-expanded": settingsOpen, "aria-controls": "trackpad-settings" })}
           {panelBtn(() => setLeftTab((t) => (t === "markup" ? null : "markup")), "markup", "Markups on these sheets (clouds, callouts, notes)", leftTab === "markup", markupCount)}
           {panelBtn(() => setLeftTab((t) => (t === "stamp" ? null : "stamp")), "stamp", "Stamps — reusable annotations dropped click-to-place", leftTab === "stamp", stampLib.stamps.length)}
           {panelBtn(() => setLeftTab((t) => (t === "rfi" ? null : "rfi")), "rfi", "RFI register — raise, track, and export Requests For Information", leftTab === "rfi", rfis.length)}
           {panelBtn(toggleTakeoffs, "takeoffs", "Takeoffs — conditions + running totals", takeoffsOpen, visibleShapes.length)}
           {panelBtn(() => setAgentOpen((o) => !o), "target", "Agent — describe a takeoff; it stages dashed proposals you accept or reject (bring your own AI key)", agentOpen, agentProposals.length)}
           {panelBtn(() => setShowRevisions(true), "revisions", "Revisions — save the takeoff at each bid revision, compare what moved", showRevisions)}
+          <button type="button" onClick={() => setDiagnosticsOpen((v) => !v)} title="Rendering diagnostics" aria-label="Rendering diagnostics" aria-pressed={diagnosticsOpen}
+            style={{ width: 34, minHeight: 34, border: `1px solid ${diagnosticsOpen ? "var(--cobalt)" : "var(--ink-faint)"}`, background: diagnosticsOpen ? "var(--cobalt)" : "var(--paper-bright)", color: diagnosticsOpen ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontSize: 9, fontWeight: 700 }}>diag</button>
           <button type="button" onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
             onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
@@ -6000,6 +6082,15 @@ export default function TakeoffCanvas() {
         </div>
 
        </div>
+
+        {settingsOpen && <TrackpadSettings
+          visible={trackpadVisible} width={trackpadWidth} height={trackpadHeight} opacity={trackpadOpacity}
+          bottom={trackpadVisible ? trackpadHeight + 14 : 14}
+          onVisibleChange={(visible) => { setTrackpadVisible(visible); trackpadPaintRef.current = ""; if (!visible) hideCrosshair(); }}
+          onWidthChange={setTrackpadWidth} onHeightChange={setTrackpadHeight} onOpacityChange={setTrackpadOpacity}
+          onClose={() => setSettingsOpen(false)}
+        />}
+        {trackpadVisible && <VirtualTrackpad onMove={moveTrackpad} onTap={tapTrackpad} width={trackpadWidth} height={trackpadHeight} opacity={trackpadOpacity} />}
 
         {/* Agent panel — DOCKED right-rail sibling (reflows the canvas like the
             Takeoffs panel). Honest empty state until the BYO-AI seam is
@@ -6136,6 +6227,7 @@ export default function TakeoffCanvas() {
           (the Agent panel links here; closing re-renders, so `configured`
           re-reads immediately). */}
       {showAiSettings && <AiSettings onClose={() => setShowAiSettings(false)} />}
+      <DiagnosticsMonitor open={diagnosticsOpen} onClose={() => setDiagnosticsOpen(false)} zoom={tf.scale} />
     </div>
   );
 }

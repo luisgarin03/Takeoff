@@ -650,3 +650,7 @@ Every shortcut in the app, verified against the code. Letter keys are suppressed
 ---
 
 *OpenTakeoff is Apache-2.0 and the codebase is deliberately readable — when you outgrow the manual, [`FEATURES.md`](../FEATURES.md) maps every capability to its code.*
+
+### Virtual trackpad (touch and mouse)
+
+Use **Trackpad** in the bottom-right canvas controls to open **Trackpad Settings**. The first opening shows the pad; its Show Trackpad checkbox can hide it without losing the selected settings. Width (50–100% of the viewport), height (40–150px), and opacity (35–100%) update live, defaulting to 75vw × 60px at 90% opacity. The pad remains bottom-centered, 5px above the viewport edge. Drag on it to move the existing plan crosshair; lift and swipe again to keep moving. A short tap places a point with the active tool, including its normal snapping and angle guides. Use Finish to complete a trace. Drags beyond 5px and holds longer than 350ms do not click. The pointer stays within visible sheet bounds. Normal canvas pan, zoom, and touch remain available; the pad itself does not pan or draw. Freehand dragging and double-click actions use the canvas directly. Settings last only while this canvas is mounted.

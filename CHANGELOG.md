@@ -11,6 +11,7 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 - Hid the original top Theme, Mode, Draw, and Edit controls and their empty separators. Side rails retain the shared actions and shortcuts; highlighter ink, size, and tip controls remain accessible in the side Draw menu.
 
 ### Added
+- Optional virtual trackpad in the bottom-right controls: Trackpad Settings supplies a Show toggle plus live 50–100vw width, 40–150px height, and 35–100% opacity controls (75vw × 60px at 90% opacity by default), while relative touch/mouse aiming and tap-to-place continue through the existing canvas handlers, shared crosshair, and snapping.
 - Synchronized black-and-gray palette Theme icon below Revisions in the bottom-right canvas rail, using the toolbar theme handler and current light/dark state.
 - Icon-only Draw (pencil) and Edit menus above Finish/Pan in the canvas rail, sharing toolbar tool choices, edit actions, availability, and active tool state. Rail menus stay within the viewport and isolate canvas pointer events.
 - Conditional checkmark Finish button above Pan in the bottom-left canvas controls, sharing the toolbar completion action and visibility, with a live accessible point count and isolated pointer events.
