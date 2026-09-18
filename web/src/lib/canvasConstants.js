@@ -36,6 +36,13 @@ export const GESTURE_MS = 140;      // wheel/pinch quiet window before the detai
 // region under real CPU contention took 50+ seconds and still resolved on its own.
 export const DETAIL_STALL_MS = 25000;
 
+// Overview mode keeps the full-resolution base raster intact, but displays this
+// prebuilt downsample while the whole stage is very small. The gap between enter
+// and exit prevents compositor-visible representation churn around the boundary.
+export const LOW_ZOOM_PREVIEW_SCALE = 0.25;
+export const LOW_ZOOM_ENTER = 0.30;
+export const LOW_ZOOM_EXIT = 0.40;
+
 export const SNAP_CELL = 24;   // snap-grid bucket, raster px (Spline runs 12 — its budgeted raster is denser)
 
 // toolbar menus — STACK-style: the menu face shows the armed tool

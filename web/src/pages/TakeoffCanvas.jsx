@@ -81,6 +81,7 @@ import { useFullscreen } from "../lib/fullscreen.js";
 import {
   PANEL_GAP, MAX_CANVAS_DIM, MAX_CANVAS_AREA,
   DETAIL_ENGAGE, DETAIL_MARGIN, SYNC_MS, GESTURE_MS, DETAIL_STALL_MS, SNAP_CELL,
+  LOW_ZOOM_PREVIEW_SCALE, LOW_ZOOM_ENTER, LOW_ZOOM_EXIT,
   MEASURE_TOOLS, CUT_TOOLS, MARKUP_TOOLS, MARKUP_IDS, HL_INKS, HL_SIZES,
 } from "../lib/canvasConstants.js";
 import { autoRenderScale, invertCanvasPixels, uid, clamp, isDangerMsg, instantiateTemplate, seedConditions } from "../lib/canvasUtil.js";
@@ -459,6 +460,11 @@ export default function TakeoffCanvas() {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
   const panelCanvasRefs = useRef(new Map()); // sheetKey → <canvas>
+  const previewCanvasRefs = useRef(new Map()); // sheetKey → low-zoom canvas in the same stage space
+  const previewReadyRef = useRef(new Map());   // sheetKey → base-render generation that produced it
+  const previewJobsRef = useRef(new Map());    // sheetKey → idle callback/timeout handle
+  const previewModeRef = useRef(false);        // hysteretic representation choice; never drives a React render
+  const zoomWillChangeTimerRef = useRef(0);
   const pageObjsRef = useRef(new Map());     // sheetKey → pdf.js page object (kept for on-demand detail-view re-render)
   const renderScalesRef = useRef(new Map()); // sheetKey → base raster pdf scale (detail view renders at a multiple of it)
   const detailCanvasRef = useRef(null);      // single high-res viewport detail canvas (positioned imperatively)
@@ -726,6 +732,82 @@ export default function TakeoffCanvas() {
     const { x, y, scale } = tfRef.current;
     if (stageRef.current) stageRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
   }, []);
+  // The preview and the base canvas occupy identical stage coordinates. Changing
+  // only their visibility leaves all PDF, SVG, pan, and measurement coordinates
+  // untouched. A missing/stale preview always leaves the base canvas visible.
+  const syncRasterRepresentation = useCallback((scale = tfRef.current.scale) => {
+    if (previewModeRef.current) {
+      if (scale >= LOW_ZOOM_EXIT) previewModeRef.current = false;
+    } else if (scale <= LOW_ZOOM_ENTER) {
+      previewModeRef.current = true;
+    }
+    for (const [key, base] of panelCanvasRefs.current) {
+      const preview = previewCanvasRefs.current.get(key);
+      const usePreview = previewModeRef.current && previewReadyRef.current.has(key) && !!preview;
+      if (base) base.style.display = usePreview ? "none" : "";
+      if (preview) preview.style.display = usePreview ? "" : "none";
+    }
+  }, []);
+  const cancelPreviewJobs = useCallback(() => {
+    for (const job of previewJobsRef.current.values()) {
+      if (job.kind === "idle") window.cancelIdleCallback?.(job.id);
+      else clearTimeout(job.id);
+    }
+    previewJobsRef.current.clear();
+  }, []);
+  const queuePreview = useCallback((key, base, generation) => {
+    const previous = previewJobsRef.current.get(key);
+    if (previous) {
+      if (previous.kind === "idle") window.cancelIdleCallback?.(previous.id);
+      else clearTimeout(previous.id);
+    }
+    const schedule = () => {
+      const run = (deadline) => {
+        // Let a busy browser finish the gesture/presentation work first. The
+        // timeout guarantees eventual generation where requestIdleCallback is
+        // absent or idle time is scarce.
+        if (!deadline.didTimeout && deadline.timeRemaining?.() < 8) return schedule();
+        previewJobsRef.current.delete(key);
+        if (generation !== renderSeqRef.current || panelCanvasRefs.current.get(key) !== base) return;
+        const preview = previewCanvasRefs.current.get(key);
+        if (!preview || !base.width || !base.height) return;
+        const w = Math.max(1, Math.round(base.width * LOW_ZOOM_PREVIEW_SCALE));
+        const h = Math.max(1, Math.round(base.height * LOW_ZOOM_PREVIEW_SCALE));
+        try {
+          preview.width = w; preview.height = h;
+          preview.getContext("2d").drawImage(base, 0, 0, w, h);
+          if (generation !== renderSeqRef.current || panelCanvasRefs.current.get(key) !== base) {
+            preview.width = preview.height = 0;
+            return;
+          }
+          previewReadyRef.current.set(key, generation);
+          canvasInvertedRef.current.set(preview, !!darkModeRef.current);
+          syncRasterRepresentation();
+        } catch {
+          preview.width = preview.height = 0;
+          previewReadyRef.current.delete(key);
+        }
+      };
+      if ("requestIdleCallback" in window) {
+        const id = window.requestIdleCallback(run, { timeout: 1000 });
+        previewJobsRef.current.set(key, { kind: "idle", id });
+      } else {
+        const id = setTimeout(() => run({ didTimeout: true, timeRemaining: () => 0 }), 120);
+        previewJobsRef.current.set(key, { kind: "timeout", id });
+      }
+    };
+    schedule();
+  }, [syncRasterRepresentation]);
+  // Keep the large stage promoted only while an actual zoom gesture is active.
+  // The timer is deliberately independent of React state and of preview work.
+  const markZoomCompositing = useCallback(() => {
+    if (stageRef.current) stageRef.current.style.willChange = "transform";
+    clearTimeout(zoomWillChangeTimerRef.current);
+    zoomWillChangeTimerRef.current = setTimeout(() => {
+      if (stageRef.current) stageRef.current.style.willChange = "auto";
+    }, GESTURE_MS);
+  }, []);
+  useEffect(() => () => { cancelPreviewJobs(); clearTimeout(zoomWillChangeTimerRef.current); }, [cancelPreviewJobs]);
   // Re-apply after every React render so an unrelated re-render mid-drag can't
   // snap the transform back to a stale value.
   useLayoutEffect(() => { applyTf(); });
@@ -761,7 +843,10 @@ export default function TakeoffCanvas() {
     setViewportEpoch((epoch) => epoch + 1);
   }, [invalidateDetail, scheduleSync]);
   const { isFullscreen, toggleFullscreen } = useFullscreen(onFullscreenViewportChange);
-  const setTfNow = useCallback((next) => { tfRef.current = next; applyTf(); setTf({ ...next }); }, [applyTf]);
+  const setTfNow = useCallback((next) => {
+    tfRef.current = next;
+    markZoomCompositing(); applyTf(); syncRasterRepresentation(next.scale); setTf({ ...next });
+  }, [applyTf, markZoomCompositing, syncRasterRepresentation]);
 
   // ── local PDFs (dropped into this browser) ─────────────────────────────────
   const refreshSheets = useCallback(async () => {
@@ -1143,6 +1228,7 @@ export default function TakeoffCanvas() {
       }
     };
     for (const [, cv] of panelCanvasRefs.current) flip(cv);
+    for (const [, cv] of previewCanvasRefs.current) flip(cv);
     flip(detailCanvasRef.current);
   }, [darkMode]);
 
@@ -1157,6 +1243,13 @@ export default function TakeoffCanvas() {
     const seq = ++renderSeqRef.current;
     const stale = () => seq !== renderSeqRef.current;
     setStatus("rendering"); setErr(""); setPoly([]); setCalib([]); setPendingLen(""); setCheck([]); setCheckStated(""); setScaleGuide(null); setPrevScale(null); selectShape(null); setProposal(null); resetZone();
+    cancelPreviewJobs();
+    previewReadyRef.current.clear();
+    for (const [, preview] of previewCanvasRefs.current) {
+      preview.style.display = "none";
+      preview.width = preview.height = 0;
+      canvasInvertedRef.current.delete(preview);
+    }
     for (const [, rt] of renderTasksRef.current) { try { diagnosticsRenderCancel(rt); rt.cancel(); } catch { /* done */ } }
     renderTasksRef.current.clear();
     snapGridsRef.current.clear();
@@ -1213,6 +1306,10 @@ export default function TakeoffCanvas() {
         if (darkModeRef.current) invertCanvasPixels(canvas);   // negative view baked into pixels
         canvasInvertedRef.current.set(canvas, !!darkModeRef.current);
         canvas.style.visibility = "";
+        // Build exactly one inexpensive overview raster from these finished
+        // pixels. It never invokes pdf.js and is ignored if this render chain
+        // becomes stale before the browser has idle time to make it.
+        queuePreview(m.key, canvas, seq);
         // snap-to-vector index per panel (best-effort; off until the user enables it)
         m.pageObj.getOperatorList().then((ol) => {
           if (stale()) return;
@@ -1282,7 +1379,7 @@ export default function TakeoffCanvas() {
     // renderTasksRef set is the whole point. Copying to a variable (the rule's
     // suggestion) would cancel the stale mount-time set and leak the live one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    return () => { renderSeqRef.current++; for (const [, rt] of renderTasksRef.current) { try { diagnosticsRenderCancel(rt); rt.cancel(); } catch { /* done */ } } };
+    return () => { renderSeqRef.current++; cancelPreviewJobs(); for (const [, rt] of renderTasksRef.current) { try { diagnosticsRenderCancel(rt); rt.cancel(); } catch { /* done */ } } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupSig, hiResKeys.join(" ")]);
 
@@ -1661,8 +1758,8 @@ export default function TakeoffCanvas() {
     diagnosticsZoom(t.scale, next);
     const k = next / t.scale;
     tfRef.current = { scale: next, x: cx - (cx - t.x) * k, y: cy - (cy - t.y) * k };
-    applyTf(); scheduleSync();
-  }, [applyTf, scheduleSync]);
+    markZoomCompositing(); applyTf(); syncRasterRepresentation(next); scheduleSync();
+  }, [applyTf, markZoomCompositing, scheduleSync, syncRasterRepresentation]);
 
   // wheel: the DEVICE decides between pan and zoom — no toggle, no mode.
   // Continuous trackpad scroll PANS both axes (the two-finger instinct every
@@ -5426,10 +5523,14 @@ export default function TakeoffCanvas() {
               placeholder="Type, Enter to place · Esc cancels"
               style={{ position: "absolute", left: editor.left, top: editor.top, zIndex: 9, minWidth: 160, padding: "3px 6px", font: "13px var(--f-body, sans-serif)", color: "var(--ink)", background: "var(--paper-bright)", border: "1px solid var(--cobalt)", boxShadow: "0 2px 10px rgba(0,0,0,.18)", borderRadius: 0, cursor: "text", outline: "none" }} />
           )}
-          <div ref={stageRef} style={{ position: "absolute", transformOrigin: "0 0", willChange: "transform", width: stage.w || undefined, height: stage.h || undefined }}>
+          <div ref={stageRef} style={{ position: "absolute", transformOrigin: "0 0", willChange: "auto", width: stage.w || undefined, height: stage.h || undefined }}>
             {panels.map((p) => (
-              <canvas key={p.key} ref={(el) => { if (el) panelCanvasRefs.current.set(p.key, el); else panelCanvasRefs.current.delete(p.key); }}
-                style={{ position: "absolute", left: p.xOffset, top: 0, boxShadow: "0 2px 20px rgba(0,0,0,.18)" }} />
+              <React.Fragment key={p.key}>
+                <canvas ref={(el) => { if (el) panelCanvasRefs.current.set(p.key, el); else panelCanvasRefs.current.delete(p.key); }}
+                  style={{ position: "absolute", left: p.xOffset, top: 0, boxShadow: "0 2px 20px rgba(0,0,0,.18)" }} />
+                <canvas ref={(el) => { if (el) previewCanvasRefs.current.set(p.key, el); else previewCanvasRefs.current.delete(p.key); }}
+                  aria-hidden="true" style={{ position: "absolute", left: p.xOffset, top: 0, width: p.img.w || undefined, height: p.img.h || undefined, display: "none", boxShadow: "0 2px 20px rgba(0,0,0,.18)", pointerEvents: "none" }} />
+              </React.Fragment>
             ))}
             {/* high-res detail overlay — a crop of the visible region re-rendered at the current zoom (see the detail-view effect) */}
             <canvas ref={detailCanvasRef} style={{ position: "absolute", left: 0, top: 0, display: "none", pointerEvents: "none" }} />

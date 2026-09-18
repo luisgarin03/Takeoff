@@ -5,6 +5,7 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 ## Unreleased
 
 ### Changed
+- Low overview zoom now switches to an idle-built 25% preview of each completed sheet raster at 30%, returning to the retained full-resolution raster at 40%. The preview shares the sheet coordinate system, never invokes PDF.js during zoom, and the large stage only holds `will-change: transform` for an active zoom gesture.
 - Added minimal Android PWA support: manifest metadata, branded 192px/512px home-screen icons, and a network-only service worker that never caches drawings or project data.
 - Report now layers above the canvas toolbar arrow and floating controls; its menus and dialogs retain their internal stacking order.
 - Mobile Report layout (screens up to 768px): wrapped controls, viewport-bounded menus, and labelled cards for condition totals, By Sheet, revisions, and materials. Desktop/print layout and report calculations/exports are unchanged.
