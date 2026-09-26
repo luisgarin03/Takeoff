@@ -578,7 +578,7 @@ export default function PlanNavigator({
                   A real medical-center <strong style={{ color: "var(--ink)" }}>floor finish plan</strong> — the scale auto-detects;
                   pick a finish and trace a flooring takeoff in seconds.
                 </div>
-                <a className="splash-credits" href="/credits.html" target="_blank" rel="noreferrer">Artwork credits · Blueprint by Magnific / Flaticon · Background by SelfMadeSystem</a>
+                
               </div></>
             ) : enumerated ? (
               <>
