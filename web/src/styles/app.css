@@ -197,6 +197,7 @@ select {
 /* ── toolbar glass ───────────────────────────────────────────────────────── */
 
 .glass-toolbar-stack {
+  container: toolbar / inline-size;
   position: absolute;
   top: 0;
   left: 0;
@@ -236,7 +237,11 @@ select {
   top: 10px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 140;
+  /* This control is a sibling of .glass-toolbar-stack (rather than a child
+     because it must remain available while the stack is collapsed). Keep it
+     in the same app-level stacking layer as the toolbar; its later DOM
+     position still lets it receive clicks where the two surfaces meet. */
+  z-index: 40;
   width: 34px;
   height: 30px;
   display: inline-flex;
@@ -452,7 +457,7 @@ select {
   }
 }
 
-@media (max-width: 1100px) {
+@container toolbar (max-width: 1100px) {
   .glass-toolbar {
     flex-wrap: wrap;
     align-content: flex-start;
@@ -488,7 +493,7 @@ select {
   }
 }
 
-@media (max-width: 900px) {
+@container toolbar (max-width: 900px) {
   .glass-toolbar-primary .toolbar-spacer {
     flex-basis: 100% !important;
     min-width: 100% !important;
@@ -919,3 +924,65 @@ select {
 @media (max-width: 760px) {
   .trackpad-settings { right: 52px; width: min(300px, calc(100vw - 62px)); }
 }
+
+/* Shared condition editor: 88px -> 132px, with real editable space. */
+.condition-name-input { width: 132px; flex: 0 1 132px; min-width: 0; max-width: 100%; }
+.canvas-workspace { position: relative; min-width: 0; }
+.glass-drawer { max-width: 100%; min-width: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.takeoffs-tabs, .takeoffs-tabs > span { flex-wrap: wrap; }
+.takeoffs-tabs > span:first-child { flex: 1 1 240px; }
+.takeoffs-tabs > span:last-child { flex-shrink: 0; margin-left: auto; }
+.glass-drawer-conditions > div:nth-child(2) { min-height: 0; }
+.overlay-drawers > .glass-drawer {
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  bottom: 0;
+  right: calc(54px + env(safe-area-inset-right, 0px));
+  max-width: calc(100% - 54px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+}
+.overlay-drawers > .glass-drawer-markups { left: env(safe-area-inset-left, 0px); right: auto; }
+.overlay-drawers .canvas-panel-rail {
+  position: fixed !important;
+  z-index: 130 !important;
+  right: max(10px, env(safe-area-inset-right, 0px)) !important;
+  bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
+  max-height: calc(100dvh - 20px - env(safe-area-inset-top, 0px));
+  overflow-y: auto;
+}
+.overlay-drawers .canvas-panel-rail > button { flex-shrink: 0; }
+@media (max-width: 600px) {
+  .overlay-drawers > .glass-drawer { width: calc(100% - 54px) !important; }
+  .takeoffs-tabs { padding: 7px !important; gap: 4px !important; }
+  .takeoffs-tabs > span:first-child { flex-basis: 100%; }
+  .glass-drawer input, .glass-drawer select, .glass-drawer textarea { max-width: 100%; min-width: 0; }
+}
+
+/* On constrained screens the last requested workspace stays above other open
+   drawers; their own open state and content are retained. */
+.overlay-drawers[data-front-drawer="markups"] > .glass-drawer-markups,
+.overlay-drawers[data-front-drawer="agent"] > .glass-drawer-agent,
+.overlay-drawers[data-front-drawer="conditions"] > .glass-drawer-conditions { z-index: 121; }
+
+@media (max-width: 600px) {
+  .condition-summary { flex-wrap: wrap; }
+  .condition-summary > div { flex-basis: calc(100% - 65px) !important; }
+}
+
+@media screen {
+  .app-shell { overflow: hidden; }
+  .glass-toolbar-stack { max-height: calc(100dvh - 48px); overflow-y: auto; }
+}
+@media screen {
+  .app-shell:has(.overlay-drawers > .glass-drawer) .toolbar-visibility-toggle {
+    left: auto;
+    right: max(10px, env(safe-area-inset-right, 0px));
+    top: max(10px, env(safe-area-inset-top, 0px)) !important;
+    transform: none;
+  }
+  .overlay-drawers:has(> .glass-drawer) .canvas-panel-rail {
+    max-height: calc(100dvh - 60px - env(safe-area-inset-top, 0px));
+  }
+}
+/* Menus already constrain themselves to the viewport. Let them escape the
+   scrollable toolbar so scale, hatch and other choices remain reachable. */
+.glass-toolbar-stack:has(.tool-menu-popover) { overflow: visible; }

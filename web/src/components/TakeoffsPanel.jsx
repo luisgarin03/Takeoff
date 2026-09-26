@@ -35,8 +35,9 @@ import { LINE_STYLES, LINE_STYLE_IDS } from "../lib/lineStyles.js";
 import { materialKind, MATERIAL_PRESETS, GROUT_DEFAULTS, groutDerivedFields, showsGroutCalc, showsGroutDeriveAffordance } from "../lib/coverage.js";
 import { draftCommitValue, blurCommitValue, blurCommitNonNegative } from "../lib/draftInput.js";
 
-export const PANEL_MIN_W = 240;
-export const PANEL_MAX_W = 560;
+export const PANEL_EXPANSION = 1.3;
+export const PANEL_MIN_W = 240 * PANEL_EXPANSION;
+export const PANEL_MAX_W = 560 * PANEL_EXPANSION;
 export const clampPanelW = (w) => Math.min(PANEL_MAX_W, Math.max(PANEL_MIN_W, w));
 
 // drag-and-drop payload type carrying a condition id — a condition row here is
@@ -309,9 +310,9 @@ export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondPara
       ? { padding: "6px 2px 2px", display: "flex", flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 10, rowGap: 8, fontSize: 11 }
       : { padding: "4px 12px 10px", display: "flex", flexDirection: "column", gap: 7, fontSize: 11 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <input name="condition-finish-tag" value={c.finish_tag} onChange={(e) => onUpdateCond({ finish_tag: e.target.value })}
+        <input className="condition-name-input" name="condition-finish-tag" value={c.finish_tag} onChange={(e) => onUpdateCond({ finish_tag: e.target.value })}
           title="Rename this condition / finish tag"
-          style={{ width: 88, padding: "3px 6px", borderRadius: 0, border: "1px solid var(--ink-faint)", fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 12, color: "var(--ink)" }} />
+          style={{ padding: "3px 6px", borderRadius: 0, border: "1px solid var(--ink-faint)", fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 12, color: "var(--ink)" }} />
         <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Multiply this condition by N identical units (measure one, ×N)">
           <span style={{ color: "var(--ink-muted)" }}>×</span>
           <input name="condition-multiplier" type="number" min="1" step="1" value={c.multiplier || 1}
@@ -538,14 +539,14 @@ function TakeoffsPanel({
   // persistence effect and the detail crop fire once per drag.
   const onResizeDown = (e) => {
     e.preventDefault();
-    dragRef.current = { sx: e.clientX, sw: width, w: width };
+    dragRef.current = { sx: e.clientX, sw: rootRef.current.getBoundingClientRect().width, w: rootRef.current.getBoundingClientRect().width };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const onResizeMove = (e) => {
     const d = dragRef.current; if (!d) return;
     if (e.buttons === 0) { onResizeEnd(e); return; }   // release happened off-window — a missed pointerup must not leave a phantom drag
     onHoldGesture();
-    d.w = clampPanelW(d.sw + (d.sx - e.clientX));
+    d.w = Math.min(window.innerWidth, clampPanelW(d.sw + (d.sx - e.clientX)));
     if (rootRef.current) rootRef.current.style.width = `${d.w}px`;
   };
   // shared by pointerup / pointercancel / lostpointercapture — any way the
@@ -553,7 +554,7 @@ function TakeoffsPanel({
   const onResizeEnd = (e) => {
     const d = dragRef.current; if (!d) return;
     dragRef.current = null;
-    onPanelPrefs((p) => (p.w === d.w ? p : { ...p, w: d.w }));
+    onPanelPrefs((p) => (p.w === d.w / PANEL_EXPANSION ? p : { ...p, w: d.w / PANEL_EXPANSION }));
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* gone */ }
   };
 
@@ -580,7 +581,7 @@ function TakeoffsPanel({
     const hot = hIdx >= 0 && hIdx < 9;
     return (
       <div key={c.id} data-cond-id={c.id} style={{ borderTop: "1px solid var(--ink-faint)", background: checked ? "var(--tint-select)" : on ? "var(--tint-active)" : "transparent", borderLeft: on ? `3px solid ${c.color}` : checked ? "3px solid var(--cobalt)" : "3px solid transparent" }}>
-        <div draggable
+        <div className="condition-summary" draggable
           onDragStart={(e) => { e.dataTransfer.setData(CONDITION_DND_MIME, c.id); e.dataTransfer.effectAllowed = "copy"; }}
           onClick={(e) => {
             if (e.metaKey || e.ctrlKey) { toggleChecked(c.id); return; }
@@ -653,7 +654,7 @@ function TakeoffsPanel({
         title="Drag to resize"
         style={{ width: 5, flexShrink: 0, cursor: "col-resize", touchAction: "none", background: "transparent", borderRight: "1px solid var(--ink-faint)" }} />
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "7px 12px", background: "var(--ink)", color: "var(--paper-cream)", flexShrink: 0 }}>
+        <div className="takeoffs-tabs" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "7px 12px", background: "var(--ink)", color: "var(--paper-cream)", flexShrink: 0 }}>
           <span style={{ display: "inline-flex", gap: 2 }}>
             {[["takeoffs", `Takeoffs · ${multiSheet ? "these sheets" : "this sheet"}`], ["library", `Library${templates.length ? ` (${templates.length})` : ""}`], ["materials", `Materials${matLib.length ? ` (${matLib.length})` : ""}`], ["columns", `Columns${conditionColumns.length ? ` (${conditionColumns.length})` : ""}`]].map(([id, label]) => (
               <button key={id} onClick={() => setPanelTab(id)}

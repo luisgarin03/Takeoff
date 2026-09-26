@@ -170,7 +170,9 @@ The band under the toolbar is your working set: **pin** a condition there (the p
 
 ### The Takeoffs panel
 
-The **☰ Takeoffs** rail button docks the panel (it starts collapsed; the palette band is the primary surface). Four tabs:
+The **☰ Takeoffs** rail button docks the panel (it starts collapsed; the palette band is the primary surface). The desktop starting widths are 30% larger (Takeoffs 416px, Agent 442px, Markups/Stamps/RFIs 468px), growing with wide viewports up to 728px. Takeoffs retains its draggable width and saved preferences. When docking would squeeze the canvas, drawers overlay it on their existing side; phones retain a narrow rail for switching and closing panels. Headers and controls wrap, and the active condition name has 50% more field width in both the drawer and toolbar. Closing/reopening preserves the selected tab and filter.
+
+Four tabs:
 
 - **Takeoffs** — every condition with live totals for the open sheets (`SF · SF wall · LF · EA`), a shape count, a **⌖** that zooms the canvas to the condition's takeoffs (double-clicking the row does the same), the Supporting Materials button, the pin, and delete. Above the list: a filter box, **A→Z** natural sort and **≡ grp** tag-family grouping (views only — hotkey numbering never changes). **⌘-click / ⇧-click** rows to bulk-select conditions, then set waste or line color on all of them, or bulk-delete.
 - **Library** — reusable condition templates, shared across every plan in this browser. **+ save 〈tag〉 to the library** snapshots the active condition (appearance, waste, H/T, materials); **Apply** adds it to any project as a fresh condition. A fresh workspace seeds from this library — tune your house conditions once and every new job starts with them.
@@ -654,3 +656,7 @@ Every shortcut in the app, verified against the code. Letter keys are suppressed
 ### Virtual trackpad (touch and mouse)
 
 Use **Trackpad** in the bottom-right canvas controls to open **Trackpad Settings**. The first opening shows the pad; its Show Trackpad checkbox can hide it without losing the selected settings. Width (50–100% of the viewport), height (40–150px), and opacity (35–100%) update live, defaulting to 75vw × 60px at 90% opacity. The pad remains bottom-centered, 5px above the viewport edge. Drag on it to move the existing plan crosshair; lift and swipe again to keep moving. A short tap places a point with the active tool, including its normal snapping and angle guides. Use Finish to complete a trace. Drags beyond 5px and holds longer than 350ms do not click. The pointer stays within visible sheet bounds. Normal canvas pan, zoom, and touch remain available; the pad itself does not pan or draw. Freehand dragging and double-click actions use the canvas directly. Settings last only while this canvas is mounted.
+
+### Startup artwork and app icons
+
+The startup view uses SelfMadeSystem's Uiverse `warm-lion-64` background and the Blueprint icon (Flaticon 1373067, Magnific). The same icon is supplied for web/PWA, Android and Windows Electron. Android's pre-WebView splash uses a static frame; Android 12's system splash uses the Blueprint icon on a dark background. Loading, importing plans and the sample-plan action are unchanged. The startup **Artwork credits** link opens the attribution and license information.

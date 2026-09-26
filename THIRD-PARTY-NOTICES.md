@@ -22,3 +22,10 @@ The optional AI sandbox (`/server`) additionally uses
 
 `pdf.js` is distributed under the Apache License 2.0; a copy of that license is
 available at <https://github.com/mozilla/pdf.js/blob/master/LICENSE>.
+
+## Startup and application artwork
+
+- Blueprint icon **1373067**, designed by **Magnific (formerly Freepik) from Flaticon**: <https://www.flaticon.com/free-icon/blueprint_1373067>. Flaticon free license with attribution, **not Apache-2.0**. Source PNG and generated platform variants are distributed with the app.
+- **SelfMadeSystem**, Uiverse **warm-lion-64** background: <https://uiverse.io/SelfMadeSystem/warm-lion-64>, MIT. Scoped CSS and a static native splash frame.
+
+Full notices ship in `web/public/asset-licenses.txt`; the startup screen links to `web/public/credits.html`. Regenerate icons with `python3 web/scripts/generate-app-icons.py` (Pillow required only for generation).

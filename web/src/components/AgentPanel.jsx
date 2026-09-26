@@ -21,6 +21,7 @@ const evidenceText = (ev) => {
 const LOG_STYLE = { status: "var(--ink-muted)", tool: "var(--cobalt)", text: "var(--ink)", error: "var(--c-danger)" };
 
 export default function AgentPanel({
+  width,
   configured, running, log, proposals, condById, sheetLabel, units,
   fmtArea, onRun, onStop, onAccept, onReject, onAcceptAll, onRejectAll,
   onOpenSettings, onClose,
@@ -35,7 +36,7 @@ export default function AgentPanel({
   const ctl = { padding: "3px 9px", border: "1px solid var(--ink-faint)", background: "transparent", cursor: "pointer", fontSize: 11.5 };
 
   return (
-    <div className="glass-drawer glass-drawer-agent" style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid var(--ink-faint)", background: "var(--paper-bright)", overflow: "hidden", minHeight: 0 }}>
+    <div className="glass-drawer glass-drawer-agent" style={{ width, flexShrink: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid var(--ink-faint)", background: "var(--paper-bright)", overflow: "hidden", minHeight: 0 }}>
       {/* header strip — matches the docked-panel chrome */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "var(--cobalt)", color: "var(--accent-contrast)" }}>
         <Icon name="target" size={15} />

@@ -72,7 +72,7 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,

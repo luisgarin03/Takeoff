@@ -1,3 +1,4 @@
+import "../styles/splash.css";
 // PlanNavigator — the single, harmonized surface for choosing plans, merging the
 // former SheetGallery (working-set thumbnail grid) and DrivePicker (browse the
 // project's Drive folder) into ONE chrome with two modes: "plan" and "browse".
@@ -523,9 +524,11 @@ export default function PlanNavigator({
         </div>
         ))}
         {!allKeys.length && (
-          <div style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)", fontSize: 13.5, lineHeight: 1.7 }}>
+          <div className={!sheets.length ? "splash-landing" : undefined} style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)", fontSize: 13.5, lineHeight: 1.7 }}>
             {!sheets.length ? (
-              <div style={{ maxWidth: 560, margin: "0 auto" }}>
+              <><div className="splash-pattern" aria-hidden="true" />
+              <div className="splash-content" style={{ maxWidth: 560, margin: "0 auto" }}>
+                <img className="splash-icon" src="/icons/blueprint-1373067.png" alt="Blueprint" width="96" height="96" />
                 <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--cobalt)", marginBottom: 6 }}>People &amp; agents · one engine</div>
                 <div style={{ fontFamily: "var(--f-display)", fontSize: 18, color: "var(--ink)", lineHeight: 1.32, marginBottom: 5 }}>Measure a plan by hand — or point an AI&nbsp;agent at the same engine.</div>
                 <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.55, marginBottom: 20 }}>Every measurement keeps its scale and how it was made — a person, one click, or an agent.</div>
@@ -563,7 +566,8 @@ export default function PlanNavigator({
                   A real medical-center <strong style={{ color: "var(--ink)" }}>floor finish plan</strong> — the scale auto-detects;
                   pick a finish and trace a flooring takeoff in seconds.
                 </div>
-              </div>
+                <a className="splash-credits" href="/credits.html" target="_blank" rel="noreferrer">Artwork credits · Blueprint by Magnific / Flaticon · Background by SelfMadeSystem</a>
+              </div></>
             ) : enumerated ? (
               <>
                 <div style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)", marginBottom: 6 }}>Couldn't read those PDFs</div>

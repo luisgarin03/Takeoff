@@ -5,6 +5,8 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 ## Unreleased
 
 ### Changed
+- Expanded workspace drawers by 30% at the desktop baseline, with viewport-aware growth, mobile overlays, safe-area spacing and wrapping controls. Shared drawer/toolbar condition-name inputs are 50% wider; panel tabs, filters, resize preferences and measurement handlers are retained.
+- Replaced startup artwork with SelfMadeSystem's Uiverse `warm-lion-64` pattern and Flaticon Blueprint icon 1373067. Updated web/PWA, Android splash/launcher densities and Windows Electron icons; included artwork credits and license notices.
 - Low overview zoom now switches to an idle-built preview of each completed sheet raster at 30%, returning to the retained full-resolution raster at 40%. Diagnostics provides a persisted 10–100% Preview Resolution slider (50% default), with dynamic dimensions, RGBA-memory estimate, generation timing, debounced replacement, and no PDF.js rerender. The preview shares the sheet coordinate system, and the large stage only holds `will-change: transform` for an active zoom gesture.
 - Added minimal Android PWA support: manifest metadata, branded 192px/512px home-screen icons, and a network-only service worker that never caches drawings or project data.
 - Report now layers above the canvas toolbar arrow and floating controls; its menus and dialogs retain their internal stacking order.

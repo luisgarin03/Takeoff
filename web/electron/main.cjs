@@ -118,7 +118,7 @@ function createWindow() {
     minHeight: 720,
     show: false,
     backgroundColor: "#f4efe0",
-    icon: path.join(app.getAppPath(), "build", "icon.ico"),
+    icon: path.join(distPath(), "icons", "icon-512.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

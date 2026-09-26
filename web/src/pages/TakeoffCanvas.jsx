@@ -30,7 +30,7 @@ import DiagnosticsMonitor from "../components/DiagnosticsMonitor.jsx";
 import PlanNavigator from "../components/PlanNavigator.jsx";
 import ReportPanel from "../components/ReportPanel.jsx";
 import RevisionsPanel from "../components/RevisionsPanel.jsx";
-import TakeoffsPanel, { clampPanelW, CONDITION_DND_MIME, ConditionAppearanceEditor } from "../components/TakeoffsPanel.jsx";
+import TakeoffsPanel, { clampPanelW, PANEL_EXPANSION, CONDITION_DND_MIME, ConditionAppearanceEditor } from "../components/TakeoffsPanel.jsx";
 import { HATCHES, PALETTE, NO_FILL, HatchPattern, HatchSwatch } from "../components/hatches.jsx";
 import { Icon } from "../brand/icons.jsx";
 import { RENDER_SCALE, MAX_GROUP, STANDARD_SCALES, parseSheetKey, compareSheetKeys, extractSheetNumber, detectScale, extractRegionText } from "../lib/sheets";
@@ -210,6 +210,7 @@ export default function TakeoffCanvas() {
   // The right-rail buttons switch tabs; the dock reflows the canvas (mirrors the
   // docked Takeoffs panel on the right).
   const [leftTab, setLeftTab] = useState(null);
+  const [frontDrawer, setFrontDrawer] = useState("conditions");
   const [showMarkups, setShowMarkups] = useState(true);       // markup SVG layer visibility (orthogonal to the export checkbox)
   const [editor, setEditor] = useState(null);                 // inline on-canvas text editor { left, top, value, multiline, commit } (retires window.prompt; screen-space overlay, NOT an SVG child)
   const [panelEditId, setPanelEditId] = useState(null);       // markup id whose text is being edited inline in the markup panel (off-screen fallback for the ✎ button)
@@ -268,7 +269,20 @@ export default function TakeoffCanvas() {
       localStorage.setItem(PANEL_PREFS_KEY, JSON.stringify(diff));
     } catch { /* private mode */ }
   }, [panelPrefs]);
-  const panelW = clampPanelW(Number(panelPrefs.w) || PANEL_DEFAULTS.w);
+  const [workspaceWidth, setWorkspaceWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const resize = () => setWorkspaceWidth(window.innerWidth);
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  // Keep saved widths in their original units. Expand them once for display;
+  // resizing writes back in those units, so reopening never compounds growth.
+  const preferredPanelW = panelPrefs.w === PANEL_DEFAULTS.w
+    ? Math.max(PANEL_DEFAULTS.w, workspaceWidth * .22)
+    : Number(panelPrefs.w) || PANEL_DEFAULTS.w;
+  const panelW = Math.min(workspaceWidth, clampPanelW(preferredPanelW * PANEL_EXPANSION));
+  const leftPanelW = Math.min(workspaceWidth, Math.max(468, Math.min(728, workspaceWidth * .30)));
+  const agentPanelW = Math.min(workspaceWidth, Math.max(442, Math.min(728, workspaceWidth * .29)));
   const takeoffsOpen = !panelPrefs.collapsed;
   const toggleTakeoffs = () => setPanelPrefs((p) => ({ ...p, collapsed: !p.collapsed }));
   // Panel resize lives INSIDE TakeoffsPanel (mid-drag width goes straight to
@@ -327,6 +341,8 @@ export default function TakeoffCanvas() {
   // Ephemeral by design: never persisted (buildPayload doesn't read them).
   const [agentProposals, setAgentProposals] = useState([]);
   const [agentOpen, setAgentOpen] = useState(false);      // docked right-rail Agent panel
+  const overlayDrawers = workspaceWidth <= 1100 ||
+    (leftTab ? leftPanelW : 0) + (takeoffsOpen ? panelW : 0) + (agentOpen ? agentPanelW : 0) > workspaceWidth - 480;
   const [agentLog, setAgentLog] = useState([]);           // streaming run status [{kind, text}]
   const [agentRunning, setAgentRunning] = useState(false);
   const [showAiSettings, setShowAiSettings] = useState(false); // BYO-key config modal (ai.js seam)
@@ -4993,8 +5009,8 @@ export default function TakeoffCanvas() {
         ref={toolbarStackRef}
         className={`glass-toolbar-stack${toolbarHidden ? " is-hidden" : ""}`}
         style={{
-          left: leftTab ? 360 : 0,
-          right: (takeoffsOpen ? panelW : 0) + (agentOpen ? 340 : 0),
+          left: !overlayDrawers && leftTab ? leftPanelW : 0,
+          right: overlayDrawers ? 0 : (takeoffsOpen ? panelW : 0) + (agentOpen ? agentPanelW : 0),
         }}
       >
         <div className="glass-toolbar glass-toolbar-primary" style={{ display: "flex", gap: 7, alignItems: "center", padding: "6px 14px", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-shadow)", whiteSpace: "nowrap" }}>
@@ -5403,11 +5419,11 @@ export default function TakeoffCanvas() {
       )}
 
       {/* canvas + issue desk */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
+      <div data-front-drawer={frontDrawer} className={`canvas-workspace${overlayDrawers ? " overlay-drawers" : ""}`} style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
        {/* docked LEFT panel — one of Markups/Stamps/RFIs at a time. Reflows the
            canvas (a flex sibling), mirroring the docked Takeoffs panel on the right. */}
        {leftTab && (
-         <div className="glass-drawer glass-drawer-markups" style={{ width: 360, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--ink-faint)", background: "var(--paper-bright)", overflow: "hidden", minHeight: 0 }}>
+         <div className="glass-drawer glass-drawer-markups" style={{ width: leftPanelW, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--ink-faint)", background: "var(--paper-bright)", overflow: "hidden", minHeight: 0 }}>
            {/* tab strip */}
            <div style={{ display: "flex", alignItems: "stretch", background: "var(--cobalt)", color: "var(--accent-contrast)" }}>
              {[{ id: "markup", label: "Markups", n: markupCount }, { id: "stamp", label: "Stamps", n: stampLib.stamps.length }, { id: "rfi", label: "RFIs", n: rfis.length }].map((t) => (
@@ -6206,16 +6222,19 @@ export default function TakeoffCanvas() {
             style). Moved out of the toolbar so it never wraps a third row. The
             takeoffs toggle mirrors the DOCKED panel's collapsed pref — the rail
             rides the canvas edge, so it stays visible either way. */}
-        <div className="canvas-panel-rail" style={{ position: "absolute", right: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
+        <div className="canvas-panel-rail" onClickCapture={(e) => {
+          const drawer = e.target.closest("[data-drawer]")?.dataset.drawer;
+          if (drawer) setFrontDrawer(drawer);
+        }} style={{ position: "absolute", right: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
           {panelBtn(() => {
             if (!trackpadStartedRef.current) { trackpadStartedRef.current = true; setTrackpadVisible(true); }
             setSettingsOpen((v) => !v); trackpadPaintRef.current = "";
           }, "trackpad", "Trackpad settings", settingsOpen, null, { "aria-label": "Trackpad settings", "aria-expanded": settingsOpen, "aria-controls": "trackpad-settings" })}
-          {panelBtn(() => setLeftTab((t) => (t === "markup" ? null : "markup")), "markup", "Markups on these sheets (clouds, callouts, notes)", leftTab === "markup", markupCount)}
-          {panelBtn(() => setLeftTab((t) => (t === "stamp" ? null : "stamp")), "stamp", "Stamps — reusable annotations dropped click-to-place", leftTab === "stamp", stampLib.stamps.length)}
-          {panelBtn(() => setLeftTab((t) => (t === "rfi" ? null : "rfi")), "rfi", "RFI register — raise, track, and export Requests For Information", leftTab === "rfi", rfis.length)}
-          {panelBtn(toggleTakeoffs, "takeoffs", "Takeoffs — conditions + running totals", takeoffsOpen, visibleShapes.length)}
-          {panelBtn(() => setAgentOpen((o) => !o), "target", "Agent — describe a takeoff; it stages dashed proposals you accept or reject (bring your own AI key)", agentOpen, agentProposals.length)}
+          {panelBtn(() => setLeftTab((t) => (t === "markup" ? null : "markup")), "markup", "Markups on these sheets (clouds, callouts, notes)", leftTab === "markup", markupCount, { "data-drawer": "markups" })}
+          {panelBtn(() => setLeftTab((t) => (t === "stamp" ? null : "stamp")), "stamp", "Stamps — reusable annotations dropped click-to-place", leftTab === "stamp", stampLib.stamps.length, { "data-drawer": "markups" })}
+          {panelBtn(() => setLeftTab((t) => (t === "rfi" ? null : "rfi")), "rfi", "RFI register — raise, track, and export Requests For Information", leftTab === "rfi", rfis.length, { "data-drawer": "markups" })}
+          {panelBtn(toggleTakeoffs, "takeoffs", "Takeoffs — conditions + running totals", takeoffsOpen, visibleShapes.length, { "data-drawer": "conditions" })}
+          {panelBtn(() => setAgentOpen((o) => !o), "target", "Agent — describe a takeoff; it stages dashed proposals you accept or reject (bring your own AI key)", agentOpen, agentProposals.length, { "data-drawer": "agent" })}
           {panelBtn(() => setShowRevisions(true), "revisions", "Revisions — save the takeoff at each bid revision, compare what moved", showRevisions)}
           <button type="button" onClick={() => setDiagnosticsOpen((v) => !v)} title="Rendering diagnostics" aria-label="Rendering diagnostics" aria-pressed={diagnosticsOpen}
             style={{ width: 34, minHeight: 34, border: `1px solid ${diagnosticsOpen ? "var(--cobalt)" : "var(--ink-faint)"}`, background: diagnosticsOpen ? "var(--cobalt)" : "var(--paper-bright)", color: diagnosticsOpen ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontSize: 9, fontWeight: 700 }}>diag</button>
@@ -6246,6 +6265,7 @@ export default function TakeoffCanvas() {
             per-proposal accept/reject desk. */}
         {agentOpen && (
           <AgentPanel
+            width={agentPanelW}
             configured={isAiConfigured()}
             running={agentRunning}
             log={agentLog}
