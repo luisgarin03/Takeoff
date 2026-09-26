@@ -263,6 +263,11 @@ export default function PlanNavigator({
   // regardless of whether other groups have levels — see sortGalleryGroups's
   // comment for why this must be a PER-GROUP gate, not a whole-gallery one.
   const groups = sortGalleryGroups(groupSheetsByLevel(allKeys, levels), labelOf);
+  const orderedKeys = groups.flatMap((group) => group.keys);
+  const selectedKeys = new Set(sel);
+  const allSelected = orderedKeys.length > 0 && orderedKeys.every((key) => selectedKeys.has(key));
+  // Use the complete gallery order, not thumbnail visibility or prior click order.
+  const toggleAll = () => setSel(allSelected ? [] : orderedKeys);
   const assignLevel = () => {
     const label = window.prompt('Level for the selected sheets (e.g. "L1", "Level 2", "Garage") — empty clears:', "");
     if (label === null) return;
@@ -361,6 +366,13 @@ export default function PlanNavigator({
             <option value="date">Modified</option>
           </select>
         </>
+      )}
+      {mode === "plan" && (
+        <button type="button" onClick={toggleAll} disabled={!enumerated || !orderedKeys.length}
+          style={ctrlBtn}>
+          <Icon name={allSelected ? "close" : "check"} size={14} />
+          {allSelected ? "Clear All" : "Select All"}
+        </button>
       )}
       {mode === "plan" && onAddFiles && (
         <div style={{ position: "relative" }}>
