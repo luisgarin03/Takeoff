@@ -18,16 +18,23 @@ import { flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { store, isStaleTabError, STALE_TAB_MESSAGE, projectIdFromUrl } from "../lib/store.js";
+import { store, isStaleTabError, STALE_TAB_MESSAGE, projectIdFromUrl, importFileProject } from "../lib/store.js";
+import { exportProjectFile, readProjectFile, projectFilename, MAX_PROJECT_FILE_BYTES } from "../lib/projectFile.js";
+import { saveProjectArchive } from "../lib/saveProjectFile.js";
+import SaveProjectDialog from "../components/SaveProjectDialog.jsx";
 import { seedStampLibrary, instantiateStamp, markupToStampElement } from "../lib/stamps.js";
 import { extractSvgPrimitives, svgToStamp } from "../lib/svgImport.js";
 import { transformPath, svgPlacedBox } from "../lib/svgpath.js";
 import { ingestFiles } from "../lib/ingest.js";
 import ToolMenu from "../components/ToolMenu.jsx";
+import SheetBookmarkButton from "../components/SheetBookmarkButton.jsx";
+import { sanitizeSheetBookmarks, toggleSheetBookmark, sheetBookmarkGroups } from "../lib/sheetBookmarks.js";
 import VirtualTrackpad from "../components/VirtualTrackpad.jsx";
 import TrackpadSettings from "../components/TrackpadSettings.jsx";
 import DiagnosticsMonitor from "../components/DiagnosticsMonitor.jsx";
 import PlanNavigator from "../components/PlanNavigator.jsx";
+import Whiteboard from "../components/Whiteboard.jsx";
+import { emptyWhiteboard } from "../lib/whiteboard.js";
 import ReportPanel from "../components/ReportPanel.jsx";
 import RevisionsPanel from "../components/RevisionsPanel.jsx";
 import TakeoffsPanel, { clampPanelW, PANEL_EXPANSION, CONDITION_DND_MIME, ConditionAppearanceEditor } from "../components/TakeoffsPanel.jsx";
@@ -190,6 +197,7 @@ export default function TakeoffCanvas() {
   const closeProject = () => navigate("/");
   const browseProjects = projectHomeFolderId() ? () => navigate("/projects") : null;
   const [openTabs, setOpenTabs] = useState([]);   // sheetKeys open as tabs across the top
+  const [sheetBookmarks, setSheetBookmarks] = useState([]);
   const [galleryLabels, setGalleryLabels] = useState({}); // sheetKey → title-block number, all files
   const [pageLabels, setPageLabels] = useState({}); // { pageNum: "A003" } from the title block
   const [sheetGroup, setSheetGroup] = useState([]);   // sheetKeys shown side-by-side; [] = single-sheet mode
@@ -482,8 +490,19 @@ export default function TakeoffCanvas() {
   const [importRows, setImportRows] = useState(null);        // Import-from-schedule approval rows (null = dialog closed)
   const [scheduleAnchor, setScheduleAnchor] = useState(null); // first marquee corner for the "schedule" tool — ISOLATED from poly so it can never leak into a measure shape
   const [projectName, setProjectName] = useState("");   // optional label for the report header
+  const [whiteboard, setWhiteboard] = useState(emptyWhiteboard);
+  const [whiteboardOpen, setWhiteboardOpen] = useState(false);
+  const [whiteboardBusy, setWhiteboardBusy] = useState(false);
   const [clientInfo, setClientInfo] = useState({});      // per-project client/job fields for branded output; additive payload field
   const fileInputRef = useRef(null);                    // hidden <input type=file> for "Open PDF"
+  const projectInputRef = useRef(null);
+  const [projectFileBusy, setProjectFileBusy] = useState("");
+  const [projectFileError, setProjectFileError] = useState("");
+  const [projectFilePrompt, setProjectFilePrompt] = useState(null);
+  const [projectSavePrompt, setProjectSavePrompt] = useState(null);
+  const projectFileLock = useRef(false);
+  const [pageExportBusy, setPageExportBusy] = useState(false);
+  const pageExportLock = useRef(false);
 
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -699,6 +718,17 @@ export default function TakeoffCanvas() {
     const base = t.file.replace(/\.pdf$/i, "");
     return lvl + (t.page > 1 ? `${base} · ${t.page}` : base);
   };
+  const bookmarkedKeys = new Set(sheetBookmarks);
+  const bookmarkButton = (key) => <SheetBookmarkButton label={tabLabel(key)} bookmarked={bookmarkedKeys.has(key)}
+    onToggle={() => setSheetBookmarks((current) => toggleSheetBookmark(current, key))} />;
+  const bookmarkGroups = sheetBookmarkGroups(openTabs, sheetBookmarks, sheets);
+  const sheetJumpItem = (key) => ({ id: key, icon: "document", label: tabLabel(key),
+    active: sheetGroup.length ? sheetGroup.includes(key) : key === sheetKey,
+    onSelect: () => openSheets([key], false), accessory: bookmarkButton(key) });
+  const sheetJumpItems = bookmarkGroups.bookmarked.length
+    ? [{ section: "Bookmarked" }, ...bookmarkGroups.bookmarked.map(sheetJumpItem),
+      ...(bookmarkGroups.other.length ? ["divider", { section: "Open sheets" }, ...bookmarkGroups.other.map(sheetJumpItem)] : [])]
+    : openTabs.map(sheetJumpItem);
 
   // ── panels: the ONE rendering model — single-sheet mode is a group of one ──
   // Every coordinate on screen lives in "stage space": panel i's image px plus
@@ -954,6 +984,11 @@ export default function TakeoffCanvas() {
   async function handleFiles(fileList) {
     const incoming = Array.from(fileList || []);
     if (!incoming.length) return;
+    if (incoming.some((file) => /\.otk$/i.test(file.name))) {
+      if (incoming.length !== 1) setProjectFileError("Open one project file at a time, separately from plan files.");
+      else setProjectFilePrompt(incoming[0]);
+      return;
+    }
     setCommitMsg("Reading files…");
     let pdfs = [], skipped = [];
     try { ({ pdfs, skipped } = await ingestFiles(incoming, { onProgress: setCommitMsg })); }
@@ -1014,6 +1049,7 @@ export default function TakeoffCanvas() {
   // Restore in the Revisions panel, so a restored revision walks the same
   // defensive path as a page reload.
   const hydrate = (a) => {
+    setWhiteboard(a.whiteboard || emptyWhiteboard());
     // Same cross-load-transient gap as the panel epoch bump below: a revision
     // Restore runs in-place with the same sheet keys, so a surviving zoneCheck
     // would immediately re-classify the RESTORED shape set against the
@@ -1071,6 +1107,7 @@ export default function TakeoffCanvas() {
     // Extracted to sanitizeSheetLevels (lib/sheetLevels.js) so this gate has
     // its own unit tests independent of the reducer.
     setSheetLevels(sanitizeSheetLevels(a.sheet_levels));
+    setSheetBookmarks(sanitizeSheetBookmarks(a.sheet_bookmarks));
     // else-clear matters at runtime (snapshot load): a payload without groups/
     // tabs must not inherit the pre-load ones — autosave would persist a hybrid.
     // In group mode sheetGroup + lastGroup share ONE instance so the lastGroup-sync
@@ -1627,7 +1664,7 @@ export default function TakeoffCanvas() {
     // units is additive and diff-only (the sheet_levels convention): imperial —
     // the default — omits the key, so an old imperial project's payload is
     // byte-identical on round-trip; only a metric project carries the field.
-    return { project_name: projectName, ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
+    return { project_name: projectName, ...(whiteboard.items.length ? { whiteboard } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
   };
   // Runtime restore of a saved payload — the Revisions panel's Restore lands
   // here. A runtime load (unlike mount) can interrupt work in
@@ -1647,6 +1684,62 @@ export default function TakeoffCanvas() {
     resetZone();
     hydrate(payload || {});
   };
+
+  function saveProjectFile() {
+    if (projectFileLock.current || !hydrated.current || whiteboardBusy || projectSavePrompt) return;
+    setProjectFileError("");
+    setProjectSavePrompt(projectFilename(projectName));
+  }
+
+  async function confirmSaveProjectFile(name) {
+    if (projectFileLock.current || !hydrated.current || whiteboardBusy) return;
+    projectFileLock.current = true;
+    setProjectFileBusy("Saving project file..."); setProjectFileError("");
+    try {
+      const result = await saveProjectArchive({
+        name,
+        pickFile: typeof window.showSaveFilePicker === "function" ? window.showSaveFilePicker.bind(window) : null,
+        // Capture live edits, including anything still in the autosave delay.
+        buildArchive: () => exportProjectFile(store, buildPayload()),
+        download: downloadBytes,
+      });
+      if (result.status !== "cancelled") {
+        setProjectSavePrompt(null);
+        setCommitMsg(`${result.status === "saved" ? "Project saved" : "Project download started"}: ${result.filename}`);
+      }
+    } catch (e) { setProjectFileError(e.message || "Couldn't save the project file."); }
+    finally { projectFileLock.current = false; setProjectFileBusy(""); }
+  }
+
+  async function openProjectFile(file) {
+    if (!file || projectFileLock.current) return;
+    projectFileLock.current = true;
+    setProjectFileBusy("Opening project file..."); setProjectFileError("");
+    try {
+      if (file.size > MAX_PROJECT_FILE_BYTES) throw new Error("Project file exceeds the 512 MB limit.");
+      const project = await readProjectFile(new Uint8Array(await file.arrayBuffer()));
+      // Never overwrite a failed-load workspace with its empty UI defaults.
+      if (hydrated.current && !remotePendingRender.current) await store.saveAnnotations(buildPayload());
+      const id = await importFileProject(project);
+      saveDataRef.current = null; saveStateRef.current = "saved";
+      // A fresh document also discards old PDF caches and asynchronous callbacks.
+      // Only the new page installs the new store; old callbacks cannot write to it.
+      window.location.assign(`${window.location.pathname}?localProject=${id}`);
+    } catch (e) { setProjectFileError(e.message || "Couldn't open the project file."); }
+    finally { projectFileLock.current = false; setProjectFileBusy(""); }
+  }
+
+  useEffect(() => {
+    if (!projectFileBusy && !projectFileError && !projectFilePrompt && !projectSavePrompt) return;
+    onMenuDepth(true);
+    return () => onMenuDepth(false);
+  }, [projectFileBusy, projectFileError, projectFilePrompt, projectSavePrompt, onMenuDepth]);
+
+  useEffect(() => {
+    if (!whiteboardOpen) return;
+    onMenuDepth(true);
+    return () => onMenuDepth(false);
+  }, [whiteboardOpen, onMenuDepth]);
 
   // markups MUST be in the deps (a cloud/callout/text or an RFI link is real work);
   // omitting it dropped markup saves and could persist a stale markups array.
@@ -1686,7 +1779,7 @@ export default function TakeoffCanvas() {
     // state it serializes, so listing buildPayload (a new identity each render)
     // would fire a save on every render instead of only on a real change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, projectName, clientInfo, units]);
+  }, [shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, projectName, clientInfo, units, whiteboard]);
   useEffect(() => { saveStateRef.current = saveState; }, [saveState]);
 
   // Flush a pending debounced save on navigate-away (unmount), and warn before a
@@ -1721,12 +1814,12 @@ export default function TakeoffCanvas() {
   // a scheduled save, an active drag, the open text editor, an in-flight OCR scan,
   // an agent run and its staged proposals — hydrate() wipes agentProposals and the
   // conditions a mid-run agent minted, so both defer exactly like One-Click review).
-  busyStateRef.current = { poly, calib, check, proposal, scaleGuide, prevScale, agentRunning, agentProposals };
+  busyStateRef.current = { poly, calib, check, proposal, scaleGuide, prevScale, agentRunning, agentProposals, whiteboardOpen };
   const computeBusy = () => isCanvasBusy({
     ...busyStateRef.current,
     saveState: saveStateRef.current,
     dragging: !!dragRef.current || !!ocDragRef.current,
-    editing: editingRef.current,
+    editing: editingRef.current || busyStateRef.current.whiteboardOpen,
     scanning: scanBusyRef.current,
   });
 
@@ -3472,6 +3565,33 @@ export default function TakeoffCanvas() {
     if (m.type === "highlight" && m.pts) return;
     setLeftTab((t) => (tool === "stamp" ? (t ?? "markup") : "markup"));
   }
+  async function downloadCurrentPage() {
+    if (pageExportLock.current || !focusPanel.file || !hydrated.current || loadError) return;
+    pageExportLock.current = true;
+    setPageExportBusy(true);
+    try {
+      // Snapshot the focused sheet and its committed marks before async PDF work.
+      // Side-by-side exports only the last-clicked sheet, never the whole group.
+      const sheet = { key: focusPanel.key, file: focusPanel.file, page: focusPanel.page, label: tabLabel(focusPanel.key) };
+      setCommitMsg(`Building ${sheet.label} PDF...`);
+      const { bytes, filename } = await buildMarkedSetPdf({
+        projectName, dark: darkMode, units, singleSheet: true, sheets: [sheet],
+        shapes: shapes.filter((s) => s.sheet_id === sheet.key),
+        markups: markups.filter((m) => m.sheet_id === sheet.key), rfis, conditions,
+        getPage: async (file, pageNum) => (await docFor(file)).getPage(pageNum),
+        loadPdfData: (file) => store.loadPdfData(file),
+      });
+      const safeFilename = projectFilename(filename.slice(0, -4)).replace(/\.otk$/, ".pdf");
+      downloadBytes(safeFilename, bytes);
+      setCommitMsg(`Page downloaded - ${safeFilename}`);
+    } catch (e) {
+      setCommitMsg(`Page download failed: ${e.message || e}`);
+    } finally {
+      pageExportLock.current = false;
+      setPageExportBusy(false);
+    }
+  }
+
   // Marked-set PDF: every sheet carrying takeoffs/markups, work burned in as
   // drawn, legend cover with net totals — built fully in the browser
   // (lib/markedset.js). Exports in the CURRENT view: dark canvas → dark PDF.
@@ -4908,7 +5028,7 @@ export default function TakeoffCanvas() {
   const sheetMenuItems = [];
   if (!sheetGroup.length && pageCount > 1) {
     sheetMenuItems.push({ section: "Sheets in this set" });
-    for (let n = 1; n <= pageCount; n++) sheetMenuItems.push({ id: `pg-${n}`, label: `${levelOfPage(n) ? `${levelOfPage(n)} · ` : ""}${pageLabels[n] || `Sheet ${n}`}`, shortcut: `${n}/${pageCount}`, active: n === page, onSelect: () => setPage(n) });
+    for (let n = 1; n <= pageCount; n++) sheetMenuItems.push({ id: `pg-${n}`, label: `${levelOfPage(n) ? `${levelOfPage(n)} · ` : ""}${pageLabels[n] || `Sheet ${n}`}`, shortcut: `${n}/${pageCount}`, active: n === page, onSelect: () => setPage(n), accessory: bookmarkButton(n > 1 ? `${active}#${n}` : active) });
   }
   if (!sheetGroup.length && sheets.length > 1) {
     sheetMenuItems.push({ section: "Files" });
@@ -4993,6 +5113,24 @@ export default function TakeoffCanvas() {
     );
   })();
 
+  const projectControls = (
+    <><button type="button" onClick={() => setWhiteboardOpen(true)} disabled={!hydrated.current || !!loadError}
+      title="Open whiteboard" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5, cursor: "pointer" }}>
+      <Icon name="rectTool" size={15} />Whiteboard</button>
+    <ToolMenu face={<><Icon name="document" size={15} />Project</>} title="Project files"
+      onOpenChange={onMenuDepth} disabled={!!projectFileBusy}
+      items={[
+        { id: "save-project", icon: "document", label: "Save project...", onSelect: saveProjectFile, disabled: !hydrated.current || !!loadError },
+        { id: "open-project", icon: "plus", label: "Open project...", onSelect: () => projectInputRef.current?.click() },
+        "divider",
+        { id: "download-page", icon: "document", label: pageExportBusy ? "Downloading page..." : "Download this page",
+          title: "Download the current sheet with all takeoff marks and markups as a PDF", onSelect: downloadCurrentPage,
+          disabled: pageExportBusy || !focusPanel.file || !hydrated.current || !!loadError },
+        ...(new URLSearchParams(window.location.search).has("localProject") ? ["divider",
+          { id: "local-workspace", label: "Return to default workspace", onSelect: () => window.location.assign(window.location.pathname) }] : []),
+      ]} /></>
+  );
+
   return (
     // .app-shell: the print stylesheet collapses this 100vh flex column while the report is open
     <div
@@ -5000,6 +5138,29 @@ export default function TakeoffCanvas() {
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer?.files); }}
       style={{ position: "relative", display: "flex", flexDirection: "column", height: "100vh" }}>
+      <input ref={projectInputRef} type="file" accept=".otk" aria-label="Open project file" style={{ display: "none" }}
+        onChange={(e) => { setProjectFilePrompt(e.target.files?.[0] || null); e.target.value = ""; }} />
+      {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard} onClose={() => setWhiteboardOpen(false)}
+        onSave={saveProjectFile} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState} />}
+      {projectSavePrompt !== null && <SaveProjectDialog filename={projectSavePrompt}
+        canChooseLocation={typeof window.showSaveFilePicker === "function"} busy={!!projectFileBusy} error={projectFileError}
+        onSave={confirmSaveProjectFile} onClose={() => { if (!projectFileLock.current) { setProjectSavePrompt(null); setProjectFileError(""); } }} />}
+      {projectSavePrompt === null && (projectFileBusy || projectFileError || projectFilePrompt) && (
+        <div role="dialog" aria-modal="true" aria-label="Project file" onDrop={(e) => e.stopPropagation()}
+          style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", padding: 16 }}>
+          <div className="panel" style={{ background: "var(--paper-bright)", color: "var(--ink)", padding: 24, maxWidth: 420 }}>
+            <p role={projectFileError ? "alert" : "status"} style={{ overflowWrap: "anywhere" }}>{projectFileError || projectFileBusy || `Open ${projectFilePrompt.name}?`}</p>
+            {projectFilePrompt && <>
+              <p>Your current project stays saved in this browser. Finish any drawing in progress before switching.</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <button type="button" onClick={() => setProjectFilePrompt(null)}>Cancel</button>
+                <button type="button" onClick={() => { const file = projectFilePrompt; setProjectFilePrompt(null); openProjectFile(file); }}>Open project</button>
+              </div>
+            </>}
+            {projectFileError && <button type="button" onClick={() => setProjectFileError("")}>Close</button>}
+          </div>
+        </div>
+      )}
       {/* toolbar — two fixed decks (issue #61). Deck 1 = things you do to the
           PROJECT (open, navigate, export, account); deck 2 = things you do to
           the SHEET (arm tools, toggle aids, set scale). Neither row wraps, and
@@ -5015,6 +5176,7 @@ export default function TakeoffCanvas() {
       >
         <div className="glass-toolbar glass-toolbar-primary" style={{ display: "flex", gap: 7, alignItems: "center", padding: "6px 14px", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-shadow)", whiteSpace: "nowrap" }}>
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}><BrandText /></strong>
+        {projectControls}
         {/* team cloud mode: always a way to leave this project, plus a way to
             browse the rest of the team's projects when the build names a root
             — fixed presence for the whole session (cloudMode is set before the
@@ -5031,7 +5193,7 @@ export default function TakeoffCanvas() {
             Projects
           </button>
         )}
-        <input name="sheet-file" ref={fileInputRef} type="file" accept=".pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
+        <input name="sheet-file" ref={fileInputRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
         <button type="button" onClick={() => fileInputRef.current?.click()} title="Open plans — PDF, image, or a .zip plan set (or just drag them onto the canvas)"
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: "1px solid var(--ink)", background: "var(--ink)", color: "var(--paper-bright)", cursor: "pointer", fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}>
@@ -5309,17 +5471,19 @@ export default function TakeoffCanvas() {
             return (
               <span key={k} className={`sheet-tab${on ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--ink-faint)", borderBottom: on ? "2px solid var(--cobalt)" : "1px solid var(--ink-faint)", background: on ? "var(--paper-cream)" : "transparent", padding: "3px 6px 2px 9px", maxWidth: 190 }}>
                 <button className="sheet-tab-button" onClick={() => goToSheet(k)} title={k} style={{ border: "none", background: "none", cursor: "pointer", fontWeight: on ? 700 : 500, fontSize: 11.5, color: "var(--ink)", fontFamily: "var(--f-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140, padding: 0 }}>{lbl}</button>
+                {bookmarkButton(k)}
                 <button className="sheet-tab-icon" onClick={() => toggleInGroup(k)} title={inGroup ? "Remove from side-by-side" : "Side-by-side with the current sheet"} style={{ border: "none", background: "none", cursor: "pointer", color: inGroup ? "var(--cobalt)" : "var(--ink-faint)", padding: 0, display: "inline-flex" }}><Icon name="sideBySide" size={11} /></button>
                 <button className="sheet-tab-icon" onClick={() => closeTab(k)} title="Close tab" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-muted)", padding: 0, display: "inline-flex" }}><Icon name="close" size={10} /></button>
               </span>
             );
           })}
-          {openTabs.length > 1 && (
+          {(openTabs.length > 1 || bookmarkGroups.bookmarked.length > 0) && (
             <ToolMenu
-              title="Jump to an open sheet"
+              title="Jump to an open or bookmarked sheet"
               onOpenChange={onMenuDepth}
               face={<span style={{ fontFamily: "var(--f-mono)", fontSize: 11 }}>{openTabs.length} open</span>}
-              items={openTabs.map((k) => ({ id: k, icon: "document", label: tabLabel(k), active: sheetGroup.length ? sheetGroup.includes(k) : k === sheetKey, onSelect: () => goToSheet(k) }))}
+              menuStyle={{ maxHeight: `min(480px, max(48px, calc(100dvh - ${toolbarHeight + 16}px)))`, overflowY: "auto", overscrollBehavior: "contain" }}
+              items={sheetJumpItems}
             />
           )}
         </div>
@@ -6319,7 +6483,7 @@ export default function TakeoffCanvas() {
       {/* Unified plan navigator — one surface for the plan-set gallery AND the
           Drive folder browser. Presents as a modal over the dimmed canvas when a
           sheet is open behind it, or full-screen (onboarding) when nothing is. */}
-      {(view === "gallery" || view === "picker") && (
+      {!whiteboardOpen && (view === "gallery" || view === "picker") && (
         <PlanNavigator
           canClose={openTabs.length > 0}
           onExit={() => setView("canvas")}
@@ -6332,6 +6496,7 @@ export default function TakeoffCanvas() {
           thumbCacheRef={thumbCacheRef} busyRef={statusRef}
           openTabs={openTabs} onOpen={openSheets}
           onAddFiles={handleFiles}
+          projectControls={projectControls}
           levels={sheetLevels}
           onAssignLevel={(keys, label) => setSheetLevels((m) => {
             const next = { ...m };

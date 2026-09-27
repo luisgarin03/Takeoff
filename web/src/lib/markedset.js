@@ -156,7 +156,8 @@ function invertPixels(cv) {
   ctx.restore();
 }
 
-export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, markups, rfis = [], conditions, getPage, loadPdfData, company, clientInfo, credit = null, coverTitle = "Marked Set", units = "imperial" }) {
+export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, markups, rfis = /** @type {object[]} */ ([]), conditions, getPage, loadPdfData, company, clientInfo, credit = null, coverTitle = "Marked Set", units = "imperial", singleSheet = false }) {
+  if (singleSheet && sheets.length !== 1) throw new Error("Choose one current sheet to download.");
   // display-unit edge (lib/units contract): quantities arrive as internal feet;
   // metric converts at the drawn string only — legend rows, by-sheet rows, and
   // the per-shape chips. ASCII "m2" (Helvetica WinAnsi has no superscript 2).
@@ -174,7 +175,8 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
     return m;
   };
   const shapesBy = byKey(shapes), marksBy = byKey(markups);
-  const marked = sheets.filter((sh) => (shapesBy.get(sh.key) || []).length || (marksBy.get(sh.key) || []).length);
+  // A page download includes the requested sheet even before it has any marks.
+  const marked = singleSheet ? sheets : sheets.filter((sh) => (shapesBy.get(sh.key) || []).length || (marksBy.get(sh.key) || []).length);
   // a live RFI can outlive its markups, so an RFI-only project still exports
   // (cover + RFI schedule, no per-sheet pages) — only a truly empty set aborts
   if (!marked.length && !rfis?.length) throw new Error("Nothing to export — no sheet carries takeoffs or markups.");
@@ -193,14 +195,14 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
   // Drawn as-is in dark mode too: normalized PNGs keep their transparency,
   // no inversion.
   let logoImg = null;
-  if (company?.logo) {
+  if (!singleSheet && company?.logo) {
     try {
       logoImg = await doc.embedPng(company.logo);
     } catch { logoImg = null; }
   }
 
   // ── legend cover ───────────────────────────────────────────────────────────
-  {
+  if (!singleSheet) {
     const pg = doc.addPage([612, 792]);
     // the single choke point for cover text — every string WinAnsi-sanitized
     const draw = (t, opts) => pg.drawText(winAnsiSafe(t), opts);
@@ -316,7 +318,7 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
   // ── RFI schedule page — ONLY when RFIs exist, so an RFI-free export never
   // gains a blank page. Its own draw() choke point WinAnsi-sanitizes every RFI
   // free-text field; subjects are clamped on the SANITIZED string. Dark-aware. ──
-  if (rfis?.length) {
+  if (!singleSheet && rfis?.length) {
     // clamp a string to a max width, measuring the SANITIZED text (mirrors the
     // cover's rightAligned) so the ellipsis can never bisect a surrogate pair
     const clampTo = (raw, size, fnt, maxW) => {
@@ -575,7 +577,7 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
       }
     }
     // sheet stamp, top-left in visual space
-    text(`${sh.label} · marked set`, 14, 20, 8, muted);
+    if (!singleSheet) text(`${sh.label} · marked set`, 14, 20, 8, muted);
   }
 
   // small tool credit on the LAST page only — the subtle parent credit shown in
@@ -583,14 +585,15 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
   // "OpenTakeoff · " wordmark, so a separate credit would be redundant.
   const allPages = doc.getPages();
   const lastPg = allPages[allPages.length - 1];
-  if (lastPg && credit) {
+  if (!singleSheet && lastPg && credit) {
     const cw = font.widthOfTextAtSize(winAnsiSafe(credit), 7);
     lastPg.drawText(winAnsiSafe(credit), { x: (612 - cw) / 2, y: 22, size: 7, font, color: muted });
   }
 
   const bytes = await doc.save();
   const base = (projectName || "").trim();
-  const filename = `${base ? base + " - " : ""}marked set${dark ? " (dark)" : ""}.pdf`;
+  const suffix = singleSheet ? `${sheets[0].label || `Page ${sheets[0].page}`} - marked page` : "marked set";
+  const filename = `${base ? base + " - " : ""}${suffix}${dark ? " (dark)" : ""}.pdf`;
   return { bytes, filename };
 }
 

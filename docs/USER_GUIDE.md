@@ -70,6 +70,8 @@ Open sheets ride a **Sheets** tab strip: click a tab to view it, **⊞** to put 
 
 In the gallery, select sheets and hit **Assign level…** (`"L1"`, `"Level 2"`, `"Garage"` — empty clears). The gallery groups by level with unassigned sheets last, cards wear their level chip, and tabs plus the page picker carry the label. Levels save with the project.
 
+**Bookmark pages:** click the outline star beside a sheet tab or a page in either navigation dropdown. A filled gold star marks a bookmark; click it again to remove it. The star does not navigate or close the menu. The **N open** dropdown puts bookmarks in a **Bookmarked** section in file/page order, then lists the remaining open sheets in their existing tab order. Click a page name to navigate; a bookmarked closed tab reopens. Closing a tab does not remove its bookmark. Removing a PDF from the working set hides its bookmarks until the file is added again. Bookmarks autosave, restore with revisions, and are included in **Save project** `.otk` files. Older projects open with no bookmarks.
+
 ### Pan & zoom
 
 The fixed bottom-left canvas controls are **Draw (pencil icon)**, **Edit (pen icon)**, **Pan**, **Select**, **+ Zoom**, **− Zoom**, **fit**, and **☾**, in that order. Draw opens the shared Measure, Cut Out, and Markup choices; Edit opens the existing editing actions with the same availability rules. When Highlighter is armed, reopen Draw to adjust ink, size, and tip. The original top Theme, Mode, Draw, and Edit controls are hidden; their actions remain available through the rails and existing keyboard shortcuts. Rail menus open beside the controls and scroll within the viewport; taps on them do not reach the canvas. A **✓ Finish** button appears above Pan only when the toolbar Finish action is available: at least three points for Area, Deduct, or a single-sheet Zone, or two for Linear, Curve, or Surface. Its tooltip and accessible label show the live point count. Either Finish button completes the same trace; finishing or cancelling removes the extra button without moving the six controls below it. Pan and Select use the existing mode state and `P` / `V` shortcuts, with the active mode filled in ink.
@@ -449,6 +451,36 @@ Addenda happen. **Revisions** (the clock icon on the rail) makes them data inste
 ---
 
 ## 12. Saving, your data & Contribute
+
+### Download the current plan page
+
+Choose **Project > Download this page** to download a one-page PDF of the complete current sheet with all committed takeoff marks and markups, even if the markup layer is hidden. Finish any trace or annotation in progress first. In side-by-side view, click the desired sheet first. Zoom/pan and toolbar visibility do not affect the export. The original page dimensions and rotation are retained in normal plan view; an inverted plan exports in its current dark appearance. No report cover, RFI schedule or extra sheet stamp is added. This is a shareable PDF, not an editable `.otk` project backup.
+
+### Whiteboard notes
+
+Open **Whiteboard** from the top toolbar or the Plan Set header. Drop PDFs or PNG/JPEG/WebP/GIF/BMP images onto the board, or use **Add files**. Each PDF stays in one card with page navigation; the original file can be downloaded from its card. Reference attachments never become plan sheets and do not affect takeoff measurements.
+
+Use **Note** for editable text notes. Drag an item's header to move it, or its lower-right handle to resize it. Select a note to change its color. Pan by dragging empty board space or selecting the pan tool; use the mouse wheel, zoom buttons, or a two-finger pinch to zoom. **Fit whiteboard** brings the items into view. Delete applies to the selected item; Undo/Redo retains the last 20 edits while the board is open.
+
+**Export PDF** in the whiteboard header downloads the current board as exactly one custom-sized PDF page. It includes every note body and each file card's currently selected PDF page or image, even offscreen; it excludes drag headers, pagination, selection handles, card shadows and the background grid. The union of the content bounds determines the page size, with no added margin. Negative positions and gaps between items are preserved. Export uses the canonical 100% card layout (one board unit is 0.75 PDF points), independent of zoom, pan, selection, screen size or device pixel ratio. It does not alter the board, save data or undo history.
+
+Original PDF pages remain vector-based where possible. Pages needing annotation/transparency flattening and colored text notes use a 3x raster (288 dpi at export size); notes keep browser font layout and Unicode. Original PNG/JPEG assets are retained where possible; other image formats and oriented JPEGs are decoded at original resolution. Animated images export their first frame. No content is uploaded. Empty boards report **Nothing to export**. A note with overflowing text must be enlarged before export, so no text is silently lost. Missing/damaged assets or unsupported future object types stop the export with an error.
+
+The PDF is limited to 19,200 board units (200 inches) per side. A raster must fit within 8,192 pixels per side and 16 megapixels; the combined raster budget is 64 megapixels. If a limit is exceeded, move items closer together or reduce the affected note/image size. The exporter never silently scales the board, splits it into pages or crops it to fit. Shape/group/freehand tools are not part of the current whiteboard model; takeoff drawings remain a separate workspace.
+
+The board autosaves with this project and is included in revision snapshots. **Save project** on the board (or Ctrl/Cmd+S) exports the same `.otk` project file, including original attachment bytes, text, colors, positions, sizes, and selected PDF pages. Reopening the file restores the board without needing the original files. Attachments are limited to 25 MB per file and 75 MB total per board; unsupported or unreadable files are reported without discarding existing notes. Files remain in browser storage until you export a portable backup. Use a current build to open the new v2 format; old v1 files remain supported.
+
+### Saving and reopening a project
+
+Use **Project > Save project...** in the top toolbar or Plan Set header to save an `.otk` file. Enter the filename, then choose **Choose location...** to open the browser's Save As picker and select a folder. The same dialog opens from the whiteboard's Save project button. Browsers without this picker show **Download** instead and manage the destination through their download settings. Cancelling leaves the project unchanged; changing the filename does not rename the project itself.
+
+The file contains all loaded plan PDFs (including images previously converted to PDFs), conditions and attached materials, measurements, calibration scales, markups, RFIs, sheet tabs/groups/levels/bookmarks, project/client details, and revision snapshots. Finish any in-progress trace before saving.
+
+Use **Project > Open project...** to reopen that file. It is validated first, then opened as a separate local workspace; the current project and same-named PDFs are not replaced. The imported workspace autosaves in this browser and survives reloading its URL. Each import creates a separate copy. **Return to default workspace** returns to the original local canvas. You can reopen another `.otk` file at any time to switch projects.
+
+The existing **Open** picker and drag-and-drop also recognize `.otk` files. Open one project file at a time, separately from ordinary plans.
+
+Browser autosave does not update the downloaded file: use **Save project...** again after making edits to keep your portable backup current. Project files are limited to 512 MB, with 32 MB of takeoff/revision metadata. These files contain your plans and project data, so share them only with intended recipients. Browser-global libraries/preferences, account credentials, and AI keys are not included. Files opened from a Drive project become independent local copies; they do not modify Drive.
 
 ### Autosave, locally
 

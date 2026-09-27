@@ -4,6 +4,16 @@ A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF
 
 ## Features
 
+Portable projects: **Project > Save project** asks for a filename and opens a Save As location picker in supported browsers (otherwise a named download). The single `.otk` file contains the plan PDFs, takeoff data, scales, markups, RFIs, tabs, and revisions. **Project > Open project** restores it into a separate local workspace without replacing the currently saved project.
+
+**Project > Download this page** exports the complete current sheet as a one-page PDF with its takeoff marks and markups, without a report cover. In side-by-side view, it uses the last-clicked sheet.
+
+**Sheet bookmarks:** star pages in the sheet tabs or navigation menus. The open-sheet dropdown groups bookmarked pages first, including bookmarked tabs you have closed. Bookmarks autosave and travel with portable project files.
+
+**Whiteboard:** arrange reference PDFs, images, and editable notes in a separate pan/zoom workspace. Original attachments, PDF page choices, and the board layout autosave with the project and travel inside its `.otk` file.
+
+**Whiteboard PDF:** use **Export PDF** in the whiteboard header for one custom-sized page tightly fitted to all note and attachment content, including offscreen items. Export keeps the board layout and original PDF vectors where possible, without the editor grid or controls.
+
 Measure construction plans with existing canvas tools, snapping, and reports. The optional **Trackpad** control adds relative touch or mouse aiming and tap-to-place without covering the target with your finger. At overview zoom, each finished sheet also has a local preview raster; its Diagnostics control is adjustable from 10–100% of the base raster (50% default), while the full-resolution sheet remains available for normal and detailed viewing.
 
 The responsive drawers provide larger workspaces, adapt to phones and tablets, and share wider condition-name inputs with the toolbar. Startup uses the attributed Uiverse rain background and Blueprint app icon.

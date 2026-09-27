@@ -10,6 +10,8 @@
 // items that flip in place (render menu). An item may carry `onHover(bool)` to
 // preview its effect while pointed at (the scale menu's plan-says item shows
 // the calibrated guide bar on the sheet behind the open menu).
+// Optional `accessory` controls are siblings of the action button, so a star
+// toggle can stay open without nesting buttons or triggering navigation.
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../brand/icons.jsx";
@@ -106,7 +108,7 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
             const dis = !!it.disabled;
             const checkable = "checked" in it;
             const fg = it.danger ? "var(--c-danger)" : "var(--ink)";
-            return (
+            const action = (
               <button key={it.id || i} type="button" disabled={dis} title={it.title || ""}
                 onClick={() => { if (!dis) { if (!it.stayOpen) setOpen(false); it.onSelect?.(); } }}
                 style={{
@@ -115,15 +117,17 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
                   background: it.active ? "var(--paper-cream)" : "transparent",
                   borderLeft: it.active ? "2px solid var(--cobalt)" : "2px solid transparent",
                   opacity: dis ? 0.38 : 1, color: fg,
+                  ...(it.accessory ? { flex: 1, minWidth: 0 } : {}),
                 }}
                 onMouseEnter={(e) => { if (!dis && !it.active) e.currentTarget.style.background = "var(--paper-shadow)"; if (!dis) it.onHover?.(true); }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = it.active ? "var(--paper-cream)" : "transparent"; if (!dis) it.onHover?.(false); }}>
                 {checkable && <span style={{ display: "inline-flex", width: 15, justifyContent: "center", color: "var(--c-positive)", visibility: it.checked ? "visible" : "hidden" }}><Icon name="check" size={14} /></span>}
                 {it.icon && <span style={{ display: "inline-flex", width: 17, justifyContent: "center", color: it.tint || fg }}><Icon name={it.icon} size={16} /></span>}
-                <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 13, fontWeight: it.active ? 600 : 400 }}>{it.label}</span>
+                <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 13, fontWeight: it.active ? 600 : 400, ...(it.accessory ? { minWidth: 0, overflowWrap: "anywhere" } : {}) }}>{it.label}</span>
                 {it.shortcut && <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-muted)" }}>{it.shortcut}</span>}
               </button>
             );
+            return it.accessory ? <div key={it.id || i} style={{ display: "flex", alignItems: "center" }}>{action}{it.accessory}</div> : action;
           })}
         </div>
       )}

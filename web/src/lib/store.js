@@ -46,9 +46,9 @@ export function emptyAnnotations() {
   return { schema: ANN_SCHEMA, conditions: [], shapes: [], markups: [], sheets: [], sheet_group: [], last_group: [], sheet_tabs: [] };
 }
 
-function openDB() {
+function openDB(databaseName = DB_NAME) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDB.open(databaseName, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       // contains-guards make this run for both fresh creates and v1->v2 upgrades
@@ -119,8 +119,8 @@ export function friendlyStoreError(e) {
 // Open, run, ALWAYS close — even when fn throws (a DataCloneError inside a
 // put, say). A leaked open connection blocks every future version upgrade
 // in every tab.
-async function withDb(fn) {
-  const db = await openDB();
+async function withDatabase(fn, databaseName = DB_NAME) {
+  const db = await openDB(databaseName);
   try {
     return await fn(db);
   } finally {
@@ -141,7 +141,13 @@ function tx(db, store, mode, fn) {
   });
 }
 
-export const localStore = {
+const withDb = (fn) => withDatabase(fn);
+
+// Portable projects reuse the same adapter in an isolated database. A PDF with
+// the same filename in another project must never replace this project's bytes.
+function createWorkspaceStore(databaseName = DB_NAME) {
+  const withDb = (fn) => withDatabase(fn, databaseName);
+  return {
   async listSheets() {
     const names = await withDb((db) => tx(db, PDF_STORE, "readonly", (os) => os.getAllKeys()));
     // preserve insertion order (IndexedDB getAllKeys sorts by key; we keep the
@@ -290,7 +296,43 @@ export const localStore = {
   async deleteSnapshot(id) {
     await withDb((db) => tx(db, SNAP_STORE, "readwrite", (os) => os.delete(id)));
   },
-};
+  };
+}
+
+export const localStore = createWorkspaceStore();
+
+function fileProjectDb(id) {
+  if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error("Invalid local project ID.");
+  return `${DB_NAME}-project-${id}`;
+}
+
+export function createFileProjectStore(id) {
+  return {
+    ...createWorkspaceStore(fileProjectDb(id)),
+    // Reusable libraries remain browser-global; placed items live in annotations.
+    loadTemplates: localStore.loadTemplates, saveTemplates: localStore.saveTemplates,
+    loadMaterialLibrary: localStore.loadMaterialLibrary, saveMaterialLibrary: localStore.saveMaterialLibrary,
+    loadStampLibrary: localStore.loadStampLibrary, saveStampLibrary: localStore.saveStampLibrary,
+  };
+}
+
+export async function importFileProject({ annotations, pdfs, snapshots }) {
+  const id = crypto.randomUUID();
+  // One transaction: quota/write failures cannot leave a half-imported project.
+  // Nothing is cleared or written in the currently open workspace.
+  await withDatabase((db) => new Promise((resolve, reject) => {
+    const t = db.transaction([PDF_STORE, META_STORE, SNAP_STORE], "readwrite");
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error("Project import was cancelled."));
+    try {
+      t.objectStore(META_STORE).put({ ...annotations, schema: ANN_SCHEMA }, ANN_KEY);
+      for (const pdf of pdfs) t.objectStore(PDF_STORE).put({ name: pdf.name, bytes: pdf.bytes.slice().buffer });
+      for (const snapshot of snapshots) t.objectStore(SNAP_STORE).put({ ...snapshot, project: null });
+    } catch (error) { t.abort(); reject(error); }
+  }), fileProjectDb(id));
+  return id;
+}
 
 // A localStore instance whose ANNOTATIONS are scoped to a single project, so an
 // opted-in cloud project keeps its own local-first annotation blob instead of

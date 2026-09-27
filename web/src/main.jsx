@@ -7,7 +7,7 @@ import "./styles/app.css";
 import TakeoffCanvas from "./pages/TakeoffCanvas.jsx";
 import ProjectHome from "./components/ProjectHome.jsx";
 import { GoogleAuthProvider, useGoogleAuth } from "./lib/google/AuthContext.jsx";
-import { projectIdFromUrl, setActiveStore } from "./lib/store.js";
+import { projectIdFromUrl, setActiveStore, createFileProjectStore } from "./lib/store.js";
 import { isGoogleConfigured, getAccessToken } from "./lib/google/auth.js";
 import { cloudSyncEnabled } from "./lib/prefs.js";
 import { projectHomeFolderId } from "./lib/projectHome.js";
@@ -186,12 +186,27 @@ function ProjectHomeGate() {
   return <ProjectHome />;
 }
 
+function FileProjectGate({ id }) {
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    try { setActiveStore(createFileProjectStore(id)); setReady(true); }
+    catch (e) { setError(e.message); }
+    return () => setActiveStore();
+  }, [id]);
+  if (error) return <Centered title="Couldn't open this project" body={error} />;
+  if (!ready) return <Centered title="Opening project..." />;
+  return <TakeoffCanvas />;
+}
+
 function App() {
   // Subscribe to navigation: react-router bails out of re-rendering the same
   // element on navigate(), so App must watch the location itself. The store.js
   // URL helpers read window.location, which history has already updated by the
   // time this re-render runs — useLocation() is purely the re-render trigger.
-  useLocation();
+  const location = useLocation();
+  const fileProjectId = new URLSearchParams(location.search).get("localProject");
+  if (fileProjectId) return <FileProjectGate key={fileProjectId} id={fileProjectId} />;
   const projectId = projectIdFromUrl();
   // ?project= deep link → the cloud project.
   if (projectId && isGoogleConfigured()) return <ProjectGate projectId={projectId} />;

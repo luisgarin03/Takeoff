@@ -54,7 +54,7 @@ export default function PlanNavigator({
   sheets, getDoc, scales, detectedScales, shapes, labels, onLabel, onDetect,
   thumbCacheRef, busyRef, openTabs, onOpen,
   onAddFiles, onClosePdf, onRemoveFromProject,
-  onCloseProject, onBrowseProjects,
+  onCloseProject, onBrowseProjects, projectControls,
   levels = {}, onAssignLevel,
   // browse (Drive) data
   listFolder, addSheets, onAdded,
@@ -76,6 +76,7 @@ export default function PlanNavigator({
   const escRef = useRef(() => {});
   useEffect(() => {
     const onKey = (e) => {
+      if (e.target?.closest?.('[role="dialog"]')) return; // A project-file dialog owns its own keys.
       if (e.key === "Escape") { e.stopPropagation(); escRef.current(); return; }
       const tag = e.target?.tagName;
       if (tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") e.stopPropagation();
@@ -349,6 +350,7 @@ export default function PlanNavigator({
       <div style={{ flex: 1 }} />
 
       {/* RIGHT: source toggle · browse filters · add plans · account */}
+      {projectControls}
       {browseEnabled && (
         <div style={{ display: "inline-flex", border: "1px solid var(--ink-faint)", borderRadius: 2, overflow: "hidden" }}>
           <button onClick={() => setMode("plan")} style={{ ...ctrlBtn, border: "none", background: mode === "plan" ? "var(--ink)" : "transparent", color: mode === "plan" ? "var(--paper-bright)" : "var(--ink-muted)" }}>Plan set</button>
@@ -397,7 +399,7 @@ export default function PlanNavigator({
         </div>
       )}
       {onAddFiles && (
-        <input name="sheet-file" ref={fileRef} type="file" accept=".pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
+        <input name="sheet-file" ref={fileRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
           onChange={(e) => { onAddFiles(e.target.files); e.target.value = ""; }} />
       )}
       <AuthChip />

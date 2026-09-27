@@ -399,6 +399,27 @@ select {
   z-index: 90 !important;
 }
 
+.sheet-bookmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 34px;
+  width: 34px;
+  min-height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+.sheet-tab .sheet-bookmark {
+  flex-basis: 20px;
+  width: 20px;
+  min-height: 18px;
+}
+.sheet-bookmark svg { color: var(--ink-muted); }
+.sheet-bookmark[aria-pressed="true"] svg,
+.sheet-bookmark:hover svg { color: var(--c-warning); }
+
 .glass-drawer {
   position: relative;
   z-index: 120;
