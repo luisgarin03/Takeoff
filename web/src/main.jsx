@@ -12,6 +12,7 @@ import { isGoogleConfigured, getAccessToken } from "./lib/google/auth.js";
 import { cloudSyncEnabled } from "./lib/prefs.js";
 import { projectHomeFolderId } from "./lib/projectHome.js";
 import { initTheme } from "./lib/theme.js";
+import { CloudProvider } from "./lib/supabase/CloudContext.jsx";
 
 initTheme();   // index.html set data-theme pre-paint; this keeps it live
 
@@ -220,12 +221,14 @@ function App() {
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <GoogleAuthProvider>
+      <CloudProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/projects" element={<ProjectHomeGate />} />
           <Route path="*" element={<App />} />
         </Routes>
       </BrowserRouter>
+      </CloudProvider>
     </GoogleAuthProvider>
   </React.StrictMode>
 );

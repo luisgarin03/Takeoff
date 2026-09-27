@@ -9,7 +9,7 @@ const MAX_ENTRIES = 10_000;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const fail = (message) => { throw new Error(message); };
 
-function validateAnnotations(a) {
+export function validateAnnotations(a) {
   if (!object(a) || a.schema !== ANN_SCHEMA) fail("Unsupported project takeoff format.");
   for (const key of ["conditions", "shapes", "sheets", "markups", "rfis"]) {
     if (a[key] !== undefined && (!Array.isArray(a[key]) || !a[key].every(object))) fail(`Invalid project ${key}.`);
@@ -21,7 +21,7 @@ function validateAnnotations(a) {
   }
 }
 
-async function digest(bytes) {
+export async function digest(bytes) {
   const hash = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -48,6 +48,7 @@ export async function exportProjectFile(source, payload) {
     validateWhiteboard(payload.whiteboard);
     const assets = [];
     for (const asset of payload.whiteboard.assets) {
+      if (asset.missing) fail(`Whiteboard file is Local Only or unavailable: ${asset.name}. Restore it before exporting.`);
       const bytes = base64ToBytes(asset.data);
       const sha256 = await digest(bytes);
       const path = `attachments/${sha256}.bin`;

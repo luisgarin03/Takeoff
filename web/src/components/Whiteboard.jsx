@@ -25,6 +25,7 @@ const FilePreview = memo(function FilePreview({ asset, page, onPages }) {
     setError(""); setPending(true);
     async function render() {
       try {
+        if (asset.missing) throw new Error("File unavailable on this device");
         const bytes = base64ToBytes(asset.data);
         if (asset.type !== "application/pdf") {
           url = URL.createObjectURL(new Blob([bytes], { type: asset.type }));
@@ -51,7 +52,7 @@ const FilePreview = memo(function FilePreview({ asset, page, onPages }) {
         await task.promise;
         if (!stopped) { element.replaceChildren(canvas); setPending(false); }
       } catch (e) {
-        if (!stopped && e.name !== "RenderingCancelledException") { setError("Preview unavailable. Download the original file to view it."); setPending(false); }
+        if (!stopped && e.name !== "RenderingCancelledException") { setError(asset.missing ? "Local Only - original file unavailable on this device." : "Preview unavailable. Download the original file to view it."); setPending(false); }
       }
     }
     render();
@@ -71,7 +72,7 @@ const FileCard = memo(function FileCard({ asset, item, onPage, visible }) {
           onChange={(e) => { const page = Number(e.target.value); if (page >= 1 && page <= pages) onPage(item.id, page); }} /> / {pages || "..."}</label>
         <Button icon="chevronRight" label={`Next page of ${asset.name}`} disabled={!pages || item.page >= pages} onClick={() => onPage(item.id, item.page + 1)} />
       </>}
-      <Button icon="document" label={`Download ${asset.name}`} className="wb-download" onClick={() => downloadBytes(asset.name, base64ToBytes(asset.data), asset.type)} />
+      <Button icon="document" label={`Download ${asset.name}`} className="wb-download" disabled={asset.missing} onClick={() => downloadBytes(asset.name, base64ToBytes(asset.data), asset.type)} />
     </footer>
   </>;
 });

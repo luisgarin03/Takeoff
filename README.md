@@ -4,6 +4,8 @@ A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF
 
 ## Features
 
+**Optional Supabase cloud:** email/password accounts and Google sign-in on the web, private cloud projects, version-checked saves, sharing, and original-file storage alongside the existing local autosave and `.otk` backups. Configure `web/.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`; never use a secret/service-role key. Database and email setup are required before cloud use. Google credentials stay in Supabase; the current Android wrapper retains email sign-in until native OAuth return support is added. See [Supabase setup and implementation report](docs/SUPABASE_SETUP.md).
+
 Portable projects: **Project > Save project** asks for a filename and opens a Save As location picker in supported browsers (otherwise a named download). The single `.otk` file contains the plan PDFs, takeoff data, scales, markups, RFIs, tabs, and revisions. **Project > Open project** restores it into a separate local workspace without replacing the currently saved project.
 
 **Project > Download this page** exports the complete current sheet as a one-page PDF with its takeoff marks and markups, without a report cover. In side-by-side view, it uses the last-clicked sheet.

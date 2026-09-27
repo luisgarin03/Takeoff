@@ -22,6 +22,9 @@ import { store, isStaleTabError, STALE_TAB_MESSAGE, projectIdFromUrl, importFile
 import { exportProjectFile, readProjectFile, projectFilename, MAX_PROJECT_FILE_BYTES } from "../lib/projectFile.js";
 import { saveProjectArchive } from "../lib/saveProjectFile.js";
 import SaveProjectDialog from "../components/SaveProjectDialog.jsx";
+import CloudProjects from "../components/CloudProjects.jsx";
+import { useCloud } from "../lib/supabase/CloudContext.jsx";
+import { UUID as PROJECT_UUID } from "../lib/supabase/projectState.js";
 import { seedStampLibrary, instantiateStamp, markupToStampElement } from "../lib/stamps.js";
 import { extractSvgPrimitives, svgToStamp } from "../lib/svgImport.js";
 import { transformPath, svgPlacedBox } from "../lib/svgpath.js";
@@ -500,6 +503,10 @@ export default function TakeoffCanvas() {
   const [projectFileError, setProjectFileError] = useState("");
   const [projectFilePrompt, setProjectFilePrompt] = useState(null);
   const [projectSavePrompt, setProjectSavePrompt] = useState(null);
+  const [cloudView, setCloudView] = useState(null);
+  const cloudAccount = useCloud();
+  useEffect(() => { if (cloudAccount.authReturn) setCloudView("projects"); }, [cloudAccount.authReturn]);
+  const portableProjectId = useRef(crypto.randomUUID());
   const projectFileLock = useRef(false);
   const [pageExportBusy, setPageExportBusy] = useState(false);
   const pageExportLock = useRef(false);
@@ -1061,6 +1068,7 @@ export default function TakeoffCanvas() {
     // (nothing is lost: rejected geometry records nothing by design).
     setAgentProposals([]);
     setProjectName(a.project_name || "");
+    if (PROJECT_UUID.test(a.project_id)) portableProjectId.current = a.project_id;
     // string fields only — a corrupted record must not put an object where
     // the report masthead renders a React child
     setClientInfo(Object.fromEntries(Object.entries(
@@ -1664,7 +1672,7 @@ export default function TakeoffCanvas() {
     // units is additive and diff-only (the sheet_levels convention): imperial —
     // the default — omits the key, so an old imperial project's payload is
     // byte-identical on round-trip; only a metric project carries the field.
-    return { project_name: projectName, ...(whiteboard.items.length ? { whiteboard } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
+    return { project_id: portableProjectId.current, project_name: projectName, ...(whiteboard.items.length ? { whiteboard } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
   };
   // Runtime restore of a saved payload — the Revisions panel's Restore lands
   // here. A runtime load (unlike mount) can interrupt work in
@@ -1682,7 +1690,8 @@ export default function TakeoffCanvas() {
     setPoly([]); setCalib([]); setPendingLen(""); selectShape(null); setProposal(null);
     setCheck([]); setCheckStated(""); setScaleGuide(null); setPrevScale(null);
     resetZone();
-    hydrate(payload || {});
+    // Restoring an old revision changes content, not this project's identity.
+    hydrate({ ...payload, project_id: portableProjectId.current });
   };
 
   function saveProjectFile() {
@@ -1763,6 +1772,7 @@ export default function TakeoffCanvas() {
     if (remotePendingRender.current) return;
     const payload = buildPayload();
     saveDataRef.current = payload;          // keep the freshest payload for an unmount flush
+    if (cloudAccount?.user) cloudAccount.setStatus((s) => s === "Local Only" ? s : "Unsaved Changes");
     setSaveState("saving");
     const t = setTimeout(() => {
       // A render was deferred AFTER this save was scheduled (its closure captured the
@@ -5114,7 +5124,11 @@ export default function TakeoffCanvas() {
   })();
 
   const projectControls = (
-    <><button type="button" onClick={() => setWhiteboardOpen(true)} disabled={!hydrated.current || !!loadError}
+    <><button type="button" onClick={() => setCloudView("projects")} disabled={!hydrated.current || !!loadError}
+      title={cloudAccount?.user ? `Account: ${cloudAccount.user.email}` : "Cloud account and projects"}
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5 }}>
+      <Icon name="document" size={15} />Cloud{cloudAccount?.user && <small>{cloudAccount.offline ? "Offline" : cloudAccount.status}</small>}</button>
+    <button type="button" onClick={() => setWhiteboardOpen(true)} disabled={!hydrated.current || !!loadError}
       title="Open whiteboard" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5, cursor: "pointer" }}>
       <Icon name="rectTool" size={15} />Whiteboard</button>
     <ToolMenu face={<><Icon name="document" size={15} />Project</>} title="Project files"
@@ -5122,6 +5136,8 @@ export default function TakeoffCanvas() {
       items={[
         { id: "save-project", icon: "document", label: "Save project...", onSelect: saveProjectFile, disabled: !hydrated.current || !!loadError },
         { id: "open-project", icon: "plus", label: "Open project...", onSelect: () => projectInputRef.current?.click() },
+        { id: "save-cloud", icon: "document", label: "Save to Cloud...", onSelect: () => setCloudView("save"), disabled: !hydrated.current || !!loadError || !!store.listFolder },
+        { id: "browse-cloud", icon: "sheets", label: "Cloud projects...", onSelect: () => setCloudView("projects"), disabled: !hydrated.current || !!loadError },
         "divider",
         { id: "download-page", icon: "document", label: pageExportBusy ? "Downloading page..." : "Download this page",
           title: "Download the current sheet with all takeoff marks and markups as a PDF", onSelect: downloadCurrentPage,
@@ -5140,6 +5156,7 @@ export default function TakeoffCanvas() {
       style={{ position: "relative", display: "flex", flexDirection: "column", height: "100vh" }}>
       <input ref={projectInputRef} type="file" accept=".otk" aria-label="Open project file" style={{ display: "none" }}
         onChange={(e) => { setProjectFilePrompt(e.target.files?.[0] || null); e.target.value = ""; }} />
+      {cloudView && <CloudProjects initialView={cloudView} source={store} getPayload={buildPayload} onClose={() => { setCloudView(null); cloudAccount.clearAuthReturn(); }} onOpenChange={onMenuDepth} />}
       {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard} onClose={() => setWhiteboardOpen(false)}
         onSave={saveProjectFile} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState} />}
       {projectSavePrompt !== null && <SaveProjectDialog filename={projectSavePrompt}

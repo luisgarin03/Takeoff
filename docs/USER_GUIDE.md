@@ -1,6 +1,6 @@
 # OpenTakeoff — The User Manual
 
-OpenTakeoff is a takeoff canvas that runs in your browser. Open a plan, set the scale, trace the finishes — or let an AI agent stage the tracing while you keep the accept button — and walk away with a priced-out quantity report, a materials buy list, and a marked set you can send to a GC. Everything happens on your machine: no account, no upload, no install.
+OpenTakeoff is a takeoff canvas that runs in your browser. Open a plan, set the scale, trace the finishes — or let an AI agent stage the tracing while you keep the accept button — and walk away with a priced-out quantity report, a materials buy list, and a marked set you can send to a GC. Local mode needs no account or upload. Optional cloud saving uploads a project only when you choose it.
 
 On Android Chrome, you can use the browser menu's **Install app** or **Add to home screen** action when running the hosted app or a local server reachable from the phone. The install uses the app manifest and branded icon; it does not make PDFs or project data available offline, so the browser remains the source of truth.
 
@@ -451,6 +451,22 @@ Addenda happen. **Revisions** (the clock icon on the rail) makes them data inste
 ---
 
 ## 12. Saving, your data & Contribute
+
+### Optional cloud projects
+
+The **Cloud** button opens account sign-in and the cloud project browser. Local work and **Project > Save project** continue working without signing in. A deployment must first complete [Supabase setup](SUPABASE_SETUP.md).
+
+On localhost or the HTTPS web app (including mobile Chrome), **Continue with Google** signs into the same Supabase cloud account system. Pending project edits are saved locally before leaving for Google. Return to the same browser/origin to finish sign-in; the current workspace and Cloud panel reopen automatically. Canceling or failing sign-in leaves local work intact. The current Capacitor Android wrapper has no external-browser return handler, so its Google button is disabled with an explanation; email/password and email-code recovery remain available. Supabase Google sign-in does not authorize the separate Google Drive integration.
+
+Use **Project > Save to Cloud** to upload the current project. Subsequent saves update the same project ID; **Save As** creates a separate project with a new ID. Cloud saving is manual, while existing local autosave continues after edits. **Browse projects** provides My Projects, Shared With Me, and Recent, with Open, Download, Duplicate, Rename, Share, and Delete as permitted by your role. Set your display name under Profile. Opening a cloud project creates a separate local workspace and keeps the previous workspace intact.
+
+The owner can share with another confirmed account by exact email address. Editors can save; viewers can open/download and make their own copies but cannot overwrite the shared cloud project. Revoking sharing does not erase copies already downloaded to another device. Signing out similarly does not erase local project data; avoid shared/untrusted browser profiles for private plans.
+
+If another device saved first, choose **Keep Local Version**, **Use Cloud Version**, or **Save Local as Copy**. Keep Local asks again before replacing the displayed cloud version and fails if that version changes again. There is no automatic drawing merge. After offline edits, reconnect and choose Save to Cloud again.
+
+PDFs larger than 50 MB remain **Local Only** while takeoff metadata still saves. Upload failures also retain local originals. Missing whiteboard files appear as placeholders; unavailable plan PDFs need the original file imported with its original filename on the other device. Do not discard the source device or its `.otk` backup until all required files are available. Cloud Download/Duplicate refuses incomplete projects rather than silently omitting files. Copies consume additional cloud file quota.
+
+Email verification and password recovery use an emailed code, entered in the same app. Cloud status is refreshed when opening Cloud and after save operations. Browser-global preferences, reusable libraries, and AI keys are not uploaded with the project.
 
 ### Download the current plan page
 

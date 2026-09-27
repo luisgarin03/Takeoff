@@ -1,6 +1,7 @@
 import { APP_NAME } from "./src/brand/appName.js";
 import { readFileSync } from "node:fs";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
+import { assertPublicCloudEnv } from "./src/lib/supabase/config.js";
 import react from "@vitejs/plugin-react";
 
 // The one source of truth for the app version — package.json — inlined as
@@ -17,7 +18,10 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 // The `/ai` proxy is OPTIONAL — it only matters if you run the bring-your-own-
 // model AI sandbox in `../server` (see server/README.md). Without it, the app
 // works fully; the AI hooks just stay dormant.
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // Fail before Vite can inline an accidentally supplied privileged key.
+  assertPublicCloudEnv(loadEnv(mode, process.cwd(), "VITE_"));
+  return {
   plugins: [react(), {
     name: "app-display-name",
     transformIndexHtml(html) {
@@ -36,4 +40,5 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
   },
+  };
 });

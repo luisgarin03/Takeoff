@@ -28,11 +28,12 @@ export function validateWhiteboard(board) {
   const assets = new Map();
   let total = 0;
   for (const asset of board.assets) {
+    const missing = asset?.missing === true && asset.data === "" && /^[a-f0-9]{64}$/.test(asset.remote_sha256);
     if (!asset || typeof asset.id !== "string" || !asset.id || assets.has(asset.id) || typeof asset.name !== "string" ||
       !WHITEBOARD_TYPES.includes(asset.type) || typeof asset.data !== "string" || asset.data.length > Math.ceil(WHITEBOARD_FILE_LIMIT / 3) * 4 ||
       asset.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(asset.data) ||
       !Number.isInteger(asset.size) || asset.size <= 0 || asset.size > WHITEBOARD_FILE_LIMIT ||
-      asset.size !== asset.data.length / 4 * 3 - (asset.data.endsWith("==") ? 2 : asset.data.endsWith("=") ? 1 : 0)) invalid();
+      (!missing && asset.size !== asset.data.length / 4 * 3 - (asset.data.endsWith("==") ? 2 : asset.data.endsWith("=") ? 1 : 0))) invalid();
     total += asset.size;
     assets.set(asset.id, asset);
   }
