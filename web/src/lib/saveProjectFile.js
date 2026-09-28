@@ -1,13 +1,15 @@
 import { projectFilename } from "./projectFile.js";
 
 export function projectSaveFilename(name) {
-  return projectFilename(String(name || "").trim().replace(/\.otk$/i, ""));
+  const title = String(name || "").trim().replace(/\.otk$/i, "");
+  if (!title) throw new Error("Name the project before saving it.");
+  return projectFilename(title);
 }
 
-export async function saveProjectArchive({ name, buildArchive, pickFile, download }) {
+export async function saveProjectArchive({ name, buildArchive, pickFile, download, existingHandle = null, saveAs = false }) {
   const filename = projectSaveFilename(name);
-  let handle;
-  if (pickFile) {
+  let handle = saveAs ? null : existingHandle;
+  if (!handle && pickFile) {
     try {
       // Pick before building the archive: the native dialog needs the click's
       // transient activation, which an async export can outlive.
@@ -35,5 +37,5 @@ export async function saveProjectArchive({ name, buildArchive, pickFile, downloa
     try { await writable.abort(); } catch { /* The stream may already be closed. */ }
     throw error;
   }
-  return { status: "saved", filename: handle.name || filename };
+  return { status: "saved", filename: handle.name || filename, handle };
 }

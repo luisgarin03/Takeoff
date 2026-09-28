@@ -456,6 +456,16 @@ Addenda happen. **Revisions** (the clock icon on the rail) makes them data inste
 
 ## 12. Saving, your data & Contribute
 
+### Project details
+
+Open **Project** and choose **New project…** to start a clean workspace with a required name, optional submission date, and an **Ongoing**, **Needs revision**, or **Done** status. OpenTakeoff warns before replacing the current workspace. The toolbar shows the current project name; **Edit project details…** updates the metadata without creating a parallel project.
+
+Project details, creation time, and last persisted modification time are stored in browser and cloud saves and inside the existing portable `.otk` archive. Older projects without metadata continue to open with safe defaults.
+
+**Save project** suggests `<Project Name>.otk`. In browsers that support retained file handles, the first save asks for a location and later saves update that same file directly. Use **Save project as…** to choose another name or location; renaming the project changes the next Save As suggestion without silently creating another file.
+
+Google Drive storage is organized as `OpenTakeoff/<Project Name>/`. The portable `<Project Name>.otk` sits at the project-folder root, while separate plan files use `PDFs/` and whiteboard attachments use `Assets/` only when needed. OpenTakeoff tracks these items by stable project and Drive IDs, so another project with the same visible title is not overwritten and renaming reuses the existing folder on the next successful save.
+
 ### Optional cloud projects
 
 The **Cloud** button opens account sign-in and the cloud project browser. Local work and **Project > Save project** continue working without signing in. A deployment must first complete [Supabase setup](SUPABASE_SETUP.md).
@@ -482,7 +492,7 @@ Choose **Project > Download this page** to download a one-page PDF of the comple
 
 Open **Whiteboard** from the top toolbar or the Plan Set header. Drop PDFs or PNG/JPEG/WebP/GIF/BMP images onto the board, or use **Add files**. Each PDF stays in one card with page navigation; the original file can be downloaded from its card. Reference attachments never become plan sheets and do not affect takeoff measurements.
 
-Use **Note** for editable text notes. Drag an item's header to move it, or its lower-right handle to resize it. Select a note to change its color. Pan by dragging empty board space or selecting the pan tool; use the mouse wheel, zoom buttons, or a two-finger pinch to zoom. **Fit whiteboard** brings the items into view. Delete applies to the selected item; Undo/Redo retains the last 20 edits while the board is open.
+Use **Note** for editable text notes. Drag an item's header to move it, or its lower-right handle to resize it. Select a note to change its color. Pan by dragging empty board space or selecting the pan tool; use the mouse wheel, zoom buttons, or a two-finger pinch to zoom from 15% up to 400%. **Fit whiteboard** brings the items into view. Delete applies to the selected item; Undo/Redo retains the last 20 edits while the board is open.
 
 **Export PDF** in the whiteboard header downloads the current board as exactly one custom-sized PDF page. It includes every note body and each file card's currently selected PDF page or image, even offscreen; it excludes drag headers, pagination, selection handles, card shadows and the background grid. The union of the content bounds determines the page size, with no added margin. Negative positions and gaps between items are preserved. Export uses the canonical 100% card layout (one board unit is 0.75 PDF points), independent of zoom, pan, selection, screen size or device pixel ratio. It does not alter the board, save data or undo history.
 

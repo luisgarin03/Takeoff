@@ -1,5 +1,7 @@
 import { DRIVE_SCOPE, CHUNK, MAX_FILE, fail, randomToken, sha256, base64, returnUrl, assertAccess, validateFile } from "./drive-security.js";
 
+const driveName = (value) => String(value || "Untitled project").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/[. ]+$/, "").slice(0, 100) || "Untitled project";
+
 // Google credentials never cross this service boundary. Collaborators are
 // authorized by Supabase on every chunk, not by public links or Drive ACLs.
 export function createDriveService({ store, google, cipher, config, fetcher = fetch }) {
@@ -102,28 +104,31 @@ export function createDriveService({ store, google, cipher, config, fetcher = fe
     begin(user, id, hash) {
       return leased(user, id, hash, "write", async ({ project, file }) => {
         const auth = await token(project.owner_id);
+        let replace = false;
         if (file.provider_file_id) {
           try {
             validateFile(file, await google.metadata(auth, file.provider_file_id));
             return await finish(user, file, { done: true, offset: Number(file.size) });
-          } catch (e) { if (e.code !== "OTK_DRIVE_MISSING" || file.uploaded) throw e; }
+          } catch (e) {
+            if (file.uploaded) throw e;
+            if (e.code === "OTK_DRIVE_INTEGRITY" && file.file_kind === "archive") replace = true;
+            else if (e.code !== "OTK_DRIVE_MISSING") throw e;
+          }
         }
         const session = await store.upload(id, hash);
         if (session?.session_cipher) {
           try { return await finish(user, file, await google.transfer(auth, await cipher.open(session.session_cipher, `${id}/${hash}`), file, 0)); }
           catch (e) { if (e.code !== "OTK_DRIVE_MISSING") throw e; }
         }
-        if (!file.provider_folder_id) {
-          const root = await google.folder(auth, "OpenTakeoff", null, "root");
-          const projects = await google.folder(auth, "projects", root, "projects");
-          const folder = await google.folder(auth, id, projects, id);
-          file.provider_folder_id = await google.folder(auth, file.file_kind, folder, `${id}/${file.file_kind}`);
-        }
+        const root = await google.folder(auth, "OpenTakeoff", null, "root");
+        const folder = await google.folder(auth, driveName(project.name), root, id);
+        const subfolder = file.file_kind === "originals" ? "PDFs" : file.file_kind === "archive" ? "" : "Assets";
+        file.provider_folder_id = subfolder ? await google.folder(auth, subfolder, folder, `${id}/${subfolder.toLowerCase()}`) : folder;
         file.provider_file_id ||= await google.id(auth);
         await access(user, id, hash, "write");
         // Persist the generated ID before starting: a lost HTTP response cannot create a second binary.
         await store.patchFile(id, hash, { provider_file_id: file.provider_file_id, provider_folder_id: file.provider_folder_id });
-        const url = await google.begin(auth, file);
+        const url = await google.begin(auth, file, replace);
         await store.patchUpload(id, hash, await cipher.seal(url, `${id}/${hash}`));
         return { done: false, offset: 0 };
       });

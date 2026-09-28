@@ -26,10 +26,14 @@ export async function digest(bytes) {
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function projectFilename(name) {
+export function projectFolderName(name) {
   // eslint-disable-next-line no-control-regex -- Control characters are invalid in Windows filenames.
   const stem = String(name || "Untitled project").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/[. ]+$/, "").slice(0, 100);
-  return `${stem || "Untitled project"}.otk`;
+  return stem || "Untitled project";
+}
+
+export function projectFilename(name) {
+  return `${projectFolderName(name)}.otk`;
 }
 
 /** @returns {Promise<Uint8Array>} */

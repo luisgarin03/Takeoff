@@ -32,7 +32,9 @@ export function createProjectRepository(client, userId) {
     async renameProject(project, name) {
       const current = await this.loadProject(project.id);
       // Retain the version shown in the list; a newer cloud edit is a conflict.
-      const state = { ...current.project_state, annotations: { ...current.project_state.annotations, project_name: name } };
+      const previous = current.project_state.annotations.project_metadata || {};
+      const state = { ...current.project_state, annotations: { ...current.project_state.annotations, project_name: name,
+        project_metadata: { ...previous, name } } };
       return this.saveProject(project.id, project.version, state);
     },
     async listFiles(id) {

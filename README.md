@@ -4,6 +4,10 @@ A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF
 
 ## Features
 
+The **Project** menu creates named projects with an optional submission date and status. Those details travel with browser autosaves, cloud saves, and portable `.otk` project archives.
+
+Local **Save project** reuses a previously selected file handle when the browser supports it; **Save project as…** always chooses a new destination. Google Drive projects use a stable-ID-backed, human-readable `OpenTakeoff/<Project Name>/` folder containing `<Project Name>.otk`, with `PDFs/` and `Assets/` created only when those separate files are needed.
+
 **Optional Google Drive files:** connect Drive separately in Cloud > Profile, then explicitly choose it for a new cloud project's original PDFs and board assets. Supabase remains authoritative for users, state and sharing; an authenticated Edge Function serves private file chunks to authorized members. Existing Supabase/local projects stay unchanged. Downloads verify file identity and stop on cancellation or an account change, including during the final local cache write. This saves Storage capacity, but proxy transfers still use Supabase egress. Backend setup and live acceptance are required: [Drive setup and implementation report](docs/GOOGLE_DRIVE_STORAGE.md).
 
 **Optional Supabase cloud:** email/password accounts and Google sign-in on the web, private cloud projects, version-checked saves, sharing, and original-file storage alongside the existing local autosave and `.otk` backups. Configure `web/.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`; never use a secret/service-role key. Database and email setup are required before cloud use. Google credentials stay in Supabase; the current Android wrapper retains email sign-in until native OAuth return support is added. See [Supabase setup and implementation report](docs/SUPABASE_SETUP.md).
@@ -16,7 +20,7 @@ Portable projects: **Project > Save project** asks for a filename and opens a Sa
 
 **PDF text search:** click **Find** in the sheet toolbar or press `Ctrl+F` (`⌘F` on Mac), type a word, and press Enter. Search scans the active PDF, jumps to each matching page, highlights results, and wraps with the previous/next controls.
 
-**Whiteboard:** arrange reference PDFs, images, and editable notes in a separate pan/zoom workspace. Original attachments, PDF page choices, and the board layout autosave with the project and travel inside its `.otk` file.
+**Whiteboard:** arrange reference PDFs, images, and editable notes in a separate pan/zoom workspace with zoom up to 400%. Paste clipboard text, images, or supported files directly onto the board. Original attachments, PDF page choices, and the board layout autosave with the project and travel inside its `.otk` file.
 
 **Whiteboard PDF:** use **Export PDF** in the whiteboard header for one custom-sized page tightly fitted to all note and attachment content, including offscreen items. Export keeps the board layout and original PDF vectors where possible, without the editor grid or controls.
 

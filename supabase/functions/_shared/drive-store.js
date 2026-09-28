@@ -19,7 +19,7 @@ export function createDriveStore(db) {
         .eq("user_id", pending.user_id).eq("oauth_nonce", pending.state_hash).select("user_id"))).length;
     },
     cancelOAuth: (id) => read(db.from("otk_drive_oauth").delete().eq("user_id", id)),
-    project: (id) => read(db.from("otk_projects").select("id,owner_id,file_provider,deleted_at").eq("id", id).maybeSingle()),
+    project: (id) => read(db.from("otk_projects").select("id,owner_id,name,file_provider,deleted_at").eq("id", id).maybeSingle()),
     member: (id, user) => read(db.from("otk_project_members").select("role").eq("project_id", id).eq("user_id", user).maybeSingle()),
     file: (id, hash) => read(db.from("otk_project_files").select("*").eq("project_id", id).eq("sha256", hash).maybeSingle()),
     patchFile: (id, hash, patch) => read(db.from("otk_project_files").update(patch).eq("project_id", id).eq("sha256", hash)),

@@ -11,14 +11,14 @@ const encryption = () => cipher(btoa("a".repeat(32)));
 async function fixture() {
   const crypt = await encryption(), hash = await sha256(new Uint8Array([1, 2, 3]));
   let connection: any = { user_id: owner, google_sub: "google-owner", email: "drive@example.com", status: "connected", token_cipher: await crypt.seal("refresh-secret", owner) };
-  const project: any = { id, owner_id: owner, file_provider: "google_drive", deleted_at: null };
+  const project: any = { id, owner_id: owner, name: "Bitzell Fence", file_provider: "google_drive", deleted_at: null };
   const file: any = { project_id: id, sha256: hash, original_filename: "Plan.pdf", mime_type: "application/pdf", size: 3,
     storage_provider: "google_drive", provider_owner_id: owner, file_kind: "originals", uploaded: false };
   const members = new Map([[editor, { role: "editor" }], [viewer, { role: "viewer" }]]);
   const states = new Map<string, any>(), uploads: any = { session_cipher: null };
   let held: string | null = null, created = 0, transferred = 0, mediaReads = 0, remote: any = null, nextOffset = 0;
   let revoked = false, identity = "google-owner", revokeNetwork = false, failReply = false;
-  const folders: string[] = [];
+  const folders: Array<{ name: string, key: string }> = []; let replaceUpload = false;
   const store: any = {
     connection: async () => connection,
     patchConnection: async (_user: string, patch: any) => { connection = { ...connection, ...patch }; },
@@ -35,9 +35,9 @@ async function fixture() {
   const metadata = () => ({ id: file.provider_file_id, size: String(file.size), mimeType: file.mime_type, sha256Checksum: hash });
   const google: any = {
     metadata: async () => { if (!remote) throw new DriveError("OTK_DRIVE_MISSING", 404); return remote; },
-    folder: async (_token: string, name: string) => { folders.push(name); return `folder-${name}`; },
+    folder: async (_token: string, name: string, _parent: string, key: string) => { folders.push({ name, key }); return `folder-${name}`; },
     id: async () => "stable-id",
-    begin: async () => { created++; return "https://www.googleapis.com/upload/drive/v3/files?upload_id=private"; },
+    begin: async (_token: string, _file: any, replace: boolean) => { created++; replaceUpload = !!replace; return "https://www.googleapis.com/upload/drive/v3/files?upload_id=private"; },
     transfer: async (_token: string, _session: string, _file: any, offset: number, bytes: Uint8Array) => {
       if (!bytes) return { offset: nextOffset, done: !!remote };
       transferred++; nextOffset = offset + bytes.length;
@@ -57,7 +57,7 @@ async function fixture() {
   };
   const api = createDriveService({ store, google, cipher: crypt, config: { clientId: "public-client", clientSecret: "server-only", callback: "https://test.supabase.co/functions/v1/otk-drive?action=callback", origins: ["http://localhost:5173", "https://example.vercel.app"] }, fetcher });
   return { api, file, hash, project, members, google, folders, states, store,
-    get connection() { return connection; }, get created() { return created; }, get transferred() { return transferred; }, get mediaReads() { return mediaReads; },
+    get connection() { return connection; }, get created() { return created; }, get transferred() { return transferred; }, get mediaReads() { return mediaReads; }, get replaceUpload() { return replaceUpload; },
     set revoked(v: boolean) { revoked = v; }, set identity(v: string) { identity = v; }, set revokeNetwork(v: boolean) { revokeNetwork = v; },
     set failReply(v: boolean) { failReply = v; }, set remote(v: any) { remote = v; },
     upload: async () => { await api.begin(owner, id, hash); return api.chunk(owner, id, hash, 0, new Uint8Array([1, 2, 3])); } };
@@ -99,10 +99,19 @@ test("disconnect denies file access even if Google revocation is offline, invali
 });
 test("upload creates content-addressed folders and publishes only completed files; repeated Save deduplicates", async () => {
   const h = await fixture(); await h.api.begin(owner, id, h.hash);
-  assert.deepEqual(h.folders, ["OpenTakeoff", "projects", id, "originals"]); assert.equal(h.file.uploaded, false);
+  assert.deepEqual(h.folders.map((f: any) => f.name), ["OpenTakeoff", "Bitzell Fence", "PDFs"]);
+  assert.deepEqual(h.folders.map((f: any) => f.key), ["root", id, `${id}/pdfs`]); assert.equal(h.file.uploaded, false);
   await h.api.chunk(owner, id, h.hash, 0, new Uint8Array([1, 2, 3]));
   assert.equal(h.file.uploaded, true); assert.equal(h.file.provider_file_id, "stable-id");
   assert.equal((await h.api.begin(owner, id, h.hash)).done, true); assert.equal(h.created, 1); assert.equal(h.transferred, 1);
+});
+test("renaming reuses the stable project folder and replaces the single archive file", async () => {
+  const h = await fixture(); h.project.name = "Renamed Project";
+  Object.assign(h.file, { file_kind: "archive", original_filename: "Renamed Project.otk", mime_type: "application/octet-stream", provider_file_id: "stable-id", uploaded: false });
+  h.remote = { id: "stable-id", size: "3", mimeType: "application/octet-stream", sha256Checksum: "f".repeat(64) };
+  await h.api.begin(owner, id, h.hash);
+  assert.deepEqual(h.folders.map((f: any) => f.name), ["OpenTakeoff", "Renamed Project"]);
+  assert.equal(h.replaceUpload, true); assert.equal(h.file.provider_file_id, "stable-id");
 });
 test("lost upload response resumes by stable ID without duplicating the file", async () => {
   const h = await fixture(); h.failReply = true;
@@ -169,4 +178,9 @@ test("Google transport uses bounded resumable chunks and private ranged download
 test("HTTP 429 remains a quota error even without a Google JSON error body", async () => {
   const google = createDriveGoogle(async () => new Response("", { status: 429 }));
   await assert.rejects(google.metadata("test-access", "file-id"), (e: any) => e.code === "OTK_DRIVE_QUOTA");
+});
+
+test("Google API 400 responses have a distinct non-retryable upload rejection code", async () => {
+  const google = createDriveGoogle(async () => new Response('{"error":{"status":"INVALID_ARGUMENT"}}', { status: 400 }));
+  await assert.rejects(google.metadata("test-access", "file-id"), (e: any) => e.code === "OTK_DRIVE_UPLOAD");
 });

@@ -4,7 +4,7 @@ import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import { ANN_SCHEMA, localStore, createFileProjectStore, importFileProject } from "../src/lib/store.js";
-import { exportProjectFile, readProjectFile, projectFilename } from "../src/lib/projectFile.js";
+import { exportProjectFile, readProjectFile, projectFilename, projectFolderName } from "../src/lib/projectFile.js";
 
 beforeEach(() => { globalThis.indexedDB = new IDBFactory(); });
 const pdf = (text: string) => new File([`%PDF-1.7\n${text}\n%%EOF`], "Plan.pdf", { type: "application/pdf" });
@@ -105,6 +105,7 @@ test("failed import transaction preserves existing workspace data", async () => 
 
 test("portable filename and workspace IDs are safe", () => {
   assert.equal(projectFilename('A/B: Estimate?'), "A_B_ Estimate_.otk");
+  assert.equal(projectFolderName("North Campus Bid"), "North Campus Bid");
   assert.equal(projectFilename(""), "Untitled project.otk");
   assert.throws(() => createFileProjectStore("../../opentakeoff"), /Invalid local project ID/);
 });

@@ -1,5 +1,5 @@
 import { ANN_SCHEMA } from "../store.js";
-import { validateAnnotations, digest } from "../projectFile.js";
+import { validateAnnotations, digest, exportProjectFile, projectFilename } from "../projectFile.js";
 import { base64ToBytes, bytesToBase64, validateWhiteboard } from "../whiteboard.js";
 import { CloudError } from "./errors.js";
 
@@ -23,7 +23,8 @@ export function restoredProjectSource(restored) {
 
 // This is a transport envelope, not a new portable file format. Annotation and
 // revision payloads are the existing serializer's values, with binary data split out.
-export async function captureCloudProject(source, payload, previousPlans = []) {
+/** @param {{name:string,type:string,size:number,sha256:string}|null} previousArchive */
+export async function captureCloudProject(source, payload, previousPlans = [], previousArchive = null) {
   const files = new Map();
   async function file(name, type, bytes) {
     const sha256 = await digest(bytes);
@@ -54,7 +55,11 @@ export async function captureCloudProject(source, payload, previousPlans = []) {
     if (!s) throw new CloudError("OTK_RETRY", "A revision changed during save. Please retry.");
     snapshots.push({ id: s.id, ts: s.ts, label: s.label, payload: await pack(s.payload) });
   }
-  const state = { schema: CLOUD_SCHEMA, annotations: await pack(payload), plans, snapshots };
+  const annotations = await pack(payload);
+  // The readable .otk is the complete portable copy in Drive. Older cloud
+  // states omit this additive field and continue to restore from split assets.
+  const archive = previousPlans.length ? previousArchive : await file(projectFilename(payload.project_name), "application/octet-stream", await exportProjectFile(source, payload));
+  const state = { schema: CLOUD_SCHEMA, annotations, plans, snapshots, ...(archive ? { archive } : {}) };
   validateCloudState(state);
   return { state, files, hash: await jsonHash(state) };
 }
@@ -63,6 +68,8 @@ export function validateCloudState(state) {
   if (!state || state.schema !== CLOUD_SCHEMA || !UUID.test(state.annotations?.project_id) || !Array.isArray(state.plans) || !Array.isArray(state.snapshots)) invalid();
   if (new TextEncoder().encode(JSON.stringify(state)).length > 32 * 1024 * 1024) invalid();
   const names = new Set(), snapshots = new Set();
+  if (state.archive && (typeof state.archive.name !== "string" || !/\.otk$/i.test(state.archive.name) ||
+    state.archive.type !== "application/octet-stream" || !HASH.test(state.archive.sha256) || !Number.isSafeInteger(state.archive.size) || state.archive.size <= 0)) invalid();
   for (const plan of state.plans) {
     if (!plan || typeof plan.name !== "string" || !plan.name.trim() || names.has(plan.name) || !HASH.test(plan.sha256) ||
       !Number.isSafeInteger(plan.size) || plan.size <= 0 || plan.type !== "application/pdf") invalid();
@@ -89,6 +96,7 @@ export function validateCloudState(state) {
 
 export function cloudFileReferences(state) {
   const refs = new Map(state.plans.map((p) => [p.sha256, p]));
+  if (state.archive) refs.set(state.archive.sha256, state.archive);
   for (const a of [state.annotations, ...state.snapshots.map((s) => s.payload)]) {
     for (const asset of a.whiteboard?.assets || []) refs.set(asset.sha256, { name: asset.name, type: asset.type, size: asset.size, sha256: asset.sha256 });
   }

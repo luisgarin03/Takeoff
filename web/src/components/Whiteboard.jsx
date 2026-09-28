@@ -6,7 +6,7 @@ import { Icon } from "../brand/icons.jsx";
 import { downloadBytes } from "../lib/markedset.js";
 import { buildWhiteboardPdf } from "../lib/whiteboardPdf.js";
 import { whiteboardPdfRenderer } from "../lib/whiteboardPdfBrowser.js";
-import { base64ToBytes, bytesToBase64, fitBoard, NOTE_COLORS, removeBoardItem, WHITEBOARD_FILE_LIMIT, WHITEBOARD_TOTAL_LIMIT, whiteboardFileType, zoomBoard } from "../lib/whiteboard.js";
+import { base64ToBytes, bytesToBase64, fitBoard, NOTE_COLORS, removeBoardItem, WHITEBOARD_FILE_LIMIT, WHITEBOARD_TOTAL_LIMIT, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType, zoomBoard } from "../lib/whiteboard.js";
 import "../styles/whiteboard.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -91,6 +91,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   const [preview, setPreview] = useState(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const gesture = useRef(null), pointers = useRef(new Map());
+  const pastePoint = useRef(null);
   const history = useRef({ past: [], future: [] });
   const [, historyTick] = useState(0);
   const editGroup = useRef(null);
@@ -207,10 +208,13 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     gesture.current = null; setPreview(null);
     if (pointers.current.size === 1) gesture.current = { kind: "pan", p: [...pointers.current.values()][0], view: viewRef.current };
   }
-  function addNote() {
-    const p = center(), v = viewRef.current;
+  function addNote(text = "", at = null) {
+    if (text.length > 100000) { setError("Pasted text exceeds the 100,000 character note limit."); return; }
+    if (boardRef.current.items.length >= 2000) { setError("Whiteboard item limit reached."); return; }
+    const p = at || center(), v = viewRef.current;
     const existing = boardRef.current.items;
-    const item = { id: crypto.randomUUID(), kind: "note", text: "", color: "yellow", x: existing.length ? Math.max(...existing.map((i) => i.x + i.w)) + 32 : (p.x - v.x) / v.scale - 140, y: existing.length ? Math.min(...existing.map((i) => i.y)) : (p.y - v.y) / v.scale - 110, w: 280, h: 220 };
+    const placed = at || !existing.length;
+    const item = { id: crypto.randomUUID(), kind: "note", text, color: "yellow", x: placed ? (p.x - v.x) / v.scale - 140 : Math.max(...existing.map((i) => i.x + i.w)) + 32, y: placed ? (p.y - v.y) / v.scale - 110 : Math.min(...existing.map((i) => i.y)), w: 280, h: 220 };
     const next = { ...boardRef.current, items: [...existing, item] };
     commit(next); setSelected(item.id);
     setCamera(fitBoard(next.items, viewport.current.clientWidth, viewport.current.clientHeight));
@@ -223,7 +227,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     const assets = [], items = [], errors = [];
     let total = boardRef.current.assets.reduce((n, asset) => n + asset.size, 0);
     try {
-      for (const file of Array.from(list)) {
+      for (const [fileIndex, file] of Array.from(list).entries()) {
         try {
           const type = whiteboardFileType(file);
           if (!type) throw new Error("Use a PDF, PNG, JPEG, WebP, GIF or BMP.");
@@ -241,7 +245,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
             ratio = bitmap.width / bitmap.height; bitmap.close();
           }
           if (!alive.current) return;
-          const asset = { id: crypto.randomUUID(), name: file.name, type, size: bytes.length, data: bytesToBase64(bytes) };
+          const asset = { id: crypto.randomUUID(), name: whiteboardClipboardFileName(file, fileIndex), type, size: bytes.length, data: bytesToBase64(bytes) };
           const i = items.length, w = 360, h = Math.max(180, Math.min(560, w / ratio + 78));
           assets.push(asset); total += bytes.length;
           items.push({ id: crypto.randomUUID(), kind: "file", assetId: asset.id, page: 1, x: origin.x + (i % 3) * 390, y: origin.y + Math.floor(i / 3) * 590, w, h });
@@ -256,6 +260,15 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         setError(errors.join("\n"));
       }
     } finally { importLock.current = false; callbacks.current.onBusyChange(false); if (alive.current) setBusy(false); }
+  }
+  function paste(e) {
+    if (busy || importLock.current || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    const content = whiteboardClipboardContent(e.clipboardData);
+    if (!content.files.length && !content.text) return;
+    e.preventDefault(); e.stopPropagation(); setError("");
+    const at = pastePoint.current || center();
+    if (content.files.length) addFiles(content.files, at);
+    else addNote(content.text, at);
   }
   async function exportPdf() {
     if (exportTask.current || importLock.current) return;
@@ -272,6 +285,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   const active = board.items.find((item) => item.id === selected);
   const assets = new Map(board.assets.map((asset) => [asset.id, asset]));
   return createPortal(<section className="wb" role="dialog" aria-modal="true" aria-label="Whiteboard" tabIndex={-1} ref={root}
+    onPaste={paste}
     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
     onDrop={(e) => { e.preventDefault(); e.stopPropagation(); }}>
     <header className="wb-header">
@@ -279,7 +293,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
       <div className="wb-title"><strong>Whiteboard</strong><span>{projectName || "Untitled project"}</span></div>
       <div className="wb-actions">
         <button type="button" onClick={() => input.current.click()} disabled={busy}><Icon name="plus" size={16} />Add files</button>
-        <button type="button" onClick={addNote} disabled={busy || board.items.length >= 2000}><Icon name="textNote" size={16} />Note</button>
+        <button type="button" onClick={() => addNote()} disabled={busy || board.items.length >= 2000}><Icon name="textNote" size={16} />Note</button>
         <button type="button" onClick={onSave} disabled={busy}><Icon name="document" size={16} />Save project</button>
         <Button icon="document" label="Export Whiteboard as PDF" onClick={exportPdf} disabled={busy || exporting} aria-busy={exporting}>{exporting ? "Exporting..." : "Export PDF"}</Button>
       </div>
@@ -303,9 +317,9 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     {error && <div className="wb-error" role="alert"><span>{error}</span><Button icon="close" label="Dismiss whiteboard error" onClick={() => setError("")} /></div>}
     <div ref={viewport} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}`} aria-label="Whiteboard canvas"
       style={{ backgroundSize: `${24 * view.scale}px ${24 * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
-      onPointerDown={(e) => start(e)} onPointerMove={move} onPointerUp={(e) => end(e)} onPointerCancel={(e) => end(e, true)}
+      onPointerDown={(e) => { pastePoint.current = point(e); start(e); }} onPointerMove={(e) => { pastePoint.current = point(e); move(e); }} onPointerUp={(e) => end(e)} onPointerCancel={(e) => end(e, true)}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); addFiles(e.dataTransfer.files, point(e)); }}>
-      {!board.items.length && <div className="wb-empty"><Icon name="document" size={36} /><strong>No notes yet</strong><button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => input.current.click()} disabled={busy}><Icon name="plus" size={16} />Add PDFs or images</button></div>}
+      {!board.items.length && <div className="wb-empty"><Icon name="document" size={36} /><strong>No notes yet</strong><span>Paste text, images or supported files, or add them manually.</span><button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => input.current.click()} disabled={busy}><Icon name="plus" size={16} />Add PDFs or images</button></div>}
       {board.items.map((saved) => {
         const item = preview?.id === saved.id ? { ...saved, ...preview } : saved;
         const asset = assets.get(item.assetId);

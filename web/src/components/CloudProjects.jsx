@@ -13,7 +13,7 @@ import { createCloudSync } from "../lib/supabase/sync.js";
 import { cloudError, CloudError } from "../lib/supabase/errors.js";
 import { captureCloudProject, restoredProjectSource } from "../lib/supabase/projectState.js";
 import { createFileProjectStore, importFileProject, metaGet, metaPut } from "../lib/store.js";
-import { exportProjectFile } from "../lib/projectFile.js";
+import { exportProjectFile, projectFilename, projectFolderName } from "../lib/projectFile.js";
 import { saveProjectArchive } from "../lib/saveProjectFile.js";
 import { downloadBytes } from "../lib/markedset.js";
 import "../styles/cloud.css";
@@ -22,7 +22,7 @@ export const cloudBindingKey = (url, userId, workspace) => `supabase:${url}:${us
 const workspace = () => new URLSearchParams(window.location.search).get("localProject") || "default";
 const meta = { get: metaGet, put: metaPut };
 
-export default function CloudProjects({ initialView = "projects", source, getPayload, onClose, onOpenChange }) {
+export default function CloudProjects({ initialView = "projects", source, getPayload, onPersisted, onClose, onOpenChange }) {
   const cloud = useCloud(), root = useRef(null), callbacks = useRef(null);
   const [view, setView] = useState(initialView), [filter, setFilter] = useState("mine");
   const [busy, setBusy] = useState(""), [error, setError] = useState(""), [notice, setNotice] = useState("");
@@ -158,12 +158,16 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     });
   }
   async function save(expectedVersion) {
-    const payload = getPayload();
+    const payload = getPayload({ touch: true });
     setWarnings([]); cloud.setStatus("Uploading");
     try {
       const result = await services.sync.save(payload, { expectedVersion, signal: transfer.current?.signal,
         storageProvider: !currentCloud || currentCloud.owner_id === userId ? provider : undefined, newProjectProvider: defaultProvider });
-      setWarnings(result.warnings); setNotice("Project state saved to cloud."); setConflict(null);
+      const filename = projectFilename(payload.project_name), folder = projectFolderName(payload.project_name);
+      const destination = result.project.file_provider === "google_drive" ? `Google Drive folder ${folder}/` : "cloud storage";
+      setWarnings(result.warnings); setNotice(result.warnings.length ? `Cloud save incomplete for ${folder}/${filename}. Retry after resolving the listed files.` : `${filename} and all project assets saved in ${destination}.`);
+      if (!result.warnings.length) onPersisted?.(payload.project_metadata?.lastModifiedAt);
+      setConflict(null);
       cloud.setStatus(result.warnings.length ? "Files Local Only" : "Synced");
       await refresh();
     } catch (e) {
@@ -187,7 +191,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     const id = crypto.randomUUID();
     const a = { ...payload, project_id: id, project_name: name.trim() || `${payload.project_name || "Untitled project"} copy` };
     const previous = localSource === source ? await services.sync.metadata() : null;
-    const captured = await captureCloudProject(localSource, a, previous?.projectId === payload.project_id ? previous.missingPlans || [] : []);
+    const captured = await captureCloudProject(localSource, a, previous?.projectId === payload.project_id ? previous.missingPlans || [] : [], previous?.projectId === payload.project_id ? previous.archive || null : null);
     const pdfs = captured.state.plans.filter((p) => captured.files.has(p.sha256)).map((p) => ({ name: p.name, bytes: captured.files.get(p.sha256).bytes }));
     const snapshots = [];
     for (const s of await localSource.listSnapshots()) {

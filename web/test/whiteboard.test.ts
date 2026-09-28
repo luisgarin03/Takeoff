@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
 import { unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
-import { emptyWhiteboard, bytesToBase64, base64ToBytes, validateWhiteboard, removeBoardItem, zoomBoard, fitBoard, whiteboardFileType } from "../src/lib/whiteboard.js";
+import { emptyWhiteboard, bytesToBase64, base64ToBytes, validateWhiteboard, removeBoardItem, zoomBoard, fitBoard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
 import { localStore, createFileProjectStore, importFileProject, ANN_SCHEMA } from "../src/lib/store.js";
 import { exportProjectFile, readProjectFile } from "../src/lib/projectFile.js";
 
@@ -103,7 +103,7 @@ test("board zoom preserves the pointed-to position, clamps scale and fits negati
   assert.ok(Math.abs((point.x - view.x) / view.scale - (point.x - next.x) / next.scale) < 1e-10);
   assert.ok(Math.abs((point.y - view.y) / view.scale - (point.y - next.y) / next.scale) < 1e-10);
   assert.equal(zoomBoard(view, point, 0).scale, .15);
-  assert.equal(zoomBoard(view, point, 99).scale, 3);
+  assert.equal(zoomBoard(view, point, 99).scale, 4);
   const fit = fitBoard(board().items, 1200, 800);
   for (const item of board().items) {
     assert.ok(fit.x + item.x * fit.scale >= 31);
@@ -119,4 +119,18 @@ test("file type allowlist and base64 preserve original bytes", () => {
   assert.equal(whiteboardFileType({name: "notes.PDF", type: ""}), "application/pdf");
   assert.equal(whiteboardFileType({name: "photo.jpeg", type: ""}), "image/jpeg");
   assert.equal(whiteboardFileType({name: "index.html", type: "text/html"}), null);
+});
+
+test("clipboard content accepts files or plain text without duplicating image fallback text", () => {
+  const image = { name: "", type: "image/png", size: 8 };
+  const imageClipboard = { items: [{ kind: "file", getAsFile: () => image }], files: [], getData: () => "redundant image URL" };
+  assert.deepEqual(whiteboardClipboardContent(imageClipboard), { files: [image], text: "" });
+  assert.deepEqual(whiteboardClipboardContent({ items: [], files: [], getData: (type: string) => type === "text/plain" ? "Door schedule\nLevel 2" : "" }), { files: [], text: "Door schedule\nLevel 2" });
+  assert.deepEqual(whiteboardClipboardContent(null), { files: [], text: "" });
+});
+
+test("unnamed clipboard images receive a readable stable filename", () => {
+  const date = new Date("2026-09-28T14:30:15.123Z");
+  assert.equal(whiteboardClipboardFileName({ name: "", type: "image/png" }, 0, date), "Pasted image 2026-09-28T14-30-15-123Z.png");
+  assert.equal(whiteboardClipboardFileName({ name: "Detail Sheet.PDF", type: "application/pdf" }, 0, date), "Detail Sheet.PDF");
 });

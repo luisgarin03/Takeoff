@@ -14,7 +14,7 @@ export function createCloudSync({ repository, files, local, meta, key, onProgres
     async status(payload) {
       const saved = await meta.get(key);
       if (!saved || saved.projectId !== payload.project_id) return "Local Only";
-      const capture = await captureCloudProject(local, payload, saved.missingPlans || []);
+      const capture = await captureCloudProject(local, payload, saved.missingPlans || [], saved.archive || null);
       return capture.hash === saved.syncedHash ? (saved.pendingFiles ? "Files Local Only" : "Synced") : "Unsaved Changes";
     },
     save: (payload, options = {}) => exclusive(async () => {
@@ -22,13 +22,13 @@ export function createCloudSync({ repository, files, local, meta, key, onProgres
       // swallow work, and the original workspace survives Save As / conflicts.
       await local.saveAnnotations(payload);
       const old = await meta.get(key);
-      const captured = await captureCloudProject(local, payload, old?.projectId === payload.project_id ? old.missingPlans || [] : []);
+      const captured = await captureCloudProject(local, payload, old?.projectId === payload.project_id ? old.missingPlans || [] : [], old?.projectId === payload.project_id ? old.archive || null : null);
       const expected = options.expectedVersion ?? (old?.projectId === payload.project_id ? old.cloudVersion : 0);
       onProgress("Saving project state...");
       let project = await repository.saveProject(payload.project_id, expected, captured.state);
       const binding = { projectId: project.id, cloudVersion: project.version, cloudUpdatedAt: project.updated_at,
         localUpdatedAt: new Date().toISOString(), lastSyncedAt: new Date().toISOString(), syncedHash: captured.hash,
-        missingPlans: captured.state.plans.filter((p) => !captured.files.has(p.sha256)), pendingFiles: true };
+        missingPlans: captured.state.plans.filter((p) => !captured.files.has(p.sha256)), archive: captured.state.archive || null, pendingFiles: true };
       // Record the successful state commit before uploads: retries update this
       // version instead of creating a duplicate or confusing a partial save with a conflict.
       await meta.put(key, binding);
@@ -44,7 +44,17 @@ export function createCloudSync({ repository, files, local, meta, key, onProgres
         if (options.signal?.aborted) throw cloudError(new Error("OTK_CANCELED"));
         if (known.get(ref.sha256)?.uploaded) continue;
         try {
-          await repository.registerFile(project.id, ref);
+          try {
+            await repository.registerFile(project.id, ref);
+          } catch (error) {
+            // Older deployments reject the portable archive's new file kind as
+            // OTK_FORMAT. Keep this separate from a damaged local .otk so the
+            // user knows the server migration—not the project—needs updating.
+            if (/\.otk$/i.test(ref.name) && error?.code === "OTK_FORMAT") {
+              throw new CloudError("OTK_ARCHIVE_SETUP", "The cloud database does not yet support .otk project archives. Apply the latest OpenTakeoff Supabase migration, then retry Save to Cloud; your local project and files are unchanged.");
+            }
+            throw error;
+          }
           if (ref.size > (files.limit?.(provider) ?? FREE_FILE_LIMIT)) { warnings.push(`${ref.name}: Local Only (${provider === "google_drive" ? "over 2 GiB" : "over 50 MB"}).`); continue; }
           const file = captured.files.get(ref.sha256);
           if (!file) { warnings.push(`${ref.name}: Local Only (not on this device).`); continue; }
@@ -80,7 +90,7 @@ export function createCloudSync({ repository, files, local, meta, key, onProgres
       if (options.signal?.aborted) throw cloudError(new Error("OTK_CANCELED"));
       return { project, restored, binding: { projectId: id, cloudVersion: project.version, cloudUpdatedAt: project.updated_at,
         lastSyncedAt: new Date().toISOString(), syncedHash: await jsonHash(project.project_state),
-        pendingFiles: restored.missing.length > 0, missingPlans: project.project_state.plans.filter((p) => missingHashes.has(p.sha256)) } };
+        pendingFiles: restored.missing.length > 0, missingPlans: project.project_state.plans.filter((p) => missingHashes.has(p.sha256)), archive: project.project_state.archive || null } };
     }),
   };
 }

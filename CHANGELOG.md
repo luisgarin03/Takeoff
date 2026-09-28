@@ -4,7 +4,12 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased
 
+### Added
+- Project-aware Save and Drive organization: named `.otk` suggestions, one-click updates through retained browser file handles, explicit Save As, and stable-ID Google Drive folders named after the project with a portable archive plus on-demand `PDFs/` and `Assets/` subfolders. Cloud success now waits for every required upload.
+- Project metadata management in the existing Project menu: required name, optional submission date, Ongoing/Needs revision/Done status, ISO creation and persisted-modification timestamps, `.otk` and cloud round-tripping, and backward-compatible defaults for older projects.
+
 ### Changed
+- Whiteboard zoom now reaches 400% using the zoom controls, mouse wheel, or pinch gesture.
 - Drive downloads now reject malformed metadata with an actionable integrity error and recheck cancellation/account identity after the final IndexedDB write. Three new regression tests pass; local verification retains the same 14 pre-existing branding failures.
 - Completed another local Drive review: validate null begin replies, retain gateway error classifications, and recheck cancellation/account identity after response-body reads. Four new regression tests pass; the setup guide now requires a dedicated Google Cloud project for independent Drive revocation and records the latest staging-readiness checks.
 - Hardened the optional Drive client against truncated responses, changed sessions, non-progress and invalid completion acknowledgements; classify bodyless HTTP 429 responses as quota errors. Added five regression tests and independently reran local web, Edge, browser and Android compile checks. Existing branding-test failures and live acceptance requirements remain documented in the Drive guide.

@@ -3,9 +3,9 @@ export const CHUNK = 4 * 1024 * 1024;
 export const MAX_FILE = 2 * 1024 * 1024 * 1024;
 export const NATIVE_RETURN = "com.opentakeoff.app://drive-auth";
 export class DriveError extends Error {
-  constructor(code, status = 400) { super(code); this.code = code; this.status = status; }
+  constructor(code, status = 400, details = undefined) { super(code); this.code = code; this.status = status; this.details = details; }
 }
-export const fail = (code, status = 400) => { throw new DriveError(code, status); };
+export const fail = (code, status = 400, details = undefined) => { throw new DriveError(code, status, details); };
 export const hex = (bytes) => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
 export const sha256 = async (value) => hex(await crypto.subtle.digest("SHA-256", typeof value === "string" ? new TextEncoder().encode(value) : value));
 export const base64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));

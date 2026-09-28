@@ -19,10 +19,12 @@ import { flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { store, isStaleTabError, STALE_TAB_MESSAGE, projectIdFromUrl, importFileProject } from "../lib/store.js";
+import { store, emptyAnnotations, isStaleTabError, STALE_TAB_MESSAGE, projectIdFromUrl, importFileProject } from "../lib/store.js";
 import { exportProjectFile, readProjectFile, projectFilename, MAX_PROJECT_FILE_BYTES } from "../lib/projectFile.js";
 import { saveProjectArchive } from "../lib/saveProjectFile.js";
 import SaveProjectDialog from "../components/SaveProjectDialog.jsx";
+import ProjectMetadataModal from "../components/ProjectMetadataModal.jsx";
+import { EMPTY_PROJECT_METADATA, createProjectMetadata, formatProjectDate, metadataPayload, normalizeProjectMetadata, preserveUnknownProjectFields, touchProjectMetadata } from "../lib/projectMetadata.js";
 import CloudProjects from "../components/CloudProjects.jsx";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
 import { UUID as PROJECT_UUID } from "../lib/supabase/projectState.js";
@@ -503,7 +505,11 @@ export default function TakeoffCanvas() {
   const [showRevisions, setShowRevisions] = useState(false); // Revisions overlay (save / compare any two, buy-list deltas, CSV, auto-banked restore)
   const [importRows, setImportRows] = useState(null);        // Import-from-schedule approval rows (null = dialog closed)
   const [scheduleAnchor, setScheduleAnchor] = useState(null); // first marquee corner for the "schedule" tool — ISOLATED from poly so it can never leak into a measure shape
-  const [projectName, setProjectName] = useState("");   // optional label for the report header
+  const [projectMetadata, setProjectMetadata] = useState(EMPTY_PROJECT_METADATA);
+  const projectName = projectMetadata.name;
+  const setProjectName = (name) => setProjectMetadata((meta) => ({ ...meta, name }));
+  const unknownProjectFieldsRef = useRef({});
+  const [projectMetadataModal, setProjectMetadataModal] = useState(null);
   const [whiteboard, setWhiteboard] = useState(emptyWhiteboard);
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [whiteboardBusy, setWhiteboardBusy] = useState(false);
@@ -514,12 +520,15 @@ export default function TakeoffCanvas() {
   const [projectFileError, setProjectFileError] = useState("");
   const [projectFilePrompt, setProjectFilePrompt] = useState(null);
   const [projectSavePrompt, setProjectSavePrompt] = useState(null);
+  const [projectSaveAs, setProjectSaveAs] = useState(false);
   const [cloudView, setCloudView] = useState(null);
   const cloudAccount = useCloud();
   useEffect(() => { if (cloudAccount.authReturn) setCloudView("projects"); }, [cloudAccount.authReturn]);
   useEffect(() => { if (cloudAccount.driveReturn) setCloudView("account"); }, [cloudAccount.driveReturn]);
   const portableProjectId = useRef(crypto.randomUUID());
   const projectFileLock = useRef(false);
+  const projectFileHandleRef = useRef(null);
+  const pendingProjectSaveRef = useRef(null);
   const [pageExportBusy, setPageExportBusy] = useState(false);
   const pageExportLock = useRef(false);
 
@@ -1203,7 +1212,8 @@ export default function TakeoffCanvas() {
     // conditions/sheets — a loaded/restored timeline starts with none pending
     // (nothing is lost: rejected geometry records nothing by design).
     setAgentProposals([]);
-    setProjectName(a.project_name || "");
+    unknownProjectFieldsRef.current = preserveUnknownProjectFields(a);
+    setProjectMetadata(normalizeProjectMetadata(a));
     if (PROJECT_UUID.test(a.project_id)) portableProjectId.current = a.project_id;
     // string fields only — a corrupted record must not put an object where
     // the report masthead renders a React child
@@ -1787,7 +1797,7 @@ export default function TakeoffCanvas() {
   // ── autosave (debounced) ──────────────────────────────────────────────────
   // buildPayload is the single serializer — autosave and snapshots must write
   // identical records for the same state (byte-stability matters downstream).
-  const buildPayload = () => {
+  const buildPayload = ({ touch = false } = {}) => {
     // palette holds condition ids; drop any that no longer resolve (defensive —
     // delete already prunes) and omit the key entirely when nothing survives,
     // mirroring the condition_columns omit-when-empty convention.
@@ -1795,8 +1805,37 @@ export default function TakeoffCanvas() {
     // units is additive and diff-only (the sheet_levels convention): imperial —
     // the default — omits the key, so an old imperial project's payload is
     // byte-identical on round-trip; only a metric project carries the field.
-    return { project_id: portableProjectId.current, project_name: projectName, ...(whiteboard.items.length ? { whiteboard } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
+    const metadata = touch ? touchProjectMetadata(projectMetadata) : projectMetadata;
+    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(metadata), ...(whiteboard.items.length ? { whiteboard } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
   };
+
+  async function submitProjectMetadata(draft) {
+    if (projectMetadataModal === "edit") {
+      setProjectMetadata((meta) => ({ ...meta, ...draft }));
+      setProjectMetadataModal(null);
+      if (pendingProjectSaveRef.current) {
+        const saveAs = pendingProjectSaveRef.current === "save-as";
+        pendingProjectSaveRef.current = null;
+        setProjectSaveAs(saveAs);
+        setProjectSavePrompt(projectFilename(draft.name));
+      }
+      return;
+    }
+    if ((sheets.length || shapes.length || markups.length || rfis.length || projectName) &&
+      !window.confirm("Create a new project and clear the current workspace? Save the current project first if you need to keep it.")) return;
+    const metadata = createProjectMetadata(draft);
+    try {
+      for (const sheet of await store.listSheets()) await store.removePdf(sheet.name);
+      const payload = { ...emptyAnnotations(), project_id: crypto.randomUUID(), project_name: metadata.name, project_metadata: metadataPayload(metadata) };
+      await store.saveAnnotations(payload);
+      portableProjectId.current = payload.project_id;
+      suppressNextSave.current = true;
+      hydrate(payload);
+      setSheets([]); setActive(""); setPage(1); setPageCount(1); setStatus("empty"); setView("gallery");
+      setProjectMetadataModal(null);
+      setCommitMsg(`Created project “${metadata.name}”.`);
+    } catch (e) { setCommitMsg(`Couldn't create the project: ${e.message || e}`); }
+  }
   // Runtime restore of a saved payload — the Revisions panel's Restore lands
   // here. A runtime load (unlike mount) can interrupt work in
   // flight: an unfinished trace/calibration/proposal must not commit into the
@@ -1817,25 +1856,40 @@ export default function TakeoffCanvas() {
     hydrate({ ...payload, project_id: portableProjectId.current });
   };
 
-  function saveProjectFile() {
+  function saveProjectFile(saveAs = false) {
     if (projectFileLock.current || !hydrated.current || whiteboardBusy || projectSavePrompt) return;
     setProjectFileError("");
+    if (!projectName.trim()) {
+      pendingProjectSaveRef.current = saveAs ? "save-as" : "save";
+      setProjectMetadataModal("edit");
+      return;
+    }
+    if (!saveAs && projectFileHandleRef.current) {
+      confirmSaveProjectFile(projectFilename(projectName), false);
+      return;
+    }
+    setProjectSaveAs(saveAs);
     setProjectSavePrompt(projectFilename(projectName));
   }
 
-  async function confirmSaveProjectFile(name) {
+  async function confirmSaveProjectFile(name, saveAs = projectSaveAs) {
     if (projectFileLock.current || !hydrated.current || whiteboardBusy) return;
     projectFileLock.current = true;
     setProjectFileBusy("Saving project file..."); setProjectFileError("");
     try {
+      let persistedPayload = null;
       const result = await saveProjectArchive({
         name,
         pickFile: typeof window.showSaveFilePicker === "function" ? window.showSaveFilePicker.bind(window) : null,
+        existingHandle: projectFileHandleRef.current,
+        saveAs,
         // Capture live edits, including anything still in the autosave delay.
-        buildArchive: () => exportProjectFile(store, buildPayload()),
+        buildArchive: () => { persistedPayload = buildPayload({ touch: true }); return exportProjectFile(store, persistedPayload); },
         download: downloadBytes,
       });
       if (result.status !== "cancelled") {
+        projectFileHandleRef.current = result.handle || null;
+        if (persistedPayload?.project_metadata?.lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, lastModifiedAt: persistedPayload.project_metadata.lastModifiedAt }));
         setProjectSavePrompt(null);
         setCommitMsg(`${result.status === "saved" ? "Project saved" : "Project download started"}: ${result.filename}`);
       }
@@ -1893,7 +1947,7 @@ export default function TakeoffCanvas() {
     // canvas are dropped by that re-hydrate (visible supersession, not silent loss —
     // the co-editing casualty the rollout forbids). The drain clears the flag.
     if (remotePendingRender.current) return;
-    const payload = buildPayload();
+    const payload = buildPayload({ touch: true });
     saveDataRef.current = payload;          // keep the freshest payload for an unmount flush
     if (cloudAccount?.user) cloudAccount.setStatus((s) => s === "Local Only" ? s : "Unsaved Changes");
     setSaveState("saving");
@@ -1902,7 +1956,7 @@ export default function TakeoffCanvas() {
       // pre-adopt payload) → don't push stale over the winner; go idle so the canvas
       // can drain and re-hydrate. Closes the last pre-scheduled-save loss window.
       if (remotePendingRender.current) { setSaveState("idle"); return; }
-      store.saveAnnotations(payload).then(() => setSaveState("saved")).catch((e) => {
+      store.saveAnnotations(payload).then(() => { setProjectMetadata((meta) => ({ ...meta, lastModifiedAt: payload.project_metadata.lastModifiedAt })); setSaveState("saved"); }).catch((e) => {
         if (isStaleTabError(e)) setCommitMsg(STALE_TAB_MESSAGE);
         setSaveState("idle");
       });
@@ -1912,7 +1966,7 @@ export default function TakeoffCanvas() {
     // state it serializes, so listing buildPayload (a new identity each render)
     // would fire a save on every render instead of only on a real change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, projectName, clientInfo, units, whiteboard]);
+  }, [shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard]);
   useEffect(() => { saveStateRef.current = saveState; }, [saveState]);
 
   // Flush a pending debounced save on navigate-away (unmount), and warn before a
@@ -5254,10 +5308,15 @@ export default function TakeoffCanvas() {
     <button type="button" onClick={() => setWhiteboardOpen(true)} disabled={!hydrated.current || !!loadError}
       title="Open whiteboard" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5, cursor: "pointer" }}>
       <Icon name="rectTool" size={15} />Whiteboard</button>
-    <ToolMenu face={<><Icon name="document" size={15} />Project</>} title="Project files"
+    <ToolMenu face={<><Icon name="document" size={15} />{projectName || "Project"}</>} title="Project files"
       onOpenChange={onMenuDepth} disabled={!!projectFileBusy}
       items={[
-        { id: "save-project", icon: "document", label: "Save project...", onSelect: saveProjectFile, disabled: !hydrated.current || !!loadError },
+        { id: "new-project", icon: "plus", label: "New project…", onSelect: () => setProjectMetadataModal("new") },
+        { id: "edit-project", label: "Edit project details…", onSelect: () => setProjectMetadataModal("edit"), disabled: !projectName },
+        { note: projectName ? `${projectMetadata.status}${projectMetadata.submissionDate ? ` · due ${formatProjectDate(projectMetadata.submissionDate, { dateStyle: "medium" })}` : " · no due date"}${projectMetadata.lastModifiedAt ? ` · modified ${formatProjectDate(projectMetadata.lastModifiedAt, { dateStyle: "medium", timeStyle: "short" })}` : ""}` : "Create a named project or open an existing project file." },
+        "divider",
+        { id: "save-project", icon: "document", label: projectFileHandleRef.current ? "Save project" : "Save project...", onSelect: () => saveProjectFile(false), disabled: !hydrated.current || !!loadError },
+        { id: "save-project-as", label: "Save project as...", onSelect: () => saveProjectFile(true), disabled: !hydrated.current || !!loadError },
         { id: "open-project", icon: "plus", label: "Open project...", onSelect: () => projectInputRef.current?.click() },
         { id: "save-cloud", icon: "document", label: "Save to Cloud...", onSelect: () => setCloudView("save"), disabled: !hydrated.current || !!loadError || !!store.listFolder },
         { id: "browse-cloud", icon: "sheets", label: "Cloud projects...", onSelect: () => setCloudView("projects"), disabled: !hydrated.current || !!loadError },
@@ -5279,12 +5338,17 @@ export default function TakeoffCanvas() {
       style={{ position: "relative", display: "flex", flexDirection: "column", height: "100vh" }}>
       <input ref={projectInputRef} type="file" accept=".otk" aria-label="Open project file" style={{ display: "none" }}
         onChange={(e) => { setProjectFilePrompt(e.target.files?.[0] || null); e.target.value = ""; }} />
-      {cloudView && <CloudProjects initialView={cloudView} source={store} getPayload={buildPayload} onClose={() => { setCloudView(null); cloudAccount.clearAuthReturn(); cloudAccount.clearDriveReturn(); }} onOpenChange={onMenuDepth} />}
+      {projectMetadataModal && <ProjectMetadataModal mode={projectMetadataModal} initial={projectMetadata}
+        hasWorkspace={!!(sheets.length || shapes.length || markups.length || rfis.length || projectName)} saveState={saveState}
+        onSubmit={submitProjectMetadata} onClose={() => setProjectMetadataModal(null)} />}
+      {cloudView && <CloudProjects initialView={cloudView} source={store} getPayload={buildPayload}
+        onPersisted={(lastModifiedAt) => { if (lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, lastModifiedAt })); }}
+        onClose={() => { setCloudView(null); cloudAccount.clearAuthReturn(); cloudAccount.clearDriveReturn(); }} onOpenChange={onMenuDepth} />}
       {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard} onClose={() => setWhiteboardOpen(false)}
-        onSave={saveProjectFile} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState} />}
+        onSave={() => saveProjectFile(false)} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState} />}
       {projectSavePrompt !== null && <SaveProjectDialog filename={projectSavePrompt}
         canChooseLocation={typeof window.showSaveFilePicker === "function"} busy={!!projectFileBusy} error={projectFileError}
-        onSave={confirmSaveProjectFile} onClose={() => { if (!projectFileLock.current) { setProjectSavePrompt(null); setProjectFileError(""); } }} />}
+        onSave={(name) => confirmSaveProjectFile(name, projectSaveAs)} onClose={() => { if (!projectFileLock.current) { setProjectSavePrompt(null); setProjectFileError(""); } }} />}
       {projectSavePrompt === null && (projectFileBusy || projectFileError || projectFilePrompt) && (
         <div role="dialog" aria-modal="true" aria-label="Project file" onDrop={(e) => e.stopPropagation()}
           style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", padding: 16 }}>

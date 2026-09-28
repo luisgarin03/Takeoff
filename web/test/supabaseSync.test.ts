@@ -28,7 +28,7 @@ async function fixture() {
   await localStore.saveSnapshot("First", payload());
 }
 function harness() {
-  let cloud: any = null, version = 0, uploads = 0, downloads = 0, failUpload = false, unavailable = false;
+  let cloud: any = null, version = 0, uploads = 0, downloads = 0, failUpload = false, unavailable = false, failArchiveRegistration = false;
   const objects = new Map<string, Uint8Array>(), rows = new Map<string, any>(), bindings = new Map<string, any>(), events: string[] = [];
   const repository = {
     async saveProject(id: string, expected: number, state: any) {
@@ -38,7 +38,11 @@ function harness() {
       cloud = { id, version: ++version, updated_at: new Date().toISOString(), project_state: structuredClone(state) }; return cloud;
     },
     async listFiles() { return [...rows.values()]; },
-    async registerFile(_id: string, ref: any) { rows.set(ref.sha256, { ...ref, uploaded: rows.get(ref.sha256)?.uploaded || false }); },
+    async setFileProvider(_id: string, provider: string) { cloud.file_provider = provider; return cloud; },
+    async registerFile(_id: string, ref: any) {
+      if (failArchiveRegistration && /\.otk$/i.test(ref.name)) throw new CloudError("OTK_FORMAT", "legacy file kind constraint");
+      rows.set(ref.sha256, { ...ref, uploaded: rows.get(ref.sha256)?.uploaded || false });
+    },
     async finishFile(_id: string, hash: string) { rows.get(hash).uploaded = true; },
     async loadProject() { return structuredClone(cloud); },
   };
@@ -49,13 +53,15 @@ function harness() {
   const meta = { get: async (key: string) => bindings.get(key), put: async (key: string, value: any) => { bindings.set(key, value); } };
   const sync = (local: any = localStore, key = "account1:workspace1") => createCloudSync({ repository, files, local, meta, key });
   return { sync, meta, events, objects, rows, bindings, set failUpload(v: boolean) { failUpload = v; }, set offline(v: boolean) { unavailable = v; },
+    set archiveRegistrationUnavailable(v: boolean) { failArchiveRegistration = v; },
     get uploads() { return uploads; }, get downloads() { return downloads; }, get version() { return version; } };
 }
 
 test("cloud round-trip preserves takeoff math, original bytes, bookmarks, whiteboard, revisions and portable identity", async () => {
   await fixture(); const original = payload(), captured = await captureCloudProject(localStore, original);
   assert.deepEqual(original, payload());
-  assert.equal(captured.files.size, 1); // Same PDF used on the plan and board/revision.
+  assert.equal(captured.files.size, 2); // Shared PDF bytes plus the portable .otk archive.
+  assert.ok(captured.state.archive); assert.equal(captured.state.archive.name, "Test project.otk");
   let reads = 0;
   const restored = await restoreCloudProject(captured.state, async (ref: { sha256: string }) => { reads++; return captured.files.get(ref.sha256).bytes; });
   assert.equal(reads, 1);
@@ -72,12 +78,12 @@ test("repeated saves update one project, persist locally first, skip uploaded by
   await fixture(); const h = harness(), sync = h.sync();
   assert.equal(await sync.status(payload()), "Local Only");
   assert.deepEqual((await sync.save(payload())).warnings, []);
-  assert.deepEqual(h.events, ["state", "upload"]);
+  assert.deepEqual(h.events, ["state", "upload", "upload"]);
   assert.equal(await sync.status(payload()), "Synced");
   const edited = { ...payload(), project_name: "Changed" };
   assert.equal(await sync.status(edited), "Unsaved Changes");
   await sync.save(edited);
-  assert.equal(h.version, 2); assert.equal(h.uploads, 1);
+  assert.equal(h.version, 2); assert.equal(h.uploads, 3);
   assert.equal((await localStore.loadAnnotations()).project_name, "Changed");
   await sync.load(projectId); assert.equal(h.downloads, 0);
   const fresh = createFileProjectStore(crypto.randomUUID());
@@ -87,12 +93,19 @@ test("repeated saves update one project, persist locally first, skip uploaded by
 
 test("partial upload retries retain version, preserve local originals and never duplicate cloud projects", async () => {
   await fixture(); const h = harness(), sync = h.sync(); h.failUpload = true;
-  assert.equal((await sync.save(payload())).warnings.length, 1);
+  assert.equal((await sync.save(payload())).warnings.length, 2);
   assert.equal(await sync.status(payload()), "Files Local Only");
   assert.equal((await sync.metadata()).cloudVersion, 1);
   h.failUpload = false; await sync.save(payload());
   assert.equal(h.version, 2); assert.equal(await sync.status(payload()), "Synced");
   assert.deepEqual(await localStore.loadPdfData("Plan.pdf"), pdf);
+});
+
+test("an older database rejection for the portable archive points to the missing migration", async () => {
+  await fixture(); const h = harness(), sync = h.sync(); h.archiveRegistrationUnavailable = true;
+  const result = await sync.save(payload(), { newProjectProvider: "google_drive" });
+  assert.ok(result.warnings.some((warning: string) => /cloud database does not yet support \.otk project archives/i.test(warning)), JSON.stringify(result.warnings));
+  assert.equal(h.uploads, 1); // The PDF can still upload; the archive failure is clearly isolated.
 });
 
 test("stale device detects a conflict before upload; explicit Keep Local still checks the shown version", async () => {
@@ -101,7 +114,7 @@ test("stale device detects a conflict before upload; explicit Keep Local still c
   await h.meta.put("device2", structuredClone(await first.metadata()));
   await first.save({ ...payload(), project_name: "PC" });
   await assert.rejects(stale.save({ ...payload(), project_name: "Phone" }), /conflict/);
-  assert.equal(h.uploads, 1); assert.equal(h.version, 2);
+  assert.equal(h.uploads, 3); assert.equal(h.version, 2);
   assert.equal((await localStore.loadAnnotations()).project_name, "Phone");
   await stale.save({ ...payload(), project_name: "Phone" }, { expectedVersion: 2 });
   assert.equal(h.version, 3);
@@ -114,7 +127,7 @@ test("offline failures keep local edits, then reconnect uses the same project/ve
   await assert.rejects(sync.save(edited), /offline/);
   assert.deepEqual(await localStore.loadAnnotations(), edited);
   assert.equal((await sync.metadata()).cloudVersion, 1);
-  h.offline = false; await sync.save(edited); assert.equal(h.version, 2); assert.equal(h.uploads, 1);
+  h.offline = false; await sync.save(edited); assert.equal(h.version, 2); assert.equal(h.uploads, 3);
 });
 
 test("oversized PDF saves metadata but never uploads; unavailable plans survive a later save", async () => {
@@ -138,7 +151,7 @@ test("Local Only whiteboard placeholders preserve layout and cannot silently exp
   assert.deepEqual(restored.annotations.whiteboard.items, payload().whiteboard.items);
   assert.equal(restored.annotations.whiteboard.assets[0].missing, true);
   await assert.rejects(exportProjectFile(restoredProjectSource(restored), restored.annotations), /Local Only/);
-  const again = await captureCloudProject(restoredProjectSource(restored), restored.annotations, capture.state.plans);
+  const again = await captureCloudProject(restoredProjectSource(restored), restored.annotations, capture.state.plans, capture.state.archive);
   assert.deepEqual(again.state, capture.state);
 });
 

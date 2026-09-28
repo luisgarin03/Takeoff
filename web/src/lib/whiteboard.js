@@ -6,8 +6,31 @@ export const emptyWhiteboard = () => ({ version: 1, items: [], assets: [] });
 
 export function whiteboardFileType(file) {
   if (WHITEBOARD_TYPES.includes(file.type)) return file.type;
-  const ext = file.name.split(".").pop().toLowerCase();
+  const ext = String(file.name || "").split(".").pop().toLowerCase();
   return ({ pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", bmp: "image/bmp" })[ext] || null;
+}
+
+export function whiteboardClipboardContent(data) {
+  if (!data) return { files: [], text: "" };
+  const files = Array.from(data.items || [])
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile?.())
+    .filter(Boolean);
+  const fallback = files.length ? files : Array.from(data.files || []);
+  // Image clipboard payloads commonly include a redundant HTML/plain-text
+  // representation. Prefer the actual bytes so one paste creates one card.
+  let text = "";
+  if (!fallback.length) {
+    try { text = data.getData?.("text/plain") || ""; } catch { /* unavailable clipboard flavor */ }
+  }
+  return { files: fallback, text };
+}
+
+export function whiteboardClipboardFileName(file, index = 0, now = new Date()) {
+  if (String(file?.name || "").trim()) return file.name;
+  const ext = ({ "application/pdf": "pdf", "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/bmp": "bmp" })[file?.type] || "bin";
+  const stamp = now.toISOString().replace(/[:.]/g, "-");
+  return `Pasted ${file?.type?.startsWith("image/") ? "image" : "file"} ${stamp}${index ? ` ${index + 1}` : ""}.${ext}`;
 }
 
 export function bytesToBase64(bytes) {
@@ -58,7 +81,7 @@ export function removeBoardItem(board, id) {
 }
 
 export function zoomBoard(view, point, nextScale) {
-  const scale = Math.min(3, Math.max(.15, nextScale));
+  const scale = Math.min(4, Math.max(.15, nextScale));
   return { scale, x: point.x - (point.x - view.x) * scale / view.scale, y: point.y - (point.y - view.y) * scale / view.scale };
 }
 

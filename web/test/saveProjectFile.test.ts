@@ -5,7 +5,19 @@ import { projectSaveFilename, saveProjectArchive } from "../src/lib/saveProjectF
 test("save names accept an optional extension and sanitize invalid filename characters", () => {
   assert.equal(projectSaveFilename(" My project.OTK "), "My project.otk");
   assert.equal(projectSaveFilename("Job: 12/Phase A"), "Job_ 12_Phase A.otk");
-  assert.equal(projectSaveFilename("   "), "Untitled project.otk");
+  assert.throws(() => projectSaveFilename("   "), /Name the project/);
+});
+
+test("a retained file handle makes normal Save one click while Save As picks again", async () => {
+  let picks = 0, writes = 0;
+  const retained = { name: "Bid Center.otk", createWritable: async () => ({ write: async () => { writes++; }, close: async () => {} }) };
+  const pickFile = async () => { picks++; return retained; };
+  const first: any = await saveProjectArchive({ name: "Bid Center", buildArchive: async () => new Uint8Array([1]), pickFile, download: async () => {} });
+  assert.equal(first.handle, retained); assert.equal(picks, 1); assert.equal(writes, 1);
+  await saveProjectArchive({ name: "Bid Center", buildArchive: async () => new Uint8Array([2]), pickFile, download: async () => {}, existingHandle: first.handle });
+  assert.equal(picks, 1); assert.equal(writes, 2);
+  await saveProjectArchive({ name: "Bid Center Renamed", buildArchive: async () => new Uint8Array([3]), pickFile, download: async () => {}, existingHandle: first.handle, saveAs: true });
+  assert.equal(picks, 2); assert.equal(writes, 3);
 });
 
 test("native save picks before any async archive work and finishes only after closing", async () => {
@@ -25,7 +37,8 @@ test("native save picks before any async archive work and finishes only after cl
     download: () => assert.fail("Native save must not download another copy"),
   });
   assert.deepEqual(calls, ["pick"]);
-  assert.deepEqual(await saving, { status: "saved", filename: "Chosen name.otk" });
+  const result: any = await saving;
+  assert.equal(result.status, "saved"); assert.equal(result.filename, "Chosen name.otk"); assert.ok(result.handle);
   assert.deepEqual(calls, ["pick", "build", "write", "close"]);
 });
 

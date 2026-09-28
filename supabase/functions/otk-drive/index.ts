@@ -24,6 +24,7 @@ async function serviceForRequest() {
 // verifies getUser(token); disabling the gateway check is NOT anonymous access.
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin") || "";
+  const action = new URL(req.url).searchParams.get("action") || "unknown";
   const headers: Record<string, string> = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Vary": "Origin",
     "Access-Control-Allow-Headers": "authorization,apikey,content-type", "Access-Control-Allow-Methods": "POST,OPTIONS" };
   if (origins.includes(origin)) headers["Access-Control-Allow-Origin"] = origin;
@@ -31,7 +32,7 @@ Deno.serve(async (req: Request) => {
   try {
     if (origin && !origins.includes(origin)) return json({ code: "OTK_ACCESS" }, 403);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
-    const url = new URL(req.url), action = url.searchParams.get("action");
+    const url = new URL(req.url);
     if (req.method === "GET" && action === "callback") {
       const api = await serviceForRequest();
       if (!api) return json({ code: "OTK_DRIVE_SETUP" }, 503);
@@ -59,6 +60,8 @@ Deno.serve(async (req: Request) => {
     return json({ code: "OTK_DRIVE_REQUEST" }, 400);
   } catch (error) {
     // Do not serialize Google responses, tokens, resumable URLs, or exception stacks.
+    const details = error instanceof DriveError ? error.details : { layer: "edge_handler", errorName: error?.name || "Error" };
+    console.error("otk-drive request failed", { action, code: error instanceof DriveError ? error.code : "OTK_DRIVE_TRANSFER", status: error instanceof DriveError ? error.status : 502, ...details });
     return json({ code: error instanceof DriveError ? error.code : "OTK_DRIVE_TRANSFER" }, error instanceof DriveError ? error.status : 502);
   }
 });
