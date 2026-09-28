@@ -45,6 +45,10 @@ export function createProjectRepository(client, userId) {
       }
     },
     registerFile: (id, file) => rpc("otk_register_file", { p_id: id, p_hash: file.sha256, p_name: file.name, p_type: file.type, p_size: file.size }),
+    async setFileProvider(id, provider) {
+      const result = await rpc("otk_set_file_provider", { p_id: id, p_provider: provider });
+      return Array.isArray(result) ? result[0] : result;
+    },
     finishFile: (id, hash) => rpc("otk_finish_file", { p_id: id, p_hash: hash }),
     deleteProject: (id, version) => rpc("otk_delete_project", { p_id: id, p_expected: version }),
     purgeProject: (id) => rpc("otk_purge_project", { p_id: id }),

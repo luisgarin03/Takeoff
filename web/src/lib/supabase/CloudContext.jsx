@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { configuration, getSupabase } from "./client.js";
 import { createAuth, restoreGoogleReturn } from "./auth.js";
+import { listenForDriveReturn } from "./driveConnection.js";
 
 const Context = createContext(null);
 export function CloudProvider({ children }) {
@@ -9,6 +10,16 @@ export function CloudProvider({ children }) {
   const [status, setStatus] = useState("Local Only");
   const [authReturn, setAuthReturn] = useState(null);
   const clearAuthReturn = useCallback(() => setAuthReturn(null), []);
+  const [driveReturn, setDriveReturn] = useState(null);
+  const clearDriveReturn = useCallback(() => setDriveReturn(null), []);
+  useEffect(() => {
+    let live = true, cleanup;
+    const controller = new AbortController();
+    listenForDriveReturn((result) => { if (live) setDriveReturn(result); }, controller.signal).then((stop) => {
+      if (live) cleanup = stop; else stop();
+    }).catch(() => {});
+    return () => { live = false; controller.abort(); cleanup?.(); };
+  }, []);
   useEffect(() => {
     let live = true, unsubscribe;
     if (configuration.configured) getSupabase().then(async (c) => {
@@ -31,6 +42,6 @@ export function CloudProvider({ children }) {
     window.addEventListener("online", connection); window.addEventListener("offline", connection);
     return () => { live = false; unsubscribe?.(); window.removeEventListener("online", connection); window.removeEventListener("offline", connection); };
   }, []);
-  return <Context.Provider value={{ client, user: session?.user || null, ready, offline, configuration, status, setStatus, authReturn, clearAuthReturn }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ client, user: session?.user || null, ready, offline, configuration, status, setStatus, authReturn, clearAuthReturn, driveReturn, clearDriveReturn }}>{children}</Context.Provider>;
 }
 export const useCloud = () => useContext(Context);

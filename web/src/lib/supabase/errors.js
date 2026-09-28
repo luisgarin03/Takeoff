@@ -5,6 +5,22 @@ export function cloudError(error) {
   if (error instanceof CloudError) return error;
   const message = String(error?.message || "");
   const messages = {
+    OTK_CANCELED: "Transfer canceled. Local work is safe; retry to resume remaining files.",
+    OTK_PROVIDER_LOCKED: "This project's storage provider is locked. Use Save As to create a separate copy with another provider.",
+    OTK_DRIVE_SETUP: "Drive server unavailable. Complete Google Drive setup or check your connection. Local mode and Supabase Storage remain available.",
+    OTK_DRIVE_CONNECT: "The project owner's Google Drive needs reconnection in Profile. Local copies are unchanged.",
+    OTK_DRIVE_ACCOUNT: "Reconnect the same Google account originally connected to this OpenTakeoff account.",
+    OTK_DRIVE_CONSENT: "Drive authorization was not completed. Try Connect Google Drive again and allow file access.",
+    OTK_DRIVE_RETURN: "Drive authorization expired or was canceled. Connect Google Drive again.",
+    OTK_DRIVE_PERMISSION: "Google denied file access. The owner should check the connected Drive account and reconnect.",
+    OTK_DRIVE_QUOTA: "Google Drive storage or request quota was reached. Free space or wait before retrying.",
+    OTK_DRIVE_MISSING: "A required Drive file is missing or trashed. Ask the owner to restore it in Google Drive, then retry.",
+    OTK_DRIVE_INTEGRITY: "Downloaded file identity, size, or type does not match the saved project. No replacement file was imported.",
+    OTK_DRIVE_SIZE: "Drive files are limited to 2 GiB per file in this app. Keep larger originals locally.",
+    OTK_DRIVE_BUSY: "Another transfer is using this file. Wait a few minutes, then retry.",
+    OTK_DRIVE_RETRY: "The upload session expired. Retry Save to Cloud to resume the file.",
+    OTK_DRIVE_TRANSFER: "Drive transfer was interrupted. Check your connection and retry to resume.",
+    OTK_DRIVE_RANGE: "Drive returned an unexpected file range. Retry the transfer.",
     OTK_AUTH: "Sign in again to continue. Your local work is safe.",
     OTK_ACCESS: "This project was deleted, access was removed, or it is not available to this account.",
     OTK_READ_ONLY: "You have viewer access. Save a copy to your own account to make cloud changes.",

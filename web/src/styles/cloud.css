@@ -31,3 +31,6 @@
 .cloud-share label { flex: 1; min-width: 180px; }
 .cloud-error { color: var(--c-danger); }
 @media (max-width: 480px) { .cloud-shade { padding: 8px; } .cloud-dialog { max-height: calc(100dvh - 16px); } .cloud-dialog header, .cloud-content { padding: 12px; } .cloud-status { max-width: 85px; } }
+.cloud-drive { border-top: 1px solid var(--ink-faint); margin-top: 20px; padding-top: 12px; }
+.cloud-drive label, .cloud-save > label { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.cloud-drive select, .cloud-save select { max-width: 100%; }

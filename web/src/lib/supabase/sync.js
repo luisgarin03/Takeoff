@@ -1,5 +1,5 @@
 import { captureCloudProject, cloudFileReferences, FREE_FILE_LIMIT, restoreCloudProject, jsonHash, UUID } from "./projectState.js";
-import { CloudError } from "./errors.js";
+import { CloudError, cloudError } from "./errors.js";
 
 // One sync coordinator per dialog. Local autosave never calls the network.
 export function createCloudSync({ repository, files, local, meta, key, onProgress = () => {} }) {
@@ -25,34 +25,42 @@ export function createCloudSync({ repository, files, local, meta, key, onProgres
       const captured = await captureCloudProject(local, payload, old?.projectId === payload.project_id ? old.missingPlans || [] : []);
       const expected = options.expectedVersion ?? (old?.projectId === payload.project_id ? old.cloudVersion : 0);
       onProgress("Saving project state...");
-      const project = await repository.saveProject(payload.project_id, expected, captured.state);
+      let project = await repository.saveProject(payload.project_id, expected, captured.state);
       const binding = { projectId: project.id, cloudVersion: project.version, cloudUpdatedAt: project.updated_at,
         localUpdatedAt: new Date().toISOString(), lastSyncedAt: new Date().toISOString(), syncedHash: captured.hash,
         missingPlans: captured.state.plans.filter((p) => !captured.files.has(p.sha256)), pendingFiles: true };
       // Record the successful state commit before uploads: retries update this
       // version instead of creating a duplicate or confusing a partial save with a conflict.
       await meta.put(key, binding);
+      // Only an explicit selection can change a new/unlocked project's provider.
+      const requestedProvider = options.storageProvider || (expected === 0 ? options.newProjectProvider : undefined);
+      if (requestedProvider && requestedProvider !== (project.file_provider || "supabase")) {
+        project = await repository.setFileProvider(project.id, requestedProvider);
+      }
+      const provider = project.file_provider || "supabase";
       const warnings = [];
       const known = new Map((await repository.listFiles(project.id)).map((f) => [f.sha256, f]));
       for (const ref of cloudFileReferences(captured.state)) {
+        if (options.signal?.aborted) throw cloudError(new Error("OTK_CANCELED"));
         if (known.get(ref.sha256)?.uploaded) continue;
         try {
           await repository.registerFile(project.id, ref);
-          if (ref.size > FREE_FILE_LIMIT) { warnings.push(`${ref.name}: Local Only (over 50 MB).`); continue; }
+          if (ref.size > (files.limit?.(provider) ?? FREE_FILE_LIMIT)) { warnings.push(`${ref.name}: Local Only (${provider === "google_drive" ? "over 2 GiB" : "over 50 MB"}).`); continue; }
           const file = captured.files.get(ref.sha256);
           if (!file) { warnings.push(`${ref.name}: Local Only (not on this device).`); continue; }
           onProgress(`Uploading ${file.name}...`);
-          await files.upload(`${project.id}/${ref.sha256}`, file, (n) => onProgress(`Uploading ${file.name}: ${Math.round(n * 100)}%`));
-          await repository.finishFile(project.id, ref.sha256);
+          await files.upload(`${project.id}/${ref.sha256}`, file, (n) => onProgress(`Uploading ${file.name} (${(file.size / 1048576).toFixed(1)} MB): ${Math.round(n * 100)}%`), { provider, signal: options.signal });
+          if (options.signal?.aborted) throw cloudError(new Error("OTK_CANCELED"));
+          if (provider !== "google_drive") await repository.finishFile(project.id, ref.sha256);
         } catch (error) {
-          if (error.code === "OTK_AUTH" || error.code === "OTK_ACCESS") throw error;
-          warnings.push(`${ref.name}: Local Only (upload incomplete; retry Save to Cloud).`);
+          if (["OTK_AUTH", "OTK_ACCESS", "OTK_CANCELED"].includes(error.code)) throw error;
+          warnings.push(`${ref.name}: ${provider === "google_drive" ? cloudError(error).message : "Local Only (upload incomplete; retry Save to Cloud)."}`);
         }
       }
       await meta.put(key, { ...binding, pendingFiles: warnings.length > 0 });
       return { project, warnings };
     }),
-    load: (id) => exclusive(async () => {
+    load: (id, options = {}) => exclusive(async () => {
       onProgress("Downloading project...");
       const project = await repository.loadProject(id);
       const rows = new Map((await repository.listFiles(id)).map((f) => [f.sha256, f]));
@@ -61,12 +69,15 @@ export function createCloudSync({ repository, files, local, meta, key, onProgres
       const localPayload = await local.loadAnnotations();
       const localCapture = UUID.test(localPayload?.project_id) ? await captureCloudProject(local, localPayload) : { files: new Map() };
       const restored = await restoreCloudProject(project.project_state, async (ref) => {
+        if (options.signal?.aborted) throw cloudError(new Error("OTK_CANCELED"));
         if (localCapture.files.has(ref.sha256)) return localCapture.files.get(ref.sha256).bytes;
         if (!rows.get(ref.sha256)?.uploaded) return null;
         onProgress(`Downloading ${ref.name}...`);
-        return files.download(`${id}/${ref.sha256}`);
+        return files.download(`${id}/${ref.sha256}`, { record: rows.get(ref.sha256), signal: options.signal,
+          onProgress: (n) => onProgress(`Downloading ${ref.name}: ${Math.round(n * 100)}%`) });
       });
       const missingHashes = new Set(restored.missing.map((f) => f.sha256));
+      if (options.signal?.aborted) throw cloudError(new Error("OTK_CANCELED"));
       return { project, restored, binding: { projectId: id, cloudVersion: project.version, cloudUpdatedAt: project.updated_at,
         lastSyncedAt: new Date().toISOString(), syncedHash: await jsonHash(project.project_state),
         pendingFiles: restored.missing.length > 0, missingPlans: project.project_state.plans.filter((p) => missingHashes.has(p.sha256)) } };

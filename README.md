@@ -4,6 +4,8 @@ A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF
 
 ## Features
 
+**Optional Google Drive files:** connect Drive separately in Cloud > Profile, then explicitly choose it for a new cloud project's original PDFs and board assets. Supabase remains authoritative for users, state and sharing; an authenticated Edge Function serves private file chunks to authorized members. Existing Supabase/local projects stay unchanged. Downloads verify file identity and stop on cancellation or an account change, including during the final local cache write. This saves Storage capacity, but proxy transfers still use Supabase egress. Backend setup and live acceptance are required: [Drive setup and implementation report](docs/GOOGLE_DRIVE_STORAGE.md).
+
 **Optional Supabase cloud:** email/password accounts and Google sign-in on the web, private cloud projects, version-checked saves, sharing, and original-file storage alongside the existing local autosave and `.otk` backups. Configure `web/.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`; never use a secret/service-role key. Database and email setup are required before cloud use. Google credentials stay in Supabase; the current Android wrapper retains email sign-in until native OAuth return support is added. See [Supabase setup and implementation report](docs/SUPABASE_SETUP.md).
 
 Portable projects: **Project > Save project** asks for a filename and opens a Save As location picker in supported browsers (otherwise a named download). The single `.otk` file contains the plan PDFs, takeoff data, scales, markups, RFIs, tabs, and revisions. **Project > Open project** restores it into a separate local workspace without replacing the currently saved project.
@@ -11,6 +13,8 @@ Portable projects: **Project > Save project** asks for a filename and opens a Sa
 **Project > Download this page** exports the complete current sheet as a one-page PDF with its takeoff marks and markups, without a report cover. In side-by-side view, it uses the last-clicked sheet.
 
 **Sheet bookmarks:** star pages in the sheet tabs or navigation menus. The open-sheet dropdown groups bookmarked pages first, including bookmarked tabs you have closed. Bookmarks autosave and travel with portable project files.
+
+**PDF text search:** click **Find** in the sheet toolbar or press `Ctrl+F` (`⌘F` on Mac), type a word, and press Enter. Search scans the active PDF, jumps to each matching page, highlights results, and wraps with the previous/next controls.
 
 **Whiteboard:** arrange reference PDFs, images, and editable notes in a separate pan/zoom workspace. Original attachments, PDF page choices, and the board layout autosave with the project and travel inside its `.otk` file.
 

@@ -1,5 +1,10 @@
 # Optional Supabase Cloud
 
+For the optional large-file Drive provider added after this initial Supabase implementation,
+see [Google Drive storage](GOOGLE_DRIVE_STORAGE.md). It uses a separate secure connection,
+additive migration 002, private Edge-mediated sharing and native Drive return handling.
+The 50 MB bucket limit below continues to apply to Supabase Storage, not Drive files.
+
 ## Current status
 
 The optional integration is implemented locally. No migration, account creation,

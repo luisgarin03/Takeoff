@@ -1,4 +1,5 @@
 import { APP_NAME } from "../brand/appName.js";
+import cloudLogo from "../brand/google-cloud.png";
 // Takeoff Canvas — Phase 1 (+ pan/zoom + standard scales).
 // Persistent, condition-driven 2D takeoff. Pick a color-coded condition (finish
 // tag), click to trace areas; each shape computes SF + perimeter from geometry ×
@@ -176,6 +177,16 @@ export default function TakeoffCanvas() {
   const [active, setActive] = useState("");      // active source PDF file name
   const [page, setPage] = useState(1);           // 1-based page within the active PDF
   const [pageCount, setPageCount] = useState(1); // pages in the active PDF
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findResults, setFindResults] = useState([]);
+  const [findIndex, setFindIndex] = useState(-1);
+  const [findResultQuery, setFindResultQuery] = useState("");
+  const [findBusy, setFindBusy] = useState(false);
+  const [findMessage, setFindMessage] = useState("");
+  const [pendingFind, setPendingFind] = useState(null);
+  const findInputRef = useRef(null);
+  const findRequestRef = useRef(0);
   const [view, setView] = useState("canvas");    // "gallery"/"picker" overlay the canvas (gallery-first on empty projects)
   // Cloud mode = the active store is a Drive-backed cloudStore (it has listFolder;
   // localStore does not). In cloud mode an empty project shows the Drive file
@@ -506,6 +517,7 @@ export default function TakeoffCanvas() {
   const [cloudView, setCloudView] = useState(null);
   const cloudAccount = useCloud();
   useEffect(() => { if (cloudAccount.authReturn) setCloudView("projects"); }, [cloudAccount.authReturn]);
+  useEffect(() => { if (cloudAccount.driveReturn) setCloudView("account"); }, [cloudAccount.driveReturn]);
   const portableProjectId = useRef(crypto.randomUUID());
   const projectFileLock = useRef(false);
   const [pageExportBusy, setPageExportBusy] = useState(false);
@@ -946,6 +958,130 @@ export default function TakeoffCanvas() {
     markZoomCompositing(); applyTf(); syncRasterRepresentation(next.scale); setTf({ ...next });
   }, [applyTf, markZoomCompositing, syncRasterRepresentation]);
 
+  // One pdf.js document per file, shared by canvas rendering and text search.
+  const docFor = useCallback((file) => {
+    let taskPromise = pdfDocsRef.current.get(file);
+    if (!taskPromise) {
+      taskPromise = store.loadPdfData(file).then((data) => pdfjsLib.getDocument({ data }));
+      pdfDocsRef.current.set(file, taskPromise);
+    }
+    return taskPromise.then((task) => task.promise);
+  }, []);
+
+  const openFind = useCallback(() => {
+    setFindOpen(true);
+    requestAnimationFrame(() => findInputRef.current?.focus());
+  }, []);
+  const closeFind = useCallback(() => {
+    findRequestRef.current++;
+    setFindOpen(false);
+    setFindBusy(false);
+    setFindResults([]);
+    setFindIndex(-1);
+    setFindResultQuery("");
+    setFindMessage("");
+    setFindBusy(false);
+    setPendingFind(null);
+  }, []);
+  const runFind = useCallback(async (rawQuery = findQuery) => {
+    const query = rawQuery.trim();
+    const request = ++findRequestRef.current;
+    setFindQuery(rawQuery);
+    setFindResults([]);
+    setFindIndex(-1);
+    setFindResultQuery("");
+    setFindMessage("");
+    if (!query) { setFindMessage("Type a word to search this PDF."); return; }
+    if (!active || !sheets.some((sheet) => sheet.name === active)) { setFindMessage("Open a PDF to search."); return; }
+    setFindBusy(true);
+    try {
+      const pdf = await docFor(active);
+      const matches = [];
+      const folded = query.toLocaleLowerCase();
+      for (let pageNum = 1; pageNum <= (pdf.numPages || 1); pageNum++) {
+        if (request !== findRequestRef.current) return;
+        const pageObj = await pdf.getPage(pageNum);
+        const key = pageNum > 1 ? `${active}#${pageNum}` : active;
+        const baseViewport = pageObj.getViewport({ scale: 1 });
+        const autoScale = autoRenderScale(baseViewport.width, baseViewport.height);
+        const renderScale = renderScalesRef.current.get(key) || (hiResKeys.includes(key) ? autoScale : Math.min(RENDER_SCALE, autoScale));
+        const viewport = pageObj.getViewport({ scale: renderScale });
+        const content = await pageObj.getTextContent();
+        for (const item of content.items) {
+          if (!item.str || !item.str.trim()) continue;
+          const text = item.str.toLocaleLowerCase();
+          let from = 0;
+          while ((from = text.indexOf(folded, from)) !== -1) {
+            const transform = pdfjsLib.Util.transform(viewport.transform, item.transform);
+            const runWidth = Math.max(1, (item.width || item.str.length * 4) * viewport.scale);
+            const charWidth = runWidth / Math.max(1, item.str.length);
+            const height = Math.max(8, Math.hypot(transform[2], transform[3]));
+            matches.push({ key, page: pageNum, x: transform[4] + charWidth * from, y: transform[5] - height,
+              w: Math.max(charWidth * query.length, charWidth), h: height });
+            from += Math.max(1, folded.length);
+          }
+        }
+      }
+      if (request !== findRequestRef.current) return;
+      setFindResults(matches);
+      if (matches.length) {
+        setFindResultQuery(query.toLocaleLowerCase());
+        setFindIndex(0);
+        setFindMessage("");
+        setSheetGroup([]);
+        setPage(matches[0].page);
+        setPendingFind({ ...matches[0], request });
+      } else setFindMessage("No matches found.");
+    } catch (error) {
+      if (request === findRequestRef.current) setFindMessage(`Couldn't search this PDF: ${error?.message || error}`);
+    } finally {
+      if (request === findRequestRef.current) setFindBusy(false);
+    }
+  }, [active, docFor, findQuery, hiResKeys, sheets]);
+  const moveFind = useCallback((direction) => {
+    if (!findResults.length) return;
+    const next = (findIndex + direction + findResults.length) % findResults.length;
+    setFindIndex(next);
+    const result = findResults[next];
+    setSheetGroup([]);
+    setPage(result.page);
+    setPendingFind({ ...result, request: findRequestRef.current });
+  }, [findIndex, findResults]);
+
+  useEffect(() => {
+    if (!pendingFind || pendingFind.key !== sheetKey) return;
+    const dims = panelImgs[pendingFind.key];
+    const el = containerRef.current;
+    if (!dims?.w || !el) return;
+    const rect = el.getBoundingClientRect();
+    const scale = Math.max(1.25, tfRef.current.scale);
+    const x = pendingFind.x + pendingFind.w / 2;
+    const y = pendingFind.y + pendingFind.h / 2;
+    setTfNow({ x: rect.width / 2 - x * scale, y: rect.height / 2 - y * scale, scale });
+    setPendingFind(null);
+  }, [pendingFind, panelImgs, sheetKey, setTfNow]);
+
+  useEffect(() => {
+    findRequestRef.current++;
+    setFindBusy(false);
+    setFindResults([]);
+    setFindIndex(-1);
+    setFindResultQuery("");
+    setFindMessage("");
+    setPendingFind(null);
+  }, [active]);
+
+  useEffect(() => {
+    const onFindShortcut = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        openFind();
+      } else if (event.key === "Escape" && findOpen) closeFind();
+    };
+    window.addEventListener("keydown", onFindShortcut);
+    return () => window.removeEventListener("keydown", onFindShortcut);
+  }, [closeFind, findOpen, openFind]);
+
   // ── local PDFs (dropped into this browser) ─────────────────────────────────
   const refreshSheets = useCallback(async () => {
     const list = await store.listSheets();
@@ -1306,19 +1442,6 @@ export default function TakeoffCanvas() {
     const onVis = () => { if (document.visibilityState === "hidden") voiceAimMarkRef.current = aimSeqRef.current; };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, []);
-
-  // one pdf.js document per file, cached for the life of the project view —
-  // the canvas render AND the gallery thumbnails share this cache
-  // Bytes come from the local store (IndexedDB); pdf.js needs them up front, so
-  // the cache holds a PROMISE of the loading task (not the task itself).
-  const docFor = useCallback((file) => {
-    let t = pdfDocsRef.current.get(file);
-    if (!t) {
-      t = store.loadPdfData(file).then((data) => pdfjsLib.getDocument({ data }));
-      pdfDocsRef.current.set(file, t);
-    }
-    return t.then((task) => task.promise);
   }, []);
 
   // dark toggle: flip the pixels of every rendered canvas in place — instant,
@@ -5127,7 +5250,7 @@ export default function TakeoffCanvas() {
     <><button type="button" onClick={() => setCloudView("projects")} disabled={!hydrated.current || !!loadError}
       title={cloudAccount?.user ? `Account: ${cloudAccount.user.email}` : "Cloud account and projects"}
       style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5 }}>
-      <Icon name="document" size={15} />Cloud{cloudAccount?.user && <small>{cloudAccount.offline ? "Offline" : cloudAccount.status}</small>}</button>
+      <img src={cloudLogo} alt="" width="20" height="16" style={{ objectFit: "contain", flexShrink: 0 }} />Cloud{cloudAccount?.user && <small>{cloudAccount.offline ? "Offline" : cloudAccount.status}</small>}</button>
     <button type="button" onClick={() => setWhiteboardOpen(true)} disabled={!hydrated.current || !!loadError}
       title="Open whiteboard" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5, cursor: "pointer" }}>
       <Icon name="rectTool" size={15} />Whiteboard</button>
@@ -5156,7 +5279,7 @@ export default function TakeoffCanvas() {
       style={{ position: "relative", display: "flex", flexDirection: "column", height: "100vh" }}>
       <input ref={projectInputRef} type="file" accept=".otk" aria-label="Open project file" style={{ display: "none" }}
         onChange={(e) => { setProjectFilePrompt(e.target.files?.[0] || null); e.target.value = ""; }} />
-      {cloudView && <CloudProjects initialView={cloudView} source={store} getPayload={buildPayload} onClose={() => { setCloudView(null); cloudAccount.clearAuthReturn(); }} onOpenChange={onMenuDepth} />}
+      {cloudView && <CloudProjects initialView={cloudView} source={store} getPayload={buildPayload} onClose={() => { setCloudView(null); cloudAccount.clearAuthReturn(); cloudAccount.clearDriveReturn(); }} onOpenChange={onMenuDepth} />}
       {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard} onClose={() => setWhiteboardOpen(false)}
         onSave={saveProjectFile} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState} />}
       {projectSavePrompt !== null && <SaveProjectDialog filename={projectSavePrompt}
@@ -5236,6 +5359,25 @@ export default function TakeoffCanvas() {
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page >= pageCount) ? 0.4 : 1 }}><Icon name="chevronRight" size={12} /></button>
           </span>
         )}
+        {sheets.length > 0 && <>
+          <button type="button" onClick={() => findOpen ? closeFind() : openFind()} title="Find text in this PDF (Ctrl+F)" aria-label="Find text in this PDF" aria-expanded={findOpen}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: `1px solid ${findOpen ? "var(--cobalt)" : "var(--ink-faint)"}`, background: findOpen ? "var(--tint-select)" : "transparent", color: "var(--ink)", cursor: "pointer", fontSize: 12.5, lineHeight: 1 }}>
+            <Icon name="target" size={14} />Find
+          </button>
+          {findOpen && <span role="search" aria-label="Find in PDF" style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 5px", border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", boxShadow: "0 2px 8px rgba(0,0,0,.10)" }}>
+            <input ref={findInputRef} type="search" value={findQuery} placeholder="Find in PDF" aria-label="Search PDF text"
+              onChange={(event) => { findRequestRef.current++; setFindBusy(false); setFindQuery(event.target.value); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage(""); }}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (findResults.length && findResultQuery === findQuery.trim().toLocaleLowerCase()) moveFind(event.shiftKey ? -1 : 1); else runFind(); } }}
+              style={{ width: 155, border: 0, outline: 0, padding: "4px 5px", color: "var(--ink)", background: "transparent", font: "12px var(--f-body, sans-serif)" }} />
+            <span aria-live="polite" style={{ minWidth: 48, textAlign: "center", font: "10px var(--f-mono)", color: "var(--ink-muted)" }}>{findBusy ? "…" : findResults.length ? `${findIndex + 1} of ${findResults.length}` : findMessage || ""}</span>
+            <button type="button" onClick={() => moveFind(-1)} disabled={!findResults.length || findBusy} title="Previous match" aria-label="Previous match"
+              style={{ border: 0, background: "transparent", color: "var(--ink-muted)", cursor: "pointer", padding: 4, opacity: findResults.length ? 1 : 0.4 }}><Icon name="chevronUp" size={13} /></button>
+            <button type="button" onClick={() => moveFind(1)} disabled={!findResults.length || findBusy} title="Next match" aria-label="Next match"
+              style={{ border: 0, background: "transparent", color: "var(--ink-muted)", cursor: "pointer", padding: 4, opacity: findResults.length ? 1 : 0.4 }}><Icon name="chevronDown" size={13} /></button>
+            <button type="button" onClick={closeFind} title="Close find" aria-label="Close find"
+              style={{ border: 0, background: "transparent", color: "var(--ink-muted)", cursor: "pointer", padding: 4 }}><Icon name="close" size={13} /></button>
+          </span>}
+        </>}
         <div className="toolbar-spacer" style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>{saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}</span>
         <button type="button" onClick={toggleFullscreen}
@@ -5789,6 +5931,9 @@ export default function TakeoffCanvas() {
                 const label = labelFor(p);
                 return (
                   <g key={p.key} transform={`translate(${p.xOffset},0)`}>
+                    {findResults.map((hit, index) => hit.key === p.key && <rect key={`find-${index}`} x={hit.x} y={hit.y} width={hit.w} height={hit.h}
+                      fill={index === findIndex ? "rgba(255,166,0,.46)" : "rgba(255,225,70,.28)"}
+                      stroke={index === findIndex ? "#d06b00" : "#d0a900"} strokeWidth={(index === findIndex ? 2 : 1) / tf.scale} pointerEvents="none" />)}
                     {panels.length > 1 && <text x={0} y={-26} fontSize={64} fontWeight={700} fill={darkMode ? "#9a917f" : "#6b6256"}>{label}</text>}
                     {pShapes.map((s) => {
                       const cond = condById[s.condition_id];

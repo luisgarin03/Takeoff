@@ -72,6 +72,10 @@ In the gallery, select sheets and hit **Assign level…** (`"L1"`, `"Level 2"`, 
 
 **Bookmark pages:** click the outline star beside a sheet tab or a page in either navigation dropdown. A filled gold star marks a bookmark; click it again to remove it. The star does not navigate or close the menu. The **N open** dropdown puts bookmarks in a **Bookmarked** section in file/page order, then lists the remaining open sheets in their existing tab order. Click a page name to navigate; a bookmarked closed tab reopens. Closing a tab does not remove its bookmark. Removing a PDF from the working set hides its bookmarks until the file is added again. Bookmarks autosave, restore with revisions, and are included in **Save project** `.otk` files. Older projects open with no bookmarks.
 
+### Find text in a PDF
+
+Click **Find** in the top sheet toolbar (or press `Ctrl+F`, `⌘F` on Mac), type a word, and press Enter. OpenTakeoff searches text in every page of the active PDF, jumps to and highlights the first match, and shows the current result number. Use the up/down buttons to move through matches; navigation wraps at either end. PDFs made only from scanned images have no searchable text.
+
 ### Pan & zoom
 
 The fixed bottom-left canvas controls are **Draw (pencil icon)**, **Edit (pen icon)**, **Pan**, **Select**, **+ Zoom**, **− Zoom**, **fit**, and **☾**, in that order. Draw opens the shared Measure, Cut Out, and Markup choices; Edit opens the existing editing actions with the same availability rules. When Highlighter is armed, reopen Draw to adjust ink, size, and tip. The original top Theme, Mode, Draw, and Edit controls are hidden; their actions remain available through the rails and existing keyboard shortcuts. Rail menus open beside the controls and scroll within the viewport; taps on them do not reach the canvas. A **✓ Finish** button appears above Pan only when the toolbar Finish action is available: at least three points for Area, Deduct, or a single-sheet Zone, or two for Linear, Curve, or Surface. Its tooltip and accessible label show the live point count. Either Finish button completes the same trace; finishing or cancelling removes the extra button without moving the six controls below it. Pan and Select use the existing mode state and `P` / `V` shortcuts, with the active mode filled in ink.
@@ -456,7 +460,7 @@ Addenda happen. **Revisions** (the clock icon on the rail) makes them data inste
 
 The **Cloud** button opens account sign-in and the cloud project browser. Local work and **Project > Save project** continue working without signing in. A deployment must first complete [Supabase setup](SUPABASE_SETUP.md).
 
-On localhost or the HTTPS web app (including mobile Chrome), **Continue with Google** signs into the same Supabase cloud account system. Pending project edits are saved locally before leaving for Google. Return to the same browser/origin to finish sign-in; the current workspace and Cloud panel reopen automatically. Canceling or failing sign-in leaves local work intact. The current Capacitor Android wrapper has no external-browser return handler, so its Google button is disabled with an explanation; email/password and email-code recovery remain available. Supabase Google sign-in does not authorize the separate Google Drive integration.
+On localhost or the HTTPS web app (including mobile Chrome), **Continue with Google** signs into the same Supabase cloud account system. Pending project edits are saved locally before leaving for Google. Return to the same browser/origin to finish sign-in; the current workspace and Cloud panel reopen automatically. Canceling or failing sign-in leaves local work intact. Native Google login remains disabled with an explanation; email/password and email-code recovery remain available. The dedicated Android Drive connection return handler does not change Google login. Supabase Google sign-in does not authorize the separate Google Drive integration.
 
 Use **Project > Save to Cloud** to upload the current project. Subsequent saves update the same project ID; **Save As** creates a separate project with a new ID. Cloud saving is manual, while existing local autosave continues after edits. **Browse projects** provides My Projects, Shared With Me, and Recent, with Open, Download, Duplicate, Rename, Share, and Delete as permitted by your role. Set your display name under Profile. Opening a cloud project creates a separate local workspace and keeps the previous workspace intact.
 
@@ -464,7 +468,9 @@ The owner can share with another confirmed account by exact email address. Edito
 
 If another device saved first, choose **Keep Local Version**, **Use Cloud Version**, or **Save Local as Copy**. Keep Local asks again before replacing the displayed cloud version and fails if that version changes again. There is no automatic drawing merge. After offline edits, reconnect and choose Save to Cloud again.
 
-PDFs larger than 50 MB remain **Local Only** while takeoff metadata still saves. Upload failures also retain local originals. Missing whiteboard files appear as placeholders; unavailable plan PDFs need the original file imported with its original filename on the other device. Do not discard the source device or its `.otk` backup until all required files are available. Cloud Download/Duplicate refuses incomplete projects rather than silently omitting files. Copies consume additional cloud file quota.
+With **Supabase Storage**, PDFs larger than 50 MB remain **Local Only** while takeoff metadata still saves. Upload failures also retain local originals. Missing whiteboard files appear as placeholders; unavailable plan PDFs need the original file imported with its original filename on the other device. Do not discard the source device or its `.otk` backup until all required files are available. Cloud Download/Duplicate refuses incomplete projects rather than silently omitting files. Copies consume additional cloud file quota.
+
+After [Drive backend setup](GOOGLE_DRIVE_STORAGE.md), **Cloud > Profile > Connect Google Drive** authorizes private storage separately from Google Sign-In. Choose **Google Drive** under **This project > Cloud file storage** before the first file upload, or explicitly choose it for a new **Save As** copy. Existing projects never switch automatically. Shared users can open uploaded PDFs and board assets without connecting their own Google account. File transfers show progress and can be canceled/retried; completed downloads remain available in the local workspace offline. Drive allows up to 2 GiB per file in this app, subject to device memory and existing import limits. Disconnecting the owner's Drive stops new uncached downloads for shared members. Removing a member stops new cloud access, but cannot erase previously downloaded copies. Drive transfers save Supabase Storage space, not proxy bandwidth costs. Downloads also check for cancellation or an account change after saving the verified local cache; retry opening the project after signing in again if needed.
 
 Email verification and password recovery use an emailed code, entered in the same app. Cloud status is refreshed when opening Cloud and after save operations. Browser-global preferences, reusable libraries, and AI keys are not uploaded with the project.
 
@@ -625,6 +631,7 @@ Every shortcut in the app, verified against the code. Letter keys are suppressed
 | `V` | Select |
 | `P` | Pan |
 | `G` | Sheet gallery |
+| `Ctrl+F` / `⌘F` | Find text in the active PDF |
 
 ### Conditions
 
