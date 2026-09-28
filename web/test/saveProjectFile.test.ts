@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { projectSaveFilename, saveProjectArchive } from "../src/lib/saveProjectFile.js";
+import { projectFileHandleFor, projectSaveFilename, saveProjectArchive } from "../src/lib/saveProjectFile.js";
+
+test("a retained local file handle is reusable only by the project that selected it", () => {
+  const handle = { name: "Previous project.otk" };
+  assert.equal(projectFileHandleFor(handle, "project-a", "project-a"), handle);
+  assert.equal(projectFileHandleFor(handle, "project-a", "project-b"), null);
+  assert.equal(projectFileHandleFor(handle, null, "project-a"), null);
+});
 
 test("save names accept an optional extension and sanitize invalid filename characters", () => {
   assert.equal(projectSaveFilename(" My project.OTK "), "My project.otk");

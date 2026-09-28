@@ -6,6 +6,13 @@ export function projectSaveFilename(name) {
   return projectFilename(title);
 }
 
+// A browser file handle belongs to the project that selected it. Keeping the
+// handle after switching projects would make the next ordinary Save overwrite
+// an unrelated project's file.
+export function projectFileHandleFor(handle, handleProjectId, projectId) {
+  return handle && handleProjectId && handleProjectId === projectId ? handle : null;
+}
+
 export async function saveProjectArchive({ name, buildArchive, pickFile, download, existingHandle = null, saveAs = false }) {
   const filename = projectSaveFilename(name);
   let handle = saveAs ? null : existingHandle;

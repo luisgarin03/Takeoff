@@ -6,7 +6,7 @@ A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF
 
 The **Project** menu creates named projects with an optional submission date and status. Those details travel with browser autosaves, cloud saves, and portable `.otk` project archives.
 
-Local **Save project** reuses a previously selected file handle when the browser supports it; **Save project as…** always chooses a new destination. Google Drive projects use a stable-ID-backed, human-readable `OpenTakeoff/<Project Name>/` folder containing `<Project Name>.otk`, with `PDFs/` and `Assets/` created only when those separate files are needed.
+Local **Save project** reuses a previously selected file handle only for that same project; **New project…** starts with a fresh named save destination. **Save project as…** always chooses a new destination. Google Drive projects use a stable-ID-backed, human-readable `OpenTakeoff/<Project Name>/` folder containing `<Project Name>.otk`, with `PDFs/` and `Assets/` created only when those separate files are needed.
 
 **Optional Google Drive files:** connect Drive separately in Cloud > Profile, then explicitly choose it for a new cloud project's original PDFs and board assets. Supabase remains authoritative for users, state and sharing; an authenticated Edge Function serves private file chunks to authorized members. Existing Supabase/local projects stay unchanged. Downloads verify file identity and stop on cancellation or an account change, including during the final local cache write. This saves Storage capacity, but proxy transfers still use Supabase egress. Backend setup and live acceptance are required: [Drive setup and implementation report](docs/GOOGLE_DRIVE_STORAGE.md).
 
@@ -23,6 +23,8 @@ Portable projects: **Project > Save project** asks for a filename and opens a Sa
 **Whiteboard:** arrange reference PDFs, images, and editable notes in a separate pan/zoom workspace with zoom up to 400%. Paste clipboard text, images, or supported files directly onto the board. Original attachments, PDF page choices, and the board layout autosave with the project and travel inside its `.otk` file.
 
 **Whiteboard PDF:** use **Export PDF** in the whiteboard header for one custom-sized page tightly fitted to all note and attachment content, including offscreen items. Export keeps the board layout and original PDF vectors where possible, without the editor grid or controls.
+
+Whiteboard PDF attachments have a **PDF detail** slider and **Refresh** action for sharper previews on demand; high-resolution renders are bounded to protect browser memory.
 
 Measure construction plans with existing canvas tools, snapping, and reports. The optional **Trackpad** control adds relative touch or mouse aiming and tap-to-place without covering the target with your finger. At overview zoom, each finished sheet also has a local preview raster; its Diagnostics control is adjustable from 10–100% of the base raster (50% default), while the full-resolution sheet remains available for normal and detailed viewing.
 

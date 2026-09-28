@@ -6,6 +6,7 @@ import { unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
 import { emptyWhiteboard, bytesToBase64, base64ToBytes, validateWhiteboard, removeBoardItem, zoomBoard, fitBoard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
 import { localStore, createFileProjectStore, importFileProject, ANN_SCHEMA } from "../src/lib/store.js";
 import { exportProjectFile, readProjectFile } from "../src/lib/projectFile.js";
+import { WHITEBOARD_PDF_PREVIEW_MAX_PIXELS, whiteboardPdfPreviewScale } from "../src/lib/whiteboardPdfPreview.js";
 
 beforeEach(() => { globalThis.indexedDB = new IDBFactory(); });
 const pdf = strToU8("%PDF-1.7\nwhiteboard reference\n%%EOF");
@@ -119,6 +120,16 @@ test("file type allowlist and base64 preserve original bytes", () => {
   assert.equal(whiteboardFileType({name: "notes.PDF", type: ""}), "application/pdf");
   assert.equal(whiteboardFileType({name: "photo.jpeg", type: ""}), "image/jpeg");
   assert.equal(whiteboardFileType({name: "index.html", type: "text/html"}), null);
+});
+
+test("PDF preview resolution increases detail but caps canvas pixel area", () => {
+  const standardPage = { width: 612, height: 792 };
+  const normal = whiteboardPdfPreviewScale(standardPage.width, standardPage.height, 1);
+  const high = whiteboardPdfPreviewScale(standardPage.width, standardPage.height, 2);
+  assert.ok(high > normal);
+  const huge = whiteboardPdfPreviewScale(10000, 14000, 3);
+  assert.ok(10000 * huge * 14000 * huge <= WHITEBOARD_PDF_PREVIEW_MAX_PIXELS + 1);
+  assert.equal(whiteboardPdfPreviewScale(0, 792, 3), 1);
 });
 
 test("clipboard content accepts files or plain text without duplicating image fallback text", () => {

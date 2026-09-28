@@ -21,7 +21,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { store, emptyAnnotations, isStaleTabError, STALE_TAB_MESSAGE, projectIdFromUrl, importFileProject } from "../lib/store.js";
 import { exportProjectFile, readProjectFile, projectFilename, MAX_PROJECT_FILE_BYTES } from "../lib/projectFile.js";
-import { saveProjectArchive } from "../lib/saveProjectFile.js";
+import { projectFileHandleFor, saveProjectArchive } from "../lib/saveProjectFile.js";
 import SaveProjectDialog from "../components/SaveProjectDialog.jsx";
 import ProjectMetadataModal from "../components/ProjectMetadataModal.jsx";
 import { EMPTY_PROJECT_METADATA, createProjectMetadata, formatProjectDate, metadataPayload, normalizeProjectMetadata, preserveUnknownProjectFields, touchProjectMetadata } from "../lib/projectMetadata.js";
@@ -528,6 +528,7 @@ export default function TakeoffCanvas() {
   const portableProjectId = useRef(crypto.randomUUID());
   const projectFileLock = useRef(false);
   const projectFileHandleRef = useRef(null);
+  const projectFileHandleProjectIdRef = useRef(null);
   const pendingProjectSaveRef = useRef(null);
   const [pageExportBusy, setPageExportBusy] = useState(false);
   const pageExportLock = useRef(false);
@@ -1214,7 +1215,13 @@ export default function TakeoffCanvas() {
     setAgentProposals([]);
     unknownProjectFieldsRef.current = preserveUnknownProjectFields(a);
     setProjectMetadata(normalizeProjectMetadata(a));
-    if (PROJECT_UUID.test(a.project_id)) portableProjectId.current = a.project_id;
+    if (PROJECT_UUID.test(a.project_id)) {
+      if (portableProjectId.current !== a.project_id) {
+        projectFileHandleRef.current = null;
+        projectFileHandleProjectIdRef.current = null;
+      }
+      portableProjectId.current = a.project_id;
+    }
     // string fields only — a corrupted record must not put an object where
     // the report masthead renders a React child
     setClientInfo(Object.fromEntries(Object.entries(
@@ -1828,6 +1835,11 @@ export default function TakeoffCanvas() {
       for (const sheet of await store.listSheets()) await store.removePdf(sheet.name);
       const payload = { ...emptyAnnotations(), project_id: crypto.randomUUID(), project_name: metadata.name, project_metadata: metadataPayload(metadata) };
       await store.saveAnnotations(payload);
+      // A new project must never inherit the previous project's local file
+      // handle: ordinary Save should ask for a new destination, named for this
+      // project, rather than overwrite the file the prior project selected.
+      projectFileHandleRef.current = null;
+      projectFileHandleProjectIdRef.current = null;
       portableProjectId.current = payload.project_id;
       suppressNextSave.current = true;
       hydrate(payload);
@@ -1864,7 +1876,7 @@ export default function TakeoffCanvas() {
       setProjectMetadataModal("edit");
       return;
     }
-    if (!saveAs && projectFileHandleRef.current) {
+    if (!saveAs && projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current)) {
       confirmSaveProjectFile(projectFilename(projectName), false);
       return;
     }
@@ -1881,7 +1893,7 @@ export default function TakeoffCanvas() {
       const result = await saveProjectArchive({
         name,
         pickFile: typeof window.showSaveFilePicker === "function" ? window.showSaveFilePicker.bind(window) : null,
-        existingHandle: projectFileHandleRef.current,
+        existingHandle: projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current),
         saveAs,
         // Capture live edits, including anything still in the autosave delay.
         buildArchive: () => { persistedPayload = buildPayload({ touch: true }); return exportProjectFile(store, persistedPayload); },
@@ -1889,6 +1901,7 @@ export default function TakeoffCanvas() {
       });
       if (result.status !== "cancelled") {
         projectFileHandleRef.current = result.handle || null;
+        projectFileHandleProjectIdRef.current = result.handle ? portableProjectId.current : null;
         if (persistedPayload?.project_metadata?.lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, lastModifiedAt: persistedPayload.project_metadata.lastModifiedAt }));
         setProjectSavePrompt(null);
         setCommitMsg(`${result.status === "saved" ? "Project saved" : "Project download started"}: ${result.filename}`);
@@ -5315,7 +5328,7 @@ export default function TakeoffCanvas() {
         { id: "edit-project", label: "Edit project details…", onSelect: () => setProjectMetadataModal("edit"), disabled: !projectName },
         { note: projectName ? `${projectMetadata.status}${projectMetadata.submissionDate ? ` · due ${formatProjectDate(projectMetadata.submissionDate, { dateStyle: "medium" })}` : " · no due date"}${projectMetadata.lastModifiedAt ? ` · modified ${formatProjectDate(projectMetadata.lastModifiedAt, { dateStyle: "medium", timeStyle: "short" })}` : ""}` : "Create a named project or open an existing project file." },
         "divider",
-        { id: "save-project", icon: "document", label: projectFileHandleRef.current ? "Save project" : "Save project...", onSelect: () => saveProjectFile(false), disabled: !hydrated.current || !!loadError },
+        { id: "save-project", icon: "document", label: projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current) ? "Save project" : "Save project...", onSelect: () => saveProjectFile(false), disabled: !hydrated.current || !!loadError },
         { id: "save-project-as", label: "Save project as...", onSelect: () => saveProjectFile(true), disabled: !hydrated.current || !!loadError },
         { id: "open-project", icon: "plus", label: "Open project...", onSelect: () => projectInputRef.current?.click() },
         { id: "save-cloud", icon: "document", label: "Save to Cloud...", onSelect: () => setCloudView("save"), disabled: !hydrated.current || !!loadError || !!store.listFolder },

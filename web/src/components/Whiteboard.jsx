@@ -6,6 +6,7 @@ import { Icon } from "../brand/icons.jsx";
 import { downloadBytes } from "../lib/markedset.js";
 import { buildWhiteboardPdf } from "../lib/whiteboardPdf.js";
 import { whiteboardPdfRenderer } from "../lib/whiteboardPdfBrowser.js";
+import { whiteboardPdfPreviewScale } from "../lib/whiteboardPdfPreview.js";
 import { base64ToBytes, bytesToBase64, fitBoard, NOTE_COLORS, removeBoardItem, WHITEBOARD_FILE_LIMIT, WHITEBOARD_TOTAL_LIMIT, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType, zoomBoard } from "../lib/whiteboard.js";
 import "../styles/whiteboard.css";
 
@@ -15,7 +16,7 @@ function Button({ icon, label, children, ...props }) {
   return <button type="button" title={label} aria-label={label} {...props}><Icon name={icon} size={17} />{children}</button>;
 }
 
-const FilePreview = memo(function FilePreview({ asset, page, onPages }) {
+const FilePreview = memo(function FilePreview({ asset, page, onPages, resolution, refreshKey }) {
   const host = useRef(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(true);
@@ -42,7 +43,7 @@ const FilePreview = memo(function FilePreview({ asset, page, onPages }) {
         const pdfPage = await doc.getPage(Math.min(page, doc.numPages));
         if (stopped) return;
         const native = pdfPage.getViewport({ scale: 1 });
-        const viewport = pdfPage.getViewport({ scale: Math.min(2, 1400 / Math.max(native.width, native.height)) });
+        const viewport = pdfPage.getViewport({ scale: whiteboardPdfPreviewScale(native.width, native.height, resolution) });
         // Render offscreen and publish only while this page owns the preview.
         // A cancelled/older page must never replace the current page's pixels.
         const canvas = document.createElement("canvas");
@@ -57,14 +58,14 @@ const FilePreview = memo(function FilePreview({ asset, page, onPages }) {
     }
     render();
     return () => { stopped = true; task?.cancel(); loading?.destroy().catch(() => {}); if (url) URL.revokeObjectURL(url); };
-  }, [asset, page, onPages]);
-  return <div className="wb-preview">{error && <span role="alert">{error}</span>}{pending && <small className="wb-preview-loading" role="status">Loading preview...</small>}<div ref={host} /></div>;
+  }, [asset, page, onPages, resolution, refreshKey]);
+  return <div className="wb-preview">{error && <span role="alert">{error}</span>}{pending && <small className="wb-preview-loading" role="status">Rendering preview…</small>}<div ref={host} /></div>;
 });
 
-const FileCard = memo(function FileCard({ asset, item, onPage, visible }) {
+const FileCard = memo(function FileCard({ asset, item, onPage, visible, resolution, refreshKey }) {
   const [pages, setPages] = useState(0);
   return <>
-    {visible ? <FilePreview asset={asset} page={item.page} onPages={setPages} /> : <div className="wb-preview" />}
+    {visible ? <FilePreview asset={asset} page={item.page} onPages={setPages} resolution={resolution} refreshKey={refreshKey} /> : <div className="wb-preview" />}
     <footer className="wb-file-footer" onPointerDown={(e) => e.stopPropagation()}>
       {asset.type === "application/pdf" && <>
         <Button icon="chevronLeft" label={`Previous page of ${asset.name}`} disabled={item.page <= 1} onClick={() => onPage(item.id, item.page - 1)} />
@@ -89,6 +90,8 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   const exportTask = useRef(null);
   const [exporting, setExporting] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [pdfResolution, setPdfResolution] = useState(2);
+  const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const gesture = useRef(null), pointers = useRef(new Map());
   const pastePoint = useRef(null);
@@ -284,6 +287,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   }
   const active = board.items.find((item) => item.id === selected);
   const assets = new Map(board.assets.map((asset) => [asset.id, asset]));
+  const hasPdf = board.assets.some((asset) => asset.type === "application/pdf");
   return createPortal(<section className="wb" role="dialog" aria-modal="true" aria-label="Whiteboard" tabIndex={-1} ref={root}
     onPaste={paste}
     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
@@ -312,6 +316,16 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         {active.kind === "note" && <div className="wb-colors" role="group" aria-label="Note color">{Object.entries(NOTE_COLORS).map(([name, color]) =>
           <button type="button" key={name} aria-label={`${name} note`} title={`${name} note`} aria-pressed={active.color === name} style={{ background: color }} onClick={() => patch(selected, { color: name })} />)}</div>}
       </>}
+      {hasPdf && <>
+        <label className="wb-resolution" title="Higher PDF preview resolution is sharper when zoomed in but takes longer to render and more memory.">
+          <span>PDF detail</span>
+          <input type="range" min="1" max="3" step="1" value={pdfResolution} aria-label="PDF preview resolution"
+            onChange={(e) => setPdfResolution(Number(e.target.value))} />
+          <output>{pdfResolution}×</output>
+        </label>
+        <button type="button" className="wb-refresh" title="Render visible PDF previews again at the selected detail" aria-label="Refresh PDF previews"
+          disabled={busy || exporting} onClick={() => setPdfRefreshKey((key) => key + 1)}>Refresh</button>
+      </>}
       <span className="wb-status" role="status">{exporting ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved locally" : ""}</span>
     </div>
     {error && <div className="wb-error" role="alert"><span>{error}</span><Button icon="close" label="Dismiss whiteboard error" onClick={() => setError("")} /></div>}
@@ -332,7 +346,8 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
           {item.kind === "note" ? <textarea aria-label="Note text" value={item.text} maxLength={100000} spellCheck
             onPointerDown={(e) => { if (mode === "pan") start(e); else { e.stopPropagation(); setSelected(item.id); } }}
             onChange={(e) => patch(item.id, { text: e.target.value }, item.id)} onBlur={() => { editGroup.current = null; }} /> :
-            asset && <FileCard asset={asset} item={item} onPage={pageChange} visible={visible} />}
+            asset && <FileCard asset={asset} item={item} onPage={pageChange} visible={visible}
+              resolution={asset.type === "application/pdf" ? pdfResolution : 1} refreshKey={asset.type === "application/pdf" ? pdfRefreshKey : 0} />}
           <button type="button" className="wb-resize" aria-label={`Resize ${asset?.name || "note"}`} title="Resize" onPointerDown={(e) => start(e, item, true)}><Icon name="fullscreen" size={13} /></button>
         </article>;
       })}
