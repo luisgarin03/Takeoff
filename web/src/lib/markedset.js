@@ -573,7 +573,8 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
           if (t) text(t, m.at[0] * W - bw / 2, y0 - 6 / ptScale, 8, mcol, bold);
         }
       } else if (m.type === "text" && m.at) {
-        text(lbl(m.text), m.at[0] * W, m.at[1] * H, 8.5, mcol, bold);
+        const lines = String(lbl(m.text) || "").split(/\r?\n/);
+        lines.forEach((lineText, index) => text(lineText, m.at[0] * W, m.at[1] * H + index * 10 / ptScale, 8.5, mcol, bold));
       }
     }
     // sheet stamp, top-left in visual space

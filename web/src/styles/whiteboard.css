@@ -36,13 +36,24 @@
 .wb-refresh { font-size: 11px !important; }
 .wb-viewport { flex: 1; min-height: 0; position: relative; overflow: hidden; touch-action: none; background-image: radial-gradient(circle, var(--ink-faint) 1px, transparent 1px); }
 .wb-viewport.is-pan { cursor: grab; }
+.wb-viewport.is-arrow { cursor: crosshair; }
+.wb-arrows { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.wb-arrow-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 4px !important; }
+.wb .wb-arrow-colors button { width: 19px; height: 19px; min-width: 19px; min-height: 19px; padding: 0; border-radius: 50%; }
 .wb-empty { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center; color: var(--ink-muted); pointer-events: none; }
 .wb-empty button { pointer-events: auto; }
 .wb-item { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; flex-direction: column; border: 1px solid var(--ink-faint); border-radius: 4px; box-shadow: 0 2px 8px #00000014; background: var(--paper-bright); overflow: hidden; }
 .wb-item.is-selected { outline: 2px solid var(--cobalt); }
 .wb-item-title { display: flex; align-items: center; gap: 8px; padding: 10px 12px; min-height: 38px; flex-shrink: 0; cursor: move; border-bottom: 1px solid var(--ink-faint); user-select: none; }
-.wb-item-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-item-title > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wb-item-title svg { flex-shrink: 0; }
+.wb .wb-item-title.wb-color-title { position: relative; }
+/* Keep the inline swatch row legible while it fits within each item's header at overview zoom. */
+.wb-item-header-colors { position: absolute; display: flex; align-items: center; gap: 1px; width: max-content; height: 16px; transform-origin: right center; }
+.wb .wb-item-header-colors .wb-file-header-swatch { display: inline-flex; align-items: center; justify-content: center; width: 7px; height: 7px; min-width: 7px; min-height: 7px; padding: 0; border: 1px solid #0006; border-radius: 50%; cursor: pointer; }
+.wb .wb-item-header-colors .wb-file-header-swatch[aria-pressed="true"] { border: 2px solid currentColor; box-shadow: 0 0 0 1px var(--paper-bright); }
+.wb .wb-item-header-colors .wb-file-header-swatch:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+.wb .wb-item-header-colors .wb-file-header-swatch svg { flex-shrink: 0; }
 .wb-preview { flex: 1; min-height: 0; position: relative; background: #fff; color: #16181d; }
 .wb-preview > div { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .wb-preview img, .wb-preview canvas { display: block; max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: none; }
@@ -55,6 +66,9 @@
 .wb-download { margin-left: auto; }
 .wb-note { color: #202520; }
 .wb-note .wb-item-title { border-bottom-color: #0000001c; }
+.wb .wb-item-title .wb-note-title { flex: 1; min-width: 0; width: 0; padding: 2px 0; border: 0; outline: 0; background: transparent; color: inherit; font: 600 13px var(--f-body); }
+.wb .wb-item-title .wb-note-title::placeholder { color: currentColor; opacity: .72; }
+.wb .wb-item-title .wb-note-title:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; border-radius: 2px; }
 .wb-note textarea { width: 100%; flex: 1; min-height: 0; resize: none; border: 0; padding: 14px 20px 20px 14px; background: transparent; color: #202520; font: 16px/1.5 var(--f-body); }
 .wb .wb-resize { position: absolute; bottom: 0; right: 0; width: 24px; height: 24px; min-width: 24px; min-height: 24px; border-radius: 4px 0 0 0; padding: 2px; cursor: nwse-resize; touch-action: none; }
 .wb-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; background: var(--paper-bright); border-top: 1px solid var(--ink-faint); padding: 8px 16px max(8px, env(safe-area-inset-bottom)); font-size: 11px; color: var(--ink-muted); }

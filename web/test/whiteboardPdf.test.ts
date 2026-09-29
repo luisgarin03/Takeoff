@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument, PDFDict, PDFRawStream, PDFName, PDFNumber, degrees, rgb } from "pdf-lib";
 import { base64ToBytes, bytesToBase64 } from "../src/lib/whiteboard.js";
-import { boardContentRect, boardPdfBounds, boardPdfPlacement, buildWhiteboardPdf, checkBoardRaster, whiteboardPdfFilename } from "../src/lib/whiteboardPdf.js";
+import { boardContentRect, boardNoteCardRect, boardPdfBounds, boardPdfPlacement, buildWhiteboardPdf, checkBoardRaster, whiteboardPdfFilename } from "../src/lib/whiteboardPdf.js";
 import type { BoardPdfRenderer } from "../src/lib/whiteboardPdf.js";
 
 const png = base64ToBytes("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j8ioAAAAASUVORK5CYII=");
@@ -29,10 +29,24 @@ async function assertPage(result: Awaited<ReturnType<typeof buildWhiteboardPdf>>
   return page;
 }
 
-test("one note tightly fits its colored content; no card chrome or outer margin", async () => {
+test("note export includes its title/header colors and complete card while rendering the colored body", async () => {
   const b = board();
   assert.deepEqual(boardContentRect(b.items[0]), { x: 1, y: 39, w: 278, h: 180 });
-  await assertPage(await buildWhiteboardPdf(b, { renderer }), 208.5, 135);
+  assert.deepEqual(boardNoteCardRect(b.items[0]), { x: 0, y: 0, w: 280, h: 220 });
+  let renderedRect: { x: number; y: number; w: number; h: number } | undefined;
+  const result = await buildWhiteboardPdf(board([note({ title: "Field note", headerColor: "#2563EB", color: "green" })]), {
+    renderer: { ...renderer, renderNote: async (_item, rect) => { renderedRect = rect; return png; } },
+  });
+  const page = await assertPage(result, 210, 165);
+  assert.deepEqual(renderedRect, { x: 0, y: 0, w: 280, h: 220 });
+  assert.ok(page.node.Resources()!.lookup(PDFName.of("XObject"), PDFDict).keys().length > 0, "complete note card is embedded in the PDF");
+});
+
+test("whiteboard arrows export over their own board bounds in the selected color", async () => {
+  const b = { ...board([]), arrows: [{ id: "arrow-1", from: [10, 20], to: [80, 60], color: "#2563EB" }] };
+  const result = await buildWhiteboardPdf(b, { renderer });
+  assert.deepEqual(result.bounds, { minX: 10, minY: 20, maxX: 80, maxY: 60, width: 52.5, height: 30 });
+  await assertPage(result, 52.5, 30);
 });
 
 test("example bounds are exactly 1400 x 800 world units and PDF y is inverted", () => {
@@ -50,7 +64,7 @@ test("distant negative/offscreen notes retain the gap and stack order at any cam
   const a = await buildWhiteboardPdf({ ...b, view: { x: 999, y: -70, scale: .15 }, selected: "far", devicePixelRatio: 2.625 }, { renderer: draw });
   const c = await buildWhiteboardPdf({ ...b, view: { x: -70, y: 999, scale: 3 }, selected: "note", devicePixelRatio: 1 }, { renderer: draw });
   assert.deepEqual(a.bounds, c.bounds);
-  await assertPage(a, 1050, 600); await assertPage(c, 1050, 600);
+  await assertPage(a, 1051.5, 630); await assertPage(c, 1051.5, 630);
   assert.deepEqual(seen, ["note", "far", "note", "far"]);
 });
 
@@ -58,7 +72,7 @@ test("hidden/deleted objects are excluded; locked notes still export", async () 
   const seen: string[] = [];
   const b = board([note({ locked: true }), note({ id: "hidden", x: -10000, hidden: true }), note({ id: "deleted", x: 10000, deleted: true }), note({ id: "invisible", visible: false })]);
   const result = await buildWhiteboardPdf(b, { renderer: { ...renderer, renderNote: async (item) => { seen.push(item.id); return png; } } });
-  await assertPage(result, 208.5, 135);
+  await assertPage(result, 210, 165);
   assert.deepEqual(seen, ["note"]);
 });
 
@@ -99,7 +113,7 @@ test("image content bounds match contain sizing, not its letterboxed card or vie
   assert.deepEqual(boardContentRect(file(), { width: 800, height: 400 }), { x: -399, y: 339, w: 400, h: 200 });
 });
 
-test("future groups, arrows, thick strokes and transforms fail explicitly instead of losing geometry", async () => {
+test("future groups, card kinds, thick strokes and transforms fail explicitly instead of losing geometry", async () => {
   for (const extra of [{ kind: "group", children: [note()], rotation: 30, scale: 2 }, { kind: "arrow", strokeWidth: 50 }, { kind: "shape" }, { rotation: 45 }, { scaleX: 2 }, { stroke: "red" }, { opacity: .5 }]) {
     await assert.rejects(buildWhiteboardPdf(board([note(extra)]), { renderer }), /unsupported whiteboard type or effect/);
   }

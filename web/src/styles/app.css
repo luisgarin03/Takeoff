@@ -947,7 +947,7 @@ select {
 }
 
 /* Shared condition editor: 88px -> 132px, with real editable space. */
-.condition-name-input { width: 132px; flex: 0 1 132px; min-width: 0; max-width: 100%; }
+.condition-name-input { width: auto; flex: 0 0 auto; min-width: min(132px, 100%); max-width: 100%; }
 .canvas-workspace { position: relative; min-width: 0; }
 .glass-drawer { max-width: 100%; min-width: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .takeoffs-tabs, .takeoffs-tabs > span { flex-wrap: wrap; }

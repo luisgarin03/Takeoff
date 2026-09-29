@@ -53,6 +53,13 @@ export function boardContentRect(item, source = null) {
   return { x: rect.x + (rect.w - w) / 2, y: rect.y + (rect.h - h) / 2, w, h };
 }
 
+// Notes export as complete cards, while their text renderer still paints only
+// the colored body. Keeping these rectangles separate preserves the editor's
+// 38px title bar and the existing body padding/layout.
+export function boardNoteCardRect(item) {
+  return { x: item.x, y: item.y, w: item.w, h: item.h };
+}
+
 export function boardPdfPlacement(rect, bounds) {
   return { x: (rect.x - bounds.minX) * BOARD_POINT_SCALE, y: (bounds.maxY - rect.y - rect.h) * BOARD_POINT_SCALE,
     width: rect.w * BOARD_POINT_SCALE, height: rect.h * BOARD_POINT_SCALE };
@@ -66,7 +73,8 @@ function exportSnapshot(board) {
   const snapshot = structuredClone(board);
   if (!Array.isArray(snapshot?.items)) throw new Error("Invalid whiteboard data.");
   snapshot.items = snapshot.items.filter((item) => !item.hidden && item.visible !== false && !item.deleted);
-  if (!snapshot.items.length) throw new Error("Nothing to export");
+  snapshot.arrows = Array.isArray(snapshot.arrows) ? snapshot.arrows : [];
+  if (!snapshot.items.length && !snapshot.arrows.length) throw new Error("Nothing to export");
   for (const item of snapshot.items) {
     // Fail closed for future scene types instead of silently exporting only
     // their untransformed boxes. Today's board supports note/file cards only.
@@ -74,8 +82,7 @@ function exportSnapshot(board) {
       throw new Error(`Item ${item.id || "(unnamed)"} uses an unsupported whiteboard type or effect. Export supports the current note and file cards only.`);
     }
   }
-  validateWhiteboard(snapshot);
-  return snapshot;
+  return validateWhiteboard(snapshot);
 }
 
 /** Export an isolated model, never the current viewport or preview canvases.
@@ -105,7 +112,7 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     const asset = assets.get(item.assetId), label = asset?.name || `Note ${item.id}`;
     try {
       if (item.kind === "note") {
-        const rect = boardContentRect(item);
+        const rect = boardNoteCardRect(item);
         budget(rect.w * BOARD_EXPORT_SCALE, rect.h * BOARD_EXPORT_SCALE);
         prepared.push({ item, rect });
         continue;
@@ -154,7 +161,11 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
       throw new Error(`${label}: ${error.message || "Could not read attachment. Re-add the file and try again."}`, { cause: error });
     }
   }
-  const bounds = boardPdfBounds(prepared.map(({ rect }) => rect));
+  const arrowRects = snapshot.arrows.map(({ from, to }) => ({
+    x: Math.min(from[0], to[0]), y: Math.min(from[1], to[1]),
+    w: Math.max(1, Math.abs(to[0] - from[0])), h: Math.max(1, Math.abs(to[1] - from[1])),
+  }));
+  const bounds = boardPdfBounds([...prepared.map(({ rect }) => rect), ...arrowRects]);
   const page = doc.addPage([bounds.width, bounds.height]);
   for (const setBox of ["setMediaBox", "setCropBox", "setTrimBox", "setBleedBox", "setArtBox"]) page[setBox](0, 0, bounds.width, bounds.height);
   page.drawRectangle({ x: 0, y: 0, width: bounds.width, height: bounds.height, color: rgb(1, 1, 1) });
@@ -185,6 +196,23 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     } catch (error) {
       checkCancelled();
       throw new Error(`${assets.get(item.assetId)?.name || `Note ${item.id}`}: ${error.message || "Export failed. Try again."}`, { cause: error });
+    }
+  }
+  for (const arrow of snapshot.arrows) {
+    checkCancelled();
+    const point = ([x, y]) => ({ x: (x - bounds.minX) * BOARD_POINT_SCALE, y: (bounds.maxY - y) * BOARD_POINT_SCALE });
+    const from = point(arrow.from), to = point(arrow.to);
+    const colorHex = arrow.color || "#1f3fc7";
+    const color = rgb(parseInt(colorHex.slice(1, 3), 16) / 255, parseInt(colorHex.slice(3, 5), 16) / 255, parseInt(colorHex.slice(5, 7), 16) / 255);
+    page.drawLine({ start: from, end: to, thickness: 2, color, opacity: .95 });
+    const dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy);
+    if (len > 0) {
+      const ux = dx / len, uy = dy / len, head = Math.min(9, len * .65), half = head * .42;
+      const bx = to.x - ux * head, by = to.y - uy * head;
+      // pdf-lib's SVG path parser uses an SVG y-down coordinate system.
+      const vertices = [to, { x: bx - uy * half, y: by + ux * half }, { x: bx + uy * half, y: by - ux * half }];
+      const path = vertices.map((p, index) => `${index ? "L" : "M"}${p.x} ${-p.y}`).join(" ") + " Z";
+      page.drawSvgPath(path, { x: 0, y: 0, color, opacity: .95 });
     }
   }
   checkCancelled();

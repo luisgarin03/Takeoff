@@ -40,7 +40,7 @@ import TrackpadSettings from "../components/TrackpadSettings.jsx";
 import DiagnosticsMonitor from "../components/DiagnosticsMonitor.jsx";
 import PlanNavigator from "../components/PlanNavigator.jsx";
 import Whiteboard from "../components/Whiteboard.jsx";
-import { emptyWhiteboard } from "../lib/whiteboard.js";
+import { emptyWhiteboard, sanitizeWhiteboardFileHeaderColors } from "../lib/whiteboard.js";
 import ReportPanel from "../components/ReportPanel.jsx";
 import RevisionsPanel from "../components/RevisionsPanel.jsx";
 import TakeoffsPanel, { clampPanelW, PANEL_EXPANSION, CONDITION_DND_MIME, ConditionAppearanceEditor } from "../components/TakeoffsPanel.jsx";
@@ -87,6 +87,7 @@ import { useGoogleAuth } from "../lib/google/AuthContext.jsx";
 import { projectHomeFolderId } from "../lib/projectHome.js";
 import { getTheme, toggleTheme, onThemeChange } from "../lib/theme.js";
 import { useFullscreen } from "../lib/fullscreen.js";
+import { wrapCanvasNoteText } from "../lib/canvasText.js";
 // Pure data constants (render/zoom budgets, snap tuning, tool descriptors,
 // starter conditions) live in lib/canvasConstants.js; the pure
 // module-scope helpers (autoRenderScale, invertCanvasPixels, uid, clamp,
@@ -97,6 +98,7 @@ import {
   LOW_ZOOM_PREVIEW_MIN_SCALE, LOW_ZOOM_PREVIEW_MAX_SCALE, LOW_ZOOM_PREVIEW_STEP,
   LOW_ZOOM_PREVIEW_DEFAULT_SCALE, LOW_ZOOM_PREVIEW_DEBOUNCE_MS, LOW_ZOOM_ENTER, LOW_ZOOM_EXIT,
   MEASURE_TOOLS, CUT_TOOLS, MARKUP_TOOLS, MARKUP_IDS, HL_INKS, HL_SIZES,
+  ARROW_COLORS,
 } from "../lib/canvasConstants.js";
 import { autoRenderScale, previewRasterDimensions, invertCanvasPixels, uid, clamp, isDangerMsg, instantiateTemplate, seedConditions } from "../lib/canvasUtil.js";
 import { diagnosticsEvent, diagnosticsRenderCancel, diagnosticsRenderComplete, diagnosticsRenderError, diagnosticsRenderStart, diagnosticsZoom } from "../lib/renderDiagnostics.js";
@@ -574,6 +576,8 @@ export default function TakeoffCanvas() {
   const rectRef = useRef(null);
   const cloudRef = useRef(null);       // live cloud preview (first corner → cursor)
   const highlightRef = useRef(null);   // live highlight-box preview (first corner → cursor; own translucent fill, NOT rectRef's condition fill)
+  const arrowLineRef = useRef(null), arrowHeadRef = useRef(null);
+  const [arrowColor, setArrowColor] = useState(ARROW_COLORS[0].value);
   const hlRef = useRef(null);          // in-progress highlighter stroke {pts (stage px), key}
   const hlPathRef = useRef(null);      // live highlighter preview path (imperative, WYSIWYG ink)
   const [hlStyle, setHlStyle] = useState(() => {
@@ -1202,7 +1206,7 @@ export default function TakeoffCanvas() {
   // Restore in the Revisions panel, so a restored revision walks the same
   // defensive path as a page reload.
   const hydrate = (a) => {
-    setWhiteboard(a.whiteboard || emptyWhiteboard());
+    setWhiteboard(sanitizeWhiteboardFileHeaderColors(a.whiteboard || emptyWhiteboard()));
     // Same cross-load-transient gap as the panel epoch bump below: a revision
     // Restore runs in-place with the same sheet keys, so a surviving zoneCheck
     // would immediately re-classify the RESTORED shape set against the
@@ -2435,7 +2439,7 @@ export default function TakeoffCanvas() {
       if (!scheduleAnchor) setScheduleAnchor(p);
       else { importScheduleFromRect(scheduleAnchor, p); setScheduleAnchor(null); setTool("select"); }
     }
-    else if (tool === "cloud" || tool === "callout" || tool === "text" || tool === "highlight") placeMarkup(p);
+    else if (tool === "cloud" || tool === "callout" || tool === "text" || tool === "highlight" || tool === "arrow") placeMarkup(p);
     else if (tool === "stamp") placeStamp(p);
   }
   // Markups carry no verts_norm (cloud rect / callout at+target / text at), so
@@ -2458,6 +2462,11 @@ export default function TakeoffCanvas() {
       const onH = inY && (Math.abs(X - x0) <= thr || Math.abs(X - x1) <= thr);
       return onV || onH;
     }
+    if (m.type === "arrow" && m.from && m.to) {
+      const ax = m.from[0] * W + ox, ay = m.from[1] * H;
+      const bx = m.to[0] * W + ox, by = m.to[1] * H;
+      return distToSeg(X, Y, ax, ay, bx, by) <= thr + 3 / sc;
+    }
     if (m.type === "callout" && m.at) {
       const ax = m.at[0] * W + ox, ay = m.at[1] * H;
       const lw = ((m.text?.length || 1) * 7 + 14) / sc;
@@ -2471,8 +2480,10 @@ export default function TakeoffCanvas() {
     }
     if (m.type === "text" && m.at) {
       const ax = m.at[0] * W + ox, ay = m.at[1] * H;
-      const lw = ((m.text?.length || 1) * 7 + 14) / sc;
-      return X >= ax - thr && X <= ax + lw && Y >= ay - 16 / sc - thr && Y <= ay + thr;
+      const lines = wrapCanvasNoteText(m.text);
+      const width = Math.max(80, Math.min(320, Math.max(...lines.map((line) => line.length), 1) * 7 + 18)) / sc;
+      const height = Math.max(20, lines.length * 16 + 8) / sc;
+      return X >= ax - 6 / sc - thr && X <= ax + width && Y >= ay - 16 / sc - thr && Y <= ay + height - 10 / sc + thr;
     }
     if (m.type === "highlight" && Array.isArray(m.pts)) {
       // a freehand highlighter stroke — hit the ink band itself (reach = half the
@@ -2821,9 +2832,18 @@ export default function TakeoffCanvas() {
         highlightRef.current.style.display = "block";
       } else highlightRef.current.style.display = "none";
     }
+    if (arrowLineRef.current && arrowHeadRef.current) {
+      if (!panRef.current && tool === "arrow" && markupDraft && Math.hypot(cur[0] - markupDraft[0], cur[1] - markupDraft[1]) > 1) {
+        const [x1, y1] = markupDraft, [x2, y2] = cur;
+        arrowLineRef.current.setAttribute("x1", x1); arrowLineRef.current.setAttribute("y1", y1);
+        arrowLineRef.current.setAttribute("x2", x2); arrowLineRef.current.setAttribute("y2", y2);
+        arrowHeadRef.current.setAttribute("d", arrowheadPath(x1, y1, x2, y2, 11 / tfRef.current.scale));
+        arrowLineRef.current.style.display = "block"; arrowHeadRef.current.style.display = "block";
+      } else { arrowLineRef.current.style.display = "none"; arrowHeadRef.current.style.display = "none"; }
+    }
   }
   function hideCrosshair() {
-    for (const ref of [crossVRef, crossHRef, rubberRef, rectRef, cloudRef, highlightRef, snapMarkRef, aimMarkRef, aimChipRef]) if (ref.current) ref.current.style.display = "none";
+    for (const ref of [crossVRef, crossHRef, rubberRef, rectRef, cloudRef, highlightRef, arrowLineRef, arrowHeadRef, snapMarkRef, aimMarkRef, aimChipRef]) if (ref.current) ref.current.style.display = "none";
     if (hlRef.current == null && hlPathRef.current) hlPathRef.current.style.display = "none";
     if (hoverRef.current) hoverRef.current.style.display = "none";
     hoverIdRef.current = "";
@@ -2841,18 +2861,18 @@ export default function TakeoffCanvas() {
   function describeShape(s) {
     const tag = condById[s.condition_id]?.finish_tag || "?";
     const a = s.computed?.area_sf || 0, lf = s.computed?.perimeter_lf || 0;
-    if (s.measure_role === "count") return `${tag} · ${num(s.computed?.count || 1, 0)} EA`;
-    if (s.measure_role === "deduct") return `${tag} · −${fa(a)} deduct`;
+    if (s.measure_role === "count") return `${tag}\n${num(s.computed?.count || 1, 0)} EA`;
+    if (s.measure_role === "deduct") return `${tag}\n−${fa(a)} deduct`;
     if (s.measure_role === "surface_area") {
       // same height semantics as recomputeShape: an override wins outright (even 0).
       // Heights stay feet in both systems — they're ENTERED in feet everywhere.
       const h = s.height_override === true
         ? Number(s.height_ft) || 0
         : Number(s.height_ft) || Number(condById[s.condition_id]?.height_ft) || 0;
-      return `${tag} · ${fa(a)} wall (${fl(lf)} × ${num(h, 2)}′)`;
+      return `${tag}\n${fa(a)} wall (${fl(lf)} × ${num(h, 2)}′)`;
     }
-    if (s.measure_role === "linear") return `${tag} · ${fl(lf)}${a > 0 ? ` · ${fa(a)} border` : ""}`;
-    return `${tag} · ${faSY(a)}`;
+    if (s.measure_role === "linear") return `${tag}\n${fl(lf)}${a > 0 ? ` · ${fa(a)} border` : ""}`;
+    return `${tag}\n${faSY(a)}`;
   }
   // STACK-style hover readout: small, follows the cursor, gone on hover-off
   function updateHover(e) {
@@ -2866,11 +2886,17 @@ export default function TakeoffCanvas() {
       return hitShapeC(s, pt[0] - sp.xOffset, pt[1], sp.img.w, sp.img.h, thr);
     });
     if (!hit) { el.style.display = "none"; hoverIdRef.current = ""; return; }
-    if (hoverIdRef.current !== hit.id) { el.textContent = describeShape(hit); hoverIdRef.current = hit.id; }
+    const description = describeShape(hit);
+    if (hoverIdRef.current !== hit.id || el.textContent !== description) { el.textContent = description; hoverIdRef.current = hit.id; }
     const r = containerRef.current.getBoundingClientRect();
-    el.style.left = `${e.clientX - r.left + 14}px`;
-    el.style.top = `${e.clientY - r.top + 16}px`;
     el.style.display = "block";
+    const box = el.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    let left = px + 14, top = py + 16;
+    if (left + box.width > r.width - 8) left = px - box.width - 14;
+    if (top + box.height > r.height - 8) top = py - box.height - 16;
+    el.style.left = `${Math.max(8, Math.min(left, r.width - box.width - 8))}px`;
+    el.style.top = `${Math.max(8, Math.min(top, r.height - box.height - 8))}px`;
   }
   function onPointerMove(e) {
     if (trackpadVisible) trackpadPointRef.current = [e.clientX, e.clientY];
@@ -3885,15 +3911,24 @@ export default function TakeoffCanvas() {
     const anchor = markupAnchorStage(m);
     if (!anchor) return;
     selectMarkup(m.id);
-    openTextEditor({ anchorStage: anchor, value: m.text || "", commit: (t) => updateMarkup(m.id, { text: (t || "").trim() }) });
+    openTextEditor({ anchorStage: anchor, value: m.text || "", multiline: m.type === "text", commit: (t) => updateMarkup(m.id, { text: (t || "").trim() }) });
   }
 
   function placeMarkup(p) {
     const tp = panelAt(p[0]);
     const norm = (q, panel) => [(q[0] - panel.xOffset) / panel.img.w, q[1] / panel.img.h];
-    if (tool === "text") {
+    if (tool === "arrow") {
+      if (!markupDraft) setMarkupDraft(p);
+      else {
+        const dp = panelAt(markupDraft[0]);
+        setMarkupDraft(null);
+        if (dp.key !== tp.key) { setCommitMsg("Draw an arrow on a single sheet."); return; }
+        if (Math.hypot(p[0] - markupDraft[0], p[1] - markupDraft[1]) < 4 / tfRef.current.scale) return;
+        addMarkup({ type: "arrow", from: norm(markupDraft, dp), to: norm(p, dp), color: arrowColor }, dp.key);
+      }
+    } else if (tool === "text") {
       // empty text is not committed (preserves the old `if (t && t.trim())` reject)
-      openTextEditor({ anchorStage: p, commit: (t) => { const tx = (t || "").trim(); if (tx) addMarkup({ type: "text", at: norm(p, tp), text: tx }, tp.key); } });
+      openTextEditor({ anchorStage: p, multiline: true, commit: (t) => { const tx = (t || "").trim(); if (tx) addMarkup({ type: "text", at: norm(p, tp), text: tx }, tp.key); } });
     } else if (tool === "cloud") {
       if (!markupDraft) { setMarkupDraft(p); }
       else {
@@ -4952,6 +4987,15 @@ export default function TakeoffCanvas() {
     </div>
   ) : null;
 
+  const arrowStyleControls = tool === "arrow" ? (
+    <div role="group" aria-label="Arrow color" className="tool-menu-popover" style={{ background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "0 6px 22px rgba(0,0,0,.16)", padding: "7px 8px", display: "flex", alignItems: "center", gap: 5 }}>
+      <span style={{ fontSize: 10, color: "var(--ink-muted)", marginRight: 2 }}>Arrow</span>
+      {ARROW_COLORS.map(({ name, value }) => <button key={value} type="button" aria-label={`${name} arrow color`} title={`${name}${arrowColor === value ? " — selected" : ""}`} aria-pressed={arrowColor === value}
+        onClick={() => setArrowColor(value)} style={{ width: 15, height: 15, minWidth: 15, padding: 0, borderRadius: "50%", background: value, border: arrowColor === value ? "2px solid var(--paper-bright)" : "1px solid #0006", boxShadow: arrowColor === value ? "0 0 0 2px var(--ink)" : "none", cursor: "pointer" }} />)}
+    </div>
+  ) : null;
+  const markupStyleControls = highlighterStyleControls || arrowStyleControls;
+
   // panel-toggle for the right-edge rail — square like the zoom cluster, count as a
   // tiny mono line under the icon. Lives on the canvas, costs the toolbar zero rows.
   const panelBtn = (onClick, iconName, label, isOn, count, extra = {}) => (
@@ -5520,9 +5564,9 @@ export default function TakeoffCanvas() {
                 active={MARKUP_IDS.includes(tool)}
                 onOpenChange={onMenuDepth}
                 face={<><Icon name="markup" size={15} /><span>Markup</span></>}
-                items={markupMenuItems}
+                items={[...markupMenuItems, ...(markupStyleControls ? [{ id: "markup-colors", custom: markupStyleControls }] : [])]}
               />
-              {highlighterStyleControls}
+              {markupStyleControls}
             </span>
             <ToolMenu
               title="Edit takeoffs"
@@ -5863,12 +5907,16 @@ export default function TakeoffCanvas() {
                            markup here may be off-screen or on another sheet (no click point).
                            Enter/blur commit, Esc cancels; INPUT is guarded from the global keys. */}
                        {panelEditId === m.id ? (
+                         m.type === "text" ? <textarea name="markup-text" autoComplete="off" autoFocus defaultValue={m.text || ""} rows={3}
+                           onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); updateMarkup(m.id, { text: e.currentTarget.value.trim() }); setPanelEditId(null); } else if (e.key === "Escape") { e.preventDefault(); e.currentTarget.value = m.text || ""; setPanelEditId(null); } }}
+                           onBlur={(e) => { updateMarkup(m.id, { text: e.currentTarget.value.trim() }); setPanelEditId(null); }}
+                           style={{ flex: 1, minWidth: 0, minHeight: 56, fontSize: 12.5, padding: "4px", border: "1px solid var(--cobalt)", borderRadius: 0, outline: "none", resize: "vertical" }} /> :
                          <input name="markup-text" autoComplete="off" autoFocus defaultValue={m.text || ""}
                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); updateMarkup(m.id, { text: e.currentTarget.value.trim() }); setPanelEditId(null); } else if (e.key === "Escape") { e.preventDefault(); e.currentTarget.value = m.text || ""; setPanelEditId(null); } }}
                            onBlur={(e) => { updateMarkup(m.id, { text: e.currentTarget.value.trim() }); setPanelEditId(null); }}
                            style={{ flex: 1, minWidth: 0, fontSize: 12.5, padding: "1px 4px", border: "1px solid var(--cobalt)", borderRadius: 0, outline: "none" }} />
                        ) : (
-                         <span style={{ flex: 1, color: "var(--ink)" }}>{m.type === "svg" ? <em style={{ color: "var(--ink-muted)" }}>(vector symbol)</em> : (m.text || <em style={{ color: "var(--ink-muted)" }}>(no text)</em>)}</span>
+                         <span style={{ flex: 1, color: "var(--ink)", whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{m.type === "svg" ? <em style={{ color: "var(--ink-muted)" }}>(vector symbol)</em> : (m.text || <em style={{ color: "var(--ink-muted)" }}>(no text)</em>)}</span>
                        )}
                        {m.type !== "svg" && <button onClick={() => setPanelEditId((id) => (id === m.id ? null : m.id))} title="Edit text" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-muted)" }}>✎</button>}
                        <button onClick={() => deleteMarkup(m.id)} title="Delete markup" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--c-danger)" }}>🗑</button>
@@ -5974,12 +6022,17 @@ export default function TakeoffCanvas() {
           </div>
           <div ref={aimChipRef} style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none", display: "none", zIndex: 6, padding: "2px 8px", background: "var(--paper-bright)", border: "1px solid var(--ink)", boxShadow: "var(--shadow-1)", fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", willChange: "transform" }} />
           {/* hover readout — what takeoff is under the cursor (DOM-direct) */}
-          <div ref={hoverRef} style={{ position: "absolute", display: "none", pointerEvents: "none", zIndex: 8, background: "var(--paper-bright)", border: "1px solid var(--ink)", boxShadow: "var(--shadow-1)", padding: "4px 8px", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--ink)", whiteSpace: "nowrap" }} />
+          <div ref={hoverRef} style={{ position: "absolute", display: "none", pointerEvents: "none", zIndex: 8, background: "var(--paper-bright)", border: "1px solid var(--ink)", boxShadow: "var(--shadow-1)", borderRadius: 4, padding: "8px 10px", fontFamily: "var(--f-mono)", fontSize: 11, lineHeight: 1.4, color: "var(--ink)", whiteSpace: "pre-line", overflowWrap: "anywhere", width: "max-content", maxWidth: "min(320px, calc(100% - 24px))" }} />
           {/* inline on-canvas text editor — a screen-space overlay pinned to its anchor
               (pan/zoom is frozen while open). Enter commits, Esc cancels, blur commits;
               all on the input's OWN handlers so the global keydown (which returns early
               for INPUT) never interferes. cursor:text overrides the stage's cursor:none. */}
           {editor && (
+            editor.multiline ? <textarea name="inline-editor" autoComplete="off" ref={editorInputRef} autoFocus defaultValue={editor.value} rows={4}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); finishEditor(true); } else if (e.key === "Escape") { e.preventDefault(); finishEditor(false); } }}
+              onBlur={() => finishEditor(true)}
+              placeholder="Type a note · Enter for a new line · Ctrl+Enter to place"
+              style={{ position: "absolute", left: editor.left, top: editor.top, zIndex: 9, width: 320, maxWidth: "calc(100% - 24px)", minHeight: 92, maxHeight: 220, padding: "7px 9px", font: "13px/1.4 var(--f-body, sans-serif)", color: "var(--ink)", background: "var(--paper-bright)", border: "1px solid var(--cobalt)", boxShadow: "0 2px 10px rgba(0,0,0,.18)", borderRadius: 3, cursor: "text", outline: "none", resize: "both", whiteSpace: "pre-wrap" }} /> :
             <input name="inline-editor" autoComplete="off" ref={editorInputRef} autoFocus defaultValue={editor.value}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); finishEditor(true); } else if (e.key === "Escape") { e.preventDefault(); finishEditor(false); } }}
               onBlur={() => finishEditor(true)}
@@ -6243,12 +6296,17 @@ export default function TakeoffCanvas() {
                         );
                       }
                       const [x, y] = m.at;
-                      const lw = ((m.text?.length || 1) * 7 + 10) / z;
+                      const lines = m.type === "text" ? wrapCanvasNoteText(m.text) : [m.text || ""];
+                      const maxLineLength = Math.max(...lines.map((line) => line.length), 1);
+                      const lw = (m.type === "text" ? Math.max(80, Math.min(320, maxLineLength * 7 + 18)) : maxLineLength * 7 + 10) / z;
+                      const lh = m.type === "text" ? Math.max(20, lines.length * 16 + 8) / z : 20 / z;
                       return (
                         <g key={m.id}>
-                          {halo(x * p.img.w - 5 / z, y * p.img.h - 16 / z, x * p.img.w + lw + 3 / z, y * p.img.h + 6 / z)}
-                          <rect x={x * p.img.w - 3 / z} y={y * p.img.h - 14 / z} width={lw} height={20 / z} fill="rgba(255,247,237,.92)" stroke={mk} strokeWidth={(1 * w) / z} strokeDasharray={dash} rx={3 / z} />
-                          <text x={x * p.img.w + 2 / z} y={y * p.img.h} fill="#0e1a2e" fontSize={12 / z} fontWeight="600">{m.text}</text>
+                          {halo(x * p.img.w - 5 / z, y * p.img.h - 16 / z, x * p.img.w + lw + 3 / z, y * p.img.h + lh - 10 / z)}
+                          <rect x={x * p.img.w - 3 / z} y={y * p.img.h - 14 / z} width={lw} height={lh} fill="rgba(255,247,237,.92)" stroke={mk} strokeWidth={(1 * w) / z} strokeDasharray={dash} rx={3 / z} />
+                          <text x={x * p.img.w + 2 / z} y={y * p.img.h} fill="#0e1a2e" fontSize={12 / z} fontWeight="600">
+                            {lines.map((line, index) => <tspan key={index} x={x * p.img.w + 2 / z} dy={index === 0 ? 0 : `${16 / z}px`}>{line || " "}</tspan>)}
+                          </text>
                           {badge(x * p.img.w, y * p.img.h - 22 / z)}
                         </g>
                       );
@@ -6359,6 +6417,8 @@ export default function TakeoffCanvas() {
               <rect ref={rectRef} fill={tool === "deduct" ? "rgba(176,58,38,.22)" : shapeFill(aCond)} stroke={tool === "deduct" ? "#b03a26" : "#1f3fc7"} strokeWidth={2 / tf.scale} style={{ display: "none" }} />
               <path ref={cloudRef} fill="rgba(37,99,235,.06)" stroke="#1f3fc7" strokeWidth={2 / tf.scale} strokeDasharray={`${5 / tf.scale} ${4 / tf.scale}`} style={{ display: "none" }} />
               <rect ref={highlightRef} fill="rgba(196,122,16,.18)" stroke="#c47a10" strokeWidth={2 / tf.scale} style={{ display: "none" }} />
+              <line ref={arrowLineRef} stroke={arrowColor} strokeWidth={2 / tf.scale} strokeLinecap="round" style={{ display: "none", pointerEvents: "none" }} />
+              <path ref={arrowHeadRef} fill={arrowColor} style={{ display: "none", pointerEvents: "none" }} />
               <path ref={hlPathRef} style={{ display: "none" }} />
               {poly.length >= 2 && (tool === "linear" || tool === "curve" || tool === "surface"
                 ? <polyline points={(tool === "curve" ? flattenCurve(poly) : poly).map((p) => p.join(",")).join(" ")} fill="none" stroke={tool === "surface" ? activeColor : "#1f3fc7"} strokeWidth={(tool === "surface" ? 3.5 : 2.5) / tf.scale} strokeDasharray={tool === "surface" ? `${10 / tf.scale} ${3 / tf.scale} ${2 / tf.scale} ${3 / tf.scale}` : undefined} strokeLinecap="round" strokeLinejoin="round" />
@@ -6442,7 +6502,7 @@ export default function TakeoffCanvas() {
               face={<Icon name="pencil" size={15} />}
               active={measureActive || tool === "deduct" || MARKUP_IDS.includes(tool)}
               onOpenChange={onMenuDepth}
-              items={[{ section: "Measure" }, ...measureMenuItems, { section: "Cut Out" }, ...cutMenuItems, { section: "Markup" }, ...markupMenuItems, ...(highlighterStyleControls ? [{ id: "highlighter-style", custom: highlighterStyleControls }] : [])]} />
+              items={[{ section: "Measure" }, ...measureMenuItems, { section: "Cut Out" }, ...cutMenuItems, { section: "Markup" }, ...markupMenuItems, ...(markupStyleControls ? [{ id: "markup-style", custom: markupStyleControls }] : [])]} />
             <ToolMenu rail title="Edit takeoffs" face={<Icon name="markup" size={15} />}
               onOpenChange={onMenuDepth} items={editMenuItems} />
             {/* Share the toolbar gate/commit; isolate Finish presses even while Space is held. */}

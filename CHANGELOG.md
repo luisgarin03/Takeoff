@@ -5,10 +5,14 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 ## Unreleased
 
 ### Added
+- Colored arrow markup in both whiteboard and plan drawing: drag over whiteboard references with the selected palette color, or click two points using **Draw > Markup > Arrow** on a sheet. Whiteboard arrows persist compatibly in the existing optional project data and are included in PDF exports.
+- Whiteboard arrows now layer above PDF/image cards. Whiteboard PDF exports include note titles, selected header colors and swatches, and the existing colored note body/text instead of exporting only the note-colored rectangle.
+- Per-item whiteboard header colors: choose a palette color from each file or note header. Note titles are editable inline; note-body colors remain independent. Header colors and titles persist in local, portable, and cloud project data; older projects retain their original appearance.
 - Project-aware Save and Drive organization: named `.otk` suggestions, one-click updates through retained browser file handles, explicit Save As, and stable-ID Google Drive folders named after the project with a portable archive plus on-demand `PDFs/` and `Assets/` subfolders. Cloud success now waits for every required upload.
 - Project metadata management in the existing Project menu: required name, optional submission date, Ongoing/Needs revision/Done status, ISO creation and persisted-modification timestamps, `.otk` and cloud round-tripping, and backward-compatible defaults for older projects.
 
 ### Changed
+- Condition-name fields now grow with longer names, and measurement hover cards wrap long condition titles/details into a compact box. Canvas Text notes support explicit and automatic line wrapping; Enter inserts a line break and Ctrl+Enter places the note.
 - Whiteboard PDF previews now support selectable 1×–3× render detail and an explicit refresh action. Rendered canvases are capped at 8 megapixels per page to balance clarity and browser memory.
 - Local Save handles are now scoped to the project that selected them. Creating or opening another project clears the old association, so its first **Save project** opens a new named destination instead of overwriting the previous project's `.otk` file.
 - Whiteboard zoom now reaches 400% using the zoom controls, mouse wheel, or pinch gesture.

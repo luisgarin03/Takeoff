@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
 import { unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
-import { emptyWhiteboard, bytesToBase64, base64ToBytes, validateWhiteboard, removeBoardItem, zoomBoard, fitBoard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
+import { emptyWhiteboard, bytesToBase64, base64ToBytes, validateWhiteboard, appendWhiteboardArrow, sanitizeWhiteboardArrows, removeBoardItem, setWhiteboardFileHeaderColor, setWhiteboardItemHeaderColor, sanitizeWhiteboardFileHeaderColors, WHITEBOARD_FILE_HEADER_COLORS, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, zoomBoard, fitBoard, fitWhiteboard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
 import { localStore, createFileProjectStore, importFileProject, ANN_SCHEMA } from "../src/lib/store.js";
 import { exportProjectFile, readProjectFile } from "../src/lib/projectFile.js";
 import { WHITEBOARD_PDF_PREVIEW_MAX_PIXELS, whiteboardPdfPreviewScale } from "../src/lib/whiteboardPdfPreview.js";
@@ -16,8 +16,8 @@ function board() {
     { id: "pdf", name: "Reference.pdf", type: "application/pdf", size: pdf.length, data: bytesToBase64(pdf) },
     { id: "img", name: "Site.png", type: "image/png", size: png.length, data: bytesToBase64(png) },
   ], items: [
-    { id: "note", kind: "note", text: "Verify door dimensions", color: "yellow", x: -125, y: 200, w: 300, h: 220 },
-    { id: "p", kind: "file", assetId: "pdf", page: 3, x: 300, y: -90, w: 440, h: 520 },
+    { id: "note", kind: "note", title: "Field note", text: "Verify door dimensions", color: "yellow", x: -125, y: 200, w: 300, h: 220, headerColor: "#0D9488" },
+    { id: "p", kind: "file", assetId: "pdf", page: 3, x: 300, y: -90, w: 440, h: 520, headerColor: "#C96442" },
     { id: "i", kind: "file", assetId: "img", page: 1, x: 800, y: 30, w: 300, h: 220 },
   ] };
 }
@@ -35,11 +35,40 @@ test("whiteboard files, notes, page selection and layout round-trip in portable 
   assert.deepEqual(files[manifest.annotations.whiteboard.assets[0].path], pdf);
   const project = await readProjectFile(saved);
   assert.deepEqual(project.annotations, payload());
+  assert.equal(project.annotations.whiteboard.items[0].title, "Field note");
+  assert.equal(project.annotations.whiteboard.items[0].headerColor, "#0D9488");
   assert.deepEqual(project.pdfs, []);
   const reopened = createFileProjectStore(await importFileProject(project));
   assert.deepEqual((await reopened.loadAnnotations()).whiteboard, board());
   assert.equal((await reopened.listSheets()).length, 0);
   assert.deepEqual((await readProjectFile(await exportProjectFile(reopened, await reopened.loadAnnotations()))).annotations, payload());
+  const reset = setWhiteboardFileHeaderColor(board(), "p", null);
+  const reopenedReset = await readProjectFile(await exportProjectFile(localStore, { ...payload(), whiteboard: reset }));
+  assert.equal(reopenedReset.annotations.whiteboard.items[1].headerColor, null, "reset-to-default is persisted in portable files");
+});
+
+test("note titles and independent header colors persist, can reset, and leave the note fill unchanged", async () => {
+  const original = board();
+  const colored = setWhiteboardItemHeaderColor(original, "note", "#9333EA");
+  const titled = { ...colored, items: colored.items.map((item: any) => item.id === "note" ? { ...item, title: "Dimensions" } : item) };
+  assert.equal(titled.items[0].headerColor, "#9333EA");
+  assert.equal(titled.items[0].title, "Dimensions");
+  assert.equal(titled.items[0].color, original.items[0].color, "changing its header keeps the sticky-note fill color");
+  assert.equal(titled.items[1].headerColor, original.items[1].headerColor, "changing one item does not affect another");
+  const reset = setWhiteboardItemHeaderColor(titled, "note", null);
+  assert.equal(reset.items[0].headerColor, null, "null restores the original note header appearance");
+  assert.equal(reset.items[1].headerColor, original.items[1].headerColor);
+
+  const saved = await exportProjectFile(localStore, { ...payload(), whiteboard: titled });
+  const reopened = await readProjectFile(saved);
+  assert.equal(reopened.annotations.whiteboard.items[0].title, "Dimensions");
+  assert.equal(reopened.annotations.whiteboard.items[0].headerColor, "#9333EA");
+  assert.equal(reopened.annotations.whiteboard.items[0].color, "yellow");
+
+  const invalid = { ...original, items: original.items.map((item) => item.id === "note" ? { ...item, title: {}, headerColor: "not-a-color" } : item) };
+  const safe = validateWhiteboard(invalid).items[0];
+  assert.equal(safe.title, "Note");
+  assert.equal(safe.headerColor, null);
 });
 
 test("revision-only attachments are retained and repeated files are deduplicated", async () => {
@@ -86,6 +115,72 @@ test("whiteboard validation rejects remote/active files, duplicate IDs and inval
     { ...board(), items: [{ ...board().items[1], page: 0 }] },
   ];
   for (const b of invalids) assert.throws(() => validateWhiteboard(b), /Invalid whiteboard/);
+});
+
+test("file header colors use the supplied palette, remain per-file, and reset to the original default", () => {
+  assert.deepEqual(WHITEBOARD_FILE_HEADER_COLORS.map(({ name, value }) => [name, value]), [
+    ["Terracotta", "#C96442"], ["Green", "#2F7D54"], ["Blue", "#2563EB"], ["Purple", "#9333EA"], ["Gold", "#B8860B"],
+    ["Teal", "#0D9488"], ["Magenta", "#BE185D"], ["Dark slate", "#1F2937"], ["Red", "#DC2626"], ["Cyan", "#0891B2"],
+  ]);
+  const original = board();
+  const changed = setWhiteboardFileHeaderColor(original, "p", "#2563EB");
+  assert.equal(changed.items[1].headerColor, "#2563EB");
+  assert.equal(changed.items[2], original.items[2]);
+  assert.equal(changed.items[0], original.items[0]);
+  assert.equal(Object.prototype.hasOwnProperty.call(changed.items[2], "headerColor"), false);
+  const reset = setWhiteboardFileHeaderColor(changed, "p", null);
+  assert.equal(reset.items[1].headerColor, null);
+  assert.equal(whiteboardFileHeaderColor(reset.items[1].headerColor), null);
+  assert.equal(setWhiteboardFileHeaderColor(reset, "i", "red"), reset, "unsupported UI values are ignored");
+  assert.equal(whiteboardFileHeaderColor("#c96442"), "#C96442", "supported hex input is canonicalized");
+  for (const { value } of WHITEBOARD_FILE_HEADER_COLORS) {
+    assert.equal(setWhiteboardFileHeaderColor(original, "p", value).items[1].headerColor, value, `${value} can be selected`);
+    const foreground = whiteboardFileHeaderTextColor(value);
+    if (foreground == null) throw new Error(`No readable foreground for ${value}`);
+    assert.ok(["#ffffff", "#111827"].includes(foreground));
+    const luminance = (hex: string) => {
+      const channel = (pair: string) => {
+        const value = parseInt(pair, 16) / 255;
+        return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+      };
+      return .2126 * channel(hex.slice(1, 3)) + .7152 * channel(hex.slice(3, 5)) + .0722 * channel(hex.slice(5, 7));
+    };
+    const contrast = (Math.max(luminance(foreground), luminance(value)) + .05) / (Math.min(luminance(foreground), luminance(value)) + .05);
+    assert.ok(contrast >= 4.5, `${value} has readable text contrast ${contrast}`);
+  }
+});
+
+test("legacy or invalid header colors safely normalize to the unchanged default style", () => {
+  const legacy = board();
+  delete legacy.items[1].headerColor;
+  delete legacy.items[0].headerColor;
+  delete legacy.items[0].title;
+  assert.equal(Object.prototype.hasOwnProperty.call(validateWhiteboard(legacy).items[1], "headerColor"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(validateWhiteboard(legacy).items[0], "headerColor"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(validateWhiteboard(legacy).items[0], "title"), false);
+  const invalid = board();
+  invalid.items[1].headerColor = "url(javascript:alert(1))";
+  const safe = validateWhiteboard(invalid);
+  assert.equal(safe.items[1].headerColor, null);
+  assert.equal(invalid.items[1].headerColor, "url(javascript:alert(1))", "normalization does not mutate the source");
+  assert.equal(sanitizeWhiteboardFileHeaderColors({ items: [{ id: "new", kind: "file" }] }).items[0].headerColor, undefined);
+});
+
+test("whiteboard arrows persist with supported colors and legacy boards without arrows remain valid", () => {
+  const legacy = emptyWhiteboard();
+  delete (legacy as any).arrows;
+  assert.equal(validateWhiteboard(legacy).arrows, undefined, "older board data does not need an arrows field");
+  const arrow = appendWhiteboardArrow(legacy, [10, 20], [180, 75], "#2563EB");
+  assert.equal(arrow.arrows.length, 1);
+  assert.deepEqual(arrow.arrows[0].from, [10, 20]);
+  assert.equal(arrow.arrows[0].color, "#2563EB");
+  assert.equal(validateWhiteboard(arrow).arrows[0].color, "#2563EB");
+  assert.notDeepEqual(fitWhiteboard(arrow, 800, 600), { x: 0, y: 0, scale: 1 }, "Fit includes board-level arrows even when the board has no cards");
+  assert.equal(appendWhiteboardArrow(legacy, [1, 1], [1, 1]), legacy, "zero-length arrows are ignored");
+  const malformed = sanitizeWhiteboardArrows({ ...arrow, arrows: [{ from: [0, 0], to: [1, 1], color: "red" }, { from: [NaN, 0], to: [1, 1] }] });
+  assert.equal(malformed.arrows.length, 1, "bad coordinates are discarded");
+  assert.equal(malformed.arrows[0].color, "#1f3fc7", "invalid colors safely use the legacy ink color");
+  assert.deepEqual(sanitizeWhiteboardArrows({ ...legacy, arrows: {} }).arrows, [], "a malformed optional field normalizes safely");
 });
 
 test("removal prunes only unused attachments and never mutates the undo snapshot", () => {

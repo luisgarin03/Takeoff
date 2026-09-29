@@ -1,5 +1,5 @@
 import { BOARD_EXPORT_SCALE, checkBoardRaster } from "./whiteboardPdf.js";
-import { NOTE_COLORS } from "./whiteboard.js";
+import { NOTE_COLORS, WHITEBOARD_FILE_HEADER_COLORS, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor } from "./whiteboard.js";
 
 function canvasFor(width, height) {
   const size = checkBoardRaster(width, height), canvas = document.createElement("canvas");
@@ -41,27 +41,49 @@ export async function renderBoardNote(item, rect, signal) {
   const canvas = canvasFor(rect.w * BOARD_EXPORT_SCALE, rect.h * BOARD_EXPORT_SCALE);
   const mirror = document.createElement("div");
   try {
-    // Let the browser do the same pre-wrap layout as the textarea at 100%.
+    // Let the browser do the same note body/title font layout as the board.
     // This isolated mirror has no camera, selection, scroll or device-DPR state.
     mirror.setAttribute("aria-hidden", "true");
-    Object.assign(mirror.style, { position: "fixed", left: "0", top: "0", visibility: "hidden", pointerEvents: "none",
-      boxSizing: "border-box", width: `${rect.w}px`, padding: "14px 20px 20px 14px", margin: "0", border: "0",
+    Object.assign(mirror.style, { position: "fixed", left: "1px", top: "39px", visibility: "hidden", pointerEvents: "none",
+      boxSizing: "border-box", width: `${rect.w - 2}px`, padding: "14px 20px 20px 14px", margin: "0", border: "0",
       font, lineHeight: "24px", letterSpacing: "0", whiteSpace: "pre-wrap", overflowWrap: "break-word", tabSize: "8", direction: "ltr" });
     mirror.textContent = item.text.replace(/\r\n?/g, "\n");
     document.body.appendChild(mirror);
-    if (mirror.getBoundingClientRect().height > rect.h + .1) {
+    if (mirror.getBoundingClientRect().height > rect.h - 40 + .1) {
       throw new Error("Text extends beyond this note. Enlarge the note before exporting so all its text fits.");
     }
     const ctx = canvas.getContext("2d");
     ctx.scale(canvas.width / rect.w, canvas.height / rect.h);
+    const headerColor = whiteboardFileHeaderColor(item.headerColor) || "#242424";
+    const titleColor = whiteboardFileHeaderTextColor(item.headerColor) || "#ffffff";
     ctx.fillStyle = NOTE_COLORS[item.color];
-    ctx.beginPath(); ctx.roundRect(0, 0, rect.w, rect.h, [0, 0, 3, 3]); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(0, 0, rect.w, rect.h, 4); ctx.fill();
+    ctx.fillStyle = headerColor; ctx.fillRect(1, 1, rect.w - 2, 38);
+    // The live card includes the inline palette after the editable title.
+    // Draw the same swatches and selected ring so colors stay legible in PDF.
+    const selectedHeaderColor = whiteboardFileHeaderColor(item.headerColor);
+    const swatchStep = 8, swatchesWidth = WHITEBOARD_FILE_HEADER_COLORS.length * 7 + (WHITEBOARD_FILE_HEADER_COLORS.length - 1);
+    const swatchesLeft = rect.w - 8 - swatchesWidth;
+    for (let index = 0; index < WHITEBOARD_FILE_HEADER_COLORS.length; index++) {
+      const color = WHITEBOARD_FILE_HEADER_COLORS[index].value, x = swatchesLeft + index * swatchStep;
+      if (color === selectedHeaderColor) {
+        ctx.beginPath(); ctx.arc(x + 3.5, 20, 4.5, 0, Math.PI * 2); ctx.fillStyle = titleColor; ctx.fill();
+      }
+      ctx.beginPath(); ctx.arc(x + 3.5, 20, 3.5, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+      ctx.lineWidth = color === selectedHeaderColor ? 1 : .6; ctx.strokeStyle = color === selectedHeaderColor ? headerColor : "#0006"; ctx.stroke();
+    }
+    ctx.save(); ctx.beginPath(); ctx.rect(34, 3, Math.max(0, swatchesLeft - 40), 32); ctx.clip();
+    ctx.font = `600 13px ${family}`; ctx.fillStyle = titleColor; ctx.textBaseline = "middle";
+    ctx.fillText(typeof item.title === "string" ? item.title : "Note", 34, 20);
+    ctx.restore();
+    ctx.strokeStyle = "#8f8f8f"; ctx.lineWidth = 1; ctx.strokeRect(.5, .5, rect.w - 1, rect.h - 1);
+    ctx.strokeStyle = "#0000001c"; ctx.beginPath(); ctx.moveTo(1, 38.5); ctx.lineTo(rect.w - 1, 38.5); ctx.stroke();
     ctx.font = font; ctx.fillStyle = "#202520"; ctx.textBaseline = "alphabetic"; ctx.direction = "ltr";
     const ascent = ctx.measureText("Mg").fontBoundingBoxAscent;
     const origin = mirror.getBoundingClientRect(), text = mirror.firstChild;
     const range = document.createRange();
     let offset = 0, line = "", left = 0, top = 0;
-    const flush = () => { if (line) ctx.fillText(line, left - origin.left, top - origin.top + ascent); line = ""; };
+    const flush = () => { if (line) ctx.fillText(line, left - origin.left + 1, top - origin.top + 39 + ascent); line = ""; };
     // Range bounds preserve the browser's word/Unicode line breaking; drawing
     // whole runs also keeps ligatures, kerning and bidirectional shaping intact.
     for (const char of mirror.textContent) {

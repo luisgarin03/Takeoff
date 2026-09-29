@@ -67,10 +67,18 @@ export const MARKUP_TOOLS = [
   { id: "highlighter", icon: "highlighter", label: "Highlighter", shortcut: "H" },
   { id: "cloud", icon: "cloud", label: "Revision cloud" },
   { id: "callout", icon: "callout", label: "Callout" },
+  { id: "arrow", icon: "arrow", label: "Arrow" },
   { id: "text", icon: "textNote", label: "Text note" },
   { id: "highlight", icon: "highlight", label: "Highlight box" },
 ];
 export const MARKUP_IDS = MARKUP_TOOLS.map((t) => t.id);
+export const ARROW_COLORS = [
+  { name: "Terracotta", value: "#C96442" }, { name: "Green", value: "#2F7D54" },
+  { name: "Blue", value: "#2563EB" }, { name: "Purple", value: "#9333EA" },
+  { name: "Gold", value: "#B8860B" }, { name: "Teal", value: "#0D9488" },
+  { name: "Magenta", value: "#BE185D" }, { name: "Dark slate", value: "#1F2937" },
+  { name: "Red", value: "#DC2626" }, { name: "Cyan", value: "#0891B2" },
+];
 // highlighter inks — literal hex (SVG attrs; CSS vars don't resolve there).
 // The freehand TOOL is "highlighter" (the two-corner "highlight" box above is
 // its own tool); its strokes persist as type:"highlight" + pts, the same

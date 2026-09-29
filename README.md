@@ -20,15 +20,17 @@ Portable projects: **Project > Save project** asks for a filename and opens a Sa
 
 **PDF text search:** click **Find** in the sheet toolbar or press `Ctrl+F` (`⌘F` on Mac), type a word, and press Enter. Search scans the active PDF, jumps to each matching page, highlights results, and wraps with the previous/next controls.
 
-**Whiteboard:** arrange reference PDFs, images, and editable notes in a separate pan/zoom workspace with zoom up to 400%. Paste clipboard text, images, or supported files directly onto the board. Original attachments, PDF page choices, and the board layout autosave with the project and travel inside its `.otk` file.
+**Whiteboard:** arrange reference PDFs, images, and editable notes in a separate pan/zoom workspace with zoom up to 400%. Paste clipboard text, images, or supported files directly onto the board. Ten inline swatches label each file or note header independently; click its selected swatch again to restore the original header. Edit note titles inline, and keep note-body colors separate. These changes autosave with the board and travel inside `.otk` and cloud project files.
 
-**Whiteboard PDF:** use **Export PDF** in the whiteboard header for one custom-sized page tightly fitted to all note and attachment content, including offscreen items. Export keeps the board layout and original PDF vectors where possible, without the editor grid or controls.
+Draw colored arrows over whiteboard references by choosing **Draw arrow**, selecting one of the ten palette colors, and dragging across the board. The bottom-left **Draw > Markup > Arrow** tool adds colored, editable arrows to plan sheets. Both arrow types save in the existing project data; older `.otk` files still open without a migration or version bump.
+
+**Whiteboard PDF:** use **Export PDF** in the whiteboard header for one custom-sized page tightly fitted to note cards and attachment content, including offscreen items. Note titles, header colors, swatches, note-body colors, and text are included; arrows stay above references. Export keeps the board layout and original PDF vectors where possible, without the editor grid or selection controls.
 
 Whiteboard PDF attachments have a **PDF detail** slider and **Refresh** action for sharper previews on demand; high-resolution renders are bounded to protect browser memory.
 
 Measure construction plans with existing canvas tools, snapping, and reports. The optional **Trackpad** control adds relative touch or mouse aiming and tap-to-place without covering the target with your finger. At overview zoom, each finished sheet also has a local preview raster; its Diagnostics control is adjustable from 10–100% of the base raster (50% default), while the full-resolution sheet remains available for normal and detailed viewing.
 
-The responsive drawers provide larger workspaces, adapt to phones and tablets, and share wider condition-name inputs with the toolbar. Startup uses the attributed Uiverse rain background and Blueprint app icon.
+The responsive drawers provide larger workspaces, adapt to phones and tablets, and share expanding condition-name inputs with the toolbar. Long measurement hover details wrap into a bounded card. Canvas Text notes accept line breaks and wrap into annotation boxes (Enter for a new line; Ctrl+Enter to place). Startup uses the attributed Uiverse rain background and Blueprint app icon.
 
 ## What's in the box
 

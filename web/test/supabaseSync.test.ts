@@ -20,7 +20,10 @@ function payload(): any {
     sheets: [{ sheet_id: "Plan.pdf#2", units_per_px: .03125, scale_source: "calibrated" }],
     sheet_tabs: ["Plan.pdf#2"], sheet_bookmarks: ["Plan.pdf#2"], client_info: { name: "Client" },
     whiteboard: { version: 1, assets: [{ id: "a1", name: "Note.pdf", type: "application/pdf", size: pdf.length, data: bytesToBase64(pdf) }],
-      items: [{ id: "i1", kind: "file", assetId: "a1", page: 1, x: 10, y: 20, w: 300, h: 400 }] } };
+      items: [
+        { id: "i1", kind: "file", assetId: "a1", page: 1, x: 10, y: 20, w: 300, h: 400, headerColor: "#2F7D54" },
+        { id: "n1", kind: "note", title: "Field note", text: "Verify dimensions", color: "yellow", x: 400, y: 20, w: 280, h: 220, headerColor: "#9333EA" },
+      ] } };
 }
 async function fixture() {
   await localStore.addPdf(new File([pdf], "Plan.pdf", { type: "application/pdf" }));
@@ -72,6 +75,19 @@ test("cloud round-trip preserves takeoff math, original bytes, bookmarks, whiteb
   assert.deepEqual(portable.pdfs[0].bytes, pdf);
   const opened = createFileProjectStore(await importFileProject(restored));
   assert.deepEqual(await opened.loadAnnotations(), payload());
+  const reset = payload(); reset.whiteboard.items[0].headerColor = null;
+  const resetCloud = await captureCloudProject(localStore, reset);
+  const reopenedReset = await restoreCloudProject(resetCloud.state, async (ref: { sha256: string }) => resetCloud.files.get(ref.sha256).bytes);
+  assert.equal(reopenedReset.annotations.whiteboard.items[0].headerColor, null, "reset-to-default is preserved by cloud save/restore");
+});
+
+test("cloud restore keeps default headers for unsupported saved colors without mutating the cloud state", async () => {
+  await fixture(); const captured = await captureCloudProject(localStore, payload());
+  captured.state.annotations.whiteboard.items[0].headerColor = "url(javascript:alert(1))";
+  const restored = await restoreCloudProject(captured.state, async (ref: { sha256: string }) => captured.files.get(ref.sha256).bytes);
+  assert.equal(restored.annotations.whiteboard.items[0].headerColor, null);
+  assert.equal(captured.state.annotations.whiteboard.items[0].headerColor, "url(javascript:alert(1))");
+  assert.equal(captured.state.annotations.whiteboard.assets[0].sha256.length, 64, "validation preserves cloud asset references");
 });
 
 test("repeated saves update one project, persist locally first, skip uploaded bytes and cache downloads", async () => {

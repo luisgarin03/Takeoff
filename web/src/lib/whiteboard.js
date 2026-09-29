@@ -2,7 +2,95 @@ export const WHITEBOARD_FILE_LIMIT = 25 * 1024 * 1024;
 export const WHITEBOARD_TOTAL_LIMIT = 75 * 1024 * 1024;
 export const WHITEBOARD_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp"];
 export const NOTE_COLORS = { yellow: "#fff0af", green: "#d8efdf", blue: "#dce9ff" };
-export const emptyWhiteboard = () => ({ version: 1, items: [], assets: [] });
+export const WHITEBOARD_FILE_HEADER_COLORS = [
+  { name: "Terracotta", value: "#C96442" },
+  { name: "Green", value: "#2F7D54" },
+  { name: "Blue", value: "#2563EB" },
+  { name: "Purple", value: "#9333EA" },
+  { name: "Gold", value: "#B8860B" },
+  { name: "Teal", value: "#0D9488" },
+  { name: "Magenta", value: "#BE185D" },
+  { name: "Dark slate", value: "#1F2937" },
+  { name: "Red", value: "#DC2626" },
+  { name: "Cyan", value: "#0891B2" },
+];
+export const emptyWhiteboard = () => ({ version: 1, items: [], assets: [], arrows: [] });
+
+export function sanitizeWhiteboardArrows(board) {
+  if (!board || !Object.hasOwn(board, "arrows")) return board;
+  if (!Array.isArray(board.arrows)) return { ...board, arrows: [] };
+  const colors = new Set(WHITEBOARD_FILE_HEADER_COLORS.map(({ value }) => value.toLowerCase()));
+  const arrows = board.arrows.filter((arrow) => arrow &&
+    Array.isArray(arrow.from) && arrow.from.length === 2 && arrow.from.every(Number.isFinite) &&
+    Array.isArray(arrow.to) && arrow.to.length === 2 && arrow.to.every(Number.isFinite) &&
+    Math.hypot(arrow.to[0] - arrow.from[0], arrow.to[1] - arrow.from[1]) > 0.01
+  ).map((arrow) => ({ ...arrow, color: typeof arrow.color === "string" && colors.has(arrow.color.toLowerCase())
+    ? WHITEBOARD_FILE_HEADER_COLORS.find(({ value }) => value.toLowerCase() === arrow.color.toLowerCase()).value
+    : "#1f3fc7" }));
+  if (arrows.length === board.arrows.length && arrows.every((arrow, index) => arrow === board.arrows[index])) return board;
+  return { ...board, arrows };
+}
+
+export function appendWhiteboardArrow(board, from, to, color = "#1f3fc7") {
+  if (!Array.isArray(from) || from.length !== 2 || !Array.isArray(to) || to.length !== 2 || [...from, ...to].some((value) => !Number.isFinite(value)) ||
+    Math.hypot(to[0] - from[0], to[1] - from[1]) < 1) return board;
+  const supported = WHITEBOARD_FILE_HEADER_COLORS.find(({ value }) => value.toLowerCase() === String(color).toLowerCase())?.value || "#1f3fc7";
+  return { ...board, arrows: [...(Array.isArray(board.arrows) ? board.arrows : []), { id: crypto.randomUUID(), from: [...from], to: [...to], color: supported }] };
+}
+
+export function whiteboardFileHeaderColor(value) {
+  if (typeof value !== "string") return null;
+  return WHITEBOARD_FILE_HEADER_COLORS.find((color) => color.value.toLowerCase() === value.toLowerCase())?.value || null;
+}
+
+export function whiteboardFileHeaderTextColor(background) {
+  const color = whiteboardFileHeaderColor(background);
+  if (!color) return null;
+  const channel = (hex) => {
+    const value = parseInt(hex, 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = .2126 * channel(color.slice(1, 3)) + .7152 * channel(color.slice(3, 5)) + .0722 * channel(color.slice(5, 7));
+  const blackContrast = (luminance + .05) / .05;
+  const whiteContrast = 1.05 / (luminance + .05);
+  return whiteContrast >= blackContrast ? "#ffffff" : "#111827";
+}
+
+export function setWhiteboardFileHeaderColor(board, id, value) {
+  return setWhiteboardItemHeaderColor(board, id, value);
+}
+
+export function setWhiteboardItemHeaderColor(board, id, value) {
+  const color = value == null ? null : whiteboardFileHeaderColor(value);
+  if (value != null && !color) return board;
+  let changed = false;
+  const items = board.items.map((item) => {
+    if (item.id !== id || item.headerColor === color) return item;
+    changed = true;
+    return { ...item, headerColor: color };
+  });
+  return changed ? { ...board, items } : board;
+}
+
+export function sanitizeWhiteboardFileHeaderColors(board) {
+  if (!board || !Array.isArray(board.items)) return board;
+  let changed = false;
+  const items = board.items.map((item) => {
+    if (!item) return item;
+    let next = item;
+    if (item.headerColor != null) {
+      const color = whiteboardFileHeaderColor(item.headerColor);
+      if (color !== item.headerColor) next = { ...next, headerColor: color };
+    }
+    if (item.kind === "note" && Object.hasOwn(item, "title") &&
+      (typeof item.title !== "string" || item.title.length > 120)) {
+      next = { ...next, title: typeof item.title === "string" ? item.title.slice(0, 120) : "Note" };
+    }
+    if (next !== item) changed = true;
+    return next;
+  });
+  return changed ? { ...board, items } : board;
+}
 
 export function whiteboardFileType(file) {
   if (WHITEBOARD_TYPES.includes(file.type)) return file.type;
@@ -71,7 +159,7 @@ export function validateWhiteboard(board) {
       if (typeof item.text !== "string" || item.text.length > 100000 || !Object.hasOwn(NOTE_COLORS, item.color)) invalid();
     } else if (!assets.has(item.assetId) || !Number.isInteger(item.page) || item.page < 1 || item.page > 100000) invalid();
   }
-  return board;
+  return sanitizeWhiteboardArrows(sanitizeWhiteboardFileHeaderColors(board));
 }
 
 export function removeBoardItem(board, id) {
@@ -93,4 +181,12 @@ export function fitBoard(items, width, height) {
   const h = Math.max(...items.map((item) => item.y + item.h)) - y;
   const scale = Math.max(.15, Math.min(1, (width - 64) / w, (height - 64) / h));
   return { scale, x: (width - w * scale) / 2 - x * scale, y: (height - h * scale) / 2 - y * scale };
+}
+
+export function fitWhiteboard(board, width, height) {
+  const arrows = Array.isArray(board?.arrows) ? board.arrows.map(({ from, to }) => ({
+    x: Math.min(from[0], to[0]), y: Math.min(from[1], to[1]),
+    w: Math.max(1, Math.abs(to[0] - from[0])), h: Math.max(1, Math.abs(to[1] - from[1])),
+  })) : [];
+  return fitBoard([...(board?.items || []), ...arrows], width, height);
 }

@@ -166,6 +166,8 @@ A **condition** is one finish or scope item — `perimeterWall`, `tile`, `ceilin
 - **H** (height, ft) — the default for **new** wall traces (Surface Area SF = LF × H) and the vertical-SF display. Existing walls keep the height they were drawn at — select a wall to change just that one (§5).
 - **T** (thickness, in) — a Linear run with thickness also computes border/feature-strip SF = LF × T⁄12. Changing it re-flows existing runs.
 
+The finish-tag field in both the top toolbar and Takeoffs panel expands for longer names. Hovering a takeoff shows its condition and measurement in a wrapped card that stays inside the canvas. The **Text note** tool opens a multiline box: Enter (or Alt+Enter) inserts a line, and Ctrl+Enter places the note. Long note text wraps in its annotation box on the sheet.
+
 **Delete** (the row's ✕) asks first when the condition owns shapes — *"Delete 〈TAG〉 and its N takeoff(s)? This can't be undone."* — and means it: the cascade is deliberately outside the undo stack (§8).
 
 There's no per-condition duplicate; the Library fills that role — read on.
@@ -377,11 +379,12 @@ The markup layer is communication, never quantity: clouds, callouts, notes, high
 
 ### The markup tools
 
-The **Markup** section of the bottom-left Draw menu holds five tools:
+The **Markup** section of the bottom-left Draw menu holds six tools:
 
 - **Highlighter** (`H`) — freehand marker ink. Press and **drag to paint**, stroke after stroke, no dialog between them. While it's armed, a style popover hangs under the menu: five inks (yellow default), **F / M / B** tip sizes, and a **chisel or round** nib — remembered per browser. Because press-drag paints, press-drag panning is off while the highlighter is armed; pan with `Space`-drag, middle-drag, or right-drag. Strokes stick to their sheet, scale like real ink, and are real objects: with Select, click one (it glows), drag to move it, `⌫` deletes it.
 - **Revision cloud** — two corner clicks; the cloud lands immediately, then an optional note editor opens (`Esc` keeps the cloud, skips the note). Clouds can carry a **Rev △** revision number from the panel.
 - **Callout** — first click is the *target* (the thing you're pointing at), second is the label spot, then type the text.
+- **Arrow** — click the start and end points to place a directed arrow. Its adjacent color strip offers the ten palette colors; the Markups panel can also change its color after placement.
 - **Text note** — one click, type in place. Empty text doesn't commit.
 - **Highlight box** — two corners, done.
 
@@ -492,11 +495,15 @@ Choose **Project > Download this page** to download a one-page PDF of the comple
 
 Open **Whiteboard** from the top toolbar or the Plan Set header. Drop PDFs or PNG/JPEG/WebP/GIF/BMP images onto the board, or use **Add files**. Each PDF stays in one card with page navigation; the original file can be downloaded from its card. Reference attachments never become plan sheets and do not affect takeoff measurements.
 
+Use one of the ten color swatches at the right end of a file or note's top header to choose an independent header color. Selecting another swatch moves the selected state to that color; click the selected swatch again to restore the original header appearance. For notes, edit the title directly in the header; the existing note-body color controls remain separate. The PDF/image page, frame edges, and page-navigation bar are not recolored. Titles and header colors autosave and are included in `.otk` and cloud saves; older projects keep the original default appearance.
+
+Choose **Draw arrow** in the whiteboard tool row, select a color, then drag across a PDF or image reference to add a directed arrow. Arrows sit over the reference content and are included in whiteboard PDF export. The separate **Draw > Markup > Arrow** tool places arrows on plan sheets by clicking a start and end point; both workflows retain the selected color in project data.
+
 Use **Note** for editable text notes. Drag an item's header to move it, or its lower-right handle to resize it. Select a note to change its color. Pan by dragging empty board space or selecting the pan tool; use the mouse wheel, zoom buttons, or a two-finger pinch to zoom from 15% up to 400%. **Fit whiteboard** brings the items into view. Delete applies to the selected item; Undo/Redo retains the last 20 edits while the board is open.
 
-**Export PDF** in the whiteboard header downloads the current board as exactly one custom-sized PDF page. It includes every note body and each file card's currently selected PDF page or image, even offscreen; it excludes drag headers, pagination, selection handles, card shadows and the background grid. The union of the content bounds determines the page size, with no added margin. Negative positions and gaps between items are preserved. Export uses the canonical 100% card layout (one board unit is 0.75 PDF points), independent of zoom, pan, selection, screen size or device pixel ratio. It does not alter the board, save data or undo history.
+**Export PDF** in the whiteboard header downloads the current board as exactly one custom-sized PDF page. It includes each complete note card (title, selected header color and palette swatches, body color and text) plus each file card's currently selected PDF page or image, even offscreen. Arrows are drawn above cards. File drag headers, pagination, selection handles, card shadows and the background grid remain excluded. The union of the note-card and attachment-content bounds determines the page size, with no added margin. Negative positions and gaps between items are preserved. Export uses the canonical 100% card layout (one board unit is 0.75 PDF points), independent of zoom, pan, selection, screen size or device pixel ratio. It does not alter the board, save data or undo history.
 
-Original PDF pages remain vector-based where possible. Pages needing annotation/transparency flattening and colored text notes use a 3x raster (288 dpi at export size); notes keep browser font layout and Unicode. Original PNG/JPEG assets are retained where possible; other image formats and oriented JPEGs are decoded at original resolution. Animated images export their first frame. No content is uploaded. Empty boards report **Nothing to export**. A note with overflowing text must be enlarged before export, so no text is silently lost. Missing/damaged assets or unsupported future object types stop the export with an error.
+Original PDF pages remain vector-based where possible. Pages needing annotation/transparency flattening and complete note cards use a 3x raster (288 dpi at export size); note titles and body text keep browser font layout and Unicode. Original PNG/JPEG assets are retained where possible; other image formats and oriented JPEGs are decoded at original resolution. Animated images export their first frame. No content is uploaded. Empty boards report **Nothing to export**. A note with overflowing text must be enlarged before export, so no text is silently lost. Missing/damaged assets or unsupported future object types stop the export with an error.
 
 The PDF is limited to 19,200 board units (200 inches) per side. A raster must fit within 8,192 pixels per side and 16 megapixels; the combined raster budget is 64 megapixels. If a limit is exceeded, move items closer together or reduce the affected note/image size. The exporter never silently scales the board, splits it into pages or crops it to fit. Shape/group/freehand tools are not part of the current whiteboard model; takeoff drawings remain a separate workspace.
 

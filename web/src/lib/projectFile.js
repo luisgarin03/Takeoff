@@ -49,9 +49,9 @@ export async function exportProjectFile(source, payload) {
   let total = 0;
   async function packWhiteboard(payload) {
     if (payload.whiteboard === undefined) return payload;
-    validateWhiteboard(payload.whiteboard);
+    const board = validateWhiteboard(payload.whiteboard);
     const assets = [];
-    for (const asset of payload.whiteboard.assets) {
+    for (const asset of board.assets) {
       if (asset.missing) fail(`Whiteboard file is Local Only or unavailable: ${asset.name}. Restore it before exporting.`);
       const bytes = base64ToBytes(asset.data);
       const sha256 = await digest(bytes);
@@ -66,7 +66,7 @@ export async function exportProjectFile(source, payload) {
       const { data: _data, ...meta } = asset;
       assets.push({ ...meta, path });
     }
-    return { ...payload, whiteboard: { ...payload.whiteboard, assets } };
+    return { ...payload, whiteboard: { ...board, assets } };
   }
   for (const { name } of await source.listSheets()) {
     const bytes = await source.loadPdfData(name);
@@ -154,7 +154,7 @@ export async function readProjectFile(bytes) {
       referenced.add(path);
       return { ...meta, data: attachments.get(path) };
     });
-    validateWhiteboard(board);
+    payload.whiteboard = validateWhiteboard(board);
   }
   unpackWhiteboard(manifest.annotations);
   const ids = new Set();

@@ -1,6 +1,6 @@
 import { ANN_SCHEMA } from "../store.js";
 import { validateAnnotations, digest, exportProjectFile, projectFilename } from "../projectFile.js";
-import { base64ToBytes, bytesToBase64, validateWhiteboard } from "../whiteboard.js";
+import { base64ToBytes, bytesToBase64, sanitizeWhiteboardFileHeaderColors, validateWhiteboard } from "../whiteboard.js";
 import { CloudError } from "./errors.js";
 
 export const CLOUD_SCHEMA = "opentakeoff.cloud.v1";
@@ -36,7 +36,7 @@ export async function captureCloudProject(source, payload, previousPlans = [], p
     const a = structuredClone({ ...input, schema: ANN_SCHEMA, units: input.units || "imperial" });
     validateAnnotations(a);
     if (a.whiteboard) {
-      validateWhiteboard(a.whiteboard);
+      a.whiteboard = validateWhiteboard(a.whiteboard);
       for (const asset of a.whiteboard.assets) {
         const info = asset.missing ? { sha256: asset.remote_sha256 } : await file(asset.name, asset.type, base64ToBytes(asset.data));
         delete asset.data; delete asset.missing; delete asset.remote_sha256;
@@ -122,6 +122,7 @@ export async function restoreCloudProject(state, getBytes) {
       delete asset.sha256;
       Object.assign(asset, data ? { data: bytesToBase64(data) } : { data: "", missing: true, remote_sha256: hash });
     }
+    if (a.whiteboard) a.whiteboard = sanitizeWhiteboardFileHeaderColors(a.whiteboard);
     return a;
   };
   const pdfs = [];
