@@ -74,7 +74,7 @@ In the gallery, select sheets and hit **Assign level…** (`"L1"`, `"Level 2"`, 
 
 ### Find text in a PDF
 
-Click **Find** in the top sheet toolbar (or press `Ctrl+F`, `⌘F` on Mac), type a word, and press Enter. OpenTakeoff searches text in every page of the active PDF, jumps to and highlights the first match, and shows the current result number. Use the up/down buttons to move through matches; navigation wraps at either end. PDFs made only from scanned images have no searchable text.
+Click **Find** in the top sheet toolbar (or press `Ctrl+F`, `⌘F` on Mac) to open the movable cross-plan search panel at the top-right, above the plans. The surrounding view stays undimmed. It starts with common scope terms such as fence, fencing, gate, enclosure, dumpster, trash, board-on-board, privacy, chain-link, ornamental, bollard, backstop, and netting. Click a suggestion to include/exclude it in the current search, use its × button to remove it from the suggestion list, or add your own suggestions. These suggestion changes are kept in this browser. You can also enter comma-separated words and phrases directly, then choose **Find all**. OpenTakeoff scans selectable text on every page of every loaded plan and highlights the matches; use the up/down buttons (or Enter) to move between matches across plans. **Mark all matches** toggles the on-screen highlights. Drag the title bar to move the panel; close it with Escape, the × button, or by clicking outside. The temporary search highlights are not saved into the PDF/project. Scanned-image PDFs need OCR before their text can be found.
 
 ### Pan & zoom
 
@@ -489,7 +489,7 @@ Email verification and password recovery use an emailed code, entered in the sam
 
 ### Download the current plan page
 
-Choose **Project > Download this page** to download a one-page PDF of the complete current sheet with all committed takeoff marks and markups, even if the markup layer is hidden. Finish any trace or annotation in progress first. In side-by-side view, click the desired sheet first. Zoom/pan and toolbar visibility do not affect the export. The original page dimensions and rotation are retained in normal plan view; an inverted plan exports in its current dark appearance. No report cover, RFI schedule or extra sheet stamp is added. This is a shareable PDF, not an editable `.otk` project backup.
+Choose **Project > Download this page** to download a one-page PDF of the complete current sheet with all committed takeoff marks and markups, even if the markup layer is hidden. Linear measurement chips are positioned close to their measured line while keeping a clear gap so they do not cover it. Finish any trace or annotation in progress first. In side-by-side view, click the desired sheet first. Zoom/pan and toolbar visibility do not affect the export. The original page dimensions and rotation are retained in normal plan view; an inverted plan exports in its current dark appearance. No report cover, RFI schedule or extra sheet stamp is added. This is a shareable PDF, not an editable `.otk` project backup.
 
 ### Whiteboard notes
 
@@ -501,7 +501,9 @@ Choose **Draw arrow** in the whiteboard tool row, select a color, then drag acro
 
 Use **Note** for editable text notes. Drag an item's header to move it, or its lower-right handle to resize it. Select a note to change its color. Pan by dragging empty board space or selecting the pan tool; use the mouse wheel, zoom buttons, or a two-finger pinch to zoom from 15% up to 400%. **Fit whiteboard** brings the items into view. Delete applies to the selected item; Undo/Redo retains the last 20 edits while the board is open.
 
-**Export PDF** in the whiteboard header downloads the current board as exactly one custom-sized PDF page. It includes each complete note card (title, selected header color and palette swatches, body color and text) plus each file card's currently selected PDF page or image, even offscreen. Arrows are drawn above cards. File drag headers, pagination, selection handles, card shadows and the background grid remain excluded. The union of the note-card and attachment-content bounds determines the page size, with no added margin. Negative positions and gaps between items are preserved. Export uses the canonical 100% card layout (one board unit is 0.75 PDF points), independent of zoom, pan, selection, screen size or device pixel ratio. It does not alter the board, save data or undo history.
+**Export whiteboard as PDF** in the whiteboard header downloads the current board as exactly one custom-sized PDF page. It includes each complete note card (title, selected header color and palette swatches, body color and text) plus each file card's currently selected PDF page or image, even offscreen. Arrows are drawn above cards. File drag headers, pagination, selection handles, card shadows and the background grid remain excluded. The union of the note-card and attachment-content bounds determines the page size, with no added margin. Negative positions and gaps between items are preserved. Export uses the canonical 100% card layout (one board unit is 0.75 PDF points), independent of zoom, pan, selection, screen size or device pixel ratio.
+
+To export only part of the canvas, select **Select area to export** in the whiteboard tool row and drag a rectangle over the area you want. The rectangle follows the board when you zoom or pan. Choose **Export selected area as PDF** to download that crop, or **Clear area** to remove it. Content that crosses the selection boundary is clipped to the selected rectangle; areas with no objects can still be exported as blank white space. Press Escape to clear the selection. Both export options leave the board, project save data and undo history unchanged.
 
 Original PDF pages remain vector-based where possible. Pages needing annotation/transparency flattening and complete note cards use a 3x raster (288 dpi at export size); note titles and body text keep browser font layout and Unicode. Original PNG/JPEG assets are retained where possible; other image formats and oriented JPEGs are decoded at original resolution. Animated images export their first frame. No content is uploaded. Empty boards report **Nothing to export**. A note with overflowing text must be enlarged before export, so no text is silently lost. Missing/damaged assets or unsupported future object types stop the export with an error.
 
@@ -648,7 +650,7 @@ Every shortcut in the app, verified against the code. Letter keys are suppressed
 | `V` | Select |
 | `P` | Pan |
 | `G` | Sheet gallery |
-| `Ctrl+F` / `⌘F` | Find text in the active PDF |
+| `Ctrl+F` / `⌘F` | Find and highlight text across loaded plans |
 
 ### Conditions
 

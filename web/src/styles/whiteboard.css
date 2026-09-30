@@ -25,6 +25,8 @@
 .wb-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .wb-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--ink-faint); background: var(--paper-bright); flex-shrink: 0; }
 .wb-tools > div { display: flex; gap: 3px; }
+.wb-export-actions { display: inline-flex; align-items: center; gap: 4px; }
+.wb-export-actions button { min-height: 28px; padding: 4px 8px; font-size: 11px; }
 .wb-tools button { padding: 5px; }
 .wb-redo svg { transform: scaleX(-1); }
 .wb-status { margin-left: auto; color: var(--ink-muted); font-size: 11px; }
@@ -37,6 +39,9 @@
 .wb-viewport { flex: 1; min-height: 0; position: relative; overflow: hidden; touch-action: none; background-image: radial-gradient(circle, var(--ink-faint) 1px, transparent 1px); }
 .wb-viewport.is-pan { cursor: grab; }
 .wb-viewport.is-arrow { cursor: crosshair; }
+.wb-viewport.is-crop { cursor: crosshair; }
+.wb-export-area { position: absolute; z-index: 5; border: 2px solid #1f3fc7; background: #1f3fc71a; box-shadow: 0 0 0 99999px #00000012; pointer-events: none; }
+.wb-export-area.is-draft { border-style: dashed; }
 .wb-arrows { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .wb-arrow-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 4px !important; }
 .wb .wb-arrow-colors button { width: 19px; height: 19px; min-width: 19px; min-height: 19px; padding: 0; border-radius: 50%; }

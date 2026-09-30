@@ -15,7 +15,7 @@ import cloudLogo from "../brand/google-cloud.png";
 // pans. Geometry math reads tfRef (always current), so drawing stays accurate.
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -51,6 +51,7 @@ import { normalizeLoadedGroups } from "../lib/sheetGroups";
 import { isCanvasBusy } from "../lib/canvasBusy";
 import { parseSchedule, rowToSeed } from "../lib/scheduleParse";
 import { normalizeScanRows, postScanWithRetry, SCAN_ENDPOINT, scanRasterScale } from "../lib/scheduleScan";
+import { DEFAULT_SCOPE_TERMS, addFindSuggestions, findTextItemMatches, normalizeFindSuggestions, parseFindTerms, removeFindSuggestion } from "../lib/findText.js";
 import { normalizeTag } from "../lib/scheduleEdit";
 import { isGoogleConfigured, isSignedIn, isAllowedDomain, getAccessToken, orgDomainHint } from "../lib/google/auth.js";
 import { extractVectorGeometry, buildMask, floodRegion, traceRegion, snapVertices, ringArea, MASK_MAX_DIM, SENS_STRICT, SENS_BALANCED, SENS_AGGRESSIVE } from "../lib/oneclick";
@@ -183,13 +184,28 @@ export default function TakeoffCanvas() {
   const [pageCount, setPageCount] = useState(1); // pages in the active PDF
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
+  const [findSuggestions, setFindSuggestions] = useState(() => {
+    try {
+      const saved = localStorage.getItem("opentakeoff.find-scope-suggestions");
+      if (saved == null) return [...DEFAULT_SCOPE_TERMS];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? normalizeFindSuggestions(parsed) : [...DEFAULT_SCOPE_TERMS];
+    } catch { return [...DEFAULT_SCOPE_TERMS]; }
+  });
+  const [findSuggestionInput, setFindSuggestionInput] = useState("");
   const [findResults, setFindResults] = useState([]);
   const [findIndex, setFindIndex] = useState(-1);
   const [findResultQuery, setFindResultQuery] = useState("");
   const [findBusy, setFindBusy] = useState(false);
+  const [findMarkAll, setFindMarkAll] = useState(true);
   const [findMessage, setFindMessage] = useState("");
   const [pendingFind, setPendingFind] = useState(null);
+  const [findDialogOffset, setFindDialogOffset] = useState({ x: 0, y: 0 });
+  const [findDialogTop, setFindDialogTop] = useState(12);
   const findInputRef = useRef(null);
+  const findPanelRef = useRef(null);
+  const findDialogRef = useRef(null);
+  const findDragRef = useRef(null);
   const findRequestRef = useRef(0);
   const [view, setView] = useState("canvas");    // "gallery"/"picker" overlay the canvas (gallery-first on empty projects)
   // Cloud mode = the active store is a Drive-backed cloudStore (it has listFolder;
@@ -982,83 +998,94 @@ export default function TakeoffCanvas() {
     return taskPromise.then((task) => task.promise);
   }, []);
 
-  const openFind = useCallback(() => {
-    setFindOpen(true);
-    requestAnimationFrame(() => findInputRef.current?.focus());
-  }, []);
   const closeFind = useCallback(() => {
     findRequestRef.current++;
     setFindOpen(false);
     setFindBusy(false);
-    setFindResults([]);
-    setFindIndex(-1);
-    setFindResultQuery("");
-    setFindMessage("");
-    setFindBusy(false);
     setPendingFind(null);
   }, []);
+  useEffect(() => {
+    try { localStorage.setItem("opentakeoff.find-scope-suggestions", JSON.stringify(findSuggestions)); }
+    catch { /* Suggestions remain usable for this session if storage is unavailable. */ }
+  }, [findSuggestions]);
   const runFind = useCallback(async (rawQuery = findQuery) => {
     const query = rawQuery.trim();
+    const terms = parseFindTerms(query);
     const request = ++findRequestRef.current;
     setFindQuery(rawQuery);
     setFindResults([]);
     setFindIndex(-1);
     setFindResultQuery("");
     setFindMessage("");
-    if (!query) { setFindMessage("Type a word to search this PDF."); return; }
-    if (!active || !sheets.some((sheet) => sheet.name === active)) { setFindMessage("Open a PDF to search."); return; }
+    setPendingFind(null);
+    if (!terms.length) { setFindMessage("Enter a word or choose a scope suggestion."); return; }
+    if (!sheets.length) { setFindMessage("Load a plan PDF to search."); return; }
     setFindBusy(true);
     try {
-      const pdf = await docFor(active);
       const matches = [];
-      const folded = query.toLocaleLowerCase();
-      for (let pageNum = 1; pageNum <= (pdf.numPages || 1); pageNum++) {
+      for (let sheetIndex = 0; sheetIndex < sheets.length; sheetIndex++) {
         if (request !== findRequestRef.current) return;
-        const pageObj = await pdf.getPage(pageNum);
-        const key = pageNum > 1 ? `${active}#${pageNum}` : active;
-        const baseViewport = pageObj.getViewport({ scale: 1 });
-        const autoScale = autoRenderScale(baseViewport.width, baseViewport.height);
-        const renderScale = renderScalesRef.current.get(key) || (hiResKeys.includes(key) ? autoScale : Math.min(RENDER_SCALE, autoScale));
-        const viewport = pageObj.getViewport({ scale: renderScale });
-        const content = await pageObj.getTextContent();
-        for (const item of content.items) {
-          if (!item.str || !item.str.trim()) continue;
-          const text = item.str.toLocaleLowerCase();
-          let from = 0;
-          while ((from = text.indexOf(folded, from)) !== -1) {
+        const file = sheets[sheetIndex].name;
+        setFindMessage(`Scanning plan ${sheetIndex + 1} of ${sheets.length}: ${file}`);
+        const pdf = await docFor(file);
+        for (let pageNum = 1; pageNum <= (pdf.numPages || 1); pageNum++) {
+          if (request !== findRequestRef.current) return;
+          const pageObj = await pdf.getPage(pageNum);
+          const key = pageNum > 1 ? `${file}#${pageNum}` : file;
+          const viewport = pageObj.getViewport({ scale: 1 });
+          const content = await pageObj.getTextContent();
+          for (const match of findTextItemMatches(content.items, terms)) {
+            const item = content.items[match.itemIndex];
             const transform = pdfjsLib.Util.transform(viewport.transform, item.transform);
-            const runWidth = Math.max(1, (item.width || item.str.length * 4) * viewport.scale);
+            const runWidth = Math.max(1, item.width || item.str.length * 4);
             const charWidth = runWidth / Math.max(1, item.str.length);
             const height = Math.max(8, Math.hypot(transform[2], transform[3]));
-            matches.push({ key, page: pageNum, x: transform[4] + charWidth * from, y: transform[5] - height,
-              w: Math.max(charWidth * query.length, charWidth), h: height });
-            from += Math.max(1, folded.length);
+            // Store normalized page coordinates. This keeps highlights aligned
+            // with each panel's raster size, independent of zoom/render scale.
+            matches.push({ key, file, page: pageNum, term: match.term,
+              x: (transform[4] + charWidth * match.start) / viewport.width,
+              y: (transform[5] - height) / viewport.height,
+              w: Math.max(charWidth * match.length, charWidth) / viewport.width,
+              h: height / viewport.height });
           }
         }
       }
       if (request !== findRequestRef.current) return;
       setFindResults(matches);
       if (matches.length) {
-        setFindResultQuery(query.toLocaleLowerCase());
+        setFindResultQuery(query.toLocaleLowerCase().trim());
         setFindIndex(0);
-        setFindMessage("");
-        setSheetGroup([]);
-        setPage(matches[0].page);
+        setFindMessage(`${matches.length.toLocaleString()} matches across ${new Set(matches.map((hit) => hit.file)).size} plan${new Set(matches.map((hit) => hit.file)).size === 1 ? "" : "s"}.`);
+        setOpenTabs((tabs) => tabs.includes(matches[0].file) ? tabs : [...tabs, matches[0].file]);
+        setView("canvas");
+        const first = parseSheetKey(matches[0].key);
+        setActive(first.file); setPage(first.page); setSheetGroup([]);
         setPendingFind({ ...matches[0], request });
-      } else setFindMessage("No matches found.");
+      } else setFindMessage(`No matches in ${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"}. Scanned selectable PDF text; scanned drawings need OCR.`);
     } catch (error) {
       if (request === findRequestRef.current) setFindMessage(`Couldn't search this PDF: ${error?.message || error}`);
     } finally {
       if (request === findRequestRef.current) setFindBusy(false);
     }
-  }, [active, docFor, findQuery, hiResKeys, sheets]);
+  }, [docFor, findQuery, sheets]);
+  const openFind = useCallback(() => {
+    const initialQuery = findQuery.trim() ? findQuery : findSuggestions.join(", ");
+    setFindOpen(true);
+    setFindDialogOffset({ x: 0, y: 0 });
+    setFindDialogTop(12);
+    setFindQuery(initialQuery);
+    requestAnimationFrame(() => findInputRef.current?.focus());
+    runFind(initialQuery);
+  }, [findQuery, findSuggestions, runFind]);
   const moveFind = useCallback((direction) => {
     if (!findResults.length) return;
     const next = (findIndex + direction + findResults.length) % findResults.length;
     setFindIndex(next);
     const result = findResults[next];
-    setSheetGroup([]);
-    setPage(result.page);
+    setOpenTabs((tabs) => tabs.includes(result.file) ? tabs : [...tabs, result.file]);
+    setView("canvas");
+    const target = parseSheetKey(result.key);
+    setActive(target.file); setPage(target.page); setSheetGroup([]);
     setPendingFind({ ...result, request: findRequestRef.current });
   }, [findIndex, findResults]);
 
@@ -1069,21 +1096,72 @@ export default function TakeoffCanvas() {
     if (!dims?.w || !el) return;
     const rect = el.getBoundingClientRect();
     const scale = Math.max(1.25, tfRef.current.scale);
-    const x = pendingFind.x + pendingFind.w / 2;
-    const y = pendingFind.y + pendingFind.h / 2;
+    const x = (pendingFind.x + pendingFind.w / 2) * dims.w;
+    const y = (pendingFind.y + pendingFind.h / 2) * dims.h;
     setTfNow({ x: rect.width / 2 - x * scale, y: rect.height / 2 - y * scale, scale });
     setPendingFind(null);
   }, [pendingFind, panelImgs, sheetKey, setTfNow]);
 
   useEffect(() => {
-    findRequestRef.current++;
-    setFindBusy(false);
-    setFindResults([]);
-    setFindIndex(-1);
-    setFindResultQuery("");
-    setFindMessage("");
-    setPendingFind(null);
-  }, [active]);
+    if (!findOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (!findPanelRef.current?.contains(event.target) && !findDialogRef.current?.contains(event.target)) closeFind();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [closeFind, findOpen]);
+
+  useEffect(() => {
+    if (!findOpen) return undefined;
+    const onResize = () => {
+      setFindDialogOffset({ x: 0, y: 0 });
+      const panel = findDialogRef.current;
+      if (!panel) return;
+      const toolbarBottom = document.querySelector(".glass-toolbar-stack")?.getBoundingClientRect().bottom || 0;
+      const maxTop = window.innerHeight - panel.getBoundingClientRect().height - 12;
+      setFindDialogTop(maxTop >= toolbarBottom + 12 ? toolbarBottom + 12 : 12);
+    };
+    const frame = requestAnimationFrame(onResize);
+    window.addEventListener("resize", onResize);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", onResize); };
+  }, [findOpen]);
+
+  const startFindDialogDrag = (event) => {
+    if (event.button !== 0 || event.target.closest("button")) return;
+    const rect = findDialogRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    findDragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      offsetX: findDialogOffset.x, offsetY: findDialogOffset.y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+  const moveFindDialog = (event) => {
+    const drag = findDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const rect = findDialogRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const dialogStyle = getComputedStyle(findDialogRef.current);
+    const baseRight = parseFloat(dialogStyle.right) || 12;
+    const baseTop = parseFloat(dialogStyle.top) || 12;
+    const baseLeft = window.innerWidth - baseRight - rect.width;
+    const minX = 12 - baseLeft;
+    const maxX = window.innerWidth - 12 - rect.width - baseLeft;
+    const minY = 12 - baseTop;
+    const maxY = window.innerHeight - 12 - rect.height - baseTop;
+    setFindDialogOffset({
+      x: Math.max(minX, Math.min(maxX, drag.offsetX + event.clientX - drag.startX)),
+      y: Math.max(minY, Math.min(maxY, drag.offsetY + event.clientY - drag.startY)),
+    });
+  };
+  const endFindDialogDrag = (event) => {
+    if (findDragRef.current?.pointerId === event.pointerId) findDragRef.current = null;
+  };
+
+  useEffect(() => {
+    if (!findResults.length) return;
+    const loaded = new Set(sheets.map((sheet) => sheet.name));
+    setFindResults((hits) => hits.filter((hit) => loaded.has(hit.file)));
+  }, [sheets, findResults.length]);
 
   useEffect(() => {
     const onFindShortcut = (event) => {
@@ -5480,25 +5558,81 @@ export default function TakeoffCanvas() {
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page >= pageCount) ? 0.4 : 1 }}><Icon name="chevronRight" size={12} /></button>
           </span>
         )}
-        {sheets.length > 0 && <>
-          <button type="button" onClick={() => findOpen ? closeFind() : openFind()} title="Find text in this PDF (Ctrl+F)" aria-label="Find text in this PDF" aria-expanded={findOpen}
+        {sheets.length > 0 && <div ref={findPanelRef} style={{ position: "relative", display: "inline-flex" }}>
+          <button type="button" onClick={() => findOpen ? closeFind() : openFind()} title="Find and mark text in all loaded plans (Ctrl+F)" aria-label="Find text in all loaded plans" aria-expanded={findOpen}
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: `1px solid ${findOpen ? "var(--cobalt)" : "var(--ink-faint)"}`, background: findOpen ? "var(--tint-select)" : "transparent", color: "var(--ink)", cursor: "pointer", fontSize: 12.5, lineHeight: 1 }}>
             <Icon name="target" size={14} />Find
           </button>
-          {findOpen && <span role="search" aria-label="Find in PDF" style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 5px", border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", boxShadow: "0 2px 8px rgba(0,0,0,.10)" }}>
-            <input ref={findInputRef} type="search" value={findQuery} placeholder="Find in PDF" aria-label="Search PDF text"
-              onChange={(event) => { findRequestRef.current++; setFindBusy(false); setFindQuery(event.target.value); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage(""); }}
-              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (findResults.length && findResultQuery === findQuery.trim().toLocaleLowerCase()) moveFind(event.shiftKey ? -1 : 1); else runFind(); } }}
-              style={{ width: 155, border: 0, outline: 0, padding: "4px 5px", color: "var(--ink)", background: "transparent", font: "12px var(--f-body, sans-serif)" }} />
-            <span aria-live="polite" style={{ minWidth: 48, textAlign: "center", font: "10px var(--f-mono)", color: "var(--ink-muted)" }}>{findBusy ? "…" : findResults.length ? `${findIndex + 1} of ${findResults.length}` : findMessage || ""}</span>
-            <button type="button" onClick={() => moveFind(-1)} disabled={!findResults.length || findBusy} title="Previous match" aria-label="Previous match"
-              style={{ border: 0, background: "transparent", color: "var(--ink-muted)", cursor: "pointer", padding: 4, opacity: findResults.length ? 1 : 0.4 }}><Icon name="chevronUp" size={13} /></button>
-            <button type="button" onClick={() => moveFind(1)} disabled={!findResults.length || findBusy} title="Next match" aria-label="Next match"
-              style={{ border: 0, background: "transparent", color: "var(--ink-muted)", cursor: "pointer", padding: 4, opacity: findResults.length ? 1 : 0.4 }}><Icon name="chevronDown" size={13} /></button>
-            <button type="button" onClick={closeFind} title="Close find" aria-label="Close find"
-              style={{ border: 0, background: "transparent", color: "var(--ink-muted)", cursor: "pointer", padding: 4 }}><Icon name="close" size={13} /></button>
-          </span>}
-        </>}
+        </div>}
+        {findOpen && createPortal(
+          <div className="find-dialog-shade" onClick={(event) => { if (event.target === event.currentTarget) closeFind(); }}>
+            <section ref={findDialogRef} className="find-all-dialog" role="dialog" aria-modal="true" aria-label="Find text across loaded plans"
+              style={{ "--find-dialog-x": `${findDialogOffset.x}px`, "--find-dialog-y": `${findDialogOffset.y}px`, "--find-dialog-top": `${findDialogTop}px` }}>
+              <header className="find-dialog-header" onPointerDown={startFindDialogDrag} onPointerMove={moveFindDialog} onPointerUp={endFindDialogDrag} onPointerCancel={endFindDialogDrag}>
+                <strong>Find in loaded plans</strong>
+                <button type="button" onClick={closeFind} aria-label="Close find panel" title="Close find panel">×</button>
+              </header>
+              <div className="find-dialog-content">
+                <label className="find-dialog-label">
+                  Search words or phrases <span>(separate multiple terms with commas)</span>
+                  <input ref={findInputRef} type="search" value={findQuery} placeholder="e.g. fence, gate, dumpster" aria-label="Search text across all loaded plan PDFs"
+                    onChange={(event) => { findRequestRef.current++; setFindBusy(false); setFindQuery(event.target.value); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans."); }}
+                    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (findResults.length && findResultQuery === findQuery.trim().toLocaleLowerCase()) moveFind(event.shiftKey ? -1 : 1); else runFind(); } }} />
+                </label>
+                <section className="find-suggestions-section" aria-label="Scope suggestions">
+                  <div className="find-suggestions-heading">
+                    <span>Scope suggestions · click a name to include or exclude it</span>
+                    <button type="button" onClick={() => setFindSuggestions([...DEFAULT_SCOPE_TERMS])} disabled={findSuggestions.length === DEFAULT_SCOPE_TERMS.length && findSuggestions.every((term, index) => term === DEFAULT_SCOPE_TERMS[index])}>Restore defaults</button>
+                  </div>
+                  <div className="find-suggestions">
+                    {findSuggestions.map((term) => {
+                      const selected = parseFindTerms(findQuery).some((item) => item.toLocaleLowerCase() === term.toLocaleLowerCase());
+                      return <span className="find-suggestion" key={term}>
+                        <button className="find-suggestion-toggle" type="button" aria-pressed={selected} onClick={() => {
+                          const terms = parseFindTerms(findQuery);
+                          const next = selected ? terms.filter((item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase()) : [...terms, term];
+                          findRequestRef.current++; setFindBusy(false); setFindQuery(next.join(", ")); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
+                        }}>{term}</button>
+                        <button className="find-suggestion-remove" type="button" aria-label={`Remove ${term} suggestion`} title={`Remove ${term} suggestion`} onClick={() => {
+                          setFindSuggestions((current) => removeFindSuggestion(current, term));
+                          const next = parseFindTerms(findQuery).filter((item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase());
+                          findRequestRef.current++; setFindBusy(false); setFindQuery(next.join(", ")); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
+                        }}>×</button>
+                      </span>;
+                    })}
+                  </div>
+                  <form className="find-add-suggestion" onSubmit={(event) => {
+                    event.preventDefault();
+                    const additions = parseFindTerms(findSuggestionInput);
+                    if (!additions.length) return;
+                    setFindSuggestions((current) => addFindSuggestions(current, additions));
+                    const terms = parseFindTerms(findQuery);
+                    setFindQuery([...new Map([...terms, ...additions].map((term) => [term.toLocaleLowerCase(), term])).values()].join(", "));
+                    setFindSuggestionInput(""); findRequestRef.current++; setFindBusy(false); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
+                  }}>
+                    <input type="text" value={findSuggestionInput} onChange={(event) => setFindSuggestionInput(event.target.value)} placeholder="Add a scope suggestion" aria-label="New scope suggestion" />
+                    <button type="submit" disabled={!parseFindTerms(findSuggestionInput).length || findSuggestions.length >= 40}>Add</button>
+                  </form>
+                </section>
+                <div className="find-dialog-actions">
+                  <button className="find-run-button" type="button" onClick={() => runFind()} disabled={findBusy || !parseFindTerms(findQuery).length}>
+                    {findBusy ? "Scanning…" : "Find all"}
+                  </button>
+                  <button className="find-mark-button" type="button" onClick={() => setFindMarkAll((value) => !value)} aria-pressed={findMarkAll} title="Show or hide highlights for every search match">
+                    {findMarkAll ? "✓ Mark all matches" : "Mark all matches"}
+                  </button>
+                  {findResults.length > 0 && <span className="find-result-count">{(findIndex + 1).toLocaleString()} / {findResults.length.toLocaleString()}</span>}
+                  <button type="button" onClick={() => moveFind(-1)} disabled={!findResults.length || findBusy} title="Previous match" aria-label="Previous match"><Icon name="chevronUp" size={13} /></button>
+                  <button type="button" onClick={() => moveFind(1)} disabled={!findResults.length || findBusy} title="Next match" aria-label="Next match"><Icon name="chevronDown" size={13} /></button>
+                </div>
+                <div className="find-dialog-status" aria-live="polite">
+                  {findResults.length && !findBusy ? `${findResults.length.toLocaleString()} matches in ${new Set(findResults.map((hit) => hit.file)).size} plans. Press Enter to move to the next match.` : findMessage || `${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"} will be searched.`}
+                </div>
+                <div className="find-dialog-help">Only selectable PDF text is searchable; scanned pages may need OCR. Drag this title bar to move the panel. Escape or click outside to close.</div>
+              </div>
+            </section>
+          </div>, document.body,
+        )}
         <div className="toolbar-spacer" style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>{saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}</span>
         <button type="button" onClick={toggleFullscreen}
@@ -6061,7 +6195,7 @@ export default function TakeoffCanvas() {
                 const label = labelFor(p);
                 return (
                   <g key={p.key} transform={`translate(${p.xOffset},0)`}>
-                    {findResults.map((hit, index) => hit.key === p.key && <rect key={`find-${index}`} x={hit.x} y={hit.y} width={hit.w} height={hit.h}
+                    {findMarkAll && findResults.map((hit, index) => hit.key === p.key && <rect key={`find-${index}`} x={hit.x * p.img.w} y={hit.y * p.img.h} width={hit.w * p.img.w} height={hit.h * p.img.h}
                       fill={index === findIndex ? "rgba(255,166,0,.46)" : "rgba(255,225,70,.28)"}
                       stroke={index === findIndex ? "#d06b00" : "#d0a900"} strokeWidth={(index === findIndex ? 2 : 1) / tf.scale} pointerEvents="none" />)}
                     {panels.length > 1 && <text x={0} y={-26} fontSize={64} fontWeight={700} fill={darkMode ? "#9a917f" : "#6b6256"}>{label}</text>}

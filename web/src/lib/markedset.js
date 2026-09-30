@@ -29,6 +29,7 @@ const COBALT = "#1f3fc7";
 const DEDUCT_RED = "#b03a26";
 const DARK_BG = [0.055, 0.07, 0.09];       // matches the canvas dark stage
 const RASTER_MAX = 2800;                    // dark-mode raster cap, long side px
+const LINE_CHIP_CLEARANCE_PT = 10;            // label box sits 4.5pt clear of a linear mark
 
 // hatch style → parallel-line families [angleDeg, pitch(image px)] that match
 // the canvas pattern's geometric read; decorative styles approximate — the
@@ -456,7 +457,10 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
         const segDash = s.measure_role === "linear" ? pdfDashFor(cond?.line_style || "solid") : undefined;
         for (let i = 1; i < pts.length; i++) line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], col, 1.4, 0.95, segDash);
         const mid = pts[Math.floor((pts.length - 1) / 2)];
-        chip(shapeChip(s, cond, M), mid[0], mid[1] - 14, col);
+        // Keep the quantity chip just above the measured line, with a small
+        // physical gap after the chip's 12pt box. Scale through ptScale so the
+        // spacing stays the same across PDF page sizes and rotations.
+        chip(shapeChip(s, cond, M), mid[0], mid[1] - LINE_CHIP_CLEARANCE_PT / ptScale, col);
       } else if (s.measure_role === "count") {
         const [px, py] = toPage(pts[0][0], pts[0][1]);
         pg.drawEllipse({ x: px, y: py, xScale: 4.5, yScale: 4.5, borderColor: col, borderWidth: 1.2, color: col, opacity: 0.35 });

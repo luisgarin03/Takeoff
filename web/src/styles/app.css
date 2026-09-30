@@ -273,6 +273,195 @@ select {
   overflow: visible !important;
 }
 
+/* Find is rendered into body so canvas/toolbar stacking and clipping cannot
+   cover it. It opens at the top-right, then pointer-drags from its title bar. */
+.find-dialog-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: start end;
+  box-sizing: border-box;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  background: transparent;
+}
+.find-all-dialog {
+  position: fixed;
+  top: var(--find-dialog-top, max(12px, env(safe-area-inset-top, 0px)));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  width: min(520px, calc(100vw - 24px));
+  max-height: min(760px, calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translate(var(--find-dialog-x, 0px), var(--find-dialog-y, 0px));
+  border: 1px solid var(--ink-faint);
+  border-radius: 10px;
+  background: var(--paper-bright);
+  color: var(--ink);
+  box-shadow: 0 18px 64px rgba(0, 0, 0, .38);
+}
+.find-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ink-faint);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.find-dialog-header:active { cursor: grabbing; }
+.find-dialog-header strong { font-size: 14px; }
+.find-dialog-header > button {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--ink-faint);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 19px;
+  line-height: 1;
+}
+.find-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+}
+.find-dialog-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+.find-dialog-label > span { font-size: 11px; }
+.find-dialog-label input,
+.find-add-suggestion input {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--ink-faint);
+  border-radius: 6px;
+  outline-color: var(--cobalt);
+  padding: 9px 10px;
+  background: var(--paper-bright);
+  color: var(--ink);
+  font: 13px var(--f-body, sans-serif);
+}
+.find-suggestions-section { display: flex; flex-direction: column; gap: 8px; }
+.find-suggestions-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.find-suggestions-heading > button {
+  flex: 0 0 auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--cobalt);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+.find-suggestions-heading > button:disabled { opacity: .45; cursor: default; }
+.find-suggestions { display: flex; flex-wrap: wrap; gap: 6px; }
+.find-suggestion {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 30px;
+  overflow: hidden;
+  border: 1px solid var(--ink-faint);
+  border-radius: 999px;
+  background: transparent;
+}
+.find-suggestion-toggle {
+  max-width: min(220px, 62vw);
+  overflow: hidden;
+  border: 0;
+  padding: 5px 4px 5px 10px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: 12px var(--f-body, sans-serif);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.find-suggestion-toggle[aria-pressed="true"] {
+  background: var(--tint-select);
+  color: var(--ink);
+}
+.find-suggestion-remove {
+  align-self: stretch;
+  min-width: 27px;
+  border: 0;
+  border-left: 1px solid var(--ink-faint);
+  padding: 0 6px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+.find-add-suggestion { display: flex; gap: 7px; }
+.find-add-suggestion > button,
+.find-dialog-actions > button {
+  min-height: 36px;
+  border: 1px solid var(--ink-faint);
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: 12px var(--f-body, sans-serif);
+}
+.find-add-suggestion > button:disabled,
+.find-dialog-actions > button:disabled { opacity: .45; cursor: default; }
+.find-dialog-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.find-dialog-actions > .find-run-button {
+  border-color: var(--cobalt);
+  background: var(--cobalt);
+  color: var(--accent-contrast, white);
+  font-weight: 700;
+}
+.find-dialog-actions > .find-mark-button[aria-pressed="true"] {
+  border-color: var(--positive, var(--cobalt));
+  background: var(--tint-select);
+}
+.find-dialog-actions > button[aria-label="Previous match"],
+.find-dialog-actions > button[aria-label="Next match"] { display: inline-flex; align-items: center; justify-content: center; width: 36px; padding: 5px; }
+.find-result-count { margin-left: auto; color: var(--ink-muted); font: 11px var(--f-mono, monospace); }
+.find-dialog-status { min-height: 16px; color: var(--ink-muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.find-dialog-help { color: var(--ink-muted); font-size: 11px; line-height: 1.4; }
+@media (max-width: 600px) {
+  .find-dialog-shade { padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
+  .find-all-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    border-radius: 9px;
+  }
+  .find-dialog-header { padding: 9px 11px; }
+  .find-dialog-content { gap: 10px; padding: 11px; }
+  .find-dialog-actions { gap: 6px; }
+  .find-dialog-actions > .find-run-button,
+  .find-dialog-actions > .find-mark-button { flex: 1 1 auto; }
+}
+
 .glass-toolbar-primary {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, .04)),

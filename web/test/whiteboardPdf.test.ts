@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument, PDFDict, PDFRawStream, PDFName, PDFNumber, degrees, rgb } from "pdf-lib";
 import { base64ToBytes, bytesToBase64 } from "../src/lib/whiteboard.js";
-import { boardContentRect, boardNoteCardRect, boardPdfBounds, boardPdfPlacement, buildWhiteboardPdf, checkBoardRaster, whiteboardPdfFilename } from "../src/lib/whiteboardPdf.js";
+import { boardContentRect, boardNoteCardRect, boardPdfBounds, boardPdfPlacement, boardRectsIntersect, buildWhiteboardPdf, checkBoardRaster, whiteboardPdfFilename } from "../src/lib/whiteboardPdf.js";
 import type { BoardPdfRenderer } from "../src/lib/whiteboardPdf.js";
 
 const png = base64ToBytes("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j8ioAAAAASUVORK5CYII=");
@@ -47,6 +47,35 @@ test("whiteboard arrows export over their own board bounds in the selected color
   const result = await buildWhiteboardPdf(b, { renderer });
   assert.deepEqual(result.bounds, { minX: 10, minY: 20, maxX: 80, maxY: 60, width: 52.5, height: 30 });
   await assertPage(result, 52.5, 30);
+});
+
+test("selected export region sets exact PDF bounds and clips intersecting cards while skipping other cards", async () => {
+  const seen: string[] = [];
+  const items = [note({ x: 0, y: 0 }), note({ id: "outside", x: 500, y: 500 })];
+  const region = { x: 50, y: 50, w: 200, h: 100 };
+  const result = await buildWhiteboardPdf(board(items), { region, boardName: "Whiteboard selection", renderer: { ...renderer, renderNote: async (item) => { seen.push(item.id); return png; } } });
+  await assertPage(result, 150, 75);
+  assert.deepEqual(result.bounds, { minX: 50, minY: 50, maxX: 250, maxY: 150, width: 150, height: 75 });
+  assert.deepEqual(seen, ["note"]);
+  assert.equal(result.filename, "Untitled project - Whiteboard selection.pdf");
+});
+
+test("selection crops arrows to the requested area and can export blank selected space", async () => {
+  const b = { ...board([note()]), arrows: [
+    { id: "inside", from: [60, 60], to: [120, 90], color: "#2563EB" },
+    { id: "outside", from: [500, 500], to: [600, 600], color: "#DC2626" },
+  ] };
+  const region = { x: 50, y: 50, w: 200, h: 100 };
+  const result = await buildWhiteboardPdf(b, { region, renderer });
+  await assertPage(result, 150, 75);
+  const blank = await buildWhiteboardPdf(board([note()]), { region: { x: 700, y: 800, w: 80, h: 60 }, renderer });
+  await assertPage(blank, 60, 45);
+});
+
+test("board rectangle intersection detects touching edges as outside", () => {
+  const a = { x: 0, y: 0, w: 10, h: 10 };
+  assert.equal(boardRectsIntersect(a, { x: 9, y: 9, w: 4, h: 4 }), true);
+  assert.equal(boardRectsIntersect(a, { x: 10, y: 0, w: 2, h: 2 }), false);
 });
 
 test("example bounds are exactly 1400 x 800 world units and PDF y is inverted", () => {

@@ -65,16 +65,20 @@ export function boardPdfPlacement(rect, bounds) {
     width: rect.w * BOARD_POINT_SCALE, height: rect.h * BOARD_POINT_SCALE };
 }
 
+export function boardRectsIntersect(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
 export function whiteboardPdfFilename(projectName, boardName = "Whiteboard") {
   return `${projectFilename(projectName).slice(0, -4)} - ${projectFilename(boardName).slice(0, -4)}.pdf`;
 }
 
-function exportSnapshot(board) {
+function exportSnapshot(board, allowEmpty = false) {
   const snapshot = structuredClone(board);
   if (!Array.isArray(snapshot?.items)) throw new Error("Invalid whiteboard data.");
   snapshot.items = snapshot.items.filter((item) => !item.hidden && item.visible !== false && !item.deleted);
   snapshot.arrows = Array.isArray(snapshot.arrows) ? snapshot.arrows : [];
-  if (!snapshot.items.length && !snapshot.arrows.length) throw new Error("Nothing to export");
+  if (!allowEmpty && !snapshot.items.length && !snapshot.arrows.length) throw new Error("Nothing to export");
   for (const item of snapshot.items) {
     // Fail closed for future scene types instead of silently exporting only
     // their untransformed boxes. Today's board supports note/file cards only.
@@ -89,10 +93,11 @@ function exportSnapshot(board) {
  * Browser-only decoding/text layout is injected so geometry and PDF boxes can
  * also be tested without a browser. No adapter receives the live board object.
  * @param {object} board
- * @param {{projectName?: string, boardName?: string, renderer?: BoardPdfRenderer, signal?: AbortSignal}} options
+ * @param {{projectName?: string, boardName?: string, renderer?: BoardPdfRenderer, signal?: AbortSignal, region?: BoardRect}} options
  */
-export async function buildWhiteboardPdf(board, { projectName, boardName = "Whiteboard", renderer, signal } = {}) {
-  const snapshot = exportSnapshot(board);
+export async function buildWhiteboardPdf(board, { projectName, boardName = "Whiteboard", renderer, signal, region } = {}) {
+  const snapshot = exportSnapshot(board, !!region);
+  const bounds = region ? boardPdfBounds([region]) : null;
   const checkCancelled = () => signal?.throwIfAborted();
   checkCancelled();
   const { PDFDocument, PDFName, PDFNumber, rgb, degrees } = await import("pdf-lib");
@@ -109,6 +114,8 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
   };
   for (const item of snapshot.items) {
     checkCancelled();
+    const itemBounds = item.kind === "note" ? boardNoteCardRect(item) : boardContentRect(item);
+    if (region && !boardRectsIntersect(itemBounds, region)) continue;
     const asset = assets.get(item.assetId), label = asset?.name || `Note ${item.id}`;
     try {
       if (item.kind === "note") {
@@ -161,17 +168,21 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
       throw new Error(`${label}: ${error.message || "Could not read attachment. Re-add the file and try again."}`, { cause: error });
     }
   }
-  const arrowRects = snapshot.arrows.map(({ from, to }) => ({
+  const exportArrows = snapshot.arrows.filter(({ from, to }) => !region || boardRectsIntersect({
+    x: Math.min(from[0], to[0]), y: Math.min(from[1], to[1]),
+    w: Math.max(1, Math.abs(to[0] - from[0])), h: Math.max(1, Math.abs(to[1] - from[1])),
+  }, region));
+  const arrowRects = exportArrows.map(({ from, to }) => ({
     x: Math.min(from[0], to[0]), y: Math.min(from[1], to[1]),
     w: Math.max(1, Math.abs(to[0] - from[0])), h: Math.max(1, Math.abs(to[1] - from[1])),
   }));
-  const bounds = boardPdfBounds([...prepared.map(({ rect }) => rect), ...arrowRects]);
-  const page = doc.addPage([bounds.width, bounds.height]);
-  for (const setBox of ["setMediaBox", "setCropBox", "setTrimBox", "setBleedBox", "setArtBox"]) page[setBox](0, 0, bounds.width, bounds.height);
-  page.drawRectangle({ x: 0, y: 0, width: bounds.width, height: bounds.height, color: rgb(1, 1, 1) });
+  const outputBounds = bounds || boardPdfBounds([...prepared.map(({ rect }) => rect), ...arrowRects]);
+  const page = doc.addPage([outputBounds.width, outputBounds.height]);
+  for (const setBox of ["setMediaBox", "setCropBox", "setTrimBox", "setBleedBox", "setArtBox"]) page[setBox](0, 0, outputBounds.width, outputBounds.height);
+  page.drawRectangle({ x: 0, y: 0, width: outputBounds.width, height: outputBounds.height, color: rgb(1, 1, 1) });
   for (const { item, file, rect } of prepared) {
     checkCancelled();
-    const place = boardPdfPlacement(rect, bounds);
+    const place = boardPdfPlacement(rect, outputBounds);
     try {
       if (!file || file.raster) {
         const png = !file ? await renderer?.renderNote(item, rect, signal) : await renderer?.renderPdfPage(file.bytes, file.page, rect, signal);
@@ -198,9 +209,9 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
       throw new Error(`${assets.get(item.assetId)?.name || `Note ${item.id}`}: ${error.message || "Export failed. Try again."}`, { cause: error });
     }
   }
-  for (const arrow of snapshot.arrows) {
+  for (const arrow of exportArrows) {
     checkCancelled();
-    const point = ([x, y]) => ({ x: (x - bounds.minX) * BOARD_POINT_SCALE, y: (bounds.maxY - y) * BOARD_POINT_SCALE });
+    const point = ([x, y]) => ({ x: (x - outputBounds.minX) * BOARD_POINT_SCALE, y: (outputBounds.maxY - y) * BOARD_POINT_SCALE });
     const from = point(arrow.from), to = point(arrow.to);
     const colorHex = arrow.color || "#1f3fc7";
     const color = rgb(parseInt(colorHex.slice(1, 3), 16) / 255, parseInt(colorHex.slice(3, 5), 16) / 255, parseInt(colorHex.slice(5, 7), 16) / 255);
@@ -216,5 +227,5 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     }
   }
   checkCancelled();
-  return { bytes: await doc.save(), filename: whiteboardPdfFilename(projectName, boardName), bounds };
+  return { bytes: await doc.save(), filename: whiteboardPdfFilename(projectName, boardName), bounds: outputBounds };
 }

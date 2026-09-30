@@ -114,6 +114,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const viewRef = useRef(view); viewRef.current = view;
   const [selected, setSelected] = useState(null), [mode, setMode] = useState("select");
+  const [exportArea, setExportArea] = useState(null), [areaDraft, setAreaDraft] = useState(null);
   const [arrowColor, setArrowColor] = useState(ARROW_COLORS[0].value), [arrowPreview, setArrowPreview] = useState(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const importLock = useRef(false), alive = useRef(true);
@@ -159,7 +160,12 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
       if (!root.current?.contains(e.target)) return;
       e.stopImmediatePropagation();
       const editing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
-      if (e.key === "Escape" && !importLock.current) { e.preventDefault(); callbacks.current.onClose(); }
+      if (e.key === "Escape" && !importLock.current) {
+        e.preventDefault();
+        if (gesture.current?.kind === "crop" || mode === "crop" || exportArea) {
+          gesture.current = null; pointers.current.clear(); setAreaDraft(null); setExportArea(null); setMode("select");
+        } else callbacks.current.onClose();
+      }
       if (e.key === "Tab") {
         const nodes = [...root.current.querySelectorAll('button:not(:disabled), input:not(:disabled), textarea')].filter((node) => node.getClientRects().length);
         const first = nodes[0], last = nodes[nodes.length - 1];
@@ -171,7 +177,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     };
     window.addEventListener("keydown", key, true);
     return () => { alive.current = false; exportTask.current?.abort(); window.removeEventListener("keydown", key, true); previous?.focus?.(); };
-  }, [undo]);
+  }, [undo, mode, exportArea]);
 
   const point = (e) => { const r = viewport.current.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const center = () => ({ x: viewport.current.clientWidth / 2, y: viewport.current.clientHeight / 2 });
@@ -208,10 +214,11 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
       setPreview(null); return;
     }
     if (pointers.current.size > 2) return;
-    const kind = resize ? "resize" : mode === "arrow" && e.button === 0 ? "arrow" : item && mode === "select" && e.button === 0 ? "move" : "pan";
+    const kind = mode === "crop" && e.button === 0 ? "crop" : resize ? "resize" : mode === "arrow" && e.button === 0 ? "arrow" : item && mode === "select" && e.button === 0 ? "move" : "pan";
     gesture.current = { kind, p, to: p, item, view: viewRef.current };
     if (kind === "arrow") setArrowPreview({ from: p, to: p, color: arrowColor });
-    if (kind === "arrow") setSelected(null); else if (item) setSelected(item.id); else setSelected(null);
+    if (kind === "crop") { setExportArea(null); setAreaDraft({ x: p.x, y: p.y, w: 0, h: 0 }); }
+    if (kind === "arrow") setSelected(null); else if (kind !== "crop") { if (item) setSelected(item.id); else setSelected(null); }
   }
   function move(e) {
     if (!pointers.current.has(e.pointerId)) return;
@@ -228,6 +235,10 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     const dx = p.x - g.p.x, dy = p.y - g.p.y;
     if (g.kind === "pan") setCamera({ ...g.view, x: g.view.x + dx, y: g.view.y + dy });
     else if (g.kind === "arrow") { g.to = p; setArrowPreview({ from: g.p, to: p, color: arrowColor }); }
+    else if (g.kind === "crop") {
+      g.to = p;
+      setAreaDraft({ x: Math.min(g.p.x, p.x), y: Math.min(g.p.y, p.y), w: Math.abs(p.x - g.p.x), h: Math.abs(p.y - g.p.y) });
+    }
     else {
       const changes = g.kind === "move" ? { x: g.item.x + dx / g.view.scale, y: g.item.y + dy / g.view.scale } :
         { w: Math.max(160, Math.min(5000, g.item.w + dx / g.view.scale)), h: Math.max(140, Math.min(5000, g.item.h + dy / g.view.scale)) };
@@ -237,6 +248,18 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   function end(e, cancel = false) {
     const g = gesture.current;
     if (!pointers.current.has(e.pointerId)) return;
+    if (g?.kind === "crop") {
+      if (!cancel && Math.abs(g.to.x - g.p.x) >= 20 && Math.abs(g.to.y - g.p.y) >= 20) {
+        const { view: camera } = g;
+        const x1 = (Math.min(g.p.x, g.to.x) - camera.x) / camera.scale;
+        const y1 = (Math.min(g.p.y, g.to.y) - camera.y) / camera.scale;
+        const x2 = (Math.max(g.p.x, g.to.x) - camera.x) / camera.scale;
+        const y2 = (Math.max(g.p.y, g.to.y) - camera.y) / camera.scale;
+        setExportArea({ x: x1, y: y1, w: x2 - x1, h: y2 - y1 });
+        setMode("select");
+      }
+      setAreaDraft(null);
+    }
     if (!cancel && g?.changes) patch(g.item.id, g.changes);
     if (!cancel && g?.kind === "arrow" && Math.hypot((g.to.x - g.p.x), (g.to.y - g.p.y)) >= 8) {
       const v = g.view;
@@ -309,12 +332,12 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     if (content.files.length) addFiles(content.files, at);
     else addNote(content.text, at);
   }
-  async function exportPdf() {
+  async function exportPdf(region = null) {
     if (exportTask.current || importLock.current) return;
     const controller = new AbortController();
     exportTask.current = controller; setExporting(true); setError("");
     try {
-      const result = await buildWhiteboardPdf(boardRef.current, { projectName,
+      const result = await buildWhiteboardPdf(boardRef.current, { projectName, ...(region ? { region, boardName: "Whiteboard selection" } : {}),
         renderer: whiteboardPdfRenderer(pdfjsLib), signal: controller.signal });
       if (alive.current && !controller.signal.aborted) downloadBytes(result.filename, result.bytes);
     } catch (e) {
@@ -335,7 +358,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         <button type="button" onClick={() => input.current.click()} disabled={busy}><Icon name="plus" size={16} />Add files</button>
         <button type="button" onClick={() => addNote()} disabled={busy || board.items.length >= 2000}><Icon name="textNote" size={16} />Note</button>
         <button type="button" onClick={onSave} disabled={busy}><Icon name="document" size={16} />Save project</button>
-        <Button icon="document" label="Export Whiteboard as PDF" onClick={exportPdf} disabled={busy || exporting} aria-busy={exporting}>{exporting ? "Exporting..." : "Export PDF"}</Button>
+        <Button icon="document" label="Export whiteboard as PDF" onClick={() => exportPdf()} disabled={busy || exporting} aria-busy={exporting}>{exporting ? "Exporting..." : "Export whiteboard as PDF"}</Button>
       </div>
       <input ref={input} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp" aria-label="Whiteboard files" hidden
         onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
@@ -345,7 +368,14 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         <Button icon="select" label="Select and move" aria-pressed={mode === "select"} onClick={() => setMode("select")} />
         <Button icon="pan" label="Pan whiteboard" aria-pressed={mode === "pan"} onClick={() => setMode("pan")} />
         <Button icon="arrow" label="Draw arrow" aria-pressed={mode === "arrow"} onClick={() => setMode(mode === "arrow" ? "select" : "arrow")} />
+        <Button icon="fullscreen" label={mode === "crop" ? "Cancel export area selection" : "Select area to export"} aria-pressed={mode === "crop"} onClick={() => {
+          setExportArea(null); setAreaDraft(null); setMode(mode === "crop" ? "select" : "crop");
+        }} />
       </div>
+      {exportArea && <div className="wb-export-actions" role="group" aria-label="Selected PDF export area">
+        <button type="button" onClick={() => exportPdf(exportArea)} disabled={busy || exporting}>{exporting ? "Exporting selection…" : "Export selected area as PDF"}</button>
+        <button type="button" onClick={() => setExportArea(null)} disabled={exporting}>Clear area</button>
+      </div>}
       {mode === "arrow" && <div className="wb-colors wb-arrow-colors" role="group" aria-label="Arrow color">
         {ARROW_COLORS.map(({ name, value }) => <button key={value} type="button" aria-label={`${name} arrow color`} title={`${name} arrow color`} aria-pressed={arrowColor === value}
           style={{ backgroundColor: value }} onClick={() => setArrowColor(value)} />)}
@@ -370,7 +400,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
       <span className="wb-status" role="status">{exporting ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved locally" : ""}</span>
     </div>
     {error && <div className="wb-error" role="alert"><span>{error}</span><Button icon="close" label="Dismiss whiteboard error" onClick={() => setError("")} /></div>}
-    <div ref={viewport} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}${mode === "arrow" ? " is-arrow" : ""}`} aria-label="Whiteboard canvas"
+    <div ref={viewport} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}${mode === "arrow" ? " is-arrow" : ""}${mode === "crop" ? " is-crop" : ""}`} aria-label="Whiteboard canvas"
       style={{ backgroundSize: `${24 * view.scale}px ${24 * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
       onPointerDown={(e) => { pastePoint.current = point(e); start(e); }} onPointerMove={(e) => { pastePoint.current = point(e); move(e); }} onPointerUp={(e) => end(e)} onPointerCancel={(e) => end(e, true)}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); addFiles(e.dataTransfer.files, point(e)); }}>
@@ -397,7 +427,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
               onChange={(color) => commit(setWhiteboardItemHeaderColor(boardRef.current, item.id, color))} />
           </div>
           {item.kind === "note" ? <textarea aria-label="Note text" value={item.text} maxLength={100000} spellCheck
-            onPointerDown={(e) => { if (mode === "pan") start(e); else { e.stopPropagation(); setSelected(item.id); } }}
+            onPointerDown={(e) => { if (mode === "pan" || mode === "crop") start(e); else { e.stopPropagation(); setSelected(item.id); } }}
             onChange={(e) => patch(item.id, { text: e.target.value }, item.id)} onBlur={() => { editGroup.current = null; }} /> :
             asset && <FileCard asset={asset} item={item} onPage={pageChange} visible={visible}
               resolution={asset.type === "application/pdf" ? pdfResolution : 1} refreshKey={asset.type === "application/pdf" ? pdfRefreshKey : 0} />}
@@ -413,6 +443,11 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         })}
         {arrowPreview && <ArrowGraphic from={arrowPreview.from} to={arrowPreview.to} color={arrowPreview.color} />}
       </svg>
+      {exportArea && <div className="wb-export-area" aria-label="Selected PDF export area" style={{
+        left: view.x + exportArea.x * view.scale, top: view.y + exportArea.y * view.scale,
+        width: exportArea.w * view.scale, height: exportArea.h * view.scale,
+      }} />}
+      {areaDraft && <div className="wb-export-area is-draft" aria-hidden="true" style={{ left: areaDraft.x, top: areaDraft.y, width: areaDraft.w, height: areaDraft.h }} />}
     </div>
     <footer className="wb-bottom"><span>{board.items.length} items</span><div>
       <Button icon="chevronDown" label="Zoom out whiteboard" onClick={() => zoom(1 / 1.2)} />

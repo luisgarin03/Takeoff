@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { PDFDocument, degrees } from "pdf-lib";
 import { getDocument } from "pdfjs-dist";
 import { buildMarkedSetPdf } from "../src/lib/markedset.js";
+import { RENDER_SCALE } from "../src/lib/sheets.js";
 
 const sheet = { key: "plans.pdf::2", file: "plans.pdf", page: 2, label: "A-102" };
 const condition = { id: "c", finish_tag: "FLOOR-1", color: "#008800", fill: "none", hatch: "solid" };
@@ -35,12 +36,14 @@ async function fixture(rotation = 0) {
 async function inspect(bytes: Uint8Array) {
   const pdf = await getDocument({ data: bytes.slice(), useSystemFonts: true }).promise;
   try {
-    const text: string[] = [];
+    const text: string[] = [], positioned: Array<{ str: string; y: number }> = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
-      text.push((await page.getTextContent()).items.map((item) => "str" in item ? item.str : "").join(" "));
+      const items = (await page.getTextContent()).items;
+      text.push(items.map((item) => "str" in item ? item.str : "").join(" "));
+      for (const item of items) if ("str" in item) positioned.push({ str: item.str, y: item.transform[5] });
     }
-    return { count: pdf.numPages, text: text.join("\n") };
+    return { count: pdf.numPages, text: text.join("\n"), positioned };
   } finally { await pdf.destroy(); }
 }
 
@@ -74,6 +77,22 @@ test("an unmarked current page still downloads in full", async () => {
     const output = await inspect(result.bytes);
     assert.equal(output.count, 1);
     assert.equal(output.text.trim(), "CURRENT PAGE");
+  } finally { await f.pdf.destroy(); }
+});
+
+test("linear quantity chips sit closer to their line without touching it", async () => {
+  const f = await fixture();
+  try {
+    const linear = { ...shape, measure_role: "linear", verts_norm: [[.2, .5], [.8, .5]], computed: { perimeter_lf: 12.9 } };
+    const result = await buildMarkedSetPdf({ ...f.options, shapes: [linear], markups: [], rfis: [] });
+    const output = await inspect(result.bytes);
+    const chip = output.positioned.find((item) => item.str.includes("12.9 LF"));
+    assert.ok(chip, "export contains the linear quantity chip");
+
+    const sourcePage = await f.pdf.getPage(2);
+    const sourceViewport = sourcePage.getViewport({ scale: RENDER_SCALE });
+    const [, lineY] = sourceViewport.convertToPdfPoint(0, sourceViewport.height * .5);
+    assert.ok(Math.abs((chip.y - lineY) - 7.5) < .1, `chip baseline is 7.5pt above the line; measured ${chip.y - lineY}pt (${lineY}, ${chip.y}; ${chip.str})`);
   } finally { await f.pdf.destroy(); }
 });
 
