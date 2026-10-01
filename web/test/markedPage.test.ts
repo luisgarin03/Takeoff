@@ -80,6 +80,17 @@ test("an unmarked current page still downloads in full", async () => {
   } finally { await f.pdf.destroy(); }
 });
 
+test("page download can omit condition and quantity labels while retaining notes", async () => {
+  const f = await fixture();
+  try {
+    const result = await buildMarkedSetPdf({ ...f.options, includeShapeLabels: false });
+    const output = await inspect(result.bytes);
+    assert.match(output.text, /CURRENT PAGE/);
+    assert.match(output.text, /RFI-007 VERIFY DOOR/);
+    assert.doesNotMatch(output.text, /FLOOR-1|42 SF/);
+  } finally { await f.pdf.destroy(); }
+});
+
 test("linear quantity chips sit closer to their line without touching it", async () => {
   const f = await fixture();
   try {

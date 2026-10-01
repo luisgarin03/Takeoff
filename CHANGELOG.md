@@ -4,7 +4,12 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased
 
+- **Download this page** now keeps takeoff linework, notes, and markups while omitting automatic condition titles and SF/LF quantity labels. The full Marked Set export still includes those measurement labels.
+- Exported markup captions now use a tightly fitted translucent paper background with a colored border, keeping notes and callouts readable over dense plan linework without an offset-looking box.
+- On-canvas note and callout backgrounds use the browser's measured Inter glyph width plus even horizontal breathing room on both sides of captions.
+
 ### Added
+- Custom browser-local Ctrl+key shortcuts for every markup tool. Assign from **Draw > Markup**, see the active binding in the menu, and clear or remap it without changing project save files.
 - Whiteboard export can now download the full board with the renamed **Export whiteboard as PDF** action or a user-drawn rectangular area. Cropped exports use the selected rectangle as page bounds and clip notes, file content and arrows without changing project save data.
 - Colored arrow markup in both whiteboard and plan drawing: drag over whiteboard references with the selected palette color, or click two points using **Draw > Markup > Arrow** on a sheet. Whiteboard arrows persist compatibly in the existing optional project data and are included in PDF exports.
 - Whiteboard arrows now layer above PDF/image cards. Whiteboard PDF exports include note titles, selected header colors and swatches, and the existing colored note body/text instead of exporting only the note-colored rectangle.

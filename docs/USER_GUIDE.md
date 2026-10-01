@@ -489,7 +489,7 @@ Email verification and password recovery use an emailed code, entered in the sam
 
 ### Download the current plan page
 
-Choose **Project > Download this page** to download a one-page PDF of the complete current sheet with all committed takeoff marks and markups, even if the markup layer is hidden. Linear measurement chips are positioned close to their measured line while keeping a clear gap so they do not cover it. Finish any trace or annotation in progress first. In side-by-side view, click the desired sheet first. Zoom/pan and toolbar visibility do not affect the export. The original page dimensions and rotation are retained in normal plan view; an inverted plan exports in its current dark appearance. No report cover, RFI schedule or extra sheet stamp is added. This is a shareable PDF, not an editable `.otk` project backup.
+Choose **Project > Download this page** to download a one-page PDF of the complete current sheet with all committed takeoff lines, notes, and markups, even if the markup layer is hidden. Automatic takeoff labels—condition titles and SF/LF quantities—are omitted so the page carries only the drawing work and annotations. Text-based markup captions receive a translucent paper background and colored border so plan linework does not obscure them. Finish any trace or annotation in progress first. In side-by-side view, click the desired sheet first. Zoom/pan and toolbar visibility do not affect the export. The original page dimensions and rotation are retained in normal plan view; an inverted plan exports in its current dark appearance. No report cover, RFI schedule or extra sheet stamp is added. This is a shareable PDF, not an editable `.otk` project backup. The Report's **Marked set** export still includes condition and quantity labels.
 
 ### Whiteboard notes
 
@@ -651,6 +651,8 @@ Every shortcut in the app, verified against the code. Letter keys are suppressed
 | `P` | Pan |
 | `G` | Sheet gallery |
 | `Ctrl+F` / `⌘F` | Find and highlight text across loaded plans |
+
+Markup tools also support custom **Ctrl+key** shortcuts. Open **Draw > Markup**, choose **Map** beside a tool, then press Ctrl and a letter or number. Its binding appears in the menu; click **×** to clear it. Each key can be assigned to one markup tool. `Ctrl+F`, `Ctrl+Z`, `Ctrl+C`, `Ctrl+V`, and `Ctrl+D` remain reserved for Find, undo, and edit commands. Bindings are saved in this browser only and do not alter project files.
 
 ### Conditions
 

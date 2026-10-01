@@ -52,6 +52,7 @@ import { isCanvasBusy } from "../lib/canvasBusy";
 import { parseSchedule, rowToSeed } from "../lib/scheduleParse";
 import { normalizeScanRows, postScanWithRetry, SCAN_ENDPOINT, scanRasterScale } from "../lib/scheduleScan";
 import { DEFAULT_SCOPE_TERMS, addFindSuggestions, findTextItemMatches, normalizeFindSuggestions, parseFindTerms, removeFindSuggestion } from "../lib/findText.js";
+import { MARKUP_SHORTCUTS_KEY, assignMarkupShortcut, clearMarkupShortcut, normalizeMarkupShortcutMap } from "../lib/markupShortcuts.js";
 import { normalizeTag } from "../lib/scheduleEdit";
 import { isGoogleConfigured, isSignedIn, isAllowedDomain, getAccessToken, orgDomainHint } from "../lib/google/auth.js";
 import { extractVectorGeometry, buildMask, floodRegion, traceRegion, snapVertices, ringArea, MASK_MAX_DIM, SENS_STRICT, SENS_BALANCED, SENS_AGGRESSIVE } from "../lib/oneclick";
@@ -88,7 +89,7 @@ import { useGoogleAuth } from "../lib/google/AuthContext.jsx";
 import { projectHomeFolderId } from "../lib/projectHome.js";
 import { getTheme, toggleTheme, onThemeChange } from "../lib/theme.js";
 import { useFullscreen } from "../lib/fullscreen.js";
-import { wrapCanvasNoteText } from "../lib/canvasText.js";
+import { measureCanvasMarkupText, wrapCanvasNoteText } from "../lib/canvasText.js";
 // Pure data constants (render/zoom budgets, snap tuning, tool descriptors,
 // starter conditions) live in lib/canvasConstants.js; the pure
 // module-scope helpers (autoRenderScale, invertCanvasPixels, uid, clamp,
@@ -131,6 +132,10 @@ const normalizePreviewResolution = (value) => {
 const storedPreviewResolution = () => {
   try { const value = localStorage.getItem(PREVIEW_RESOLUTION_KEY); return value == null ? LOW_ZOOM_PREVIEW_DEFAULT_SCALE : normalizePreviewResolution(value); }
   catch { return LOW_ZOOM_PREVIEW_DEFAULT_SCALE; }
+};
+const storedMarkupShortcuts = () => {
+  try { return normalizeMarkupShortcutMap(JSON.parse(localStorage.getItem(MARKUP_SHORTCUTS_KEY) || "{}")); }
+  catch { return {}; }
 };
 
 // Click-select against a curved line's DRAWN path: flatten the control points and
@@ -284,6 +289,8 @@ export default function TakeoffCanvas() {
   const [err, setErr] = useState("");
 
   const [tool, setTool] = useState("pan");
+  const [markupShortcuts, setMarkupShortcuts] = useState(storedMarkupShortcuts);
+  const [mappingMarkupShortcut, setMappingMarkupShortcut] = useState(null);
   const [toolbarHidden, setToolbarHidden] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [viewportEpoch, setViewportEpoch] = useState(0);
@@ -298,6 +305,7 @@ export default function TakeoffCanvas() {
   const [detectedScales, setDetectedScales] = useState({}); // { sheetKey: {upp,label,multi} } read off the plan text
   const [darkMode, setDarkMode] = useState(() => { try { return localStorage.getItem("opentakeoff_dark") === "1"; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem("opentakeoff_dark", darkMode ? "1" : "0"); } catch { /* private mode */ } }, [darkMode]);
+  useEffect(() => { try { localStorage.setItem(MARKUP_SHORTCUTS_KEY, JSON.stringify(markupShortcuts)); } catch { /* browser storage may be unavailable */ } }, [markupShortcuts]);
   // App chrome theme (light/dark tokens) — independent of the canvas ☾ invert
   // above. lib/theme.js owns the DOM; this state just keeps the glyph current.
   const [theme, setTheme] = useState(getTheme);
@@ -639,6 +647,7 @@ export default function TakeoffCanvas() {
   // its onOpenChange effect when the callback identity changes, so an inline
   // arrow here would re-count an open menu on every canvas render
   const onMenuDepth = useCallback((o) => { menuDepthRef.current = Math.max(0, menuDepthRef.current + (o ? 1 : -1)); }, []);
+  const onMarkupMenuDepth = useCallback((o) => { onMenuDepth(o); if (!o) setMappingMarkupShortcut(null); }, [onMenuDepth]);
   const thumbCacheRef = useRef(new Map()); // sheetKey → thumbnail dataURL — survives gallery close
   const legacyPinnedRef = useRef(null);    // old `pinned` page numbers awaiting their one-shot tab migration
   const tabInitRef = useRef(false);        // snap to the first restored tab exactly once
@@ -2313,6 +2322,54 @@ export default function TakeoffCanvas() {
   //   precedent): ⏎ accept dispatches an `add` against the CURRENT array, so a
   //   shapes change with no other dep change must re-subscribe this handler.
 
+  // Custom Ctrl+key bindings for the markup tools are browser-local UI
+  // preferences, separate from project data. Ctrl+F and the existing edit
+  // commands remain reserved; mapped bindings otherwise take priority over
+  // plain tool keys, conditions, and browser defaults.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+      if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (viewRef.current === "gallery" || menuDepthRef.current > 0) return;
+      const key = e.key.toUpperCase();
+      if (["F", "Z", "C", "V", "D"].includes(key)) return;
+      const item = MARKUP_TOOLS.find((candidate) => markupShortcuts[candidate.id] === key);
+      if (!item) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setTool(item.id);
+      setMarkupDraft(null);
+      setPoly([]);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [markupShortcuts]);
+
+  // The menu's per-tool Map button arms one capture. Escape cancels; Ctrl+F,
+  // undo, and clipboard/duplicate chords stay available for their current jobs.
+  useEffect(() => {
+    if (!mappingMarkupShortcut) return undefined;
+    const reserved = new Set(["F", "Z", "C", "V", "D"]);
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setMappingMarkupShortcut(null);
+        return;
+      }
+      if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      const key = e.key.toUpperCase();
+      if (!/^[A-Z0-9]$/.test(key)) return;
+      if (reserved.has(key)) { setMappingMarkupShortcut(null); return; }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setMarkupShortcuts((current) => assignMarkupShortcut(current, mappingMarkupShortcut, key));
+      setMappingMarkupShortcut(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [mappingMarkupShortcut]);
+
   // remember the last armed measure tool — the Measure menu face shows it
   useEffect(() => { if (MEASURE_TOOLS.some((t) => t.id === tool)) lastMeasureRef.current = tool; }, [tool]);
 
@@ -2547,8 +2604,8 @@ export default function TakeoffCanvas() {
     }
     if (m.type === "callout" && m.at) {
       const ax = m.at[0] * W + ox, ay = m.at[1] * H;
-      const lw = ((m.text?.length || 1) * 7 + 14) / sc;
-      if (X >= ax - thr && X <= ax + lw && Y >= ay - 18 / sc - thr && Y <= ay + thr) return true;
+      const lw = (measureCanvasMarkupText(m.text || " ") + 20) / sc;
+      if (X >= ax - 5 / sc - thr && X <= ax - 5 / sc + lw + thr && Y >= ay - 18 / sc - thr && Y <= ay + thr) return true;
       if (m.target) {
         const tx = m.target[0] * W + ox, ty = m.target[1] * H;
         if (Math.hypot(X - tx, Y - ty) < thr * 2) return true;
@@ -3879,7 +3936,7 @@ export default function TakeoffCanvas() {
       const sheet = { key: focusPanel.key, file: focusPanel.file, page: focusPanel.page, label: tabLabel(focusPanel.key) };
       setCommitMsg(`Building ${sheet.label} PDF...`);
       const { bytes, filename } = await buildMarkedSetPdf({
-        projectName, dark: darkMode, units, singleSheet: true, sheets: [sheet],
+        projectName, dark: darkMode, units, singleSheet: true, includeShapeLabels: false, sheets: [sheet],
         shapes: shapes.filter((s) => s.sheet_id === sheet.key),
         markups: markups.filter((m) => m.sheet_id === sheet.key), rfis, conditions,
         getPage: async (file, pageNum) => (await docFor(file)).getPage(pageNum),
@@ -5021,7 +5078,31 @@ export default function TakeoffCanvas() {
   // Toolbar and canvas rail share the exact action objects and availability gates.
   const measureMenuItems = MEASURE_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, onSelect: () => setTool(t.id) }));
   const cutMenuItems = CUT_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, tint: "var(--c-danger)", onSelect: () => setTool(t.id) }));
-  const markupMenuItems = MARKUP_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, onSelect: () => { setTool(t.id); setMarkupDraft(null); } }));
+  const activateMarkupTool = (id) => { setTool(id); setMarkupDraft(null); setPoly([]); };
+  const markupMenuItems = [
+    ...MARKUP_TOOLS.map((t) => {
+      const mappedKey = markupShortcuts[t.id];
+      const isMapping = mappingMarkupShortcut === t.id;
+      return {
+        id: t.id, icon: t.icon, label: t.label,
+        shortcut: mappedKey ? `Ctrl+${mappedKey}` : t.shortcut,
+        active: tool === t.id,
+        onSelect: () => activateMarkupTool(t.id),
+        accessory: <div style={{ display: "inline-flex", alignItems: "center", gap: 3, paddingRight: 5 }}>
+          <button type="button" aria-label={isMapping ? `Press Ctrl and a key for ${t.label}` : `Map Ctrl shortcut for ${t.label}`}
+            aria-pressed={isMapping} title={isMapping ? "Press Ctrl plus a letter or number; Escape cancels" : `Map a Ctrl shortcut for ${t.label}`}
+            onClick={() => setMappingMarkupShortcut(isMapping ? null : t.id)}
+            style={{ minWidth: 34, padding: "3px 5px", border: `1px solid ${isMapping ? "var(--cobalt)" : "var(--ink-faint)"}`, background: isMapping ? "var(--paper-cream)" : "transparent", color: "var(--ink)", cursor: "pointer", font: "10px var(--f-mono)" }}>
+            {isMapping ? "Ctrl+…" : "Map"}
+          </button>
+          {mappedKey && <button type="button" aria-label={`Clear Ctrl+${mappedKey} shortcut for ${t.label}`} title={`Clear Ctrl+${mappedKey} shortcut`}
+            onClick={() => { setMarkupShortcuts((current) => clearMarkupShortcut(current, t.id)); if (isMapping) setMappingMarkupShortcut(null); }}
+            style={{ width: 22, height: 24, padding: 0, border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", font: "12px var(--f-body)" }}>×</button>}
+        </div>,
+      };
+    }),
+    { note: mappingMarkupShortcut ? "Press Ctrl plus a letter or number to assign; Escape cancels. Ctrl+F/Z/C/V/D are reserved." : "Map a Ctrl+key shortcut for each markup tool. Existing Ctrl+F/Z/C/V/D commands stay reserved." },
+  ];
   const editMenuItems = [
     { id: "copy", icon: "copy", label: "Copy", shortcut: "⌘C", disabled: !selectedId, onSelect: copySelected },
     { id: "paste", icon: "paste", label: "Paste", shortcut: "⌘V", disabled: !clipRef.current.length, onSelect: () => pasteClipboard() },
@@ -5457,7 +5538,7 @@ export default function TakeoffCanvas() {
         { id: "browse-cloud", icon: "sheets", label: "Cloud projects...", onSelect: () => setCloudView("projects"), disabled: !hydrated.current || !!loadError },
         "divider",
         { id: "download-page", icon: "document", label: pageExportBusy ? "Downloading page..." : "Download this page",
-          title: "Download the current sheet with all takeoff marks and markups as a PDF", onSelect: downloadCurrentPage,
+          title: "Download the current sheet with takeoff lines, notes, and markups but no measurement labels", onSelect: downloadCurrentPage,
           disabled: pageExportBusy || !focusPanel.file || !hydrated.current || !!loadError },
         ...(new URLSearchParams(window.location.search).has("localProject") ? ["divider",
           { id: "local-workspace", label: "Return to default workspace", onSelect: () => window.location.assign(window.location.pathname) }] : []),
@@ -5696,7 +5777,7 @@ export default function TakeoffCanvas() {
               <ToolMenu
                 title="Markup — annotations, not measurements"
                 active={MARKUP_IDS.includes(tool)}
-                onOpenChange={onMenuDepth}
+                onOpenChange={onMarkupMenuDepth}
                 face={<><Icon name="markup" size={15} /><span>Markup</span></>}
                 items={[...markupMenuItems, ...(markupStyleControls ? [{ id: "markup-colors", custom: markupStyleControls }] : [])]}
               />
@@ -6366,14 +6447,14 @@ export default function TakeoffCanvas() {
                       }
                       if (m.type === "callout") {
                         const [tx, ty] = m.target, [ax, ay] = m.at;
-                        const lw = ((m.text?.length || 1) * 7 + 10) / z;
+                        const lw = (measureCanvasMarkupText(m.text || " ") + 20) / z;
                         return (
                           <g key={m.id}>
-                            {halo(ax * p.img.w - 4 / z, ay * p.img.h - 18 / z, ax * p.img.w + lw + 4 / z, ay * p.img.h + 4 / z)}
+                            {halo(ax * p.img.w - 9 / z, ay * p.img.h - 18 / z, ax * p.img.w - 5 / z + lw + 4 / z, ay * p.img.h + 4 / z)}
                             <line x1={tx * p.img.w} y1={ty * p.img.h} x2={ax * p.img.w} y2={ay * p.img.h} stroke={mk} strokeWidth={(2 * w) / z} strokeDasharray={dash} />
                             {/* arrowhead at the target end — replaces the old vertex star */}
                             <path d={arrowheadPath(ax * p.img.w, ay * p.img.h, tx * p.img.w, ty * p.img.h, 9 / z)} fill={mk} />
-                            <rect x={ax * p.img.w} y={ay * p.img.h - 16 / z} width={lw} height={20 / z} fill="rgba(255,255,255,.92)" stroke={mk} strokeWidth={(1 * w) / z} strokeDasharray={dash} rx={3 / z} />
+                            <rect x={ax * p.img.w - 5 / z} y={ay * p.img.h - 16 / z} width={lw} height={20 / z} fill="rgba(255,255,255,.92)" stroke={mk} strokeWidth={(1 * w) / z} strokeDasharray={dash} rx={3 / z} />
                             <text x={(ax * p.img.w) + 5 / z} y={(ay * p.img.h) - 2 / z} fill="#0e1a2e" fontSize={12 / z}>{m.text}</text>
                             {badge(ax * p.img.w, ay * p.img.h - 24 / z)}
                           </g>
@@ -6431,13 +6512,13 @@ export default function TakeoffCanvas() {
                       }
                       const [x, y] = m.at;
                       const lines = m.type === "text" ? wrapCanvasNoteText(m.text) : [m.text || ""];
-                      const maxLineLength = Math.max(...lines.map((line) => line.length), 1);
-                      const lw = (m.type === "text" ? Math.max(80, Math.min(320, maxLineLength * 7 + 18)) : maxLineLength * 7 + 10) / z;
+                      const measuredWidth = Math.max(...lines.map((line) => measureCanvasMarkupText(line, 12, 600)), 1);
+                      const lw = (m.type === "text" ? Math.max(80, Math.min(340, measuredWidth + 20)) : measuredWidth + 20) / z;
                       const lh = m.type === "text" ? Math.max(20, lines.length * 16 + 8) / z : 20 / z;
                       return (
                         <g key={m.id}>
-                          {halo(x * p.img.w - 5 / z, y * p.img.h - 16 / z, x * p.img.w + lw + 3 / z, y * p.img.h + lh - 10 / z)}
-                          <rect x={x * p.img.w - 3 / z} y={y * p.img.h - 14 / z} width={lw} height={lh} fill="rgba(255,247,237,.92)" stroke={mk} strokeWidth={(1 * w) / z} strokeDasharray={dash} rx={3 / z} />
+                          {halo(x * p.img.w - 10 / z, y * p.img.h - 16 / z, x * p.img.w - 8 / z + lw + 3 / z, y * p.img.h + lh - 10 / z)}
+                          <rect x={x * p.img.w - 8 / z} y={y * p.img.h - 14 / z} width={lw} height={lh} fill="rgba(255,247,237,.92)" stroke={mk} strokeWidth={(1 * w) / z} strokeDasharray={dash} rx={3 / z} />
                           <text x={x * p.img.w + 2 / z} y={y * p.img.h} fill="#0e1a2e" fontSize={12 / z} fontWeight="600">
                             {lines.map((line, index) => <tspan key={index} x={x * p.img.w + 2 / z} dy={index === 0 ? 0 : `${16 / z}px`}>{line || " "}</tspan>)}
                           </text>
@@ -6635,7 +6716,7 @@ export default function TakeoffCanvas() {
             <ToolMenu rail title="Draw — measurement, cut out, and markup tools"
               face={<Icon name="pencil" size={15} />}
               active={measureActive || tool === "deduct" || MARKUP_IDS.includes(tool)}
-              onOpenChange={onMenuDepth}
+              onOpenChange={onMarkupMenuDepth}
               items={[{ section: "Measure" }, ...measureMenuItems, { section: "Cut Out" }, ...cutMenuItems, { section: "Markup" }, ...markupMenuItems, ...(markupStyleControls ? [{ id: "markup-style", custom: markupStyleControls }] : [])]} />
             <ToolMenu rail title="Edit takeoffs" face={<Icon name="markup" size={15} />}
               onOpenChange={onMenuDepth} items={editMenuItems} />

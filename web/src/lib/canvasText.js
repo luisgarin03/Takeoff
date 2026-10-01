@@ -22,3 +22,22 @@ export function wrapCanvasNoteText(value, maxChars = 42) {
   }
   return lines.length ? lines : [""];
 }
+
+let markupMeasureContext = null;
+
+// SVG does not expose a useful text width until after paint. Measure with the
+// same browser font up front so annotation backgrounds fit their actual glyphs
+// instead of guessing from character count (which leaves narrow text offset).
+export function measureCanvasMarkupText(value, size = 12, weight = 400) {
+  const text = String(value || "");
+  try {
+    if (!markupMeasureContext && typeof document !== "undefined") {
+      markupMeasureContext = document.createElement("canvas").getContext("2d");
+    }
+    if (markupMeasureContext) {
+      markupMeasureContext.font = `${weight} ${size}px Inter, system-ui, sans-serif`;
+      return markupMeasureContext.measureText(text).width;
+    }
+  } catch { /* deterministic fallback for tests/non-DOM renderers */ }
+  return text.length * size * 0.55;
+}
