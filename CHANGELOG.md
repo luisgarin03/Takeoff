@@ -4,6 +4,12 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased
 
+- Theme palette control now opens logo color, effect, brightness, and speed settings, applied live to the real logo and saved locally.
+
+- Reorganized the in-app manual into 16 clickable topics with formatted instructions, relevant button references, and existing app screenshots and animation.
+
+- Added Project → Open Recent and a centered User Guide with internal scrolling and app icon/button references.
+
 - **Download this page** now keeps takeoff linework, notes, and markups while omitting automatic condition titles and SF/LF quantity labels. The full Marked Set export still includes those measurement labels.
 - Exported markup captions now use a tightly fitted translucent paper background with a colored border, keeping notes and callouts readable over dense plan linework without an offset-looking box.
 - On-canvas note and callout backgrounds use the browser's measured Inter glyph width plus even horizontal breathing room on both sides of captions.

@@ -1,5 +1,13 @@
 # OpenTakeoff — The User Manual
 
+The in-app guide's Contents index selects one of 16 topics. Each topic includes its detailed instructions and relevant visual control references; the schedule, One-Click, and report topics also include images from the app documentation.
+
+Use **User Guide** in the estimating toolbar to read this manual in a centered window. Scroll inside the guide; close it with the × button or Escape. The illustrated button labels are references to controls in the workspace.
+
+Use **Project → Open Recent** to expand recently used workspaces saved in this browser. The default workspace is a single changing workspace, not an archive of each imported plan. Export a project file when you need a portable backup.
+
+The [ConstructConnect On-Screen Takeoff guide](https://help.constructconnect.com/on-screen-takeoff-user-guide-68) is an organizational reference for topics such as projects, conditions, scale, measurements, annotations, and reports. The instructions here describe OpenTakeoff's own controls and behavior.
+
 OpenTakeoff is a takeoff canvas that runs in your browser. Open a plan, set the scale, trace the finishes — or let an AI agent stage the tracing while you keep the accept button — and walk away with a priced-out quantity report, a materials buy list, and a marked set you can send to a GC. Local mode needs no account or upload. Optional cloud saving uploads a project only when you choose it.
 
 On Android Chrome, you can use the browser menu's **Install app** or **Add to home screen** action when running the hosted app or a local server reachable from the phone. The install uses the app manifest and branded icon; it does not make PDFs or project data available offline, so the browser remains the source of truth.
@@ -93,6 +101,8 @@ Panning is always at hand, whatever tool is armed:
 Past ~115% zoom the visible region re-renders straight from the PDF vectors at your current zoom, so fine callouts and hatching stay razor-sharp at any depth. At very low overview zoom, OpenTakeoff displays a prebuilt preview of the same finished sheet raster; it switches back to the full-resolution base after zooming in, and quantities, coordinates, and vector overlays are unchanged. The Diagnostics panel’s **Preview Resolution** control selects 10–100% of the base raster (50% by default) and shows its size plus an RGBA-memory estimate; it is saved per browser and never re-renders the PDF. Per sheet, the **Render & fill settings** menu (the sliders icon beside the 45° and Snap toggles) offers **Hi-Res render (this sheet)** — a higher base raster quality budget (~28 MP) for dense sheets. Hi-Res is a display setting, saved per sheet per browser; **quantities are never affected by render quality**.
 
 ### App theme
+
+The palette button now opens **Theme & logo**. Switch light/dark appearance, choose Shimmer, Solid, Pulse, Morph, or Rainbow, and adjust logo brightness and speed. Morph blends the primary and second colors; Rainbow uses its own spectrum. Changes appear immediately on the actual toolbar logo and save in this browser. Reset logo restores the logo defaults. Reduced-motion settings pause animation.
 
 The palette icon below Revisions at the bottom of the right canvas rail toggles the existing light/dark app theme and reflects the current theme. It shares the saved browser preference with the original, now-hidden top toolbar control. This changes app chrome, not sheet inversion or report theme settings.
 

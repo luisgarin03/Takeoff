@@ -1,0 +1,10 @@
+.theme-settings { position: fixed; inset: auto 16px 16px auto; margin: 0; width: min(400px, 94vw); max-height: calc(100dvh - 80px); padding: 0; border: 1px solid var(--ink-faint); border-radius: 12px; background: var(--paper-bright); color: var(--ink); box-shadow: 0 24px 70px #0006; }
+.theme-settings::backdrop { background: transparent; }
+.theme-settings header, .theme-settings footer { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; background: var(--paper-shadow); }
+.theme-settings h2 { margin: 4px 0 0; font-size: 22px; }.theme-settings small { font-size: 10px; letter-spacing: .14em; color: var(--ink-muted); }
+.theme-settings-body { padding: 22px 24px; display: grid; gap: 18px; }
+.theme-settings button, .theme-settings select { padding: 8px 10px; color: var(--ink); background: var(--paper-bright); border: 1px solid var(--ink-faint); }
+.theme-settings label { display: grid; gap: 8px; font-size: 13px; font-weight: 600; }.theme-settings .theme-row { display: flex; justify-content: space-between; align-items: center; }
+.theme-colors { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }.theme-colors input { width: 100%; height: 42px; border: 1px solid var(--ink-faint); background: transparent; }.theme-colors span { font-size: 11px; color: var(--ink-muted); }
+.theme-settings fieldset { border: 1px solid var(--ink-faint); padding: 12px; }.theme-settings legend { font-size: 12px; }.theme-swatches { display: flex; gap: 8px; flex-wrap: wrap; }.theme-swatches button { width: 28px; height: 28px; padding: 0; }.theme-swatches button[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+.theme-settings input[type="range"] { width: 100%; accent-color: var(--cobalt); }.theme-settings output { font-size: 11px; color: var(--ink-muted); }.theme-range-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-muted); }.theme-settings p { font-size: 12px; line-height: 1.6; color: var(--ink-muted); margin: 0; }.theme-settings :disabled { opacity: .4; cursor: default; }

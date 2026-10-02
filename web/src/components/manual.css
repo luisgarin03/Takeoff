@@ -1,0 +1,22 @@
+.manual-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; font-size: 14px; line-height: 1.75; }
+.manual-index { width: 235px; flex-shrink: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 12px; border-right: 1px solid var(--ink-faint); background: var(--paper-shadow); }
+.manual-index strong { display: block; font-size: 10px; letter-spacing: .15em; padding: 0 10px 12px; color: var(--ink-muted); }
+.manual-index button { display: block; width: 100%; padding: 10px; text-align: left; color: var(--ink-muted); border: 0; border-radius: 5px; background: transparent; cursor: pointer; font: inherit; font-size: 12px; line-height: 1.5; }
+.manual-index button[aria-current], .manual-index button:hover { background: var(--paper-bright); color: var(--cobalt); }
+.manual-article { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 32px 44px; }
+.manual-article h2 { font-size: 22px; line-height: 1.4; margin: 0 0 16px; }
+.manual-section-heading { border-top: 1px solid var(--ink-faint); margin-top: 24px; padding-top: 18px; }
+.manual-section-heading h3 { font-size: 15px; margin: 0 0 10px; }
+.manual-article p, .manual-article li { color: var(--ink-muted); overflow-wrap: anywhere; }
+.manual-article strong { color: var(--ink); }
+.manual-hint { font-size: 12px; }
+.manual-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 16px; }
+.manual-button { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--ink-faint); border-radius: 5px; background: var(--paper-shadow); color: var(--ink); font-size: 12px; font-weight: 600; }
+.manual-article kbd { font-size: 11px; border: 1px solid var(--ink-faint); border-radius: 3px; padding: 1px 4px; white-space: nowrap; }
+.manual-article figure { margin: 20px 0; }
+.manual-article figure img { width: 100%; height: auto; border: 1px solid var(--ink-faint); border-radius: 6px; }
+.manual-article figcaption { font-size: 11px; color: var(--ink-muted); margin-top: 8px; }
+.manual-table { overflow-x: auto; } .manual-table table { border-collapse: collapse; width: 100%; font-size: 12px; } .manual-table th, .manual-table td { padding: 9px; text-align: left; border-bottom: 1px solid var(--ink-faint); }
+.manual-article pre { overflow-x: auto; background: var(--paper-shadow); padding: 14px; font-size: 12px; }
+dialog[aria-labelledby="user-guide-title"]::backdrop { background: #0009; }
+@media (max-width: 650px) { .manual-layout { flex-direction: column; } .manual-index { width: auto; max-height: 130px; border-right: 0; border-bottom: 1px solid var(--ink-faint); } .manual-article { padding: 18px; } }

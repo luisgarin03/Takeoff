@@ -27,13 +27,20 @@ a { color: inherit; text-decoration: none; }
 .brand-text-shimmer {
   display: inline-block;
   color: var(--ink);
-  background: linear-gradient(110deg, var(--ink-muted) 0%, var(--ink) 38%, var(--cobalt) 50%, var(--ink) 62%, var(--ink-muted) 100%);
+  background: linear-gradient(110deg, var(--ink-muted) 0%, var(--ink) 38%, var(--logo-color, var(--cobalt)) 50%, var(--ink) 62%, var(--ink-muted) 100%);
   background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: brand-text-shimmer 4s linear infinite;
+  animation: brand-text-shimmer var(--logo-duration, 4s) linear infinite;
+  filter: brightness(var(--logo-brightness, 1));
 }
+.brand-text-shimmer[data-effect="solid"], .brand-text-shimmer[data-effect="pulse"], .brand-text-shimmer[data-effect="morph"] { background: none; color: var(--logo-color); -webkit-text-fill-color: currentColor; animation: none; }
+.brand-text-shimmer[data-effect="pulse"] { animation: logo-pulse var(--logo-duration) ease-in-out infinite; }
+.brand-text-shimmer[data-effect="morph"] { animation: logo-morph var(--logo-duration) ease-in-out infinite; }
+.brand-text-shimmer[data-effect="rainbow"] { background-image: linear-gradient(90deg, #ef7070, #e6b64c, #65c884, #68b8ff, #b78bff, #ef7070); }
+@keyframes logo-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes logo-morph { 0%, 100% { color: var(--logo-color); } 50% { color: var(--logo-second); } }
 
 @keyframes brand-text-shimmer {
   from { background-position: 100% center; }
@@ -41,7 +48,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .brand-text-shimmer { animation: none; }
+  .brand-text-shimmer, .brand-text-shimmer[data-effect] { animation: none; }
 }
 
 input,
@@ -471,6 +478,27 @@ select {
     inset 0 1px 0 var(--glass-toolbar-highlight),
     var(--glass-toolbar-shadow);
 }
+
+/* Primary toolbar faces share one size; dropdown contents keep their own layout. */
+.glass-toolbar-primary > button,
+.glass-toolbar-primary > span > button,
+.glass-toolbar-primary > span > span > button,
+.glass-toolbar-primary > div > button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 30px;
+  min-height: 30px;
+  padding: 6px 10px !important;
+  gap: 7px !important;
+  font-family: var(--f-mono) !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  letter-spacing: normal !important;
+  flex-shrink: 0;
+}
+.glass-toolbar-primary button > svg { flex-shrink: 0; vertical-align: middle; }
 
 .glass-toolbar-strip {
   background:

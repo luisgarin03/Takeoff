@@ -1,9 +1,11 @@
 import { APP_NAME } from "./appName.js";
+import { useLogoSettings } from "./logoSettings.js";
 
 export function BrandText() {
+  const settings = useLogoSettings();
   // Keep the configured name exactly as entered; the logo should not impose a
   // lowercase/italic wordmark treatment on an organization's chosen casing.
-  return <span className="brand-text-shimmer">{APP_NAME}</span>;
+  return <span className="brand-text-shimmer" data-effect={settings.effect} style={{ "--logo-color": settings.color, "--logo-second": settings.second, "--logo-duration": `${12 - settings.speed * .1}s`, "--logo-brightness": settings.brightness / 100 }}>{APP_NAME}</span>;
 }
 
 // OpenTakeoff brand marks. Neutral, paper/ink/cobalt — the same token palette as

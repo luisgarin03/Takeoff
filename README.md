@@ -4,6 +4,12 @@ A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF
 
 ## Features
 
+**Theme & logo** provides live logo colors, Shimmer/Solid/Pulse/Morph/Rainbow effects, brightness, speed, and light/dark appearance controls.
+
+The User Guide includes a clickable topic index, visual control references, and app screenshots, with scrolling contained inside the guide.
+
+The toolbar **User Guide** opens a centered, internally scrolling manual with button references. **Project → Open Recent** expands saved workspace links.
+
 The **Project** menu creates named projects with an optional submission date and status. Those details travel with browser autosaves, cloud saves, and portable `.otk` project archives.
 
 Local **Save project** reuses a previously selected file handle only for that same project; **New project…** starts with a fresh named save destination. **Save project as…** always chooses a new destination. Google Drive projects use a stable-ID-backed, human-readable `OpenTakeoff/<Project Name>/` folder containing `<Project Name>.otk`, with `PDFs/` and `Assets/` created only when those separate files are needed.

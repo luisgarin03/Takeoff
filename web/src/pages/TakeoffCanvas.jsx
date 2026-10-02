@@ -33,6 +33,8 @@ import { extractSvgPrimitives, svgToStamp } from "../lib/svgImport.js";
 import { transformPath, svgPlacedBox } from "../lib/svgpath.js";
 import { ingestFiles } from "../lib/ingest.js";
 import ToolMenu from "../components/ToolMenu.jsx";
+import ThemeSettings from "../components/ThemeSettings.jsx";
+import WorkspaceHelp, { RecentProjectsMenu } from "../components/WorkspaceHelp.jsx";
 import SheetBookmarkButton from "../components/SheetBookmarkButton.jsx";
 import { sanitizeSheetBookmarks, toggleSheetBookmark, sheetBookmarkGroups } from "../lib/sheetBookmarks.js";
 import VirtualTrackpad from "../components/VirtualTrackpad.jsx";
@@ -309,6 +311,7 @@ export default function TakeoffCanvas() {
   // App chrome theme (light/dark tokens) — independent of the canvas ☾ invert
   // above. lib/theme.js owns the DOM; this state just keeps the glyph current.
   const [theme, setTheme] = useState(getTheme);
+  const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
   useEffect(() => onThemeChange(setTheme), []);
   // diff-only prefs (cf. reportColumns): only keys that differ from the
   // defaults persist, so a future default change reaches existing users
@@ -5534,6 +5537,7 @@ export default function TakeoffCanvas() {
         { id: "save-project", icon: "document", label: projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current) ? "Save project" : "Save project...", onSelect: () => saveProjectFile(false), disabled: !hydrated.current || !!loadError },
         { id: "save-project-as", label: "Save project as...", onSelect: () => saveProjectFile(true), disabled: !hydrated.current || !!loadError },
         { id: "open-project", icon: "plus", label: "Open project...", onSelect: () => projectInputRef.current?.click() },
+        { id: "open-recent", custom: <RecentProjectsMenu /> },
         { id: "save-cloud", icon: "document", label: "Save to Cloud...", onSelect: () => setCloudView("save"), disabled: !hydrated.current || !!loadError || !!store.listFolder },
         { id: "browse-cloud", icon: "sheets", label: "Cloud projects...", onSelect: () => setCloudView("projects"), disabled: !hydrated.current || !!loadError },
         "divider",
@@ -5597,6 +5601,7 @@ export default function TakeoffCanvas() {
         <div className="glass-toolbar glass-toolbar-primary" style={{ display: "flex", gap: 7, alignItems: "center", padding: "6px 14px", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-shadow)", whiteSpace: "nowrap" }}>
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}><BrandText /></strong>
         {projectControls}
+        <WorkspaceHelp name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
         {/* team cloud mode: always a way to leave this project, plus a way to
             browse the rest of the team's projects when the build names a root
             — fixed presence for the whole session (cloudMode is set before the
@@ -6916,11 +6921,11 @@ export default function TakeoffCanvas() {
           {panelBtn(() => setShowRevisions(true), "revisions", "Revisions — save the takeoff at each bid revision, compare what moved", showRevisions)}
           <button type="button" onClick={() => setDiagnosticsOpen((v) => !v)} title="Rendering diagnostics" aria-label="Rendering diagnostics" aria-pressed={diagnosticsOpen}
             style={{ width: 34, minHeight: 34, border: `1px solid ${diagnosticsOpen ? "var(--cobalt)" : "var(--ink-faint)"}`, background: diagnosticsOpen ? "var(--cobalt)" : "var(--paper-bright)", color: diagnosticsOpen ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontSize: 9, fontWeight: 700 }}>diag</button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
+          <button type="button" onClick={(e) => { e.stopPropagation(); setThemeSettingsOpen(true); }}
             onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
-            title="App theme — light / dark chrome (sheets unaffected; use ☾ on the canvas to invert the print)"
-            aria-label="App theme — light / dark chrome" aria-pressed={theme === "dark"}
+            title="Theme settings — app appearance and animated logo"
+            aria-label="Theme settings" aria-haspopup="dialog"
             style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 34, minHeight: 34, padding: "5px 0 4px", border: `1px solid ${theme === "dark" ? "var(--ink)" : "var(--ink-faint)"}`, background: theme === "dark" ? "var(--ink)" : "var(--paper-bright)", color: theme === "dark" ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 14, lineHeight: 1 }}>
             <Icon name="palette" size={18} />
           </button>
@@ -6928,6 +6933,7 @@ export default function TakeoffCanvas() {
 
        </div>
 
+        {themeSettingsOpen && <ThemeSettings theme={theme} toggleTheme={toggleTheme} onClose={() => setThemeSettingsOpen(false)} onMenuDepth={onMenuDepth} />}
         {settingsOpen && <TrackpadSettings
           visible={trackpadVisible} width={trackpadWidth} height={trackpadHeight} opacity={trackpadOpacity}
           bottom={trackpadVisible ? trackpadHeight + 14 : 14}
