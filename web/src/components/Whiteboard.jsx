@@ -12,6 +12,11 @@ import { base64ToBytes, bytesToBase64, appendWhiteboardArrow, fitWhiteboard, NOT
 import "../styles/whiteboard.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+const WHITEBOARD_TOOLBAR_HIDDEN_KEY = "opentakeoff_whiteboard_toolbar_hidden";
+const storedToolbarHidden = () => {
+  try { return localStorage.getItem(WHITEBOARD_TOOLBAR_HIDDEN_KEY) === "1"; }
+  catch { return false; }
+};
 
 function Button({ icon, label, children, ...props }) {
   return <button type="button" title={label} aria-label={label} {...props}><Icon name={icon} size={17} />{children}</button>;
@@ -63,10 +68,11 @@ const FilePreview = memo(function FilePreview({ asset, page, onPages, resolution
   return <div className="wb-preview">{error && <span role="alert">{error}</span>}{pending && <small className="wb-preview-loading" role="status">Rendering preview…</small>}<div ref={host} /></div>;
 });
 
-function ArrowGraphic({ from, to, color }) {
+function ArrowGraphic({ from, to, color, type = "arrow" }) {
   const dx = to.x - from.x, dy = to.y - from.y;
   const length = Math.hypot(dx, dy);
   if (!Number.isFinite(length) || length < 1) return null;
+  if (type === "line") return <line pointerEvents="none" x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={color} strokeWidth="2.5" strokeLinecap="round" />;
   const ux = dx / length, uy = dy / length, head = Math.min(14, length * 0.65), half = head * 0.42;
   const bx = to.x - ux * head, by = to.y - uy * head;
   const d = `M ${to.x} ${to.y} L ${bx - uy * half} ${by + ux * half} L ${bx + uy * half} ${by - ux * half} Z`;
@@ -114,8 +120,9 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const viewRef = useRef(view); viewRef.current = view;
   const [selected, setSelected] = useState(null), [mode, setMode] = useState("select");
+  const [toolbarHidden, setToolbarHidden] = useState(storedToolbarHidden);
   const [exportArea, setExportArea] = useState(null), [areaDraft, setAreaDraft] = useState(null);
-  const [arrowColor, setArrowColor] = useState(ARROW_COLORS[0].value), [arrowPreview, setArrowPreview] = useState(null);
+  const [arrowColor, setArrowColor] = useState(ARROW_COLORS[0].value), [connectorType, setConnectorType] = useState("arrow"), [arrowPreview, setArrowPreview] = useState(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const importLock = useRef(false), alive = useRef(true);
   const exportTask = useRef(null);
@@ -129,6 +136,11 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   const history = useRef({ past: [], future: [] });
   const [, historyTick] = useState(0);
   const editGroup = useRef(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(WHITEBOARD_TOOLBAR_HIDDEN_KEY, toolbarHidden ? "1" : "0"); }
+    catch { /* browser storage may be unavailable */ }
+  }, [toolbarHidden]);
 
   const commit = useCallback((next, group = null) => {
     if (next === boardRef.current) return;
@@ -215,8 +227,8 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     }
     if (pointers.current.size > 2) return;
     const kind = mode === "crop" && e.button === 0 ? "crop" : resize ? "resize" : mode === "arrow" && e.button === 0 ? "arrow" : item && mode === "select" && e.button === 0 ? "move" : "pan";
-    gesture.current = { kind, p, to: p, item, view: viewRef.current };
-    if (kind === "arrow") setArrowPreview({ from: p, to: p, color: arrowColor });
+    gesture.current = { kind, p, to: p, item, view: viewRef.current, ...(kind === "arrow" ? { color: arrowColor, connectorType } : {}) };
+    if (kind === "arrow") setArrowPreview({ from: p, to: p, color: arrowColor, type: connectorType });
     if (kind === "crop") { setExportArea(null); setAreaDraft({ x: p.x, y: p.y, w: 0, h: 0 }); }
     if (kind === "arrow") setSelected(null); else if (kind !== "crop") { if (item) setSelected(item.id); else setSelected(null); }
   }
@@ -234,7 +246,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     }
     const dx = p.x - g.p.x, dy = p.y - g.p.y;
     if (g.kind === "pan") setCamera({ ...g.view, x: g.view.x + dx, y: g.view.y + dy });
-    else if (g.kind === "arrow") { g.to = p; setArrowPreview({ from: g.p, to: p, color: arrowColor }); }
+    else if (g.kind === "arrow") { g.to = p; setArrowPreview({ from: g.p, to: p, color: g.color, type: g.connectorType }); }
     else if (g.kind === "crop") {
       g.to = p;
       setAreaDraft({ x: Math.min(g.p.x, p.x), y: Math.min(g.p.y, p.y), w: Math.abs(p.x - g.p.x), h: Math.abs(p.y - g.p.y) });
@@ -263,7 +275,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     if (!cancel && g?.changes) patch(g.item.id, g.changes);
     if (!cancel && g?.kind === "arrow" && Math.hypot((g.to.x - g.p.x), (g.to.y - g.p.y)) >= 8) {
       const v = g.view;
-      commit(appendWhiteboardArrow(boardRef.current, [(g.p.x - v.x) / v.scale, (g.p.y - v.y) / v.scale], [(g.to.x - v.x) / v.scale, (g.to.y - v.y) / v.scale], g.color || arrowColor));
+      commit(appendWhiteboardArrow(boardRef.current, [(g.p.x - v.x) / v.scale, (g.p.y - v.y) / v.scale], [(g.to.x - v.x) / v.scale, (g.to.y - v.y) / v.scale], g.color || arrowColor, g.connectorType));
     }
     pointers.current.delete(e.pointerId);
     if (viewport.current.hasPointerCapture(e.pointerId)) viewport.current.releasePointerCapture(e.pointerId);
@@ -351,7 +363,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     onPaste={paste}
     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
     onDrop={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-    <header className="wb-header">
+    {!toolbarHidden && <header className="wb-header">
       <Button icon="chevronLeft" label="Close whiteboard" onClick={onClose} disabled={busy} />
       <div className="wb-title"><strong>Whiteboard</strong><span>{projectName || "Untitled project"}</span></div>
       <div className="wb-actions">
@@ -360,14 +372,14 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         <button type="button" onClick={onSave} disabled={busy}><Icon name="document" size={16} />Save project</button>
         <Button icon="document" label="Export whiteboard as PDF" onClick={() => exportPdf()} disabled={busy || exporting} aria-busy={exporting}>{exporting ? "Exporting..." : "Export whiteboard as PDF"}</Button>
       </div>
-      <input ref={input} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp" aria-label="Whiteboard files" hidden
-        onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-    </header>
-    <div className="wb-tools">
+    </header>}
+    <input ref={input} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp" aria-label="Whiteboard files" hidden
+      onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+    {!toolbarHidden && <div className="wb-tools">
       <div role="group" aria-label="Whiteboard mode">
         <Button icon="select" label="Select and move" aria-pressed={mode === "select"} onClick={() => setMode("select")} />
         <Button icon="pan" label="Pan whiteboard" aria-pressed={mode === "pan"} onClick={() => setMode("pan")} />
-        <Button icon="arrow" label="Draw arrow" aria-pressed={mode === "arrow"} onClick={() => setMode(mode === "arrow" ? "select" : "arrow")} />
+        <Button icon="arrow" label={`Draw ${connectorType}`} aria-pressed={mode === "arrow"} onClick={() => setMode(mode === "arrow" ? "select" : "arrow")} />
         <Button icon="fullscreen" label={mode === "crop" ? "Cancel export area selection" : "Select area to export"} aria-pressed={mode === "crop"} onClick={() => {
           setExportArea(null); setAreaDraft(null); setMode(mode === "crop" ? "select" : "crop");
         }} />
@@ -376,8 +388,12 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         <button type="button" onClick={() => exportPdf(exportArea)} disabled={busy || exporting}>{exporting ? "Exporting selection…" : "Export selected area as PDF"}</button>
         <button type="button" onClick={() => setExportArea(null)} disabled={exporting}>Clear area</button>
       </div>}
-      {mode === "arrow" && <div className="wb-colors wb-arrow-colors" role="group" aria-label="Arrow color">
-        {ARROW_COLORS.map(({ name, value }) => <button key={value} type="button" aria-label={`${name} arrow color`} title={`${name} arrow color`} aria-pressed={arrowColor === value}
+      {mode === "arrow" && <div className="wb-export-actions" role="group" aria-label="Connector type">
+        <button type="button" aria-pressed={connectorType === "arrow"} onClick={() => setConnectorType("arrow")}>Arrow</button>
+        <button type="button" aria-pressed={connectorType === "line"} onClick={() => setConnectorType("line")}>Line</button>
+      </div>}
+      {mode === "arrow" && <div className="wb-colors wb-arrow-colors" role="group" aria-label={`${connectorType === "line" ? "Line" : "Arrow"} color`}>
+        {ARROW_COLORS.map(({ name, value }) => <button key={value} type="button" aria-label={`${name} ${connectorType} color`} title={`${name} ${connectorType} color`} aria-pressed={arrowColor === value}
           style={{ backgroundColor: value }} onClick={() => setArrowColor(value)} />)}
       </div>}
       <Button icon="undo" label="Undo whiteboard change" disabled={busy || !history.current.past.length} onClick={() => undo()} />
@@ -398,7 +414,10 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
           disabled={busy || exporting} onClick={() => setPdfRefreshKey((key) => key + 1)}>Refresh</button>
       </>}
       <span className="wb-status" role="status">{exporting ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved locally" : ""}</span>
-    </div>
+      <Button icon="chevronUp" label="Hide whiteboard toolbar" className="wb-hide-toolbar" aria-pressed={toolbarHidden} onClick={() => setToolbarHidden(true)} />
+    </div>}
+    {toolbarHidden && <button type="button" className="wb-show-toolbar" title="Show whiteboard toolbar" aria-label="Show whiteboard toolbar"
+      aria-pressed="true" onClick={() => setToolbarHidden(false)}><Icon name="chevronDown" size={16} /></button>}
     {error && <div className="wb-error" role="alert"><span>{error}</span><Button icon="close" label="Dismiss whiteboard error" onClick={() => setError("")} /></div>}
     <div ref={viewport} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}${mode === "arrow" ? " is-arrow" : ""}${mode === "crop" ? " is-crop" : ""}`} aria-label="Whiteboard canvas"
       style={{ backgroundSize: `${24 * view.scale}px ${24 * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
@@ -439,9 +458,9 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         {(board.arrows || []).map((arrow) => {
           const start = { x: view.x + arrow.from[0] * view.scale, y: view.y + arrow.from[1] * view.scale };
           const end = { x: view.x + arrow.to[0] * view.scale, y: view.y + arrow.to[1] * view.scale };
-          return <ArrowGraphic key={arrow.id} from={start} to={end} color={arrow.color || "#1f3fc7"} />;
+          return <ArrowGraphic key={arrow.id} from={start} to={end} color={arrow.color || "#1f3fc7"} type={arrow.type} />;
         })}
-        {arrowPreview && <ArrowGraphic from={arrowPreview.from} to={arrowPreview.to} color={arrowPreview.color} />}
+        {arrowPreview && <ArrowGraphic from={arrowPreview.from} to={arrowPreview.to} color={arrowPreview.color} type={arrowPreview.type} />}
       </svg>
       {exportArea && <div className="wb-export-area" aria-label="Selected PDF export area" style={{
         left: view.x + exportArea.x * view.scale, top: view.y + exportArea.y * view.scale,

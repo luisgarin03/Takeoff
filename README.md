@@ -14,7 +14,7 @@ Local **Save project** reuses a previously selected file handle only for that sa
 
 Portable projects: **Project > Save project** asks for a filename and opens a Save As location picker in supported browsers (otherwise a named download). The single `.otk` file contains the plan PDFs, takeoff data, scales, markups, RFIs, tabs, and revisions. **Project > Open project** restores it into a separate local workspace without replacing the currently saved project.
 
-**Project > Download this page** exports the complete current sheet as a one-page PDF with its takeoff lines, notes, and markups, without the automatic condition/quantity labels or a report cover. Exported markup captions use a translucent paper background so they stay readable over dense plan linework. In side-by-side view, it uses the last-clicked sheet.
+**Project > Download this page** exports the complete current sheet as a one-page PDF with its takeoff lines, notes, and markups, without the automatic condition/quantity labels or a report cover. Exported markup strokes are print-weight, and captions use larger text with a roomier translucent paper background so they stay readable over dense plan linework. In side-by-side view, it uses the last-clicked sheet.
 
 **Sheet bookmarks:** star pages in the sheet tabs or navigation menus. The open-sheet dropdown groups bookmarked pages first, including bookmarked tabs you have closed. Bookmarks autosave and travel with portable project files.
 
@@ -22,11 +22,15 @@ Portable projects: **Project > Save project** asks for a filename and opens a Sa
 
 **Whiteboard:** arrange reference PDFs, images, and editable notes in a separate pan/zoom workspace with zoom up to 400%. Paste clipboard text, images, or supported files directly onto the board. Ten inline swatches label each file or note header independently; click its selected swatch again to restore the original header. Edit note titles inline, and keep note-body colors separate. These changes autosave with the board and travel inside `.otk` and cloud project files.
 
-Draw colored arrows over whiteboard references by choosing **Draw arrow**, selecting one of the ten palette colors, and dragging across the board. The bottom-left **Draw > Markup > Arrow** tool adds colored, editable arrows to plan sheets. Both arrow types save in the existing project data; older `.otk` files still open without a migration or version bump.
+Draw colored arrows or plain lines over whiteboard references by choosing the connector tool, toggling **Arrow** or **Line**, selecting one of the ten palette colors, and dragging across the board. Both connector types save in project data and export to whiteboard PDFs. The bottom-left **Draw > Markup > Arrow** tool remains the directed-arrow tool for plan sheets. Older `.otk` files still open without a migration or version bump.
+
+For a **Linear** condition, the **T** (thickness in inches) control also sets that condition's visible and exported line weight. Blank or zero retains the default stroke; extreme imported values are capped so they cannot cover the plan.
 
 **Markup shortcuts:** assign a custom **Ctrl+key** binding to each markup tool from its **Draw > Markup** menu. Bindings are unique per key, can be cleared, and stay in the current browser rather than changing saved project files. Ctrl+F and existing undo/copy/paste/duplicate chords remain reserved.
 
-**Whiteboard PDF:** use **Export whiteboard as PDF** for one custom-sized page fitted to all note cards and attachment content, including offscreen items. To export only part of the board, choose **Select area to export**, drag a rectangle, then choose **Export selected area as PDF**. Note titles, header colors, swatches, note-body colors, text, and arrows are included; export keeps original PDF vectors where possible and clips content at the selected page edge.
+**Whiteboard PDF:** use **Export whiteboard as PDF** for one custom-sized page fitted to all note cards and attachment content, including offscreen items. To export only part of the board, choose **Select area to export**, drag a rectangle, then choose **Export selected area as PDF**. Note titles, header colors, swatches, note-body colors, text, arrows, and plain lines are included; export keeps original PDF vectors where possible and clips content at the selected page edge.
+
+The Whiteboard's up-chevron hides both top toolbar rows to maximize board space. A centered down-chevron restores them, and the visibility preference stays in the current browser.
 
 Whiteboard PDF attachments have a **PDF detail** slider and **Refresh** action for sharper previews on demand; high-resolution renders are bounded to protect browser memory.
 

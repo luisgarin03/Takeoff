@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   LINE_STYLES, LINE_STYLE_IDS, dashArrayFor, pdfDashFor, boostForDark, luminance,
-  clampWeight, snapWeight, WEIGHT_MIN, WEIGHT_MAX,
+  clampWeight, conditionLinearStroke, snapWeight, WEIGHT_MIN, WEIGHT_MAX,
 } from "../src/lib/lineStyles.js";
 
 test("LINE_STYLES exposes the four expected styles", () => {
@@ -43,6 +43,15 @@ test("pdfDashFor: dashed returns a fresh page-point array (no scale)", () => {
   const a = pdfDashFor("dashed") as number[];
   a[0] = 99;
   assert.deepEqual(pdfDashFor("dashed"), [6, 4]);
+});
+
+test("conditionLinearStroke maps T inches to canvas/PDF weight with safe defaults and cap", () => {
+  assert.equal(conditionLinearStroke(undefined), 3);
+  assert.equal(conditionLinearStroke(0), 3);
+  assert.equal(conditionLinearStroke(0, 1.4), 1.4);
+  assert.equal(conditionLinearStroke(1), 1);
+  assert.equal(conditionLinearStroke(3), 3);
+  assert.equal(conditionLinearStroke(20), 12);
 });
 
 test("boostForDark: a dark color is lightened", () => {

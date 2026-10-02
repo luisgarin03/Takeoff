@@ -37,6 +37,16 @@ export function pdfDashFor(style) {
   return pat.slice();
 }
 
+// A condition's T field is both the physical width used by Linear quantity
+// math and the visible/exported stroke weight for those Linear runs. Blank/0
+// preserves the historic 3-unit stroke; cap extreme imported values so a line
+// cannot cover the plan.
+export function conditionLinearStroke(thicknessIn, fallback = 3) {
+  const n = Number(thicknessIn);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.max(1, Math.min(12, n));
+}
+
 // ── markup line-weight multiplier ────────────────────────────────────────────
 // `weight` is a MULTIPLIER over each element's existing base stroke width (so
 // box proportions survive — a scalar absolute would flatten them). Default 1,

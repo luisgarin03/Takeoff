@@ -215,10 +215,10 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     const from = point(arrow.from), to = point(arrow.to);
     const colorHex = arrow.color || "#1f3fc7";
     const color = rgb(parseInt(colorHex.slice(1, 3), 16) / 255, parseInt(colorHex.slice(3, 5), 16) / 255, parseInt(colorHex.slice(5, 7), 16) / 255);
-    page.drawLine({ start: from, end: to, thickness: 2, color, opacity: .95 });
+    page.drawLine({ start: from, end: to, thickness: 4, color, opacity: .95 });
     const dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy);
-    if (len > 0) {
-      const ux = dx / len, uy = dy / len, head = Math.min(9, len * .65), half = head * .42;
+    if (len > 0 && arrow.type !== "line") {
+      const ux = dx / len, uy = dy / len, head = Math.min(13, len * .65), half = head * .42;
       const bx = to.x - ux * head, by = to.y - uy * head;
       // pdf-lib's SVG path parser uses an SVG y-down coordinate system.
       const vertices = [to, { x: bx - uy * half, y: by + ux * half }, { x: bx + uy * half, y: by - ux * half }];

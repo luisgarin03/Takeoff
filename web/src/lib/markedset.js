@@ -23,13 +23,15 @@ import { pointInPoly, starPath, arrowheadPath, cloudBezier, chiselRibbon } from 
 import { transformPath, svgPlacedBox } from "./svgpath.js";
 import { rfiStatus } from "./rfi.js";
 import { RENDER_SCALE } from "./sheets";
-import { pdfDashFor, boostForDark, clampWeight } from "./lineStyles.js";
+import { pdfDashFor, boostForDark, clampWeight, conditionLinearStroke } from "./lineStyles.js";
 
 const COBALT = "#1f3fc7";
 const DEDUCT_RED = "#b03a26";
 const DARK_BG = [0.055, 0.07, 0.09];       // matches the canvas dark stage
 const RASTER_MAX = 2800;                    // dark-mode raster cap, long side px
 const LINE_CHIP_CLEARANCE_PT = 10;            // label box sits 4.5pt clear of a linear mark
+const MARKUP_EXPORT_STROKE = 1.75;             // markup-only print boost; takeoff geometry stays unchanged
+const MARKUP_EXPORT_TEXT_SIZE = 11;
 
 // hatch style → parallel-line families [angleDeg, pitch(image px)] that match
 // the canvas pattern's geometric read; decorative styles approximate — the
@@ -432,7 +434,7 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
       // Helvetica's glyphs occupy about 74% above and 20% below the baseline.
       // Use those real visual bounds instead of a full extra font-size box,
       // which made the backing look shifted high and long on the right.
-      const padX = 5.5, descent = size * 0.22, ascent = size * 0.78, padY = 1.4;
+      const padX = 7.5, descent = size * 0.22, ascent = size * 0.78, padY = 2.25;
       const w = fnt.widthOfTextAtSize(t, size) + padX * 2;
       pg.drawRectangle({
         x: px - padX, y: py - descent - padY, width: w, height: ascent + descent + padY * 2,
@@ -474,7 +476,8 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
       } else if (s.measure_role === "linear" || s.measure_role === "surface_area") {
         // shared branch — dash only the linear role; surface_area stays solid
         const segDash = s.measure_role === "linear" ? pdfDashFor(cond?.line_style || "solid") : undefined;
-        for (let i = 1; i < pts.length; i++) line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], col, 1.4, 0.95, segDash);
+        const lineWeight = s.measure_role === "linear" ? conditionLinearStroke(cond?.thickness_in, 1.4) : 1.4;
+        for (let i = 1; i < pts.length; i++) line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], col, lineWeight, 0.95, segDash);
         const mid = pts[Math.floor((pts.length - 1) / 2)];
         // Keep the quantity chip just above the measured line, with a small
         // physical gap after the chip's 12pt box. Scale through ptScale so the
@@ -520,9 +523,9 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
       } else if (m.type === "highlight" && m.rect) {
         const [[nx0, ny0], [nx1, ny1]] = m.rect;
         const r = [[nx0 * W, ny0 * H], [nx1 * W, ny0 * H], [nx1 * W, ny1 * H], [nx0 * W, ny1 * H]];
-        pg.drawSvgPath(svgPath(r), { x: 0, y: 0, color: mcol, opacity: 0.18 + alphaBoost / 2, borderColor: mcol, borderWidth: 1 * mw, borderOpacity: 0.9, ...(mdash ? { borderDashArray: mdash } : {}) });
+        pg.drawSvgPath(svgPath(r), { x: 0, y: 0, color: mcol, opacity: 0.18 + alphaBoost / 2, borderColor: mcol, borderWidth: MARKUP_EXPORT_STROKE * mw, borderOpacity: 0.9, ...(mdash ? { borderDashArray: mdash } : {}) });
         const t = lbl(m.text);
-        if (t) boxedText(t, Math.min(nx0, nx1) * W, Math.min(ny0, ny1) * H - 10 / ptScale, 8, mcol, bold);
+        if (t) boxedText(t, Math.min(nx0, nx1) * W, Math.min(ny0, ny1) * H - 13 / ptScale, MARKUP_EXPORT_TEXT_SIZE, mcol, bold);
       } else if (m.type === "cloud" && m.rect) {
         const [[nx0, ny0], [nx1, ny1]] = m.rect;
         // real scallops: cloudBezier's CONTROL POINTS survive the affine page
@@ -532,9 +535,9 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
         const P = (p) => { const [px, py] = toPage(p[0], p[1]); return `${px},${-py}`; };
         let d = `M${P(cb.start)}`;
         for (const [c1, c2, end] of cb.segments) d += ` C${P(c1)} ${P(c2)} ${P(end)}`;
-        pg.drawSvgPath(d + " Z", { x: 0, y: 0, borderColor: mcol, borderWidth: 1.3 * mw, borderOpacity: 0.95, ...(mdash ? { borderDashArray: mdash } : {}) });
+        pg.drawSvgPath(d + " Z", { x: 0, y: 0, borderColor: mcol, borderWidth: 1.3 * MARKUP_EXPORT_STROKE * mw, borderOpacity: 0.95, ...(mdash ? { borderDashArray: mdash } : {}) });
         const t = lbl(m.text);
-        if (t) boxedText(t, Math.min(nx0, nx1) * W, Math.min(ny0, ny1) * H - 10 / ptScale, 8, mcol, bold);
+        if (t) boxedText(t, Math.min(nx0, nx1) * W, Math.min(ny0, ny1) * H - 13 / ptScale, MARKUP_EXPORT_TEXT_SIZE, mcol, bold);
         // revision-delta triangle at the top-right corner — clear of the
         // top-left RFI label and the centered note. Absent m.rev → nothing.
         if (Number.isFinite(m.rev) && m.rev > 0) {
@@ -550,12 +553,12 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
         // a directed leader with a filled arrowhead at the `to` end — seam /
         // plank-direction arrows and the north arrow (a stamp of arrow + "N").
         // arrowheadPath negates y like svgPath; the shaft goes through line().
-        line(m.from[0] * W, m.from[1] * H, m.to[0] * W, m.to[1] * H, mcol, 1.3 * mw, 0.95, mdash);
+        line(m.from[0] * W, m.from[1] * H, m.to[0] * W, m.to[1] * H, mcol, 1.3 * MARKUP_EXPORT_STROKE * mw, 0.95, mdash);
         const [pfx, pfy] = toPage(m.from[0] * W, m.from[1] * H);
         const [ptx, pty] = toPage(m.to[0] * W, m.to[1] * H);
-        pg.drawSvgPath(arrowheadPath(pfx, -pfy, ptx, -pty, 6 * mw), { x: 0, y: 0, color: mcol, opacity: 0.95 });
+        pg.drawSvgPath(arrowheadPath(pfx, -pfy, ptx, -pty, 8 * mw), { x: 0, y: 0, color: mcol, opacity: 0.95 });
         const t = lbl(m.text);
-        if (t) boxedText(t, (m.from[0] + m.to[0]) / 2 * W, (m.from[1] + m.to[1]) / 2 * H - 6 / ptScale, 8, mcol, bold);
+        if (t) boxedText(t, (m.from[0] + m.to[0]) / 2 * W, (m.from[1] + m.to[1]) / 2 * H - 8 / ptScale, MARKUP_EXPORT_TEXT_SIZE, mcol, bold);
       } else if (m.type === "bubble" && m.at) {
         // a circle carrying centered text — detail/section/keynote bubbles and
         // pattern-origin markers. Radius is normalized to sheet WIDTH, so it maps
@@ -563,23 +566,23 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
         const cxImg = m.at[0] * W, cyImg = m.at[1] * H;
         const [pcx, pcy] = toPage(cxImg, cyImg);
         const rPt = (Number(m.r) > 0 ? Number(m.r) : 0.02) * W * ptScale;
-        pg.drawEllipse({ x: pcx, y: pcy, xScale: rPt, yScale: rPt, borderColor: mcol, borderWidth: 1.2 * mw, borderOpacity: 0.95, color: dark ? rgb(0.08, 0.1, 0.12) : rgb(1, 1, 1), opacity: 0.85 });
+        pg.drawEllipse({ x: pcx, y: pcy, xScale: rPt, yScale: rPt, borderColor: mcol, borderWidth: 1.2 * MARKUP_EXPORT_STROKE * mw, borderOpacity: 0.95, color: dark ? rgb(0.08, 0.1, 0.12) : rgb(1, 1, 1), opacity: 0.85 });
         const t = lbl(m.text);
         if (t) {
-          const size = 8;
+          const size = MARKUP_EXPORT_TEXT_SIZE;
           const tw = bold.widthOfTextAtSize(winAnsiSafe(t), size);
           pg.drawText(winAnsiSafe(t), { x: pcx - tw / 2, y: pcy - size / 2.7, size, font: bold, color: mcol, rotate: chipRot });
         }
       } else if (m.type === "callout" && m.at) {
         if (m.target) {
-          line(m.target[0] * W, m.target[1] * H, m.at[0] * W, m.at[1] * H, mcol, 0.9 * mw, 0.9, mdash);
+          line(m.target[0] * W, m.target[1] * H, m.at[0] * W, m.at[1] * H, mcol, 0.9 * MARKUP_EXPORT_STROKE * mw, 0.9, mdash);
           // arrowhead at the target end, pointing from the label — page coords
           // negate y to match svgPath's convention
           const [pax, pay] = toPage(m.at[0] * W, m.at[1] * H);
           const [ptx, pty] = toPage(m.target[0] * W, m.target[1] * H);
-          pg.drawSvgPath(arrowheadPath(pax, -pay, ptx, -pty, 5), { x: 0, y: 0, color: mcol, opacity: 0.9 });
+          pg.drawSvgPath(arrowheadPath(pax, -pay, ptx, -pty, 7), { x: 0, y: 0, color: mcol, opacity: 0.9 });
         }
-        boxedText(lbl(m.text), m.at[0] * W, m.at[1] * H, 8.5, mcol, bold);
+        boxedText(lbl(m.text), m.at[0] * W, m.at[1] * H, MARKUP_EXPORT_TEXT_SIZE, mcol, bold);
       } else if (m.type === "svg" && m.at && Array.isArray(m.vb) && typeof m.path === "string") {
         // a vector symbol — bake local→page px, NEGATING y like every sibling path
         // (drawSvgPath internally applies scale(1,-1), so toPage output must be
@@ -591,13 +594,13 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
           const x0 = m.at[0] * W - bw / 2, y0 = m.at[1] * H - bh / 2;
           const d = transformPath(m.path, (lx, ly) => { const [px, py] = toPage(x0 + lx * sx, y0 + ly * sx); return [px, -py]; });
           const fillOn = m.fill && m.fill !== "none";
-          if (d) pg.drawSvgPath(d, { x: 0, y: 0, borderColor: mcol, borderWidth: 1.2 * mw, borderOpacity: 0.95, ...(fillOn ? { color: rgb(...hex(dark ? boostForDark(m.fill) : m.fill)), opacity: 0.9 } : {}) });
+          if (d) pg.drawSvgPath(d, { x: 0, y: 0, borderColor: mcol, borderWidth: 1.2 * MARKUP_EXPORT_STROKE * mw, borderOpacity: 0.95, ...(fillOn ? { color: rgb(...hex(dark ? boostForDark(m.fill) : m.fill)), opacity: 0.9 } : {}) });
           const t = lbl(m.text);
-          if (t) boxedText(t, m.at[0] * W - bw / 2, y0 - 6 / ptScale, 8, mcol, bold);
+          if (t) boxedText(t, m.at[0] * W - bw / 2, y0 - 8 / ptScale, MARKUP_EXPORT_TEXT_SIZE, mcol, bold);
         }
       } else if (m.type === "text" && m.at) {
         const lines = String(lbl(m.text) || "").split(/\r?\n/);
-        lines.forEach((lineText, index) => boxedText(lineText || " ", m.at[0] * W, m.at[1] * H + index * 13 / ptScale, 8.5, mcol, bold));
+        lines.forEach((lineText, index) => boxedText(lineText || " ", m.at[0] * W, m.at[1] * H + index * 16 / ptScale, MARKUP_EXPORT_TEXT_SIZE, mcol, bold));
       }
     }
     // sheet stamp, top-left in visual space

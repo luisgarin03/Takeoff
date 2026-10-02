@@ -367,7 +367,7 @@ export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondPara
             onChange={(e) => onSetCondParam("height_ft", e.target.value)}
             style={{ width: 54, padding: "3px 5px", borderRadius: 0, border: "1px solid var(--ink-faint)", fontSize: 12 }} />
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Thickness (in) — a Linear run with thickness also computes border/feature-strip SF = LF × T/12. Changing it re-flows existing linear runs.">
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Thickness (in) — controls the visible and exported stroke width of Linear runs and computes border/feature-strip SF = LF × T/12. Blank or 0 uses the default line weight. Changing it re-flows existing linear runs.">
           <Icon name="thickness" size={13} /><span style={{ color: "var(--ink-muted)" }}>T</span>
           <input name="condition-thickness-in" type="number" min="0" step="0.25" value={c.thickness_in ?? ""} placeholder="in"
             onChange={(e) => onSetCondParam("thickness_in", e.target.value)}

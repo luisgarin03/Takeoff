@@ -24,18 +24,18 @@ export function sanitizeWhiteboardArrows(board) {
     Array.isArray(arrow.from) && arrow.from.length === 2 && arrow.from.every(Number.isFinite) &&
     Array.isArray(arrow.to) && arrow.to.length === 2 && arrow.to.every(Number.isFinite) &&
     Math.hypot(arrow.to[0] - arrow.from[0], arrow.to[1] - arrow.from[1]) > 0.01
-  ).map((arrow) => ({ ...arrow, color: typeof arrow.color === "string" && colors.has(arrow.color.toLowerCase())
+  ).map((arrow) => ({ ...arrow, ...(arrow.type === "line" ? { type: "line" } : {}), color: typeof arrow.color === "string" && colors.has(arrow.color.toLowerCase())
     ? WHITEBOARD_FILE_HEADER_COLORS.find(({ value }) => value.toLowerCase() === arrow.color.toLowerCase()).value
     : "#1f3fc7" }));
   if (arrows.length === board.arrows.length && arrows.every((arrow, index) => arrow === board.arrows[index])) return board;
   return { ...board, arrows };
 }
 
-export function appendWhiteboardArrow(board, from, to, color = "#1f3fc7") {
+export function appendWhiteboardArrow(board, from, to, color = "#1f3fc7", type = "arrow") {
   if (!Array.isArray(from) || from.length !== 2 || !Array.isArray(to) || to.length !== 2 || [...from, ...to].some((value) => !Number.isFinite(value)) ||
     Math.hypot(to[0] - from[0], to[1] - from[1]) < 1) return board;
   const supported = WHITEBOARD_FILE_HEADER_COLORS.find(({ value }) => value.toLowerCase() === String(color).toLowerCase())?.value || "#1f3fc7";
-  return { ...board, arrows: [...(Array.isArray(board.arrows) ? board.arrows : []), { id: crypto.randomUUID(), from: [...from], to: [...to], color: supported }] };
+  return { ...board, arrows: [...(Array.isArray(board.arrows) ? board.arrows : []), { id: crypto.randomUUID(), from: [...from], to: [...to], color: supported, ...(type === "line" ? { type: "line" } : {}) }] };
 }
 
 export function whiteboardFileHeaderColor(value) {

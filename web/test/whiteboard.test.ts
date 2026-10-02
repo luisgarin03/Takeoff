@@ -175,6 +175,9 @@ test("whiteboard arrows persist with supported colors and legacy boards without 
   assert.deepEqual(arrow.arrows[0].from, [10, 20]);
   assert.equal(arrow.arrows[0].color, "#2563EB");
   assert.equal(validateWhiteboard(arrow).arrows[0].color, "#2563EB");
+  const line = appendWhiteboardArrow(arrow, [20, 30], [190, 90], "#DC2626", "line");
+  assert.equal(line.arrows[1].type, "line");
+  assert.equal(validateWhiteboard(line).arrows[1].type, "line");
   assert.notDeepEqual(fitWhiteboard(arrow, 800, 600), { x: 0, y: 0, scale: 1 }, "Fit includes board-level arrows even when the board has no cards");
   assert.equal(appendWhiteboardArrow(legacy, [1, 1], [1, 1]), legacy, "zero-length arrows are ignored");
   const malformed = sanitizeWhiteboardArrows({ ...arrow, arrows: [{ from: [0, 0], to: [1, 1], color: "red" }, { from: [NaN, 0], to: [1, 1] }] });

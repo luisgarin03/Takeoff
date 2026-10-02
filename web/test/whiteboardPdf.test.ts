@@ -49,6 +49,13 @@ test("whiteboard arrows export over their own board bounds in the selected color
   await assertPage(result, 52.5, 30);
 });
 
+test("whiteboard lines export with the same bounds without requiring an arrowhead", async () => {
+  const b = { ...board([]), arrows: [{ id: "line-1", type: "line", from: [15, 25], to: [95, 75], color: "#DC2626" }] };
+  const result = await buildWhiteboardPdf(b, { renderer });
+  assert.deepEqual(result.bounds, { minX: 15, minY: 25, maxX: 95, maxY: 75, width: 60, height: 37.5 });
+  await assertPage(result, 60, 37.5);
+});
+
 test("selected export region sets exact PDF bounds and clips intersecting cards while skipping other cards", async () => {
   const seen: string[] = [];
   const items = [note({ x: 0, y: 0 }), note({ id: "outside", x: 500, y: 500 })];

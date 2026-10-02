@@ -30,6 +30,8 @@
 .wb-tools button { padding: 5px; }
 .wb-redo svg { transform: scaleX(-1); }
 .wb-status { margin-left: auto; color: var(--ink-muted); font-size: 11px; }
+.wb .wb-hide-toolbar { min-width: 30px; min-height: 28px; padding: 3px; }
+.wb .wb-show-toolbar { position: absolute; z-index: 20; top: max(8px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); min-width: 38px; min-height: 30px; padding: 3px 9px; border-radius: 0 0 8px 8px; background: color-mix(in srgb, var(--paper-bright) 88%, transparent); box-shadow: 0 6px 18px #0003; backdrop-filter: blur(14px); }
 .wb-colors { padding: 0 8px; }
 .wb-colors button { border-radius: 50%; min-width: 22px; min-height: 22px; width: 22px; height: 22px; border-color: #747b87; }
 .wb-resolution { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; color: var(--ink-muted); font-size: 11px; white-space: nowrap; }
