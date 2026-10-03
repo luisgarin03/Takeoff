@@ -2,3 +2,8 @@
 .splash-content { position: relative; z-index: 2; padding: clamp(16px, 4vw, 32px); background: var(--glass-drawer-bg); border: 1px solid var(--glass-drawer-border); border-radius: var(--radius-control); }
 .splash-logo { min-height: 96px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-family: var(--f-display); font-size: clamp(24px, 3vw, 32px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
 .splash-credits { display: block; margin-top: 20px; font-size: 11px; text-decoration: underline; color: var(--ink-muted); }
+
+.splash-landing { display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.splash-content { width: 100%; box-sizing: border-box; }
+.landing-recents { margin-top: 20px; text-align: left; }
+.landing-recents details > div { max-height: 220px !important; }

@@ -4,6 +4,8 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased
 
+- Simplified the empty landing page to its background and centered card. Added Open Recent shortcuts with saved author and last-modified details.
+
 - Canvas tool icons no longer appear over the landing page or plan gallery on small screens; they render only while viewing a loaded plan.
 
 - Hid project sharing controls, invitation inbox/badges, and in-app sharing instructions behind a disabled UI flag. Sharing implementation and stored data are retained.

@@ -6,6 +6,8 @@ A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF
 
 ## Features
 
+- Centered landing card with Open Recent project shortcuts, including saved author and last-modified details.
+
 Project sharing is currently hidden in the app. Its implementation is retained behind `SHARING_UI_ENABLED` for future use.
 
 - Responsive workspace controls, viewport-sized Cloud and User Guide windows, and stacked project details on phones. Narrow screens retain every toolbar control with vertical scrolling.

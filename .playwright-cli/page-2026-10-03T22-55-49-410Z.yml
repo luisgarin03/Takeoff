@@ -1,0 +1,117 @@
+- generic [ref=f3e3]:
+  - generic:
+    - generic [ref=f3e4]:
+      - strong [ref=f3e5]:
+        - generic [ref=f3e6]: Beitzell Estimating
+      - button "Cloud Local Only" [ref=f3e7]:
+        - text: Cloud
+        - generic [ref=f3e8]: Local Only
+      - button "Whiteboard" [ref=f3e9]
+      - button "Project files" [ref=f3e17]: Project
+      - button "Sheets" [ref=f3e24]
+      - button "Report" [ref=f3e30]
+      - button "User Guide" [ref=f3e31]
+      - generic [ref=f3e35]:
+        - generic [ref=f3e36]:
+          - generic [ref=f3e37]: Aids
+          - button "Zone" [ref=f3e38]
+          - button "Snap" [ref=f3e42]
+          - button "45°" [ref=f3e46]
+          - button "Render & fill settings — Hi-Res and One-Click fill sensitivity" [ref=f3e51]
+        - generic [ref=f3e58]:
+          - generic [ref=f3e59]: Command
+          - 'textbox "Command line (RFC #59): a condition tag (\"CPT-1\", \"carpet one\", \"tile 2 waste 5\"), \"waste 7\", \"label Phase 1\", \"clear label\", or \"note …\" — Enter runs it through the same actions the buttons use. End with \"this room\" / \"here\" while the pointer rests on a room to trace and commit it there (\"carpet one, this room\"). Push-to-talk dictation will feed this box." [ref=f3e60]':
+            - /placeholder: cpt 1 · waste 7 · this room
+        - generic [ref=f3e62]:
+          - generic [ref=f3e63]: Scale —
+          - button "ft" [ref=f3e64]
+          - button "Set the scale for — remembered per sheet" [ref=f3e67]:
+            - generic [ref=f3e68]: Set scale…
+    - generic [ref=f3e72]:
+      - generic [ref=f3e73]:
+        - generic "Quick-access conditions — drag a condition here (or use a row's pushpin) to pin it, up to 9. Press 1–9 to activate by this order; click a chip to activate; double-click to open the panel." [ref=f3e74]: Conditions
+        - generic [ref=f3e75]: drag conditions here (or pin a row) for 1-9 one-click access
+        - button "+ condition" [ref=f3e76]
+      - generic [ref=f3e78]:
+        - generic [ref=f3e79]:
+          - textbox "Rename this condition / finish tag" [ref=f3e80]: perimeterWall
+          - generic "Multiply this condition by N identical units (measure one, ×N)" [ref=f3e81]:
+            - generic [ref=f3e82]: ×
+            - spinbutton [ref=f3e83]: "1"
+          - generic "Waste % — a flooring allowance added on top of the measured quantity in the Report. You choose it per condition (e.g. ~8% straight-lay LVP, ~15% diagonal, ~20% herringbone)." [ref=f3e84]:
+            - generic [ref=f3e85]: Waste
+            - spinbutton [ref=f3e86]: "0"
+            - generic [ref=f3e87]: "%"
+        - generic [ref=f3e89]:
+          - generic [ref=f3e90]: Line
+          - button "#c96442" [ref=f3e91]
+          - button "#2f7d54" [ref=f3e92]
+          - button "#2563eb" [ref=f3e93]
+          - button "#9333ea" [ref=f3e94]
+          - button "#b8860b" [ref=f3e95]
+          - button "#0d9488" [ref=f3e96]
+          - button "#be185d" [ref=f3e97]
+          - button "#1f2937" [ref=f3e98]
+          - button "#dc2626" [ref=f3e99]
+          - button "#0891b2" [ref=f3e100]
+        - generic [ref=f3e101]:
+          - generic [ref=f3e102]: Fill
+          - button "⦸" [ref=f3e103]
+          - button "#c96442" [ref=f3e104]
+          - button "#2f7d54" [ref=f3e105]
+          - button "#2563eb" [ref=f3e106]
+          - button "#9333ea" [ref=f3e107]
+          - button "#b8860b" [ref=f3e108]
+          - button "#0d9488" [ref=f3e109]
+          - button "#be185d" [ref=f3e110]
+          - button "#1f2937" [ref=f3e111]
+          - button "#dc2626" [ref=f3e112]
+          - button "#0891b2" [ref=f3e113]
+        - generic [ref=f3e115]:
+          - button "Horizontal ▾" [ref=f3e117]
+          - generic "Line style — the outline dash for this finish's floor-area and linear takeoffs (canvas + Marked Set PDF). Surface walls and deducts keep their own dashing." [ref=f3e122]:
+            - generic [ref=f3e123]: Style
+            - combobox [ref=f3e124]:
+              - option "Solid" [selected]
+              - option "Dashed"
+              - option "Dotted"
+              - option "Dash-dot"
+          - generic "Height (ft) — the default for NEW wall traces (SF = LF × H) and the vertical-SF display on floor areas. Walls keep the height they were drawn at — select a wall to change just that one." [ref=f3e125]:
+            - generic [ref=f3e128]: H
+            - spinbutton "ft" [ref=f3e129]
+          - generic "Thickness (in) — a Linear run with thickness also computes border/feature-strip SF = LF × T/12. Changing it re-flows existing linear runs." [ref=f3e130]:
+            - generic [ref=f3e133]: T
+            - spinbutton "in" [ref=f3e134]
+  - generic [ref=f3e136]:
+    - generic [ref=f3e137]:
+      - generic [ref=f3e139]: No PDFs yet — click “Open PDF” or drag a plan onto the canvas.
+      - generic [ref=f3e140]:
+        - button "Enter fullscreen" [ref=f3e141]
+        - button "Draw — measurement, cut out, and markup tools" [ref=f3e145]
+        - button "Edit takeoffs" [ref=f3e149]
+        - button "Pan (P) — or hold right-click / Space mid-measure" [pressed] [ref=f3e152]
+        - button "Select (V) — pick a takeoff, drag points" [ref=f3e156]
+        - button "+" [ref=f3e159]
+        - button "−" [ref=f3e160]
+        - button "fit" [ref=f3e161]
+        - button "☾" [ref=f3e162]
+    - generic [ref=f3e163]:
+      - generic [ref=f3e164]: perimeterWall
+      - generic [ref=f3e165]: Set scale first
+      - generic [ref=f3e167]: perimeterWall total (0)
+      - generic [ref=f3e168]: —
+      - generic [ref=f3e169]: 0 shapes on sheet · zoom 100%
+  - generic [ref=f3e174]:
+    - generic [ref=f3e175]: Beitzell Estimating
+    - generic [ref=f3e177]: TAKEOFF · ONE WORKSPACE
+    - generic [ref=f3e178]: Measure plans. Build estimates.
+    - generic [ref=f3e179]: Keep quantities, notes, and measurements together.
+    - button "Open your plans Drag a PDF, an image, or a whole .zip plan set here — or click to choose. Nothing leaves your browser." [ref=f3e180]:
+      - generic [ref=f3e181]: Open your plans
+      - text: Drag a PDF, an image, or a whole .zip plan set here — or click to choose. Nothing leaves your browser.
+    - group [ref=f3e183]:
+      - generic "Open Recent" [ref=f3e184] [cursor=pointer]
+      - paragraph [ref=f3e186]: No recent workspaces yet.
+    - generic [ref=f3e187]: new here?
+    - button "Load sample plan" [ref=f3e190]
+    - generic [ref=f3e194]: Try a sample plan and start measuring.

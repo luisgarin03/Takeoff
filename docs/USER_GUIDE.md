@@ -8,7 +8,7 @@ Use **User Guide** in the estimating toolbar to read this manual in a window tha
 
 On narrow screens, toolbar controls wrap and scroll vertically within the top portion of the screen, leaving room for the plan. All controls remain available. Cloud fills the screen on phones and displays file details as stacked cards; larger screens use a table.
 
-Use **Project → Open Recent** to expand recently used workspaces saved in this browser. The default workspace is a single changing workspace, not an archive of each imported plan. Export a project file when you need a portable backup.
+Use **Open Recent** on the landing card or **Project → Open Recent** to open recently used workspaces saved in this browser. Shortcuts show the saved author and last-modified date; older entries show Unknown until reopened with that metadata. The default workspace is a single changing workspace, not an archive of each imported plan. Export a project file when you need a portable backup.
 
 The [ConstructConnect On-Screen Takeoff guide](https://help.constructconnect.com/on-screen-takeoff-user-guide-68) is an organizational reference for topics such as projects, conditions, scale, measurements, annotations, and reports. The instructions here describe OpenTakeoff's own controls and behavior.
 

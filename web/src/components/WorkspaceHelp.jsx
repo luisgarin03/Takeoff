@@ -8,7 +8,7 @@ function readRecent() {
   try { return JSON.parse(localStorage.getItem(KEY) || "[]").filter((r) => typeof r.name === "string" && typeof r.search === "string" && (!r.search || /^\?(localProject|project)=[\w%-]+$/.test(r.search))).slice(0, 12); }
   catch { return []; }
 }
-export default function WorkspaceHelp({ name, hasWorkspace, ready, onMenuDepth }) {
+export default function WorkspaceHelp({ name, metadata, hasWorkspace, ready, onMenuDepth }) {
   const [open, setOpen] = useState(false);
   const dialog = useRef(null);
   useEffect(() => {
@@ -16,9 +16,9 @@ export default function WorkspaceHelp({ name, hasWorkspace, ready, onMenuDepth }
     const params = new URLSearchParams(window.location.search);
     const key = params.has("localProject") ? "localProject" : params.has("project") ? "project" : null;
     const search = key ? `?${key}=${encodeURIComponent(params.get(key))}` : "";
-    const next = [{ name: name || "Local workspace", search }, ...readRecent().filter((r) => r.search !== search)].slice(0, 12);
+    const next = [{ name: name || "Local workspace", search, lastModifiedAt: metadata?.lastModifiedAt || null, author: metadata?.authorName || metadata?.authorEmail || "" }, ...readRecent().filter((r) => r.search !== search)].slice(0, 12);
     try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* Storage may be full or unavailable. */ }
-  }, [name, hasWorkspace, ready]);
+  }, [name, metadata?.lastModifiedAt, metadata?.authorName, metadata?.authorEmail, hasWorkspace, ready]);
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement;
@@ -38,12 +38,12 @@ export default function WorkspaceHelp({ name, hasWorkspace, ready, onMenuDepth }
   </>;
 }
 
-export function RecentProjectsMenu() {
+export function RecentProjectsMenu({ expanded = false }) {
   const [recent] = useState(readRecent);
-  return <details style={{ color: "var(--ink)", fontSize: 12.5 }}>
+  return <details className="recent-projects" open={expanded || undefined} style={{ color: "var(--ink)", fontSize: 12.5 }}>
     <summary style={{ padding: "8px 14px", cursor: "pointer" }}>Open Recent</summary>
-    <div style={{ maxHeight: "40vh", overflowY: "auto", padding: "4px 8px 8px 24px", background: "var(--paper-shadow)" }}>
-      {recent.length ? recent.map((r) => <a key={r.search} href={`${window.location.pathname}${r.search}`} style={{ display: "block", padding: "9px 6px", color: "var(--ink)", textDecoration: "none", overflowWrap: "anywhere" }}>{r.name}<small style={{ display: "block", color: "var(--ink-muted)" }}>{r.search.startsWith("?project=") ? "Google Drive" : "This browser"}</small></a>) : <p>No recent workspaces yet.</p>}
+    <div className="recent-project-list">
+      {recent.length ? recent.map((r) => <a key={r.search} href={`${window.location.pathname}${r.search}`} className="recent-project-card">{r.name}<small className="recent-project-detail">{r.search.startsWith("?project=") ? "Google Drive" : "This browser"}</small><small className="recent-project-detail">Modified: {r.lastModifiedAt && Number.isFinite(new Date(r.lastModifiedAt).getTime()) ? new Date(r.lastModifiedAt).toLocaleString() : "Unknown"} · Author: {r.author || "Unknown"}</small></a>) : <p>No recent workspaces yet.</p>}
     </div>
   </details>;
 }

@@ -1,3 +1,4 @@
+import { RecentProjectsMenu } from "./WorkspaceHelp.jsx";
 import "../styles/splash.css";
 // PlanNavigator — the single, harmonized surface for choosing plans, merging the
 // former SheetGallery (working-set thumbnail grid) and DrivePicker (browse the
@@ -401,10 +402,7 @@ export default function PlanNavigator({
           )}
         </div>
       )}
-      {onAddFiles && (
-        <input name="sheet-file" ref={fileRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
-          onChange={(e) => { onAddFiles(e.target.files); e.target.value = ""; }} />
-      )}
+
       <AuthChip />
       {onCloseProject && (
         <button onClick={onCloseProject} title="Close this project and return to the local canvas" style={{ ...ctrlBtn, color: "var(--ink-muted)" }}>Close project</button>
@@ -555,6 +553,7 @@ export default function PlanNavigator({
                   <div style={{ fontFamily: "var(--f-display)", fontSize: 20, color: "var(--ink)", marginBottom: 8 }}>Open your plans</div>
                   Drag a PDF, an image, or a whole .zip plan set here — or click to choose. Nothing leaves your browser.
                 </button>
+                <div className="landing-recents"><RecentProjectsMenu expanded /></div>
                 {isGoogleConfigured() && (!user || projectHomeFolderId()) && (
                   <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6 }}>
                     {!user ? (
@@ -655,7 +654,11 @@ export default function PlanNavigator({
       style={canClose
         ? { position: "relative", width: "min(1100px, 92vw)", height: "85vh", display: "flex", flexDirection: "column", background: "var(--paper-cream)", boxShadow: "var(--shadow-2)", overflow: "hidden" }
         : { position: "absolute", inset: 0, display: "flex", flexDirection: "column", background: "var(--paper-cream)" }}>
-      {header}
+      {(mode !== "plan" || sheets.length > 0 || canClose) && header}
+      {onAddFiles && (
+        <input name="sheet-file" ref={fileRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
+          onChange={(e) => { onAddFiles(e.target.files); e.target.value = ""; }} />
+      )}
       {mode === "browse" ? browseBody : planBody}
       {confirmDialog}
     </div>
