@@ -1308,3 +1308,65 @@ select {
 @media screen and (max-height: 500px) {
   .glass-toolbar-stack { max-height: 42dvh; }
 }
+
+/* Match workspace controls to the compact condition field. */
+:root .glass-toolbar-stack { --toolbar-control-height: 28px; --toolbar-control-font: 12px; }
+:root .glass-toolbar button:not([title^="#"]):not([title="No fill"]):not(.tool-menu-popover button),
+:root .glass-toolbar input:not([type="checkbox"]):not([type="range"]),
+:root .glass-toolbar select {
+  box-sizing: border-box;
+  height: var(--toolbar-control-height) !important;
+  min-height: var(--toolbar-control-height) !important;
+  max-height: var(--toolbar-control-height) !important;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+  font-family: var(--f-mono) !important;
+  font-size: var(--toolbar-control-font) !important;
+  font-weight: 600 !important;
+  line-height: 20px !important;
+  letter-spacing: normal !important;
+}
+:root .glass-toolbar button:not(.tool-menu-popover button) > span:not(.account-avatar) { font-size: inherit !important; }
+:root .glass-toolbar .account-avatar { width: 24px !important; height: 24px !important; font-size: 12px; }
+:root .glass-toolbar button[hidden] { display: none !important; }
+
+/* Sheet tab frames match the adjacent open-sheet picker, including borders. */
+:root .glass-toolbar .sheet-tab {
+  box-sizing: border-box;
+  height: var(--toolbar-control-height, 28px);
+  padding: 0 6px 0 9px !important;
+}
+:root .glass-toolbar .sheet-tab button {
+  height: 22px !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 20px !important;
+}
+
+/* Reserve a stable top-right slot for the account while tools wrap. */
+:root .glass-toolbar-primary:has(> .account-profile-button) {
+  position: relative;
+  padding-right: calc(var(--profile-button-width, 86px) + 21px) !important;
+  min-height: 40px;
+}
+:root .glass-toolbar-primary > .account-profile-button {
+  position: absolute;
+  top: 6px;
+  right: 14px;
+  width: max-content;
+  max-width: 126px;
+  justify-content: flex-start !important;
+}
+:root .glass-toolbar-primary > .account-profile-button > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root .glass-toolbar-primary > .account-profile-button .account-avatar { flex-shrink: 0; }
+@media (max-width: 480px) {
+  :root .glass-toolbar-primary:has(> .account-profile-button) { padding-right: calc(var(--profile-button-width, 86px) + 15px) !important; }
+  :root .glass-toolbar-primary > .account-profile-button { right: 8px; width: max-content; max-width: 98px; }
+}

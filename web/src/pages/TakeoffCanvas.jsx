@@ -5541,11 +5541,10 @@ export default function TakeoffCanvas() {
         );
 
   const projectControls = (
-    <><button type="button" onClick={() => setCloudView("projects")} disabled={!hydrated.current || !!loadError}
+    <><button hidden type="button" onClick={() => setCloudView("projects")} disabled={!hydrated.current || !!loadError}
       title={cloudAccount?.user ? `Account: ${cloudAccount.user.email}` : "Cloud account and projects"}
-      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5 }}>
+      style={{ display: "none", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5 }}>
       <img src={cloudLogo} alt="" width="20" height="16" style={{ objectFit: "contain", flexShrink: 0 }} />Cloud{SHARING_UI_ENABLED && cloudAccount?.invitationCount > 0 && <span className="cloud-invitation-badge" aria-label={`${cloudAccount.invitationCount} new project invitations`}>{cloudAccount.invitationCount}</span>}{cloudAccount?.displayStatus && <small>{cloudAccount.displayStatus}</small>}</button>
-    <span style={{ fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>{saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}</span>
     {view !== "canvas" && <button type="button" onClick={() => setWhiteboardOpen(true)} disabled={!hydrated.current || !!loadError}
       title="Open whiteboard" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5, cursor: "pointer" }}>
       <Icon name="rectTool" size={15} />Whiteboard</button>}
@@ -5641,6 +5640,7 @@ export default function TakeoffCanvas() {
         <input name="sheet-file" ref={fileInputRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
 
+        <span style={{ fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>{saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}</span>
         <button type="button" onClick={() => setView("gallery")}
           title={`Plan set — the visual gallery; open one or several sheets (G)${sheetGroup.length ? ` · ${sheetGroup.length} side-by-side now` : ""}`}
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: `1px solid ${sheetGroup.length ? "var(--cobalt)" : "var(--ink-faint)"}`, background: sheetGroup.length ? "var(--cobalt)" : "transparent", color: sheetGroup.length ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}>
@@ -5735,7 +5735,7 @@ export default function TakeoffCanvas() {
         <button onClick={() => setShowReport(true)} disabled={!conditions.length} title="Open the takeoff report — per-condition breakdown with waste, plus CSV / JSON export."
           style={{ padding: "8px 14px", border: "none", background: conditions.length ? "var(--ink)" : "var(--text-faint)", color: "var(--paper-bright)", cursor: conditions.length ? "pointer" : "default", fontWeight: 700, fontFamily: "var(--f-mono)", fontSize: 11, letterSpacing: "0.12em", textTransform: "none" }}>Report</button>
         <WorkspaceHelp metadata={projectMetadata} name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
-        {cloudAccount?.user && <button type="button" className="account-profile-button" aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><AccountAvatar profile={cloudAccount.identity} /><span>{cloudAccount.identity.name}</span></button>}
+        {cloudAccount?.user && <button type="button" className="account-profile-button" ref={(el) => { if (el) el.parentElement.style.setProperty("--profile-button-width", `${el.getBoundingClientRect().width}px`); }} aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><AccountAvatar profile={cloudAccount.identity} /><span>{cloudAccount.identity.name}</span></button>}
       {/* open-sheet tabs — what you opened from the gallery; click to view,
           ⊞ to side-by-side, ✕ to close; the dropdown lists every open sheet */}
       {openTabs.length > 0 && (
