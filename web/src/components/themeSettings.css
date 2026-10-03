@@ -1,5 +1,8 @@
 .theme-settings { position: fixed; inset: auto 16px 16px auto; margin: 0; width: min(400px, 94vw); max-height: calc(100dvh - 80px); padding: 0; border: 1px solid var(--ink-faint); border-radius: 12px; background: var(--paper-bright); color: var(--ink); box-shadow: 0 24px 70px #0006; }
 .theme-settings::backdrop { background: transparent; }
+.theme-cursors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.theme-cursors button { padding: 8px 2px; font-size: 11px; }
+.theme-cursors button[aria-pressed="true"] { outline: 2px solid var(--cobalt); outline-offset: 1px; background: var(--tint-select); font-weight: 700; }
 .theme-settings header, .theme-settings footer { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; background: var(--paper-shadow); }
 .theme-settings h2 { margin: 4px 0 0; font-size: 22px; }.theme-settings small { font-size: 10px; letter-spacing: .14em; color: var(--ink-muted); }
 .theme-settings-body { padding: 22px 24px; display: grid; gap: 18px; }

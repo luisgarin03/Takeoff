@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { applyCursorTheme, normalizeCursorTheme } from "./cursorThemes.js";
 export const LOGO_DEFAULTS = { effect: "shimmer", color: "#8da8ff", second: "#ef8dce", speed: 50, brightness: 100 };
 const key = "opentakeoff.logo-style.v1";
 export function normalizeLogoSettings(value = {}) {
@@ -6,14 +7,17 @@ export function normalizeLogoSettings(value = {}) {
   const number = (v, fallback, min, max) => typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
   return { effect: ["shimmer", "solid", "pulse", "morph", "rainbow"].includes(value?.effect) ? value.effect : LOGO_DEFAULTS.effect,
     color: color(value?.color, LOGO_DEFAULTS.color), second: color(value?.second, LOGO_DEFAULTS.second),
-    speed: number(value?.speed, 50, 0, 100), brightness: number(value?.brightness, 100, 30, 150) };
+    speed: number(value?.speed, 50, 0, 100), brightness: number(value?.brightness, 100, 30, 150),
+    cursorTheme: normalizeCursorTheme(value?.cursorTheme) };
 }
-let current = LOGO_DEFAULTS;
+let current = normalizeLogoSettings(LOGO_DEFAULTS);
 try { current = normalizeLogoSettings(JSON.parse(localStorage.getItem(key))); } catch { /* Defaults when storage is unavailable. */ }
 const listeners = new Set();
+applyCursorTheme(current.cursorTheme);
 const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 export function setLogoSettings(value) {
   current = normalizeLogoSettings(value);
+  applyCursorTheme(current.cursorTheme);
   try { localStorage.setItem(key, JSON.stringify(current)); } catch { /* Still preview in this session. */ }
   listeners.forEach((fn) => fn());
 }

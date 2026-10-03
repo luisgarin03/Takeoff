@@ -24,5 +24,5 @@ export function applyCursorTheme(theme) {
   if (typeof document === "undefined") return;
   const value = normalizeCursorTheme(theme);
   document.documentElement.dataset.cursorTheme = value;
-  for (const role of Object.keys(CURSOR_ROLES)) document.documentElement.style.setProperty(`--cursor-${role}`, getCursor(value, role, import.meta.env.BASE_URL));
+  for (const role of Object.keys(CURSOR_ROLES)) document.documentElement.style.setProperty(`--cursor-${role}`, getCursor(value, role, import.meta.env?.BASE_URL || "/"));
 }

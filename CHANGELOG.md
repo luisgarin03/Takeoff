@@ -4,7 +4,10 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased
 
+- The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated Estimating by Luis Garin wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
 - Theme palette control now opens logo color, effect, brightness, and speed settings, applied live to the real logo and saved locally.
+
+- Cursor theme offers Default (original grayscale), Red, Blue, Pink, Orange, Purple, Green, and Yellow. It changes immediately and saves in this browser independently of logo colors; Reset logo keeps the cursor choice. Drawing, text, pan, and resize retain their cursor roles. Busy cursors use the included static fallbacks.
 
 - Reorganized the in-app manual into 16 clickable topics with formatted instructions, relevant button references, and existing app screenshots and animation.
 

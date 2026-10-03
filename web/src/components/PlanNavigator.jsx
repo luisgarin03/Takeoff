@@ -18,15 +18,18 @@ import "../styles/splash.css";
 // escRef below. While mounted, the navigator swallows canvas keyboard
 // shortcuts in EVERY mode via a capture-phase listener — shortcut suppression is
 // keyed on "is this mounted", never on the canvas' view/mode staying in sync.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../brand/icons.jsx";
+import { BrandText } from "../brand/marks.jsx";
 import AuthChip from "./AuthChip.jsx";
 import { useGoogleAuth } from "../lib/google/AuthContext.jsx";
 import { parseSheetKey, extractSheetNumber, detectScale, RENDER_SCALE, MAX_GROUP } from "../lib/sheets";
 import { isGoogleConfigured } from "../lib/google/auth.js";
 import { projectHomeFolderId } from "../lib/projectHome.js";
 import { groupSheetsByLevel, sortGalleryGroups } from "../lib/sheetLevels.js";
+
+const ColorBendsBackground = lazy(() => import("./backgrounds/ColorBendsBackground.jsx"));
 
 const THUMB_W = 380;
 const ROOT = { id: undefined, name: "Project" };   // id undefined → cloudStore's default (project folder)
@@ -487,7 +490,8 @@ export default function PlanNavigator({
   // ── PLAN body + footer ──────────────────────────────────────────────────
   const planBody = (
     <>
-      <div style={{ flex: 1, overflow: "auto", padding: 18 }}>
+      <div style={{ flex: 1, overflow: "auto", padding: 18, position: "relative", isolation: "isolate", background: !sheets.length && !canClose ? "#05070c" : undefined }}>
+        {!sheets.length && !canClose && <Suspense fallback={null}><ColorBendsBackground /></Suspense>}
         {groups.map((grp) => (
         <div key={grp.level ?? "__all"} style={{ marginBottom: grp.level !== null ? 22 : 0 }}>
         {grp.level !== null && (
@@ -540,12 +544,12 @@ export default function PlanNavigator({
         {!allKeys.length && (
           <div className={!sheets.length ? "splash-landing" : undefined} style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)", fontSize: 13.5, lineHeight: 1.7 }}>
             {!sheets.length ? (
-              <><div className="splash-pattern" aria-hidden="true" />
+              <>
               <div className="splash-content" style={{ maxWidth: 560, margin: "0 auto" }}>
-                <img className="splash-icon" src="/icons/blueprint-1373067.png" alt="Blueprint" width="96" height="96" />
-                <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--cobalt)", marginBottom: 6 }}>People &amp; agents · one engine</div>
-                <div style={{ fontFamily: "var(--f-display)", fontSize: 18, color: "var(--ink)", lineHeight: 1.32, marginBottom: 5 }}>Measure a plan by hand — or point an AI&nbsp;agent at the same engine.</div>
-                <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.55, marginBottom: 20 }}>Every measurement keeps its scale and how it was made — a person, one click, or an agent.</div>
+                <div className="splash-logo"><BrandText /></div>
+                <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--cobalt)", marginBottom: 6 }}>TAKEOFF · ONE WORKSPACE</div>
+                <div style={{ fontFamily: "var(--f-display)", fontSize: 18, color: "var(--ink)", lineHeight: 1.32, marginBottom: 5 }}>Measure plans. Build estimates.</div>
+                <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.55, marginBottom: 20 }}>Keep quantities, notes, and measurements together.</div>
                 <button onClick={() => fileRef.current?.click()}
                   style={{ display: "block", width: "100%", margin: "24px auto 0", padding: "44px 24px", border: "2px dashed var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", color: "var(--ink-muted)", fontFamily: "var(--f-body)", fontSize: 13.5, lineHeight: 1.7 }}>
                   <div style={{ fontFamily: "var(--f-display)", fontSize: 20, color: "var(--ink)", marginBottom: 8 }}>Open your plans</div>
@@ -577,8 +581,7 @@ export default function PlanNavigator({
                   <Icon name="takeoff" size={16} />{sampleBusy ? "Loading sample…" : "Load sample plan"}
                 </button>
                 <div style={{ fontFamily: "var(--f-body)", fontSize: 12.5, color: "var(--ink-muted)", marginTop: 11, lineHeight: 1.6 }}>
-                  A real medical-center <strong style={{ color: "var(--ink)" }}>floor finish plan</strong> — the scale auto-detects;
-                  pick a finish and trace a flooring takeoff in seconds.
+                  Try a sample plan and start measuring.
                 </div>
                 
               </div></>

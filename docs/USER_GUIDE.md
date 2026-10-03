@@ -1,5 +1,7 @@
 # OpenTakeoff — The User Manual
 
+The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated Estimating by Luis Garin wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
+
 The in-app guide's Contents index selects one of 16 topics. Each topic includes its detailed instructions and relevant visual control references; the schedule, One-Click, and report topics also include images from the app documentation.
 
 Use **User Guide** in the estimating toolbar to read this manual in a centered window. Scroll inside the guide; close it with the × button or Escape. The illustrated button labels are references to controls in the workspace.
@@ -46,6 +48,99 @@ The fastest way to learn the canvas is to run one takeoff end to end on the bund
 5. **Read the report.** Open **Report** for the per-condition breakdown — SF, SY, waste-adjusted order quantities, and the materials buy list. Export **CSV**, **Excel**, or a **Marked set** PDF.
 
 That's the whole loop: open → scale → condition → measure → report. Everything autosaves to your browser as you go — reload the tab and your takeoff is still there.
+
+---
+
+## Google Drive Cloud Sync
+
+This section describes the **intended Google Drive workflow**. Availability depends on your OpenTakeoff installation; automatic creation of the folders below is not confirmed in this build. Installing Google Drive alone does not connect OpenTakeoff or enable cloud saving.
+
+### Install Google Drive
+
+Before using cloud sync, install the official Google Drive app where applicable and sign in with the Google account you want to use with OpenTakeoff. Remain signed in to that same account.
+
+**Windows / PC:** install Google Drive for desktop from Google's official page:
+
+[Download Google Drive](https://www.google.com/drive/download/)
+
+https://www.google.com/drive/download/
+
+Already have Google Drive installed?
+
+[Open Google Drive](https://drive.google.com/)
+
+https://drive.google.com/
+
+**Phones and tablets:** install the official Google Drive app from your device's app store and sign in with the same Google account. The links above open in a new browser tab or window.
+
+### First-time cloud setup
+
+In the intended workflow, click **Cloud** when you first open OpenTakeoff. If you are not connected, sign in with Google and authorize OpenTakeoff to use Drive for project storage. OpenTakeoff should then check for its required storage folders.
+
+The intended main folder is named exactly **Estimate save data**. If missing, OpenTakeoff is intended to create it automatically, including its **Projects** folder. You should not need to create these folders manually. If your Cloud screen offers a different storage service, this Google Drive setup does not apply to that service.
+
+### Where projects belong
+
+This example shows the intended organization, not a guarantee of the files or subfolders created by this build:
+
+```text
+Google Drive
+└── Estimate save data
+    └── Projects
+        ├── Habitat Restore - Laurel
+        │   ├── project.otk
+        │   ├── Plans
+        │   │   ├── Civil Plans.pdf
+        │   │   └── Architectural Plans.pdf
+        │   ├── Images
+        │   ├── PDFs
+        │   └── Project Data
+        │
+        └── Another Project
+            └── ...
+```
+
+- **Estimate save data** is the intended main OpenTakeoff cloud storage folder.
+- **Projects** contains your OpenTakeoff projects.
+- Each project should have its own folder, named using the project title entered or selected in OpenTakeoff.
+- A project folder may contain its **.otk** project file, imported construction plans, PDFs, images, whiteboard/project data, markups, takeoff-related files, and other assets needed to reopen the project. Some information may be stored within the project file rather than in separate files.
+
+### Folder checks and existing projects
+
+Whenever Google Drive storage is initialized or opened, the intended workflow checks that **Estimate save data → Projects** is configured correctly and recreates missing application-managed folders where appropriate. An existing cloud project should reuse its folder instead of creating unnecessary duplicates. Its title helps you identify the folder.
+
+**Managed files:** Do not manually delete, rename, or reorganize files inside the OpenTakeoff cloud project folders unless you know the project is no longer needed. Changing the managed folder structure may prevent OpenTakeoff from locating project files.
+
+### Recommended workflow
+
+1. Install Google Drive where applicable.
+2. Sign in to your Google account.
+3. Open OpenTakeoff.
+4. Click **Cloud**.
+5. Sign in with Google when prompted.
+6. Allow OpenTakeoff to complete the available cloud setup.
+7. Create or open a project.
+8. In the intended folder workflow, find its cloud files under **Google Drive → Estimate save data → Projects → [Project Name]**.
+9. Continue working normally and confirm the available save/sync status before switching devices.
+
+### Setup confirmation
+
+Where supported, setup messages may indicate **Connected**, **Setting up**, **Ready**, or **Needs attention**: account connected, folders being prepared, setup complete, or an action required. Exact labels vary by installation; this guide does not add these statuses to the application.
+
+### Local and cloud storage
+
+- **Local:** files and saved work available on the current device. Keep an exported project backup when needed.
+- **Google Drive Cloud:** project files stored or synchronized through your Google account, useful for backup, multiple devices, and supported collaboration workflows. This does not promise real-time collaboration or automatic upload of every local change.
+
+### Troubleshooting
+
+**Google Drive is not connected:** check that you are signed in to the correct Google account. Open Cloud and reconnect Google Drive where that option is available.
+
+**I cannot find my project:** for the intended folder workflow, check **Google Drive → Estimate save data → Projects** and confirm you are using the same account used when the project was saved.
+
+**The Estimate save data folder is missing:** open Cloud and allow the available Drive setup/check to run again. OpenTakeoff is intended to create the required folder automatically. If your installation does not offer this workflow, do not assume a cloud backup was created.
+
+**My files are still syncing:** check your internet connection and allow Google Drive time to finish syncing before shutting down or disconnecting the device. Also confirm OpenTakeoff's save has completed where applicable.
 
 ---
 
@@ -103,6 +198,8 @@ Past ~115% zoom the visible region re-renders straight from the PDF vectors at y
 ### App theme
 
 The palette button now opens **Theme & logo**. Switch light/dark appearance, choose Shimmer, Solid, Pulse, Morph, or Rainbow, and adjust logo brightness and speed. Morph blends the primary and second colors; Rainbow uses its own spectrum. Changes appear immediately on the actual toolbar logo and save in this browser. Reset logo restores the logo defaults. Reduced-motion settings pause animation.
+
+Cursor theme offers Default (original grayscale), Red, Blue, Pink, Orange, Purple, Green, and Yellow. It changes immediately and saves in this browser independently of logo colors; Reset logo keeps the cursor choice. Drawing, text, pan, and resize retain their cursor roles. Busy cursors use the included static fallbacks.
 
 The palette icon below Revisions at the bottom of the right canvas rail toggles the existing light/dark app theme and reflects the current theme. It shares the saved browser preference with the original, now-hidden top toolbar control. This changes app chrome, not sheet inversion or report theme settings.
 

@@ -1,10 +1,14 @@
 # OpenTakeoff
 
+The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated Estimating by Luis Garin wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
+
 A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF.md), [feature map](FEATURES.md), and [user guide](docs/USER_GUIDE.md).
 
 ## Features
 
 **Theme & logo** provides live logo colors, Shimmer/Solid/Pulse/Morph/Rainbow effects, brightness, speed, and light/dark appearance controls.
+
+Cursor theme offers Default (original grayscale), Red, Blue, Pink, Orange, Purple, Green, and Yellow. It changes immediately and saves in this browser independently of logo colors; Reset logo keeps the cursor choice. Drawing, text, pan, and resize retain their cursor roles. Busy cursors use the included static fallbacks.
 
 The User Guide includes a clickable topic index, visual control references, and app screenshots, with scrolling contained inside the guide.
 

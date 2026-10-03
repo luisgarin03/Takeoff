@@ -22,6 +22,8 @@ button {
   border-radius: var(--radius-control) !important;
 }
 a { color: inherit; text-decoration: none; cursor: var(--cursor-pointer, pointer); }
+input, textarea, [contenteditable="true"] { cursor: var(--cursor-text, text); }
+select, input[type="checkbox"], input[type="radio"], input[type="color"], input[type="range"] { cursor: var(--cursor-pointer, pointer); }
 button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: var(--cursor-not-allowed, not-allowed) !important; }
 
 /* Logo-only text shimmer, based on Motion Primitives' moving-gradient treatment.

@@ -652,7 +652,7 @@ function TakeoffsPanel({
       <div onPointerDown={onResizeDown} onPointerMove={onResizeMove} onPointerUp={onResizeEnd}
         onPointerCancel={onResizeEnd} onLostPointerCapture={onResizeEnd}
         title="Drag to resize"
-        style={{ width: 5, flexShrink: 0, cursor: "col-resize", touchAction: "none", background: "transparent", borderRight: "1px solid var(--ink-faint)" }} />
+        style={{ width: 5, flexShrink: 0, cursor: "var(--cursor-col-resize, col-resize)", touchAction: "none", background: "transparent", borderRight: "1px solid var(--ink-faint)" }} />
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <div className="takeoffs-tabs" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "7px 12px", background: "var(--ink)", color: "var(--paper-cream)", flexShrink: 0 }}>
           <span style={{ display: "inline-flex", gap: 2 }}>

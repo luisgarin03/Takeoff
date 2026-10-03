@@ -2286,7 +2286,7 @@ export default function TakeoffCanvas() {
   // Space = temporary pan (any tool)
   useEffect(() => {
     const down = (e) => { if (e.code === "Space" && !e.repeat && e.target.tagName !== "INPUT") { spaceRef.current = true; if (containerRef.current) containerRef.current.style.cursor = "var(--cursor-grab, grab)"; } };
-    const up = (e) => { if (e.code === "Space") { spaceRef.current = false; if (containerRef.current) containerRef.current.style.cursor = ""; } };
+    const up = (e) => { if (e.code === "Space") { spaceRef.current = false; if (containerRef.current) containerRef.current.style.cursor = "var(--canvas-tool-cursor)"; } };
     window.addEventListener("keydown", down); window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
   }, []);
@@ -2864,10 +2864,9 @@ export default function TakeoffCanvas() {
       if (lock) { angleRef.current = lock.pt; cur = lock.pt; }
     }
 
-    // the crosshair IS the cursor — re-assert cursor:none every move because the
-    // pan/space handlers restore style.cursor to "" (computed auto) on release
-    if (!panRef.current && !spaceRef.current && containerRef.current.style.cursor !== "none")
-      containerRef.current.style.cursor = "none";
+    // Restore the tool cursor after temporary pan without changing the snap/aim overlays.
+    if (!panRef.current && !spaceRef.current)
+      containerRef.current.style.cursor = "var(--canvas-tool-cursor)";
 
     // aim visuals ride the EFFECTIVE point (locked/snapped), not the raw mouse
     const t = tfRef.current;
@@ -3206,7 +3205,7 @@ export default function TakeoffCanvas() {
     if (panRef.current) {
       panRef.current = null;
       setTf({ ...tfRef.current });   // sync once at end
-      if (containerRef.current) containerRef.current.style.cursor = spaceRef.current ? "var(--cursor-grab, grab)" : "";
+      if (containerRef.current) containerRef.current.style.cursor = spaceRef.current ? "var(--cursor-grab, grab)" : "var(--canvas-tool-cursor)";
       try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* gone */ }
     }
   }
@@ -6223,9 +6222,8 @@ export default function TakeoffCanvas() {
         <div ref={containerRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp} onPointerLeave={leaveCanvas} onContextMenu={(e) => e.preventDefault()}
           onDoubleClick={(e) => { if (tool === "oneclick") { if (proposal?.regions.length) createProposal(); } else if (tool === "area" || tool === "deduct" || tool === "linear" || tool === "curve" || tool === "surface" || tool === "zone") finishShape(); else if (tool === "select") editMarkupAt(e); }}
-          style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--paper-cream)", cursor: tool === "pan" ? "var(--cursor-grab, grab)" : tool === "select" ? "var(--cursor-default, default)" : "none", touchAction: "none" }}>
-          {/* aim crosshair (draw modes): the OS cursor is hidden on the canvas — the
-              crosshair IS the cursor. Two crisp full-page hairlines riding the
+          style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--paper-cream)", "--canvas-tool-cursor": tool === "pan" ? "var(--cursor-grab, grab)" : tool === "select" ? "var(--cursor-default, default)" : tool === "text" ? "var(--cursor-text, text)" : "var(--cursor-crosshair, crosshair)", cursor: "var(--canvas-tool-cursor)", touchAction: "none" }}>
+          {/* aim crosshair (draw modes): retain the precision overlay alongside the themed cursor. Two crisp full-page hairlines riding the
               EFFECTIVE point (angle-locked / endpoint-snapped), the SPLINE STAR at
               the crossing, and a small readout chip in the house style. The 45°
               lock reads as a quiet state change (hairlines brighten, star swells
@@ -6246,18 +6244,18 @@ export default function TakeoffCanvas() {
           {/* inline on-canvas text editor — a screen-space overlay pinned to its anchor
               (pan/zoom is frozen while open). Enter commits, Esc cancels, blur commits;
               all on the input's OWN handlers so the global keydown (which returns early
-              for INPUT) never interferes. cursor:text overrides the stage's cursor:none. */}
+              for INPUT) never interferes. the editor uses the themed text cursor. */}
           {editor && (
             editor.multiline ? <textarea name="inline-editor" autoComplete="off" ref={editorInputRef} autoFocus defaultValue={editor.value} rows={4}
               onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); finishEditor(true); } else if (e.key === "Escape") { e.preventDefault(); finishEditor(false); } }}
               onBlur={() => finishEditor(true)}
               placeholder="Type a note · Enter for a new line · Ctrl+Enter to place"
-              style={{ position: "absolute", left: editor.left, top: editor.top, zIndex: 9, width: 320, maxWidth: "calc(100% - 24px)", minHeight: 92, maxHeight: 220, padding: "7px 9px", font: "13px/1.4 var(--f-body, sans-serif)", color: "var(--ink)", background: "var(--paper-bright)", border: "1px solid var(--cobalt)", boxShadow: "0 2px 10px rgba(0,0,0,.18)", borderRadius: 3, cursor: "text", outline: "none", resize: "both", whiteSpace: "pre-wrap" }} /> :
+              style={{ position: "absolute", left: editor.left, top: editor.top, zIndex: 9, width: 320, maxWidth: "calc(100% - 24px)", minHeight: 92, maxHeight: 220, padding: "7px 9px", font: "13px/1.4 var(--f-body, sans-serif)", color: "var(--ink)", background: "var(--paper-bright)", border: "1px solid var(--cobalt)", boxShadow: "0 2px 10px rgba(0,0,0,.18)", borderRadius: 3, cursor: "var(--cursor-text, text)", outline: "none", resize: "both", whiteSpace: "pre-wrap" }} /> :
             <input name="inline-editor" autoComplete="off" ref={editorInputRef} autoFocus defaultValue={editor.value}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); finishEditor(true); } else if (e.key === "Escape") { e.preventDefault(); finishEditor(false); } }}
               onBlur={() => finishEditor(true)}
               placeholder="Type, Enter to place · Esc cancels"
-              style={{ position: "absolute", left: editor.left, top: editor.top, zIndex: 9, minWidth: 160, padding: "3px 6px", font: "13px var(--f-body, sans-serif)", color: "var(--ink)", background: "var(--paper-bright)", border: "1px solid var(--cobalt)", boxShadow: "0 2px 10px rgba(0,0,0,.18)", borderRadius: 0, cursor: "text", outline: "none" }} />
+              style={{ position: "absolute", left: editor.left, top: editor.top, zIndex: 9, minWidth: 160, padding: "3px 6px", font: "13px var(--f-body, sans-serif)", color: "var(--ink)", background: "var(--paper-bright)", border: "1px solid var(--cobalt)", boxShadow: "0 2px 10px rgba(0,0,0,.18)", borderRadius: 0, cursor: "var(--cursor-text, text)", outline: "none" }} />
           )}
           <div ref={stageRef} style={{ position: "absolute", transformOrigin: "0 0", willChange: "auto", width: stage.w || undefined, height: stage.h || undefined }}>
             {panels.map((p) => (
@@ -6612,7 +6610,7 @@ export default function TakeoffCanvas() {
                         Array.isArray(ev.seed_norm) ? "seeded by one-click" : "",
                       ].filter(Boolean).join(", ");
                       return (
-                        <g key={ap.id} style={{ pointerEvents: clickable ? "auto" : "none", cursor: clickable ? "pointer" : undefined }}
+                        <g key={ap.id} style={{ pointerEvents: clickable ? "auto" : "none", cursor: clickable ? "var(--cursor-pointer, pointer)" : undefined }}
                           onPointerDown={(e) => { if (clickable) e.stopPropagation(); }}
                           onClick={(e) => { if (clickable) { e.stopPropagation(); acceptAgentProposal(ap.id); } }}>
                           <title>{`Agent proposal — ${condById[ap.condition_id]?.finish_tag || "?"}${ded ? " (deduct)" : ""}, ${fa(ap.area_sf)}. ${evBits ? `Evidence: ${evBits}. ` : ""}Click to accept (⏎ accepts all visible); reject from the Agent panel.`}</title>
