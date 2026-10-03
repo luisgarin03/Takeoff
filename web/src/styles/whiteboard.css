@@ -37,9 +37,9 @@
 .wb-resolution output { min-width: 20px; color: var(--ink); font: 11px var(--f-mono); }
 .wb-refresh { font-size: 11px !important; }
 .wb-viewport { flex: 1; min-height: 0; position: relative; overflow: hidden; touch-action: none; background-image: radial-gradient(circle, var(--ink-faint) 1px, transparent 1px); }
-.wb-viewport.is-pan { cursor: grab; }
-.wb-viewport.is-arrow { cursor: crosshair; }
-.wb-viewport.is-crop { cursor: crosshair; }
+.wb-viewport.is-pan { cursor: var(--cursor-grab, grab); }
+.wb-viewport.is-arrow { cursor: var(--cursor-crosshair, crosshair); }
+.wb-viewport.is-crop { cursor: var(--cursor-crosshair, crosshair); }
 .wb-export-area { position: absolute; z-index: 5; border: 2px solid #1f3fc7; background: #1f3fc71a; box-shadow: 0 0 0 99999px #00000012; pointer-events: none; }
 .wb-export-area.is-draft { border-style: dashed; }
 .wb-arrows { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
@@ -49,7 +49,7 @@
 .wb-empty button { pointer-events: auto; }
 .wb-item { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; flex-direction: column; border: 1px solid var(--ink-faint); border-radius: 4px; box-shadow: 0 2px 8px #00000014; background: var(--paper-bright); overflow: hidden; }
 .wb-item.is-selected { outline: 2px solid var(--cobalt); }
-.wb-item-title { display: flex; align-items: center; gap: 8px; padding: 10px 12px; min-height: 38px; flex-shrink: 0; cursor: move; border-bottom: 1px solid var(--ink-faint); user-select: none; }
+.wb-item-title { display: flex; align-items: center; gap: 8px; padding: 10px 12px; min-height: 38px; flex-shrink: 0; cursor: var(--cursor-move, move); border-bottom: 1px solid var(--ink-faint); user-select: none; }
 .wb-item-title > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wb-item-title svg { flex-shrink: 0; }
 .wb .wb-item-title.wb-color-title { position: relative; }
@@ -75,7 +75,7 @@
 .wb .wb-item-title .wb-note-title::placeholder { color: currentColor; opacity: .72; }
 .wb .wb-item-title .wb-note-title:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; border-radius: 2px; }
 .wb-note textarea { width: 100%; flex: 1; min-height: 0; resize: none; border: 0; padding: 14px 20px 20px 14px; background: transparent; color: #202520; font: 16px/1.5 var(--f-body); }
-.wb .wb-resize { position: absolute; bottom: 0; right: 0; width: 24px; height: 24px; min-width: 24px; min-height: 24px; border-radius: 4px 0 0 0; padding: 2px; cursor: nwse-resize; touch-action: none; }
+.wb .wb-resize { position: absolute; bottom: 0; right: 0; width: 24px; height: 24px; min-width: 24px; min-height: 24px; border-radius: 4px 0 0 0; padding: 2px; cursor: var(--cursor-nwse-resize, nwse-resize); touch-action: none; }
 .wb-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; background: var(--paper-bright); border-top: 1px solid var(--ink-faint); padding: 8px 16px max(8px, env(safe-area-inset-bottom)); font-size: 11px; color: var(--ink-muted); }
 .wb-bottom > div { display: flex; align-items: center; gap: 4px; }
 .wb-bottom .wb-zoom { min-width: 60px; font-family: var(--f-mono); }

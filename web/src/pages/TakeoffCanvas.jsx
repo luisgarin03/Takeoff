@@ -2285,7 +2285,7 @@ export default function TakeoffCanvas() {
 
   // Space = temporary pan (any tool)
   useEffect(() => {
-    const down = (e) => { if (e.code === "Space" && !e.repeat && e.target.tagName !== "INPUT") { spaceRef.current = true; if (containerRef.current) containerRef.current.style.cursor = "grab"; } };
+    const down = (e) => { if (e.code === "Space" && !e.repeat && e.target.tagName !== "INPUT") { spaceRef.current = true; if (containerRef.current) containerRef.current.style.cursor = "var(--cursor-grab, grab)"; } };
     const up = (e) => { if (e.code === "Space") { spaceRef.current = false; if (containerRef.current) containerRef.current.style.cursor = ""; } };
     window.addEventListener("keydown", down); window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
@@ -2518,7 +2518,7 @@ export default function TakeoffCanvas() {
     if (tool === "pan" || e.button === 1 || e.button === 2 || spaceRef.current) {
       panRef.current = { sx: e.clientX, sy: e.clientY, ox: tfRef.current.x, oy: tfRef.current.y };
       e.currentTarget.setPointerCapture(e.pointerId);
-      if (containerRef.current) containerRef.current.style.cursor = "grabbing";
+      if (containerRef.current) containerRef.current.style.cursor = "var(--cursor-grabbing, grabbing)";
       return;
     }
     if (e.button !== 0) return;   // only left-click places points
@@ -2764,7 +2764,7 @@ export default function TakeoffCanvas() {
     // press costs nothing.
     panRef.current = { sx: e.clientX, sy: e.clientY, ox: tfRef.current.x, oy: tfRef.current.y };
     e.currentTarget.setPointerCapture(e.pointerId);
-    if (containerRef.current) containerRef.current.style.cursor = "grabbing";
+    if (containerRef.current) containerRef.current.style.cursor = "var(--cursor-grabbing, grabbing)";
   }
   // Delete just the selected corner (Delete/⌫), keeping a polygon ≥3 / a run ≥2.
   // At the floor we deselect so the NEXT ⌫ falls through to deleting the whole
@@ -3061,7 +3061,7 @@ export default function TakeoffCanvas() {
       if (Math.hypot(e.clientX - pc.cx, e.clientY - pc.cy) > 5) {
         panRef.current = { sx: pc.cx, sy: pc.cy, ox: tfRef.current.x, oy: tfRef.current.y };
         pendingClickRef.current = null;
-        if (containerRef.current) containerRef.current.style.cursor = "grabbing";
+        if (containerRef.current) containerRef.current.style.cursor = "var(--cursor-grabbing, grabbing)";
       }
     }
     updateHover(e);
@@ -3206,7 +3206,7 @@ export default function TakeoffCanvas() {
     if (panRef.current) {
       panRef.current = null;
       setTf({ ...tfRef.current });   // sync once at end
-      if (containerRef.current) containerRef.current.style.cursor = spaceRef.current ? "grab" : "";
+      if (containerRef.current) containerRef.current.style.cursor = spaceRef.current ? "var(--cursor-grab, grab)" : "";
       try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* gone */ }
     }
   }
@@ -6223,7 +6223,7 @@ export default function TakeoffCanvas() {
         <div ref={containerRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp} onPointerLeave={leaveCanvas} onContextMenu={(e) => e.preventDefault()}
           onDoubleClick={(e) => { if (tool === "oneclick") { if (proposal?.regions.length) createProposal(); } else if (tool === "area" || tool === "deduct" || tool === "linear" || tool === "curve" || tool === "surface" || tool === "zone") finishShape(); else if (tool === "select") editMarkupAt(e); }}
-          style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--paper-cream)", cursor: tool === "pan" ? "grab" : tool === "select" ? "default" : "none", touchAction: "none" }}>
+          style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--paper-cream)", cursor: tool === "pan" ? "var(--cursor-grab, grab)" : tool === "select" ? "var(--cursor-default, default)" : "none", touchAction: "none" }}>
           {/* aim crosshair (draw modes): the OS cursor is hidden on the canvas — the
               crosshair IS the cursor. Two crisp full-page hairlines riding the
               EFFECTIVE point (angle-locked / endpoint-snapped), the SPLINE STAR at

@@ -13,14 +13,16 @@ body {
   color: var(--ink);
   font-family: var(--f-body);
   -webkit-font-smoothing: antialiased;
+  cursor: var(--cursor-default, default);
 }
 
 button {
   font-family: var(--f-mono);
-  cursor: pointer;
+  cursor: var(--cursor-pointer, pointer) !important;
   border-radius: var(--radius-control) !important;
 }
-a { color: inherit; text-decoration: none; }
+a { color: inherit; text-decoration: none; cursor: var(--cursor-pointer, pointer); }
+button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: var(--cursor-not-allowed, not-allowed) !important; }
 
 /* Logo-only text shimmer, based on Motion Primitives' moving-gradient treatment.
    It deliberately lives on BrandText rather than a generic text selector. */
