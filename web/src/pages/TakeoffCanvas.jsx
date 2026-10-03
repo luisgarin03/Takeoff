@@ -1,4 +1,6 @@
+import { SHARING_UI_ENABLED } from "../lib/sharingVisibility.js";
 import { APP_NAME } from "../brand/appName.js";
+import AccountAvatar from "../components/AccountAvatar.jsx";
 import cloudLogo from "../brand/google-cloud.png";
 // Takeoff Canvas — Phase 1 (+ pan/zoom + standard scales).
 // Persistent, condition-driven 2D takeoff. Pick a color-coded condition (finish
@@ -24,7 +26,7 @@ import { exportProjectFile, readProjectFile, projectFilename, MAX_PROJECT_FILE_B
 import { projectFileHandleFor, saveProjectArchive } from "../lib/saveProjectFile.js";
 import SaveProjectDialog from "../components/SaveProjectDialog.jsx";
 import ProjectMetadataModal from "../components/ProjectMetadataModal.jsx";
-import { EMPTY_PROJECT_METADATA, createProjectMetadata, formatProjectDate, metadataPayload, normalizeProjectMetadata, preserveUnknownProjectFields, touchProjectMetadata } from "../lib/projectMetadata.js";
+import { EMPTY_PROJECT_METADATA, withProjectEditor, withProjectAuthor, createProjectMetadata, formatProjectDate, metadataPayload, normalizeProjectMetadata, preserveUnknownProjectFields, touchProjectMetadata } from "../lib/projectMetadata.js";
 import CloudProjects from "../components/CloudProjects.jsx";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
 import { UUID as PROJECT_UUID } from "../lib/supabase/projectState.js";
@@ -550,7 +552,7 @@ export default function TakeoffCanvas() {
   const [projectFilePrompt, setProjectFilePrompt] = useState(null);
   const [projectSavePrompt, setProjectSavePrompt] = useState(null);
   const [projectSaveAs, setProjectSaveAs] = useState(false);
-  const [cloudView, setCloudView] = useState(null);
+  const [cloudView, setCloudView] = useState(() => SHARING_UI_ENABLED && new URLSearchParams(window.location.search).has("sharedProject") ? "projects" : null);
   const cloudAccount = useCloud();
   useEffect(() => { if (cloudAccount.authReturn) setCloudView("projects"); }, [cloudAccount.authReturn]);
   useEffect(() => { if (cloudAccount.driveReturn) setCloudView("account"); }, [cloudAccount.driveReturn]);
@@ -1906,8 +1908,8 @@ export default function TakeoffCanvas() {
     // units is additive and diff-only (the sheet_levels convention): imperial —
     // the default — omits the key, so an old imperial project's payload is
     // byte-identical on round-trip; only a metric project carries the field.
-    const metadata = touch ? touchProjectMetadata(projectMetadata) : projectMetadata;
-    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(metadata), ...(whiteboard.items.length ? { whiteboard } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
+    const metadata = touch ? withProjectEditor(touchProjectMetadata(projectMetadata), cloudAccount?.user, cloudAccount?.profileName) : projectMetadata;
+    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(whiteboard.items.length ? { whiteboard } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
   };
 
   async function submitProjectMetadata(draft) {
@@ -1927,7 +1929,7 @@ export default function TakeoffCanvas() {
     const metadata = createProjectMetadata(draft);
     try {
       for (const sheet of await store.listSheets()) await store.removePdf(sheet.name);
-      const payload = { ...emptyAnnotations(), project_id: crypto.randomUUID(), project_name: metadata.name, project_metadata: metadataPayload(metadata) };
+      const payload = { ...emptyAnnotations(), project_id: crypto.randomUUID(), project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)) };
       await store.saveAnnotations(payload);
       // A new project must never inherit the previous project's local file
       // handle: ordinary Save should ask for a new destination, named for this
@@ -1996,7 +1998,7 @@ export default function TakeoffCanvas() {
       if (result.status !== "cancelled") {
         projectFileHandleRef.current = result.handle || null;
         projectFileHandleProjectIdRef.current = result.handle ? portableProjectId.current : null;
-        if (persistedPayload?.project_metadata?.lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, lastModifiedAt: persistedPayload.project_metadata.lastModifiedAt }));
+        if (persistedPayload?.project_metadata?.lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, ...persistedPayload.project_metadata }));
         setProjectSavePrompt(null);
         setCommitMsg(`${result.status === "saved" ? "Project saved" : "Project download started"}: ${result.filename}`);
       }
@@ -2063,7 +2065,7 @@ export default function TakeoffCanvas() {
       // pre-adopt payload) → don't push stale over the winner; go idle so the canvas
       // can drain and re-hydrate. Closes the last pre-scheduled-save loss window.
       if (remotePendingRender.current) { setSaveState("idle"); return; }
-      store.saveAnnotations(payload).then(() => { setProjectMetadata((meta) => ({ ...meta, lastModifiedAt: payload.project_metadata.lastModifiedAt })); setSaveState("saved"); }).catch((e) => {
+      store.saveAnnotations(payload).then(() => { setProjectMetadata((meta) => ({ ...meta, ...payload.project_metadata })); setSaveState("saved"); }).catch((e) => {
         if (isStaleTabError(e)) setCommitMsg(STALE_TAB_MESSAGE);
         setSaveState("idle");
       });
@@ -5162,7 +5164,7 @@ export default function TakeoffCanvas() {
   const panelBtn = (onClick, iconName, label, isOn, count, extra = {}) => (
     <button type="button" onClick={onClick} title={label} {...extra}
       style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 34, minHeight: 34, padding: "5px 0 4px", border: `1px solid ${isOn ? "var(--ink)" : "var(--ink-faint)"}`, background: isOn ? "var(--ink)" : "var(--paper-bright)", color: isOn ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, lineHeight: 1 }}>
-      <Icon name={iconName} size={15} />{count ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5 }}>{count}</span> : null}
+      {iconName === "agentAI" ? <span style={{ fontFamily: "var(--f-body)", fontSize: 12, fontWeight: 700 }}>AI</span> : <Icon name={iconName} size={15} />}{count ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5 }}>{count}</span> : null}
     </button>
   );
   const vRule = <span style={{ width: 1, alignSelf: "stretch", background: "var(--ink-faint)", margin: "0 3px" }} />;
@@ -5518,14 +5520,35 @@ export default function TakeoffCanvas() {
     );
   })();
 
+  const scaleControls = cluster(`Scale — ${labelFor(focusPanel)}`,
+          <>
+            <button onClick={() => setUnits((u) => (u === "metric" ? "imperial" : "metric"))}
+              title={units === "metric" ? "Metric display (m² / m) — click for imperial. Calibrate in meters; 1:50-style scales in the list. Display only — stored takeoffs never change." : "Imperial display (SF / LF) — click for metric (m² / m, calibrate in meters, 1:50-style scales). Display only — stored takeoffs never change."}
+              style={{ padding: "6px 10px", border: `1px solid ${units === "metric" ? "var(--cobalt)" : "var(--ink-faint)"}`, background: units === "metric" ? "var(--cobalt)" : "transparent", color: units === "metric" ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 700, fontFamily: "var(--f-mono)", fontSize: 11, lineHeight: 1 }}>
+              {units === "metric" ? "m" : "ft"}
+            </button>
+            <span className={!unitsPerPx && focusPanel.key ? "scale-needs-setting" : undefined} style={{ display: "inline-flex" }}>
+            <ToolMenu
+              title={scaleTitle}
+              onOpenChange={onScaleMenuDepth}
+              face={<span>{scaleFace}</span>}
+              faceStyle={{ fontFamily: "var(--f-mono)", fontSize: 11.5, ...scaleFaceStyle }}
+              menuStyle={{ minWidth: 250 }}
+              items={scaleItems}
+            />
+            </span>
+          </>
+        );
+
   const projectControls = (
     <><button type="button" onClick={() => setCloudView("projects")} disabled={!hydrated.current || !!loadError}
       title={cloudAccount?.user ? `Account: ${cloudAccount.user.email}` : "Cloud account and projects"}
       style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5 }}>
-      <img src={cloudLogo} alt="" width="20" height="16" style={{ objectFit: "contain", flexShrink: 0 }} />Cloud{cloudAccount?.user && <small>{cloudAccount.offline ? "Offline" : cloudAccount.status}</small>}</button>
-    <button type="button" onClick={() => setWhiteboardOpen(true)} disabled={!hydrated.current || !!loadError}
+      <img src={cloudLogo} alt="" width="20" height="16" style={{ objectFit: "contain", flexShrink: 0 }} />Cloud{SHARING_UI_ENABLED && cloudAccount?.invitationCount > 0 && <span className="cloud-invitation-badge" aria-label={`${cloudAccount.invitationCount} new project invitations`}>{cloudAccount.invitationCount}</span>}{cloudAccount?.displayStatus && <small>{cloudAccount.displayStatus}</small>}</button>
+    <span style={{ fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>{saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}</span>
+    {view !== "canvas" && <button type="button" onClick={() => setWhiteboardOpen(true)} disabled={!hydrated.current || !!loadError}
       title="Open whiteboard" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5, cursor: "pointer" }}>
-      <Icon name="rectTool" size={15} />Whiteboard</button>
+      <Icon name="rectTool" size={15} />Whiteboard</button>}
     <ToolMenu face={<><Icon name="document" size={15} />{projectName || "Project"}</>} title="Project files"
       onOpenChange={onMenuDepth} disabled={!!projectFileBusy}
       items={[
@@ -5537,7 +5560,6 @@ export default function TakeoffCanvas() {
         { id: "save-project-as", label: "Save project as...", onSelect: () => saveProjectFile(true), disabled: !hydrated.current || !!loadError },
         { id: "open-project", icon: "plus", label: "Open project...", onSelect: () => projectInputRef.current?.click() },
         { id: "open-recent", custom: <RecentProjectsMenu /> },
-        { id: "save-cloud", icon: "document", label: "Save to Cloud...", onSelect: () => setCloudView("save"), disabled: !hydrated.current || !!loadError || !!store.listFolder },
         { id: "browse-cloud", icon: "sheets", label: "Cloud projects...", onSelect: () => setCloudView("projects"), disabled: !hydrated.current || !!loadError },
         "divider",
         { id: "download-page", icon: "document", label: pageExportBusy ? "Downloading page..." : "Download this page",
@@ -5554,14 +5576,14 @@ export default function TakeoffCanvas() {
       className="app-shell"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer?.files); }}
-      style={{ position: "relative", display: "flex", flexDirection: "column", height: "100vh" }}>
+      style={{ "--workspace-toolbar-height": `${toolbarHidden ? 0 : toolbarHeight}px`, position: "relative", display: "flex", flexDirection: "column", height: "100vh" }}>
       <input ref={projectInputRef} type="file" accept=".otk" aria-label="Open project file" style={{ display: "none" }}
         onChange={(e) => { setProjectFilePrompt(e.target.files?.[0] || null); e.target.value = ""; }} />
       {projectMetadataModal && <ProjectMetadataModal mode={projectMetadataModal} initial={projectMetadata}
         hasWorkspace={!!(sheets.length || shapes.length || markups.length || rfis.length || projectName)} saveState={saveState}
         onSubmit={submitProjectMetadata} onClose={() => setProjectMetadataModal(null)} />}
       {cloudView && <CloudProjects initialView={cloudView} source={store} getPayload={buildPayload}
-        onPersisted={(lastModifiedAt) => { if (lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, lastModifiedAt })); }}
+        onPersisted={(lastModifiedAt, savedMetadata) => { if (lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, ...savedMetadata, lastModifiedAt })); }}
         onClose={() => { setCloudView(null); cloudAccount.clearAuthReturn(); cloudAccount.clearDriveReturn(); }} onOpenChange={onMenuDepth} />}
       {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard} onClose={() => setWhiteboardOpen(false)}
         onSave={() => saveProjectFile(false)} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState} />}
@@ -5600,7 +5622,6 @@ export default function TakeoffCanvas() {
         <div className="glass-toolbar glass-toolbar-primary" style={{ display: "flex", gap: 7, alignItems: "center", padding: "6px 14px", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-shadow)", whiteSpace: "nowrap" }}>
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}><BrandText /></strong>
         {projectControls}
-        <WorkspaceHelp name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
         {/* team cloud mode: always a way to leave this project, plus a way to
             browse the rest of the team's projects when the build names a root
             — fixed presence for the whole session (cloudMode is set before the
@@ -5619,9 +5640,7 @@ export default function TakeoffCanvas() {
         )}
         <input name="sheet-file" ref={fileInputRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
-        <button type="button" onClick={() => fileInputRef.current?.click()} title="Open plans — PDF, image, or a .zip plan set (or just drag them onto the canvas)"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: "1px solid var(--ink)", background: "var(--ink)", color: "var(--paper-bright)", cursor: "pointer", fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}>
-          <Icon name="plus" size={14} />Open</button>
+
         <button type="button" onClick={() => setView("gallery")}
           title={`Plan set — the visual gallery; open one or several sheets (G)${sheetGroup.length ? ` · ${sheetGroup.length} side-by-side now` : ""}`}
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: `1px solid ${sheetGroup.length ? "var(--cobalt)" : "var(--ink-faint)"}`, background: sheetGroup.length ? "var(--cobalt)" : "transparent", color: sheetGroup.length ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}>
@@ -5643,12 +5662,6 @@ export default function TakeoffCanvas() {
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page >= pageCount) ? 0.4 : 1 }}><Icon name="chevronRight" size={12} /></button>
           </span>
         )}
-        {sheets.length > 0 && <div ref={findPanelRef} style={{ position: "relative", display: "inline-flex" }}>
-          <button type="button" onClick={() => findOpen ? closeFind() : openFind()} title="Find and mark text in all loaded plans (Ctrl+F)" aria-label="Find text in all loaded plans" aria-expanded={findOpen}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: `1px solid ${findOpen ? "var(--cobalt)" : "var(--ink-faint)"}`, background: findOpen ? "var(--tint-select)" : "transparent", color: "var(--ink)", cursor: "pointer", fontSize: 12.5, lineHeight: 1 }}>
-            <Icon name="target" size={14} />Find
-          </button>
-        </div>}
         {findOpen && createPortal(
           <div className="find-dialog-shade" onClick={(event) => { if (event.target === event.currentTarget) closeFind(); }}>
             <section ref={findDialogRef} className="find-all-dialog" role="dialog" aria-modal="true" aria-label="Find text across loaded plans"
@@ -5719,40 +5732,40 @@ export default function TakeoffCanvas() {
           </div>, document.body,
         )}
         <div className="toolbar-spacer" style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>{saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}</span>
-        <button type="button" onClick={toggleFullscreen}
-          title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-          aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-          aria-pressed={isFullscreen}
-          style={{ display: "inline-flex", alignItems: "center", padding: "6px 9px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", lineHeight: 1 }}>
-          <Icon name={isFullscreen ? "fullscreenExit" : "fullscreen"} size={15} />
-        </button>
-        <button onClick={toggleTheme} title="App theme — light / dark chrome (sheets unaffected; use ☾ on the canvas to invert the print)"
-          aria-label="App theme — light / dark chrome" aria-pressed={theme === "dark"}
-          style={{ display: "none", alignItems: "center", padding: "6px 9px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>
-          {theme === "dark" ? "◐" : "◑"}
-        </button>
-        <button onClick={() => { setScheduleAnchor(null); setTool((t) => (t === "schedule" ? "select" : "schedule")); }}
-          title="Import from schedule — arm, then drag a box around the finish/material schedule to create conditions (two clicks: corner, corner)"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: `1px solid ${tool === "schedule" ? "var(--cobalt)" : "var(--ink-faint)"}`, background: tool === "schedule" ? "var(--cobalt)" : "transparent", color: tool === "schedule" ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}>
-          <Icon name="rectTool" size={15} />Schedule
-        </button>
         <button onClick={() => setShowReport(true)} disabled={!conditions.length} title="Open the takeoff report — per-condition breakdown with waste, plus CSV / JSON export."
-          style={{ padding: "8px 14px", border: "none", background: conditions.length ? "var(--ink)" : "var(--text-faint)", color: "var(--paper-bright)", cursor: conditions.length ? "pointer" : "default", fontWeight: 700, fontFamily: "var(--f-mono)", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase" }}>Report</button>
-        {/* Deliberately subtle, not a button: local-first app, cloud mode is an
-            opt-in extra. Only when ALREADY signed in (never a sign-in entry
-            point in the toolbar — that lives solely on the landing link), no
-            cloud project is open, and the build names a Projects root. */}
-        {!cloudMode && googleUser && isGoogleConfigured() && projectHomeFolderId() && (
-          <Link to="/projects" style={{ fontSize: 11.5, color: "var(--ink-muted)", whiteSpace: "nowrap" }}>
-            browse team projects
-          </Link>
-        )}
-        <AccountChip note={cloudMode ? "Synced to Google Drive" : "Local workspace"} onOpenChange={onMenuDepth} />
-      </div>
-
-      {/* deck 2 — the work bar: drafting-style captions above each cluster */}
-      <div className="glass-toolbar glass-toolbar-secondary" style={{ display: "flex", gap: 7, alignItems: "center", padding: "20px 14px 8px", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-bright)", whiteSpace: "nowrap" }}>
+          style={{ padding: "8px 14px", border: "none", background: conditions.length ? "var(--ink)" : "var(--text-faint)", color: "var(--paper-bright)", cursor: conditions.length ? "pointer" : "default", fontWeight: 700, fontFamily: "var(--f-mono)", fontSize: 11, letterSpacing: "0.12em", textTransform: "none" }}>Report</button>
+        <WorkspaceHelp name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
+        {cloudAccount?.user && <button type="button" className="account-profile-button" aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><AccountAvatar profile={cloudAccount.identity} /><span>{cloudAccount.identity.name}</span></button>}
+      {/* open-sheet tabs — what you opened from the gallery; click to view,
+          ⊞ to side-by-side, ✕ to close; the dropdown lists every open sheet */}
+      {openTabs.length > 0 && (
+        <div className="toolbar-sheet-tabs" style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--ink-muted)" }}>Sheets</span>
+          {openTabs.slice(0, 8).map((k) => {
+            const inGroup = sheetGroup.includes(k);
+            const on = sheetGroup.length ? inGroup : k === sheetKey;
+            const lbl = tabLabel(k);
+            return (
+              <span key={k} className={`sheet-tab${on ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--ink-faint)", borderBottom: on ? "2px solid var(--cobalt)" : "1px solid var(--ink-faint)", background: on ? "var(--paper-cream)" : "transparent", padding: "3px 6px 2px 9px", maxWidth: 190 }}>
+                <button className="sheet-tab-button" onClick={() => goToSheet(k)} title={k} style={{ border: "none", background: "none", cursor: "pointer", fontWeight: on ? 700 : 500, fontSize: 11.5, color: "var(--ink)", fontFamily: "var(--f-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140, padding: 0 }}>{lbl}</button>
+                {bookmarkButton(k)}
+                <button className="sheet-tab-icon" onClick={() => toggleInGroup(k)} title={inGroup ? "Remove from side-by-side" : "Side-by-side with the current sheet"} style={{ border: "none", background: "none", cursor: "pointer", color: inGroup ? "var(--cobalt)" : "var(--ink-faint)", padding: 0, display: "inline-flex" }}><Icon name="sideBySide" size={11} /></button>
+                <button className="sheet-tab-icon" onClick={() => closeTab(k)} title="Close tab" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-muted)", padding: 0, display: "inline-flex" }}><Icon name="close" size={10} /></button>
+              </span>
+            );
+          })}
+          {(openTabs.length > 1 || bookmarkGroups.bookmarked.length > 0) && (
+            <ToolMenu
+              title="Jump to an open or bookmarked sheet"
+              onOpenChange={onMenuDepth}
+              face={<span style={{ fontFamily: "var(--f-mono)", fontSize: 11 }}>{openTabs.length} open</span>}
+              menuStyle={{ maxHeight: `min(480px, max(48px, calc(100dvh - ${toolbarHeight + 16}px)))`, overflowY: "auto", overscrollBehavior: "contain" }}
+              items={sheetJumpItems}
+            />
+          )}
+        </div>
+      )}
+        <div className="toolbar-sheet-tools" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, paddingTop: 14, minWidth: 0 }}>
         {/* Presentation only: rail controls own their anchors and share these actions. */}
         <div style={{ display: "none" }}>
           {cluster("Mode",
@@ -5862,25 +5875,8 @@ export default function TakeoffCanvas() {
             style={{ fontFamily: "var(--f-mono)", fontSize: 11.5, padding: "5px 6px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", width: 150 }}
           />
         )}
-        <div style={{ flex: 1 }} />
-        {cluster(`Scale — ${labelFor(focusPanel)}`,
-          <>
-            <button onClick={() => setUnits((u) => (u === "metric" ? "imperial" : "metric"))}
-              title={units === "metric" ? "Metric display (m² / m) — click for imperial. Calibrate in meters; 1:50-style scales in the list. Display only — stored takeoffs never change." : "Imperial display (SF / LF) — click for metric (m² / m, calibrate in meters, 1:50-style scales). Display only — stored takeoffs never change."}
-              style={{ padding: "6px 10px", border: `1px solid ${units === "metric" ? "var(--cobalt)" : "var(--ink-faint)"}`, background: units === "metric" ? "var(--cobalt)" : "transparent", color: units === "metric" ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 700, fontFamily: "var(--f-mono)", fontSize: 11, lineHeight: 1 }}>
-              {units === "metric" ? "m" : "ft"}
-            </button>
-            <ToolMenu
-              title={scaleTitle}
-              onOpenChange={onScaleMenuDepth}
-              face={<span>{scaleFace}</span>}
-              faceStyle={{ fontFamily: "var(--f-mono)", fontSize: 11.5, ...scaleFaceStyle }}
-              menuStyle={{ minWidth: 250 }}
-              items={scaleItems}
-            />
-          </>
-        )}
-        {cluster("Action",
+        <div style={{ display: "inline-flex", borderLeft: "1px solid var(--ink-faint)", paddingLeft: 12 }}>{scaleControls}</div>
+        {(finishOk || proposal?.regions.length > 0 || (markupDraft && ["cloud", "callout", "highlight"].includes(tool))) && cluster("",
           <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 6, minWidth: 150 }}>
             {markupDraft && (tool === "cloud" || tool === "callout" || tool === "highlight") && <span style={{ fontSize: 11, color: "var(--cobalt)" }}>click the {tool === "callout" ? "label spot" : "opposite corner"}…</span>}
             {finishOk && (
@@ -5891,6 +5887,17 @@ export default function TakeoffCanvas() {
             )}
           </span>
         )}
+        </div>
+        {/* Deliberately subtle, not a button: local-first app, cloud mode is an
+            opt-in extra. Only when ALREADY signed in (never a sign-in entry
+            point in the toolbar — that lives solely on the landing link), no
+            cloud project is open, and the build names a Projects root. */}
+        {!cloudMode && googleUser && isGoogleConfigured() && projectHomeFolderId() && (
+          <Link to="/projects" style={{ fontSize: 11.5, color: "var(--ink-muted)", whiteSpace: "nowrap" }}>
+            browse team projects
+          </Link>
+        )}
+        <AccountChip note={cloudMode ? "Synced to Google Drive" : "Local workspace"} onOpenChange={onMenuDepth} />
       </div>
 
       {/* quick-access condition palette — its own slim band under the toolbar
@@ -5958,35 +5965,7 @@ export default function TakeoffCanvas() {
         </div>
       )}
 
-      {/* open-sheet tabs — what you opened from the gallery; click to view,
-          ⊞ to side-by-side, ✕ to close; the dropdown lists every open sheet */}
-      {openTabs.length > 0 && (
-        <div className="glass-toolbar glass-toolbar-strip" style={{ display: "flex", gap: 5, alignItems: "center", padding: "5px 14px", flexWrap: "wrap", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-bright)" }}>
-          <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--ink-muted)" }}>Sheets</span>
-          {openTabs.slice(0, 8).map((k) => {
-            const inGroup = sheetGroup.includes(k);
-            const on = sheetGroup.length ? inGroup : k === sheetKey;
-            const lbl = tabLabel(k);
-            return (
-              <span key={k} className={`sheet-tab${on ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--ink-faint)", borderBottom: on ? "2px solid var(--cobalt)" : "1px solid var(--ink-faint)", background: on ? "var(--paper-cream)" : "transparent", padding: "3px 6px 2px 9px", maxWidth: 190 }}>
-                <button className="sheet-tab-button" onClick={() => goToSheet(k)} title={k} style={{ border: "none", background: "none", cursor: "pointer", fontWeight: on ? 700 : 500, fontSize: 11.5, color: "var(--ink)", fontFamily: "var(--f-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140, padding: 0 }}>{lbl}</button>
-                {bookmarkButton(k)}
-                <button className="sheet-tab-icon" onClick={() => toggleInGroup(k)} title={inGroup ? "Remove from side-by-side" : "Side-by-side with the current sheet"} style={{ border: "none", background: "none", cursor: "pointer", color: inGroup ? "var(--cobalt)" : "var(--ink-faint)", padding: 0, display: "inline-flex" }}><Icon name="sideBySide" size={11} /></button>
-                <button className="sheet-tab-icon" onClick={() => closeTab(k)} title="Close tab" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-muted)", padding: 0, display: "inline-flex" }}><Icon name="close" size={10} /></button>
-              </span>
-            );
-          })}
-          {(openTabs.length > 1 || bookmarkGroups.bookmarked.length > 0) && (
-            <ToolMenu
-              title="Jump to an open or bookmarked sheet"
-              onOpenChange={onMenuDepth}
-              face={<span style={{ fontFamily: "var(--f-mono)", fontSize: 11 }}>{openTabs.length} open</span>}
-              menuStyle={{ maxHeight: `min(480px, max(48px, calc(100dvh - ${toolbarHeight + 16}px)))`, overflowY: "auto", overscrollBehavior: "contain" }}
-              items={sheetJumpItems}
-            />
-          )}
-        </div>
-      )}
+
       </div>
 
       {/* compact conditions strip — OPTIONAL small-project mode. The docked
@@ -6716,12 +6695,16 @@ export default function TakeoffCanvas() {
               and dblclick is stopped so rapid zoom clicks can't finishShape() */}
           <div className="canvas-zoom-rail" onPointerDown={(e) => { if (e.button === 0 && !spaceRef.current) e.stopPropagation(); }} onDoubleClick={(e) => e.stopPropagation()}
             style={{ position: "absolute", left: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6 }}>
+            {panelBtn(toggleFullscreen, isFullscreen ? "fullscreenExit" : "fullscreen", isFullscreen ? "Exit fullscreen" : "Enter fullscreen", isFullscreen, null, { "aria-label": isFullscreen ? "Exit fullscreen" : "Enter fullscreen", "aria-pressed": isFullscreen })}
+            {sheets.length > 0 && <div ref={findPanelRef} style={{ display: "flex" }}>
+              {panelBtn(() => findOpen ? closeFind() : openFind(), "target", "Find and mark text in all loaded plans (Ctrl+F)", findOpen, null, { "aria-label": "Find text in all loaded plans", "aria-expanded": findOpen })}
+            </div>}
             <ToolMenu rail title="Draw — measurement, cut out, and markup tools"
               face={<Icon name="pencil" size={15} />}
-              active={measureActive || tool === "deduct" || MARKUP_IDS.includes(tool)}
+              active={measureActive || tool === "schedule" || tool === "deduct" || MARKUP_IDS.includes(tool)}
               onOpenChange={onMarkupMenuDepth}
-              items={[{ section: "Measure" }, ...measureMenuItems, { section: "Cut Out" }, ...cutMenuItems, { section: "Markup" }, ...markupMenuItems, ...(markupStyleControls ? [{ id: "markup-style", custom: markupStyleControls }] : [])]} />
-            <ToolMenu rail title="Edit takeoffs" face={<Icon name="markup" size={15} />}
+              items={[{ section: "Measure" }, ...measureMenuItems, { id: "schedule", icon: "rectTool", label: "Schedule", title: "Import a finish/material schedule — click two opposite corners around the table", active: tool === "schedule", onSelect: () => { setScheduleAnchor(null); setTool((t) => t === "schedule" ? "select" : "schedule"); } }, { section: "Cut Out" }, ...cutMenuItems, { section: "Markup" }, ...markupMenuItems, ...(markupStyleControls ? [{ id: "markup-style", custom: markupStyleControls }] : [])]} />
+            <ToolMenu rail title="Edit takeoffs" face={<Icon name="eraser" size={15} />}
               onOpenChange={onMenuDepth} items={editMenuItems} />
             {/* Share the toolbar gate/commit; isolate Finish presses even while Space is held. */}
             {finishOk && (
@@ -6907,6 +6890,7 @@ export default function TakeoffCanvas() {
           const drawer = e.target.closest("[data-drawer]")?.dataset.drawer;
           if (drawer) setFrontDrawer(drawer);
         }} style={{ position: "absolute", right: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
+          {panelBtn(() => setWhiteboardOpen(true), "rectTool", "Open whiteboard", whiteboardOpen, null, { "aria-label": "Whiteboard", disabled: !hydrated.current || !!loadError })}
           {panelBtn(() => {
             if (!trackpadStartedRef.current) { trackpadStartedRef.current = true; setTrackpadVisible(true); }
             setSettingsOpen((v) => !v); trackpadPaintRef.current = "";
@@ -6915,7 +6899,7 @@ export default function TakeoffCanvas() {
           {panelBtn(() => setLeftTab((t) => (t === "stamp" ? null : "stamp")), "stamp", "Stamps — reusable annotations dropped click-to-place", leftTab === "stamp", stampLib.stamps.length, { "data-drawer": "markups" })}
           {panelBtn(() => setLeftTab((t) => (t === "rfi" ? null : "rfi")), "rfi", "RFI register — raise, track, and export Requests For Information", leftTab === "rfi", rfis.length, { "data-drawer": "markups" })}
           {panelBtn(toggleTakeoffs, "takeoffs", "Takeoffs — conditions + running totals", takeoffsOpen, visibleShapes.length, { "data-drawer": "conditions" })}
-          {panelBtn(() => setAgentOpen((o) => !o), "target", "Agent — describe a takeoff; it stages dashed proposals you accept or reject (bring your own AI key)", agentOpen, agentProposals.length, { "data-drawer": "agent" })}
+          {panelBtn(() => setAgentOpen((o) => !o), "agentAI", "Agent — describe a takeoff; it stages dashed proposals you accept or reject (bring your own AI key)", agentOpen, agentProposals.length, { "data-drawer": "agent" })}
           {panelBtn(() => setShowRevisions(true), "revisions", "Revisions — save the takeoff at each bid revision, compare what moved", showRevisions)}
           <button type="button" onClick={() => setDiagnosticsOpen((v) => !v)} title="Rendering diagnostics" aria-label="Rendering diagnostics" aria-pressed={diagnosticsOpen}
             style={{ width: 34, minHeight: 34, border: `1px solid ${diagnosticsOpen ? "var(--cobalt)" : "var(--ink-faint)"}`, background: diagnosticsOpen ? "var(--cobalt)" : "var(--paper-bright)", color: diagnosticsOpen ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontSize: 9, fontWeight: 700 }}>diag</button>

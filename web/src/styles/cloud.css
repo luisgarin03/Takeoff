@@ -34,3 +34,89 @@
 .cloud-drive { border-top: 1px solid var(--ink-faint); margin-top: 20px; padding-top: 12px; }
 .cloud-drive label, .cloud-save > label { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
 .cloud-drive select, .cloud-save select { max-width: 100%; }
+
+.cloud-browser > .cloud-actions { margin: 12px 0; }
+.cloud-file-table { overflow-x: auto; }
+.cloud-file-table table { width: 100%; border-collapse: collapse; text-align: left; }
+.cloud-file-table th, .cloud-file-table td { padding: 10px 6px; border-bottom: 1px solid var(--ink-faint); vertical-align: top; overflow-wrap: anywhere; }
+.cloud-file-table td:first-child { width: 40%; }
+.cloud-file-table td button { text-align: left; justify-content: flex-start; width: 100%; }
+.cloud-file-table tr[aria-selected="true"] { background: var(--paper-shadow); }
+.cloud-selection { padding-top: 12px; }
+@media (max-width: 600px) { .cloud-author, .cloud-type { display: none; } .cloud-file-table td:first-child { width: 55%; } }
+
+.cloud-dialog .cloud-file-table .cloud-open-project { width: auto; min-width: 90px; min-height: 36px; padding: 7px 12px; gap: 8px; justify-content: center; border: 1px solid #414141; border-radius: 11px; background: linear-gradient(#2d2d2d, #202020); color: #f4f4f4; font-weight: 700; white-space: nowrap; box-shadow: inset 0 1px 0 rgb(255 255 255 / .05); }
+.cloud-dialog .cloud-file-table .cloud-open-project:hover:not(:disabled) { background: #353535; }
+
+.cloud-local-file { display: flex; align-items: center; gap: 8px; padding: 3px; border: 1px solid var(--ink-faint); border-radius: 10px; }
+.cloud-dialog .cloud-file-table .cloud-local-filename { flex: 1; min-width: 0; width: auto; border: 0; background: transparent; }
+.cloud-local-filename span { overflow-wrap: anywhere; }
+.cloud-local-filename svg, .cloud-local-file .cloud-open-project { flex-shrink: 0; }
+
+.cloud-browser[aria-label="Selected local folder"] .cloud-file-table td:first-child { width: 55%; }
+.cloud-folder-date { display: block; color: var(--ink-muted); }
+@media (max-width: 600px) { .cloud-local-file { flex-wrap: wrap; } .cloud-local-file .cloud-open-project { margin-left: auto; } }
+@media (max-width: 600px) { .cloud-dialog .cloud-file-table .cloud-local-filename { flex-basis: 100%; } }
+
+.account-avatar { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; overflow: hidden; border-radius: 50%; background: var(--paper-shadow); color: var(--ink); font-size: 12px; font-weight: 700; }
+.account-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.account-profile-button { display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; color: var(--ink); background: transparent; border: 0; box-shadow: none; cursor: pointer; font: inherit; max-width: 210px; }
+.glass-toolbar-primary > button.account-profile-button { font-size: 11px !important; box-shadow: none; }
+.account-profile-button > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cloud-profile-summary { display: grid; grid-template-columns: 90px minmax(0, 1fr) 90px; align-items: center; gap: 12px; margin-bottom: 20px; }
+.cloud-profile-identity { grid-column: 2; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; text-align: center; overflow-wrap: anywhere; }
+.cloud-profile-identity > strong, .cloud-profile-identity > div { max-width: 100%; }
+.cloud-profile-summary > button { justify-self: end; }
+.cloud-profile-form label, .cloud-profile-form input { text-align: center; }
+@media (max-width: 600px) { .cloud-profile-summary { grid-template-columns: minmax(0, 1fr); } .cloud-profile-identity { grid-column: 1; } }
+@media (max-width: 600px) { .account-profile-button { max-width: 150px; } }
+
+.cloud-dialog header h2 { flex-shrink: 0; }
+.cloud-header-account { display: flex; align-items: center; gap: 8px; min-width: 0; margin-left: auto; }
+.cloud-header-account > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cloud-dialog header > .cloud-header-account ~ button { margin-left: 0; flex-shrink: 0; }
+.project-invitations { border: 1px solid var(--ink-faint); border-radius: 8px; padding: 12px; margin: 12px 0; }
+.project-invitations p { font-size: 13px; }
+.share-invitation-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--ink-faint); }
+.share-invitation-row > div { min-width: 0; overflow-wrap: anywhere; }
+.share-invitation-row small { display: block; margin-top: 4px; color: var(--ink-muted); }
+.share-file-list { max-height: 220px; overflow: auto; margin: 12px 0; overflow-wrap: anywhere; }
+.project-invitations .share-file-list label { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; text-align: left; gap: 8px; padding: 5px; }
+.project-invitations input[type=email], .project-invitations select { max-width: 100%; display: block; margin-top: 6px; }
+.cloud-invitation-badge { border-radius: 12px; background: var(--cobalt); color: white; padding: 2px 6px; font-size: 11px; }
+
+/* Google Picker is mounted outside the Cloud dialog. */
+.picker-dialog { z-index: 3202 !important; }
+.picker-dialog-bg { z-index: 3201 !important; }
+
+/* Use the workspace, rather than a narrow fixed-size dialog. */
+.cloud-shade { padding: clamp(0px, 1vw, 16px); box-sizing: border-box; }
+.cloud-dialog { width: 100%; height: 100%; max-height: 100%; min-width: 0; font-size: 14px; box-sizing: border-box; }
+.cloud-dialog > header { flex-shrink: 0; }
+.cloud-content { flex: 1; min-height: 0; min-width: 0; }
+.cloud-dialog button { min-height: 38px; white-space: normal; }
+.cloud-dialog button svg { flex-shrink: 0; }
+.cloud-file-table td button span { min-width: 0; overflow-wrap: anywhere; }
+.cloud-auth { width: 100%; max-width: 480px; }
+.cloud-dialog .cloud-file-table table { table-layout: fixed; }
+.cloud-browser > .cloud-actions input { flex: 1 1 220px; }
+@media (max-width: 650px) {
+  .cloud-shade { padding: 0; }
+  .cloud-dialog { border-radius: 0; border: 0; height: 100dvh; max-height: 100dvh; }
+  .cloud-dialog > header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 12px; }
+  .cloud-dialog header > button { grid-column: 2; grid-row: 1; }
+  .cloud-header-account { grid-column: 1 / -1; grid-row: 2; margin-left: 0; }
+  .cloud-dialog header > .cloud-status:empty { display: none; }
+  .cloud-dialog button { min-height: 44px; }
+  .cloud-dialog input:not([type=checkbox]), .cloud-dialog select { font-size: 16px; }
+  .cloud-file-table table, .cloud-file-table tbody { display: block; width: 100%; }
+  .cloud-file-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .cloud-file-table tr { display: grid; grid-template-columns: minmax(0, 1fr); border: 1px solid var(--ink-faint); border-radius: 8px; margin: 12px 0; padding: 8px; }
+  .cloud-dialog .cloud-file-table td, .cloud-browser[aria-label="Selected local folder"] .cloud-file-table td:first-child { display: block; width: auto; border: 0; padding: 5px; }
+  .cloud-file-table td:not(:first-child)::before { content: attr(data-label) ": "; font-weight: 600; color: var(--ink-muted); }
+  .cloud-file-table td:last-child button { width: auto; }
+  .cloud-local-file { flex-wrap: wrap; }
+  .cloud-dialog .cloud-file-table .cloud-local-filename { flex-basis: 100%; }
+  .cloud-file-table td button { overflow-wrap: anywhere; }
+  .project-invitations .cloud-actions { align-items: stretch; }
+}

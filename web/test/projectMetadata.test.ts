@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PROJECT_STATUSES, createProjectMetadata, metadataPayload, normalizeProjectMetadata, preserveUnknownProjectFields, touchProjectMetadata, validateProjectDraft } from "../src/lib/projectMetadata.js";
+import { PROJECT_STATUSES, withProjectEditor, createProjectMetadata, metadataPayload, normalizeProjectMetadata, preserveUnknownProjectFields, touchProjectMetadata, validateProjectDraft } from "../src/lib/projectMetadata.js";
 
 test("creating a project validates, defaults status, and stamps ISO dates", () => {
   const meta = createProjectMetadata({ name: "  Bid Center  ", submissionDate: "" }, "2026-09-28T12:00:00.000Z");
@@ -40,4 +40,11 @@ test("older saves without metadata load safely from project_name", () => {
 
 test("unknown top-level fields are preserved separately for resave", () => {
   assert.deepEqual(preserveUnknownProjectFields({ schema: "v1", shapes: [], future_flag: { enabled: true } }), { future_flag: { enabled: true } });
+});
+
+test("saving records the current editor separately from the original author", () => {
+  const edited = withProjectEditor({ authorName: "Original", lastModifiedByName: "Previous" }, { id: "editor", email: "editor@example.com" }, "Editor");
+  assert.equal(edited.authorName, "Original");
+  assert.equal(Reflect.get(metadataPayload(edited), "lastModifiedByName"), "Editor");
+  assert.equal(Reflect.get(metadataPayload(withProjectEditor(edited, null)), "lastModifiedByName"), undefined);
 });

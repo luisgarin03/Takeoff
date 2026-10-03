@@ -34,6 +34,7 @@ async function fixture() {
   };
   const metadata = () => ({ id: file.provider_file_id, size: String(file.size), mimeType: file.mime_type, sha256Checksum: hash });
   const google: any = {
+    findFolder: async () => null,
     metadata: async () => { if (!remote) throw new DriveError("OTK_DRIVE_MISSING", 404); return remote; },
     folder: async (_token: string, name: string, _parent: string, key: string) => { folders.push({ name, key }); return `folder-${name}`; },
     id: async () => "stable-id",
@@ -99,8 +100,8 @@ test("disconnect denies file access even if Google revocation is offline, invali
 });
 test("upload creates content-addressed folders and publishes only completed files; repeated Save deduplicates", async () => {
   const h = await fixture(); await h.api.begin(owner, id, h.hash);
-  assert.deepEqual(h.folders.map((f: any) => f.name), ["OpenTakeoff", "Bitzell Fence", "PDFs"]);
-  assert.deepEqual(h.folders.map((f: any) => f.key), ["root", id, `${id}/pdfs`]); assert.equal(h.file.uploaded, false);
+  assert.deepEqual(h.folders.map((f: any) => f.name), ["Estimate save data", "Projects", "Bitzell Fence", "PDFs"]);
+  assert.deepEqual(h.folders.map((f: any) => f.key), ["root", "projects", id, `${id}/pdfs`]); assert.equal(h.file.uploaded, false);
   await h.api.chunk(owner, id, h.hash, 0, new Uint8Array([1, 2, 3]));
   assert.equal(h.file.uploaded, true); assert.equal(h.file.provider_file_id, "stable-id");
   assert.equal((await h.api.begin(owner, id, h.hash)).done, true); assert.equal(h.created, 1); assert.equal(h.transferred, 1);
@@ -110,7 +111,7 @@ test("renaming reuses the stable project folder and replaces the single archive 
   Object.assign(h.file, { file_kind: "archive", original_filename: "Renamed Project.otk", mime_type: "application/octet-stream", provider_file_id: "stable-id", uploaded: false });
   h.remote = { id: "stable-id", size: "3", mimeType: "application/octet-stream", sha256Checksum: "f".repeat(64) };
   await h.api.begin(owner, id, h.hash);
-  assert.deepEqual(h.folders.map((f: any) => f.name), ["OpenTakeoff", "Renamed Project"]);
+  assert.deepEqual(h.folders.map((f: any) => f.name), ["Estimate save data", "Projects", "Renamed Project"]);
   assert.equal(h.replaceUpload, true); assert.equal(h.file.provider_file_id, "stable-id");
 });
 test("lost upload response resumes by stable ID without duplicating the file", async () => {
@@ -183,4 +184,13 @@ test("HTTP 429 remains a quota error even without a Google JSON error body", asy
 test("Google API 400 responses have a distinct non-retryable upload rejection code", async () => {
   const google = createDriveGoogle(async () => new Response('{"error":{"status":"INVALID_ARGUMENT"}}', { status: 400 }));
   await assert.rejects(google.metadata("test-access", "file-id"), (e: any) => e.code === "OTK_DRIVE_UPLOAD");
+});
+
+test("existing legacy project folder remains under its tagged root on save", async () => {
+  const h = await fixture(); const parents: string[] = [];
+  h.google.findFolder = async (_token: string, key: string, parent: string) => key === id && parent === "folder-Estimate save data" ? { id: "existing" } : null;
+  const original = h.google.folder;
+  h.google.folder = async (token: string, name: string, parent: string, key: string) => { if (key === id) parents.push(parent); return original(token,name,parent,key); };
+  await h.api.begin(owner,id,h.hash);
+  assert.deepEqual(parents,["folder-Estimate save data"]);
 });

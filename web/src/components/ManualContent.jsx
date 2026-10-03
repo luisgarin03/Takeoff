@@ -1,11 +1,14 @@
+import { SHARING_UI_ENABLED } from "../lib/sharingVisibility.js";
 import React, { useRef, useState } from "react";
 import guide from "../../../docs/USER_GUIDE.md?raw";
 import { Icon } from "../brand/icons.jsx";
+import googleDriveLogo from "../brand/google-drive.png";
 import { MEASURE_TOOLS, CUT_TOOLS, MARKUP_TOOLS } from "../lib/canvasConstants.js";
 import "./manual.css";
 
 const images = import.meta.glob("../../../docs/img/*", { eager: true, query: "?url", import: "default" });
-const chapters = guide.replace(/\r\n/g, "\n").split(/^## /m).slice(1).map((text, i) => {
+const visibleGuide = SHARING_UI_ENABLED ? guide : guide.replace(/### Share a project from your Google Drive[\s\S]*?(?=\n## )/, "");
+const chapters = visibleGuide.replace(/\r\n/g, "\n").split(/^## /m).slice(1).map((text, i) => {
   const [title, ...body] = text.split("\n");
   return { id: `manual-chapter-${i}`, title, body: body.join("\n") };
 });
@@ -59,9 +62,9 @@ export default function ManualContent() {
   const article = useRef(null);
   const chapter = chapters[active];
   return <div className="manual-layout">
-    <nav className="manual-index" aria-label="Manual topics"><strong>CONTENTS</strong>{chapters.map((item, i) => <button key={item.id} aria-current={i === active ? "page" : undefined} onClick={() => { setActive(i); article.current.scrollTop = 0; }}>{item.title.replace(/`/g, "")}</button>)}</nav>
+    <nav className="manual-index" aria-label="Manual topics"><strong>CONTENTS</strong>{chapters.map((item, i) => <button key={item.id} aria-current={i === active ? "page" : undefined} onClick={() => { setActive(i); article.current.scrollTop = 0; }}>{item.title.includes("Google Drive Cloud Sync") && <img className="manual-drive-logo" src={googleDriveLogo} alt="" width={18} height={18} />}{item.title.replace(/`/g, "")}</button>)}</nav>
     <article className="manual-article" ref={article} aria-label={chapter.title}>
-      <h2>{chapter.title}</h2><References title={chapter.title.replace(/^\d+\. /, "")} />
+      <h2>{chapter.title.includes("Google Drive Cloud Sync") && <img className="manual-drive-logo" src={googleDriveLogo} alt="" width={26} height={26} />}{chapter.title}</h2><References title={chapter.title.replace(/^\d+\. /, "")} />
       <p className="manual-hint">Button pictures identify controls in the estimating workspace. Keyboard shortcuts appear beside them.</p>
       <Blocks text={chapter.body} chapter={chapter.id} />
     </article>

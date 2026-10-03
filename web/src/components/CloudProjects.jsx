@@ -1,21 +1,30 @@
+import { SHARING_UI_ENABLED } from "../lib/sharingVisibility.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../brand/icons.jsx";
 import googleLogo from "../brand/google-g.png";
+import googleDriveLogo from "../brand/google-drive.png";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
 import { createAuth, googleSignInUnavailable } from "../lib/supabase/auth.js";
 import { createProjectRepository } from "../lib/supabase/projects.js";
 import { createFileStorage } from "../lib/supabase/files.js";
 import { createDriveFiles } from "../lib/supabase/driveFiles.js";
 import { createProjectFiles } from "../lib/supabase/projectFiles.js";
-import { connectDrive } from "../lib/supabase/driveConnection.js";
+
 import { createCloudSync } from "../lib/supabase/sync.js";
 import { cloudError, CloudError } from "../lib/supabase/errors.js";
 import { captureCloudProject, restoredProjectSource } from "../lib/supabase/projectState.js";
 import { createFileProjectStore, importFileProject, metaGet, metaPut } from "../lib/store.js";
-import { exportProjectFile, projectFilename, projectFolderName } from "../lib/projectFile.js";
-import { saveProjectArchive } from "../lib/saveProjectFile.js";
-import { downloadBytes } from "../lib/markedset.js";
+import { projectFilename, projectFolderName } from "../lib/projectFile.js";
+import { withProjectAuthor, withProjectEditor, touchProjectMetadata } from "../lib/projectMetadata.js";
+import { downloadDriveFolder } from "../lib/supabase/driveLibrary.js";
+import { openLocalDriveProject, localDriveUnavailable, readLocalProjectHandle, SOURCE_FOLDER_NAME, findLocalSourceFolder, createLocalSourceFolder, localSourceFolderView } from "../lib/localDriveProject.js";
+import { jsonHash } from "../lib/supabase/projectState.js";
+import CloudFileBrowser from "./CloudFileBrowser.jsx";
+import AccountAvatar from "./AccountAvatar.jsx";
+import LocalFolderBrowser from "./LocalFolderBrowser.jsx";
+import ProjectInvitations from "./ProjectInvitations.jsx";
+
 import "../styles/cloud.css";
 
 export const cloudBindingKey = (url, userId, workspace) => `supabase:${url}:${userId}:${workspace}`;
@@ -28,16 +37,27 @@ export default function CloudProjects({ initialView = "projects", source, getPay
   const [busy, setBusy] = useState(""), [error, setError] = useState(""), [notice, setNotice] = useState("");
   const [projects, setProjects] = useState([]), [warnings, setWarnings] = useState([]);
   const [authMode, setAuthMode] = useState("signin"), [email, setEmail] = useState(""), [password, setPassword] = useState("");
-  const [code, setCode] = useState(""), [displayName, setDisplayName] = useState("");
+  const [code, setCode] = useState(""), [displayName, setDisplayName] = useState(cloud.identity?.name || "");
   const [confirm, setConfirm] = useState(null), [name, setName] = useState("");
   const [sharing, setSharing] = useState(null), [members, setMembers] = useState([]), [shareEmail, setShareEmail] = useState(""), [role, setRole] = useState("viewer");
   const [conflict, setConflict] = useState(null), lock = useRef(false), alive = useRef(true);
   const [savedCopy, setSavedCopy] = useState("");
-  const [drive, setDrive] = useState(null), [driveError, setDriveError] = useState("");
-  const [provider, setProvider] = useState(null), [defaultProvider, setDefaultProvider] = useState("supabase");
+  const [drive, setDrive] = useState(null);
+  const [defaultProvider, setDefaultProvider] = useState("google_drive");
+  const [localRoot, setLocalRoot] = useState(null);
+  const [restoringSource, setRestoringSource] = useState(!!cloud.user);
+  const [localBrowser, setLocalBrowser] = useState(null);
+  const [shareEntry, setShareEntry] = useState(null);
+  const [showCloudLibrary, setShowCloudLibrary] = useState(false);
+  const [createSource, setCreateSource] = useState(null);
   const [copyProvider, setCopyProvider] = useState("supabase"), [currentCloud, setCurrentCloud] = useState(null);
   const transfer = useRef(null);
   const userId = cloud.user?.id;
+  const profileDraft = useRef({ userId, edited: false });
+  useEffect(() => {
+    if (profileDraft.current.userId !== userId) profileDraft.current = { userId, edited: false };
+    if (view === "account" && !profileDraft.current.edited) setDisplayName(cloud.identity?.name || "");
+  }, [userId, view, cloud.identity?.name]);
   const services = useMemo(() => {
     if (!cloud.client || !userId) return null;
     const repository = createProjectRepository(cloud.client, userId);
@@ -58,7 +78,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
   useEffect(() => {
     if (cloud.driveReturn) { setView("account"); setError(cloud.driveReturn.error); }
   }, [cloud.driveReturn]);
-  callbacks.current = { busy, onClose };
+  callbacks.current = { busy, onClose, cancelCreate: createSource ? () => { setCreateSource(null); setError(""); } : null };
   useEffect(() => {
     alive.current = true;
     const previous = document.activeElement;
@@ -66,7 +86,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     const key = (e) => {
       if (!root.current?.contains(e.target)) return;
       e.stopImmediatePropagation();
-      if (e.key === "Escape") { e.preventDefault(); if (!lock.current) callbacks.current.onClose(); }
+      if (e.key === "Escape") { e.preventDefault(); if (!lock.current) (callbacks.current.cancelCreate || callbacks.current.onClose)(); }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") e.preventDefault();
       if (e.key === "Tab") {
         const nodes = [...root.current.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href]')].filter((n) => n.getClientRects().length);
@@ -84,6 +104,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     lock.current = true; transfer.current = new AbortController(); setBusy("Working..."); setError(""); setNotice(""); setSavedCopy(""); cloud.clearAuthReturn(); cloud.clearDriveReturn();
     try { await fn(); }
     catch (e) {
+      if (e.name === "AbortError") return;
       const safe = cloudError(e);
       if (import.meta.env.DEV) console.warn("Cloud operation failed", { code: safe.code });
       if (alive.current) { setError(safe.message); if (safe.code === "OTK_CONFLICT") cloud.setStatus("Conflict"); }
@@ -93,30 +114,37 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     const rows = await services.repository.listProjects();
     if (alive.current) setProjects(rows);
   }
-  async function refreshDrive() {
-    const state = await services.drive.status();
-    if (alive.current) { setDrive(state); setDriveError(""); }
-  }
   useEffect(() => {
-    setDrive(null); setDriveError(""); setCurrentCloud(null); setProvider(null); setDefaultProvider("supabase");
+    setDrive(null); setCurrentCloud(null); setLocalRoot(null); setLocalBrowser(null); setShareEntry(null); setShowCloudLibrary(false); setCreateSource(null); setDefaultProvider("google_drive");
+    setRestoringSource(!!services);
     if (!services) return;
     let live = true;
-    services.drive.status().then((s) => { if (live) setDrive(s); }).catch((e) => { if (live) setDriveError(cloudError(e).message); });
+    metaGet(`drive-local-folder:${userId}`).then(async (saved) => {
+      const handle = saved?.handle || saved;
+      if (!handle || !live) return;
+      setLocalRoot(handle);
+      if (handle.queryPermission && await handle.queryPermission({ mode: "read" }) !== "granted") return;
+      const browser = await localSourceFolderView(handle, !!saved?.browseProjects);
+      if (live) setLocalBrowser(browser);
+    }).catch(() => {
+      if (live) setNotice("Could not load the saved source folder. Locate it again to continue.");
+    }).finally(() => { if (live) setRestoringSource(false); });
+    services.drive.status().then((s) => { if (live) setDrive(s); }).catch((e) => { if (live) setError(cloudError(e).message); });
     metaGet(services.preferenceKey).then((p) => { if (live && ["supabase", "google_drive"].includes(p)) setDefaultProvider(p); });
     return () => { live = false; transfer.current?.abort(); };
-  }, [services]);
+  }, [services, userId]);
   useEffect(() => {
     if (!services || !cloud.driveReturn) return;
     let live = true;
-    services.drive.status().then((s) => { if (live) setDrive(s); }).catch((e) => { if (live) setDriveError(cloudError(e).message); });
+    services.drive.status().then((s) => { if (live) setDrive(s); }).catch((e) => { if (live) setError(cloudError(e).message); });
     return () => { live = false; };
   }, [services, cloud.driveReturn]);
   useEffect(() => {
     if (!services) return;
     let live = true;
     const id = getPayload().project_id;
-    if (projects.some((p) => p.id === id && !p.deleted_at)) {
-      services.repository.loadProject(id).then((p) => { if (live) { setCurrentCloud(p); setProvider(null); } }).catch(() => {});
+    if (id) {
+      services.repository.loadProject(id).then((p) => { if (live) { setCurrentCloud(p); } }).catch(() => {});
     }
     return () => { live = false; };
     // Reload authoritative provider after saves/list refresh, not canvas edits.
@@ -126,7 +154,6 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     setProjects([]); setSharing(null); setMembers([]); setConflict(null); setWarnings([]); setConfirm(null);
     if (!services) return;
     let live = true;
-    services.repository.listProjects().then((rows) => { if (live) setProjects(rows); }).catch((e) => { if (live) setError(cloudError(e).message); });
     // The canvas serializer includes edits still inside the local debounce.
     services.sync.status(getPayload()).then((status) => { if (live) cloud.setStatus(status); }).catch(() => {});
     return () => { live = false; };
@@ -158,15 +185,20 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     });
   }
   async function save(expectedVersion) {
-    const payload = getPayload({ touch: true });
+    const raw = getPayload({ touch: true });
+    const binding = await services.sync.metadata();
+    const authoritative = binding?.projectId === raw.project_id ? await services.repository.loadProject(raw.project_id) : currentCloud;
+    const original = authoritative?.project_state?.annotations?.project_metadata;
+    const author = original?.authorId || original?.authorName || original?.authorEmail ? original : raw.project_metadata;
+    const payload = { ...raw, project_metadata: { ...raw.project_metadata, ...Object.fromEntries(Object.entries(withProjectAuthor(author, cloud.user, cloud.profileName) || {}).filter(([k]) => k.startsWith("author"))) } };
     setWarnings([]); cloud.setStatus("Uploading");
     try {
       const result = await services.sync.save(payload, { expectedVersion, signal: transfer.current?.signal,
-        storageProvider: !currentCloud || currentCloud.owner_id === userId ? provider : undefined, newProjectProvider: defaultProvider });
+        storageProvider: authoritative?.file_provider, newProjectProvider: "google_drive" });
       const filename = projectFilename(payload.project_name), folder = projectFolderName(payload.project_name);
       const destination = result.project.file_provider === "google_drive" ? `Google Drive folder ${folder}/` : "cloud storage";
       setWarnings(result.warnings); setNotice(result.warnings.length ? `Cloud save incomplete for ${folder}/${filename}. Retry after resolving the listed files.` : `${filename} and all project assets saved in ${destination}.`);
-      if (!result.warnings.length) onPersisted?.(payload.project_metadata?.lastModifiedAt);
+      if (!result.warnings.length) onPersisted?.(payload.project_metadata?.lastModifiedAt, payload.project_metadata);
       setConflict(null);
       cloud.setStatus(result.warnings.length ? "Files Local Only" : "Synced");
       await refresh();
@@ -178,18 +210,72 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     }
   }
   async function open(id) {
+    const project = await services.repository.loadProject(id);
     await source.saveAnnotations(getPayload());
-    cloud.setStatus("Downloading");
-    const loaded = await services.sync.load(id, { signal: transfer.current?.signal });
-    const localId = await importFileProject(loaded.restored);
-    await metaPut(cloudBindingKey(cloud.configuration.url, cloud.user.id, localId), loaded.binding);
-    // Open in a separate local workspace. Never overwrite an offline edit or
-    // the previous workspace when adopting a cloud winner.
+    if (project.file_provider !== "google_drive") {
+      // Keep the pre-existing Supabase workflow available for legacy projects.
+      cloud.setStatus("Downloading");
+      const loaded = await services.sync.load(id, { signal: transfer.current?.signal });
+      const localId = await importFileProject(loaded.restored);
+      await metaPut(cloudBindingKey(cloud.configuration.url, userId, localId), loaded.binding);
+      window.location.assign(`${window.location.pathname}?localProject=${localId}`);
+      return;
+    }
+    setBusy("Opening project from Google Drive...");
+    if (!localRoot) throw new CloudError("OTK_LOCAL_DRIVE", localDriveUnavailable);
+    const listing = await services.drive.listFolder(id, null, transfer.current?.signal);
+    const restored = await openLocalDriveProject(localRoot, listing.localPath, id, undefined, project.project_state.archive?.sha256);
+    // Do not bind a stale synced .otk to the newest cloud version and overwrite it.
+    const capture = project.project_state.archive ? { hash: await jsonHash(project.project_state), state: project.project_state } : await captureCloudProject(restoredProjectSource(restored), restored.annotations);
+    if (await jsonHash(capture.state.annotations) !== await jsonHash(project.project_state.annotations)) throw new CloudError("OTK_LOCAL_DRIVE", "The synced .otk differs from the cloud project. Wait for Google Drive to finish syncing, then retry. You can open an older file separately through Project > Open project.");
+    const localId = await importFileProject(restored);
+    await metaPut(cloudBindingKey(cloud.configuration.url, userId, localId), { projectId: id, cloudVersion: project.version,
+      syncedHash: capture.hash, archive: project.project_state.archive || null, pendingFiles: false, missingPlans: [] });
+    window.location.assign(`${window.location.pathname}?localProject=${localId}`);
+  }
+  async function activateLocalSource(handle, browseProjects = false) {
+    const browser = await localSourceFolderView(handle, browseProjects);
+    await services.repository.assertUser();
+    try { await metaPut(`drive-local-folder:${userId}`, browseProjects ? { handle, browseProjects: true } : handle); }
+    catch { throw new CloudError("OTK_LOCAL_DRIVE", "The folder is available, but OpenTakeoff could not remember it locally. Check browser storage and try selecting it again."); }
+    if (!alive.current) return;
+    setLocalRoot(handle); setLocalBrowser(browser); setShowCloudLibrary(false); setCreateSource(null);
+    setNotice(`Source folder: ${handle.name}. Ready.`);
+  }
+  async function locateDrive() {
+    if (!window.showDirectoryPicker) throw new CloudError("OTK_LOCAL_DRIVE", localDriveUnavailable);
+    const handle = await window.showDirectoryPicker({ id: "opentakeoff-drive", mode: "read" });
+    await activateLocalSource(handle);
+  }
+  async function chooseSourceParent() {
+    if (!window.showDirectoryPicker) throw new CloudError("OTK_LOCAL_DRIVE", localDriveUnavailable);
+    setCreateSource(null);
+    let parent;
+    try { parent = await window.showDirectoryPicker({ id: "opentakeoff-drive", mode: "readwrite" }); }
+    catch (error) {
+      if (error.name === "AbortError") return;
+      throw new CloudError("OTK_LOCAL_DRIVE", "The selected location could not be opened. Allow folder access and check Google Drive is available on this computer.");
+    }
+    const existing = await findLocalSourceFolder(parent);
+    if (alive.current) setCreateSource({ parent, exists: !!existing });
+  }
+  async function finishCreateSource(useExisting = false) {
+    const result = await createLocalSourceFolder(createSource.parent, useExisting);
+    if (result.exists) { setCreateSource((current) => ({ ...current, exists: true })); return; }
+    await activateLocalSource(result.handle, true);
+  }
+  async function openSelectedLocalFile(handle) {
+    setBusy("Opening project from selected folder...");
+    const restored = await readLocalProjectHandle(handle);
+    await source.saveAnnotations(getPayload());
+    const localId = await importFileProject(restored);
     window.location.assign(`${window.location.pathname}?localProject=${localId}`);
   }
   async function saveCopy(payload, localSource = source) {
     const id = crypto.randomUUID();
-    const a = { ...payload, project_id: id, project_name: name.trim() || `${payload.project_name || "Untitled project"} copy` };
+    const copyName = name.trim() || `${payload.project_name || "Untitled project"} copy`;
+    const copiedMetadata = Object.fromEntries(Object.entries(payload.project_metadata || {}).filter(([k]) => !k.startsWith("author")));
+    const a = { ...payload, project_id: id, project_name: copyName, project_metadata: withProjectEditor(withProjectAuthor(touchProjectMetadata({ ...copiedMetadata, name: copyName, createdAt: "" }), cloud.user, cloud.profileName), cloud.user, cloud.profileName) };
     const previous = localSource === source ? await services.sync.metadata() : null;
     const captured = await captureCloudProject(localSource, a, previous?.projectId === payload.project_id ? previous.missingPlans || [] : [], previous?.projectId === payload.project_id ? previous.archive || null : null);
     const pdfs = captured.state.plans.filter((p) => captured.files.has(p.sha256)).map((p) => ({ name: p.name, bytes: captured.files.get(p.sha256).bytes }));
@@ -232,22 +318,26 @@ export default function CloudProjects({ initialView = "projects", source, getPay
   }
   const ask = (type, project) => { setCopyProvider(defaultProvider); setName(type.startsWith("copy") ? `${project?.name || getPayload().project_name || "Untitled project"} copy` : project?.name || ""); setConfirm({ type, project }); };
   async function download(project) {
-    // The picker runs synchronously from the click, before network/ZIP work.
-    await saveProjectArchive({ name: project.name,
-      pickFile: typeof window.showSaveFilePicker === "function" ? window.showSaveFilePicker.bind(window) : null,
-      buildArchive: async () => {
-        const loaded = await services.sync.load(project.id, { signal: transfer.current?.signal });
-        if (loaded.restored.missing.length) throw new CloudError("OTK_MISSING", "A complete .otk backup needs the Local Only files. Export from the device holding those originals.");
-        return exportProjectFile(restoredProjectSource(loaded.restored), loaded.restored.annotations);
-      }, download: downloadBytes });
+    if (!project || project.file_provider !== "google_drive") throw new CloudError("OTK_LOCAL_DRIVE", "Save this project to Google Drive before downloading a local copy.");
+    cloud.setStatus("Downloading");
+    try { await downloadDriveFolder({ drive: services.drive, project, signal: transfer.current?.signal, onProgress: setBusy,
+      pickFile: window.showSaveFilePicker?.bind(window),
+      download: (name, blob) => { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); } });
+    } finally { cloud.setStatus(await services.sync.status(getPayload()).catch(() => "Local Only")); }
   }
-  const visible = projects.filter((p) => filter === "recent" || (filter === "mine" ? p.owner_id === cloud.user?.id : p.owner_id !== cloud.user?.id));
+  const visible = projects.filter((p) => filter === "legacy" ? p.file_provider !== "google_drive" : p.file_provider === "google_drive" && (filter === "recent" || (filter === "mine" ? p.owner_id === userId : p.owner_id !== userId)));
+  const projectActions = (p, canOpen = true) => <>
+    {!p.deleted_at && <>{canOpen && <button disabled={!!busy || cloud.offline} onClick={() => run(() => open(p.id))}>Open project</button>}<button disabled={!!busy || cloud.offline} onClick={() => ask("copy-cloud", p)}>Duplicate</button></>}
+    {!p.deleted_at && p.role !== "viewer" && <button disabled={!!busy || cloud.offline} onClick={() => ask("rename", p)}>Rename</button>}
+    {SHARING_UI_ENABLED && !p.deleted_at && p.role === "owner" && <button disabled={!!busy || cloud.offline} onClick={() => run(async () => { setSharing(p); setMembers(await services.repository.listProjectMembers(p.id)); })}>Share</button>}
+    {p.role === "owner" && <button disabled={!!busy || cloud.offline} onClick={() => ask("delete", p)}>{p.deleted_at ? "Finish deletion" : "Delete"}</button>}
+  </>;
   const authentication = !cloud.user || authMode === "password";
   const storageOptions = <><option value="supabase">Supabase Storage</option><option value="google_drive" disabled={!drive?.connected}>Google Drive{!drive?.connected ? " (connect in Profile)" : ""}</option></>;
   return createPortal(<div className="cloud-shade" onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-    <section ref={root} className="cloud-dialog" role="dialog" aria-modal="true" aria-label="Cloud projects" tabIndex={-1}>
-      <header><h2>Cloud projects</h2><span className="cloud-status">{cloud.offline ? "Offline" : cloud.status}</span>
-        <button type="button" title="Close cloud projects" aria-label="Close cloud projects" disabled={!!busy} onClick={onClose}><Icon name="close" size={18} /></button></header>
+    <section ref={root} className="cloud-dialog" role="dialog" aria-modal="true" aria-label={view === "account" ? "Profile" : "Cloud projects"} tabIndex={-1}>
+      <header><h2>{view === "account" ? "Profile" : "Cloud projects"}</h2>{cloud.user && view !== "account" && <div className="cloud-header-account"><AccountAvatar profile={cloud.identity} size={28} /><span title={cloud.user.email}>{cloud.user.email}</span></div>}<span className="cloud-status">{cloud.displayStatus}</span>
+        <button type="button" title={view === "account" ? "Close profile" : "Close cloud projects"} aria-label={view === "account" ? "Close profile" : "Close cloud projects"} disabled={!!busy} onClick={onClose}><Icon name="close" size={18} /></button></header>
       <div className="cloud-content">
         {!cloud.configuration.configured ? <p role="status">{cloud.configuration.error || "Cloud is not configured. Local saving remains available."}</p> : !cloud.ready || !auth ? <p role="status">Restoring account...</p> : <>
           {authentication ? <form onSubmit={authenticate} className="cloud-auth">
@@ -263,49 +353,38 @@ export default function CloudProjects({ initialView = "projects", source, getPay
             <button className="btn-primary" disabled={!!busy || cloud.offline} type="submit">{authMode === "signin" ? "Sign in" : "Continue"}</button>
             <div className="cloud-actions">{["signin", "signup", "forgot"].filter((m) => m !== authMode).map((m) => <button key={m} type="button" disabled={!!busy} onClick={() => { setAuthMode(m); setError(""); setPassword(""); }}>{m === "signup" ? "Create account" : m === "forgot" ? "Forgot password" : "Sign in"}</button>)}</div>
           </form> : <>
-            <div className="cloud-account"><span>{cloud.user.email}</span><button disabled={!!busy} onClick={() => run(async () => { await auth.signOut(); cloud.setStatus("Local Only"); })}>Sign out</button></div>
-            <div className="cloud-actions cloud-tabs"><button aria-pressed={view === "save"} disabled={!!busy} onClick={() => setView("save")}>This project</button><button aria-pressed={view === "projects"} disabled={!!busy} onClick={() => setView("projects")}>Browse projects</button><button aria-pressed={view === "account"} disabled={!!busy} onClick={() => { setDisplayName(cloud.user.user_metadata?.display_name || ""); setView("account"); }}>Profile</button></div>
             {view === "account" && <>
-              <form className="cloud-auth" onSubmit={(e) => { e.preventDefault(); run(async () => { await auth.saveProfile(cloud.user.id, displayName); setNotice("Profile saved."); }); }}><label>Display name<input value={displayName} maxLength={120} onChange={(e) => setDisplayName(e.target.value)} /></label><button className="btn-primary" disabled={!!busy || cloud.offline}>Save profile</button></form>
-              <section className="cloud-drive"><h3>Google Drive</h3>
-                <p role="status">{drive?.connected ? `Connected as ${drive.email}` : drive?.configured ? "Not connected" : driveError || "Drive server setup required."}</p>
-                <div className="cloud-actions">
-                  <button disabled={!!busy || cloud.offline || !drive?.configured} onClick={() => run(async () => {
-                    await source.saveAnnotations(getPayload()); await connectDrive(services.drive);
-                  })}>{drive?.connected ? "Reconnect Google Drive" : "Connect Google Drive"}</button>
-                  {drive?.connected && <><button disabled={!!busy || cloud.offline} onClick={() => {
-                    if (window.confirm("Disconnect Google Drive? Cloud files in this Drive will be unavailable to you and shared members until you reconnect. Local copies are kept.")) run(async () => {
-                      const result = await services.drive.disconnect(); await refreshDrive();
-                      setNotice(result.revoked ? "Google Drive disconnected." : "Disconnected in OpenTakeoff. Also remove access under Google Account permissions.");
-                    });
-                  }}>Disconnect</button><a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer">Manage</a></>}
-                  <button disabled={!!busy || cloud.offline} onClick={() => run(refreshDrive)}>Refresh connection</button>
-                </div>
-                <label>Default file storage for new cloud projects<select value={defaultProvider} disabled={!!busy} onChange={(e) => run(async () => {
-                  const value = e.target.value; await metaPut(services.preferenceKey, value); setDefaultProvider(value);
-                })}>{storageOptions}</select></label>
-              </section>
+              <div className="cloud-profile-summary"><div className="cloud-profile-identity"><AccountAvatar profile={cloud.identity} size={40} /><strong>{cloud.identity.name}</strong><div>{cloud.identity.email}</div></div><button disabled={!!busy} onClick={() => run(async () => { await auth.signOut(); cloud.setStatus("Local Only"); })}>Log out</button></div>
+              <form className="cloud-auth cloud-profile-form" onSubmit={(e) => { e.preventDefault(); run(async () => { await auth.saveProfile(cloud.user.id, displayName); profileDraft.current.edited = false; await cloud.refreshProfile(); setDisplayName(displayName.trim()); setNotice("Profile saved."); }); }}><label>Display name<input value={displayName} maxLength={120} onChange={(e) => { profileDraft.current.edited = true; setDisplayName(e.target.value); }} /></label><button className="btn-primary" disabled={!!busy || cloud.offline}>Save profile</button></form>
+
             </>}
             {view === "save" && <div className="cloud-save"><h3>{getPayload().project_name || "Untitled project"}</h3>
-              <label>Cloud file storage<select value={provider || currentCloud?.file_provider || defaultProvider} disabled={!!busy || !!currentCloud?.file_provider_locked || (!!currentCloud && currentCloud.owner_id !== userId)} onChange={(e) => setProvider(e.target.value)}>{storageOptions}</select></label>
-              {currentCloud?.file_provider_locked && <p>Storage: {currentCloud.file_provider === "google_drive" ? "Google Drive" : "Supabase Storage"}. Existing files stay with this provider.</p>}
-              <div className="cloud-actions"><button className="btn-primary" disabled={!!busy || cloud.offline || !!source.listFolder} onClick={() => run(() => save())}><Icon name="document" size={16} />Save to Cloud</button><button className="btn-ghost" disabled={!!busy || cloud.offline || !!source.listFolder} onClick={() => ask("copy-local")}>Save As...</button></div>
+              <p>Cloud status: {currentCloud?.file_provider === "supabase" ? "Existing project uses Supabase Storage" : drive?.connected ? "Google Drive connected" : "Connect Google Drive in Profile"}</p>
+              <div className="cloud-actions"><button className="btn-primary" disabled={!!busy || cloud.offline || !!source.listFolder || (!currentCloud && !drive?.connected)} onClick={() => run(() => save())}><Icon name="document" size={16} />Save to Cloud</button><button disabled={!!busy || cloud.offline || currentCloud?.file_provider !== "google_drive"} onClick={() => run(() => download(currentCloud))}>Download Locally</button><button className="btn-ghost" disabled={!!busy || cloud.offline || !!source.listFolder} onClick={() => ask("copy-local")}>Save As...</button></div>
+              {currentCloud?.file_provider !== "google_drive" && <p>Save this project to Google Drive before downloading a local copy.</p>}
               {source.listFolder && <p>Export this Drive project and open its local .otk copy before saving to Supabase.</p>}
             </div>}
             {view === "projects" && <>
-              <div className="cloud-actions"><select aria-label="Project filter" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="mine">My Projects</option><option value="shared">Shared With Me</option><option value="recent">Recent</option></select><button disabled={!!busy || cloud.offline} onClick={() => run(refresh)}>Refresh</button></div>
-              {!visible.length && <p>No cloud projects in this view.</p>}
-              <div className="cloud-project-list">{visible.map((p) => <article key={p.id}>
-                <div><strong>{p.name}</strong><small>{p.owner} · {p.role} · {new Date(p.updated_at).toLocaleString()}{p.deleted_at ? " · Deleted" : " · Cloud"}</small></div>
+              {restoringSource && <p role="status" aria-live="polite">Loading saved source folder…</p>}
+              {!restoringSource && !localBrowser && !showCloudLibrary && <section><h3>Select a source folder</h3><p>You are signed in. Select or create your Google Drive folder on this computer to display its files.</p></section>}
+              <div className="cloud-actions">{showCloudLibrary && !localBrowser && <><select aria-label="Project filter" value={filter} disabled={(!!busy || restoringSource)} onChange={(e) => setFilter(e.target.value)}><option value="mine">My Projects</option>{SHARING_UI_ENABLED && <option value="shared">Shared With Me</option>}<option value="recent">Recent</option><option value="legacy">Legacy storage</option></select><button disabled={(!!busy || restoringSource) || cloud.offline} onClick={() => run(refresh)}>Refresh projects</button></>}<button disabled={(!!busy || restoringSource) || !window.showDirectoryPicker} onClick={() => run(locateDrive)}><img src={googleDriveLogo} alt="" aria-hidden="true" width={18} height={18} style={{ objectFit: "contain", flexShrink: 0 }} />Locate Google Drive Folder</button></div>
+              {!restoringSource && !localBrowser && !showCloudLibrary && <p>Locate an existing source folder, or create a new source folder in Google Drive for desktop.</p>}
+              {createSource && <section className="cloud-confirm" aria-label="Create source folder">
+                <h3>{createSource.exists ? "An OpenTakeoff source folder already exists here." : "Create New Source Folder"}</h3>
+                <p>Selected location: {createSource.parent.name}</p>
+                <p>{createSource.exists ? "Use" : "Create"}: {createSource.parent.name} / {SOURCE_FOLDER_NAME} / Projects</p>
+                <p>Choose a location inside your Google Drive for desktop folder. The source folder name is fixed to match OpenTakeoff’s managed structure.</p>
                 <div className="cloud-actions">
-                  {!p.deleted_at && <><button disabled={!!busy || cloud.offline} onClick={() => run(() => open(p.id))}>Open</button><button disabled={!!busy || cloud.offline} onClick={() => run(() => download(p))}>Download</button><button disabled={!!busy || cloud.offline} onClick={() => ask("copy-cloud", p)}>Duplicate</button></>}
-                  {!p.deleted_at && p.role !== "viewer" && <button disabled={!!busy || cloud.offline} onClick={() => ask("rename", p)}>Rename</button>}
-                  {!p.deleted_at && p.role === "owner" && <button disabled={!!busy || cloud.offline} onClick={() => run(async () => { setSharing(p); setMembers(await services.repository.listProjectMembers(p.id)); })}>Share</button>}
-                  {p.role === "owner" && <button disabled={!!busy || cloud.offline} onClick={() => ask("delete", p)}>{p.deleted_at ? "Finish deletion" : "Delete"}</button>}
+                  <button className="btn-primary" disabled={(!!busy || restoringSource)} onClick={() => run(() => finishCreateSource(createSource.exists))}>{createSource.exists ? "Use Existing Folder" : "Create Folder"}</button>
+                  <button disabled={(!!busy || restoringSource)} onClick={() => run(chooseSourceParent)}>Choose Another Location</button>
+                  <button disabled={(!!busy || restoringSource)} onClick={() => { setCreateSource(null); setError(""); }}>Cancel</button>
                 </div>
-              </article>)}</div>
+              </section>}
+              {!window.showDirectoryPicker && <p>This browser cannot locate synced folders. Use Project → Open project to choose the synced .otk file; Open will not download a cloud copy.</p>}
+              {SHARING_UI_ENABLED && services && <ProjectInvitations key={userId} cloud={cloud} drive={services.drive} assertUser={services.repository.assertUser} shareEntry={shareEntry} onShareClose={() => setShareEntry(null)} busy={!!busy} run={run} onOpen={openSelectedLocalFile} />}
+              {localBrowser ? <LocalFolderBrowser key={localBrowser.key} initial={localBrowser} busy={(!!busy || restoringSource)} run={run} onOpen={openSelectedLocalFile} onShare={SHARING_UI_ENABLED ? setShareEntry : undefined} /> : showCloudLibrary ? <CloudFileBrowser key={`${userId}:${filter}`} projects={visible} drive={services.drive} busy={(!!busy || restoringSource)} offline={cloud.offline} run={run} actions={projectActions} /> : null}
             </>}
-            {sharing && <section className="cloud-share"><h3>Share {sharing.name}</h3><form onSubmit={(e) => { e.preventDefault(); run(async () => { await services.repository.shareProject(sharing.id, shareEmail, role); setMembers(await services.repository.listProjectMembers(sharing.id)); setShareEmail(""); }); }}>
+            {SHARING_UI_ENABLED && sharing && <section className="cloud-share"><h3>Share {sharing.name}</h3><form onSubmit={(e) => { e.preventDefault(); run(async () => { await services.repository.shareProject(sharing.id, shareEmail, role); setMembers(await services.repository.listProjectMembers(sharing.id)); setShareEmail(""); }); }}>
               <label>Registered user's email<input type="email" required value={shareEmail} onChange={(e) => setShareEmail(e.target.value)} /></label><select aria-label="Member role" value={role} onChange={(e) => setRole(e.target.value)}><option value="viewer">Viewer</option><option value="editor">Editor</option></select><button disabled={!!busy}>Share</button></form>
               {members.map((m) => <div className="cloud-member" key={m.user_id}><span>{m.name} · {m.role}</span><button disabled={!!busy} onClick={() => run(async () => { await services.repository.removeProjectMember(sharing.id, m.user_id); setMembers(await services.repository.listProjectMembers(sharing.id)); })}>Remove</button></div>)}
               <button disabled={!!busy} onClick={() => setSharing(null)}>Done</button></section>}

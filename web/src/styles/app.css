@@ -545,7 +545,7 @@ select {
     0 14px 34px rgba(31, 42, 68, .14);
 }
 
-:root[data-theme="dark"] .glass-toolbar button:not([title^="#"]):not(.sheet-tab-button):not(.sheet-tab-icon),
+:root[data-theme="dark"] .glass-toolbar button:not([title^="#"]):not(.sheet-tab-button):not(.sheet-tab-icon):not(.account-profile-button),
 :root[data-theme="dark"] .glass-toolbar input,
 :root[data-theme="dark"] .glass-toolbar select {
   background: var(--glass-control-bg) !important;
@@ -556,7 +556,7 @@ select {
     0 1px 2px rgba(0, 0, 0, .22);
 }
 
-:root[data-theme="dark"] .glass-toolbar button:not([title^="#"]):not(.sheet-tab-button):not(.sheet-tab-icon):hover:not(:disabled),
+:root[data-theme="dark"] .glass-toolbar button:not([title^="#"]):not(.sheet-tab-button):not(.sheet-tab-icon):not(.account-profile-button):hover:not(:disabled),
 :root[data-theme="dark"] .glass-toolbar input:hover,
 :root[data-theme="dark"] .glass-toolbar select:hover {
   background: var(--glass-control-bg-hover) !important;
@@ -698,6 +698,11 @@ select {
     background: var(--paper-bright) !important;
   }
 }
+
+/* Wrap at the available width, including wide screens with many controls. */
+.glass-toolbar { flex-wrap: wrap; align-content: flex-start; row-gap: 10px; white-space: normal !important; }
+.glass-toolbar > * { max-width: 100%; }
+.toolbar-sheet-tools { border-left: 1px solid var(--ink-faint); padding-left: 12px; }
 
 @container toolbar (max-width: 1100px) {
   .glass-toolbar {
@@ -1228,3 +1233,78 @@ select {
 /* Menus already constrain themselves to the viewport. Let them escape the
    scrollable toolbar so scale, hatch and other choices remain reachable. */
 .glass-toolbar-stack:has(.tool-menu-popover) { overflow: visible; }
+
+/* Align report toolbar faces without changing controls inside their popovers. */
+.report-toolbar { flex-wrap: wrap; }
+.report-toolbar > button,
+.report-toolbar > div > button,
+.report-toolbar > span > button,
+.report-toolbar > label > select,
+.report-toolbar > input[name="project-name"] {
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 36px;
+  padding: 6px 10px !important;
+  font-family: var(--f-body) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  border-radius: 8px;
+}
+.report-toolbar > button,
+.report-toolbar > div > button,
+.report-toolbar > span > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.report-toolbar > label { font: 600 13px var(--f-body) !important; }
+.report-toolbar > strong { font-size: 15px !important; white-space: nowrap; }
+@media (max-width: 760px) {
+  .report-toolbar > button,
+  .report-toolbar > div > button,
+  .report-toolbar > span > button,
+  .report-toolbar > label > select,
+  .report-toolbar > input[name="project-name"] { height: 40px; min-height: 40px; }
+}
+
+/* Quiet scale reminder; only the trigger animates, never the menu. */
+:root .glass-toolbar .scale-needs-setting > span > button {
+  color: #ff9696 !important;
+  border-color: #ff6262 !important;
+  background: rgba(255, 70, 70, .16) !important;
+  animation: scale-reminder 3s ease-in-out infinite;
+}
+@keyframes scale-reminder {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255, 98, 98, .22); }
+  50% { box-shadow: 0 0 0 3px rgba(255, 98, 98, .38), 0 0 9px rgba(255, 70, 70, .20); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root .glass-toolbar .scale-needs-setting > span > button { animation: none; }
+}
+
+/* Viewport-sized shell and readable, wrapping controls at every screen size. */
+@media screen {
+  .app-shell { height: 100dvh !important; width: 100%; min-width: 0; }
+  .glass-toolbar-primary > button,
+  .glass-toolbar-primary > span > button,
+  .glass-toolbar-primary > div > button { font-size: 13px !important; min-height: 36px; }
+  .glass-toolbar-primary .toolbar-spacer { flex: 1 1 0 !important; min-width: 0 !important; }
+  .toolbar-sheet-tools { min-width: 0; max-width: 100%; }
+  .canvas-zoom-rail, .canvas-panel-rail {
+    max-height: max(44px, calc(100dvh - var(--workspace-toolbar-height, 0px) - 28px));
+    overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  }
+  .canvas-zoom-rail > *, .canvas-panel-rail > * { flex-shrink: 0; }
+  .report-scroll { min-height: 0; }
+}
+@media screen and (max-width: 760px) {
+  .glass-toolbar-stack { max-height: 44dvh; overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
+  .glass-toolbar { row-gap: 6px; }
+  .glass-toolbar-primary .toolbar-spacer { display: none; }
+  .glass-toolbar-primary > button, .glass-toolbar-primary > span > button { min-height: 40px; }
+  .toolbar-sheet-tools { border-left: 0; padding-left: 0; border-top: 1px solid var(--ink-faint); padding-top: 6px; }
+  .canvas-zoom-rail > button, .canvas-panel-rail > button { min-width: 40px; min-height: 40px !important; }
+  .canvas-live-readout { min-width: 0 !important; max-width: min(220px, calc(100% - 112px)) !important; padding: 8px !important; font-size: 12px; }
+}
+@media screen and (max-height: 500px) {
+  .glass-toolbar-stack { max-height: 42dvh; }
+}

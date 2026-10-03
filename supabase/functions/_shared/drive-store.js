@@ -2,6 +2,9 @@
 export function createDriveStore(db) {
   const read = async (q) => { const { data, error } = await q; if (error) throw new Error("OTK_DRIVE_DATABASE"); return data; };
   return {
+    invitation: (id) => read(db.from("otk_project_invitations").select("*").eq("id", id).maybeSingle()),
+    reserveInvitation: (row) => read(db.rpc("otk_reserve_invitation", { p_row: row })),
+    patchInvitation: (id, patch) => read(db.from("otk_project_invitations").update(patch).eq("id", id)),
     connection: (id) => read(db.from("otk_drive_connections").select("*").eq("user_id", id).maybeSingle()),
     putConnection: (row) => read(db.from("otk_drive_connections").upsert(row)),
     patchConnection: (id, patch) => read(db.from("otk_drive_connections").update({ ...patch, updated_at: new Date().toISOString() }).eq("user_id", id)),

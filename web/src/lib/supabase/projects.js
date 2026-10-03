@@ -11,11 +11,11 @@ export function createProjectRepository(client, userId) {
     assertUser,
     async listProjects() {
       await assertUser();
-      const projects = await checked(client.from("otk_projects").select("id,owner_id,name,version,created_at,updated_at,deleted_at").order("updated_at", { ascending: false }).limit(200));
+      const projects = await checked(client.from("otk_projects").select("id,owner_id,name,version,created_at,updated_at,deleted_at,file_provider,project_metadata:project_state->annotations->project_metadata").order("updated_at", { ascending: false }).limit(200));
       const members = await checked(client.from("otk_project_members").select("project_id,role").eq("user_id", userId));
       const profiles = await checked(client.from("otk_profiles").select("id,display_name"));
       return projects.map((p) => ({ ...p, role: p.owner_id === userId ? "owner" : members.find((m) => m.project_id === p.id)?.role,
-        owner: profiles.find((profile) => profile.id === p.owner_id)?.display_name || p.owner_id.slice(0, 8) }));
+        owner: profiles.find((profile) => profile.id === p.owner_id)?.display_name || "Unknown" }));
     },
     async loadProject(id) {
       await assertUser();

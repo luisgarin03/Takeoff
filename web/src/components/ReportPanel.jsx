@@ -19,7 +19,7 @@ import { shapesDetail, shapesToCsv, shapesToJson } from "../lib/shapesExport.js"
 import { rfisToCsv, rfisToJson } from "../lib/rfi.js";
 import { reportWorkbook, buildXlsx } from "../lib/xlsx.js";
 import { buildContribution, sendContribution, isContributeConfigured } from "../lib/contribute.js";
-import { activeTheme, saveActiveThemeFile, clearActiveTheme } from "../lib/reportTheme.js";
+import { activeTheme, saveActiveThemeFile, clearActiveTheme, REPORT_THEME_PRESETS } from "../lib/reportTheme.js";
 import { normalizeLogoToPng, loadProfiles, saveProfiles, activeProfile, updateActiveProfile, addProfile, setActiveProfile, removeProfile } from "../lib/identity.js";
 import { resolveBranding, loadBrandingSelection, saveBrandingSelection } from "../lib/branding.js";
 import { projectIdFromUrl } from "../lib/store.js";
@@ -377,13 +377,10 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
     // Foreground app layer: canvas drawers reach 120; the toolbar toggle is 140.
     <div className="report-panel" style={{ ...theme.vars, position: "absolute", inset: 0, zIndex: 150, display: "flex", flexDirection: "column", background: "var(--paper-cream)" }}>
       <div className="report-toolbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 18px", borderBottom: "1px solid var(--ink)", background: "var(--paper-bright)" }}>
-        <Icon name="takeoffs" size={18} />
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>Takeoff report</strong>
         <input name="project-name" value={projectName} onChange={(e) => onProjectName(e.target.value)} placeholder="Project name (optional)"
           className="field-input" style={{ width: 260, padding: "5px 9px", fontSize: 13 }} />
         <div className="report-toolbar-spacer" style={{ flex: 1 }} />
-        <button className="btn-ghost" onClick={() => setShowInfo(true)}
-          title="Your company identity and the client/job details for the print header and marked-set cover">Project info</button>
         {/* always rendered, even with zero custom columns — Sheet grouping
             is useful on its own */}
         <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--ink)", whiteSpace: "nowrap" }}
@@ -489,7 +486,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
           )}
         </div>
         <div ref={themeRef} style={{ position: "relative" }}>
-          <button className="btn-ghost" onClick={() => setShowTheme((s) => !s)} title="Apply an imported design-token theme to the report (colors + fonts)">Theme{theme.name ? " ●" : ""}</button>
+          <button className="btn-ghost" onClick={() => setShowTheme((s) => !s)} title="Choose a report theme or import your own (colors + fonts)">Theme{theme.name ? " ●" : ""}</button>
           {showTheme && (
             <div className="report-modal" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 70, width: 292, background: "var(--paper-bright)", border: "1px solid var(--ink)", boxShadow: "var(--shadow-2)", padding: "10px 12px", fontSize: 12.5, color: "var(--ink)" }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
@@ -499,7 +496,14 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                   style={{ border: "none", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
               </div>
               <div style={{ fontSize: 11, color: "var(--ink-muted)", lineHeight: 1.5, marginBottom: 8 }}>
-                Import a design-token file (e.g. a Claude Design <code>tokens.json</code>) to reskin this report — palette and fonts only. Your company identity stays where it is.
+                Choose a theme below, or import a JSON theme file to add your own colors and fonts.
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+                {REPORT_THEME_PRESETS.map((preset) => <button key={preset.name} aria-pressed={theme.name === preset.name}
+                  onClick={() => { saveActiveThemeFile(preset); setTheme(activeTheme()); }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 38, padding: "6px 8px", border: theme.name === preset.name ? "2px solid var(--cobalt)" : "1px solid var(--ink-faint)", borderRadius: 4, background: "var(--paper-bright)", color: "var(--ink)", cursor: "pointer", font: "inherit" }}>
+                  <span aria-hidden="true" style={{ width: 16, height: 16, flexShrink: 0, borderRadius: "50%", background: preset.color.neutral.paper.value, border: `3px solid ${preset.color.accent.blue.value}` }} />{preset.name}
+                </button>)}
               </div>
               {theme.name ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -567,10 +571,6 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
               title="RFI log as JSON"><Icon name="rfi" size={13} />RFI JSON</button>
           </>
         )}
-        <button className="btn-primary" onClick={() => setShowContribute(true)} disabled={!rows.length}
-          title="Optionally contribute this takeoff's derived data to the open flooring model">
-          <Icon name="oneClick" size={13} />Contribute
-        </button>
         <button onClick={onClose} title="Back to the canvas (Esc)"
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontSize: 12.5 }}>
           <Icon name="close" size={12} />Close

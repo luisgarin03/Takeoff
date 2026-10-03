@@ -5,6 +5,10 @@ export function cloudError(error) {
   if (error instanceof CloudError) return error;
   const message = String(error?.message || "");
   const messages = {
+    OTK_SHARE_INPUT: "Choose up to 30 Google Drive files including an .otk project and a valid recipient email. You cannot invite yourself.",
+    OTK_SHARE_SETUP: "Drive sharing needs Google Picker configuration and the latest server function. Ask the app administrator to complete sharing setup.",
+    OTK_SHARE_PARTIAL: "Sharing did not finish. Some files may already have Drive permissions and email notifications. Check Sent invitations and Google Drive permissions before retrying.",
+    OTK_DRIVE_EXPORT_TYPE: "This folder contains a Google-native document or shortcut. A complete byte-for-byte ZIP cannot include it. Export it to a regular file in Drive first; nothing was omitted or downloaded.",
     OTK_CANCELED: "Transfer canceled. Local work is safe; retry to resume remaining files.",
     OTK_PROVIDER_LOCKED: "This project's storage provider is locked. Use Save As to create a separate copy with another provider.",
     OTK_DRIVE_SETUP: "Drive server unavailable. Complete Google Drive setup or check your connection. Local mode and Supabase Storage remain available.",

@@ -9,6 +9,9 @@ function I({ children, size = 24, stroke = 1.5, color = "currentColor" }) {
 }
 
 export const icons = {
+  eraser: (s) => <I size={s}><path d="M3 14 L13 4 L21 12 L13 20 H9 Z M8 9 L16 17 M13 20 H22" /></I>,
+  folder: (s) => <I size={s}><path d="M3 5 H9 L12 8 H21 V20 H3 Z" /></I>,
+  imageFile: (s) => <I size={s}><rect x="3" y="3" width="18" height="18" /><circle cx="8" cy="8" r="2" /><path d="M3 18 L10 12 L14 16 L18 10 L21 14" /></I>,
   logo: (s) => <I size={s}><path d="M2 18 C 7 18, 7 6, 12 12 S 17 18, 22 6" /><circle cx="7" cy="14" r="1" fill="currentColor" /><circle cx="12" cy="12" r="1" fill="currentColor" /><circle cx="17" cy="10" r="1" fill="currentColor" /></I>,
   spec: (s) => <I size={s}><path d="M5 3 H 16 L 19 6 V 21 H 5 Z" /><line x1="8" y1="9" x2="16" y2="9" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="13" y2="17" /></I>,
   document: (s) => <I size={s}><path d="M6 3 H 16 L 19 6 V 21 H 6 Z" /><path d="M16 3 V 6 H 19" /><line x1="9" y1="12" x2="16" y2="12" /><line x1="9" y1="16" x2="16" y2="16" /></I>,

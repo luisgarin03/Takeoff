@@ -44,7 +44,15 @@ export function createDriveFiles({ client, url, key, userId, assertUser, fetcher
       || (state.done ? state.offset !== size : state.offset >= size)) raise("OTK_DRIVE_INTEGRITY");
   }
   return {
+    listFolder: (projectId, folderId, signal) => request("folder-list", { body: { projectId, folderId }, signal }),
+    folderChunk: (projectId, entry, offset, signal) => retry(() => request("folder-chunk", { body: { projectId, fileId: entry.id, offset, expected: { size: entry.size, modifiedTime: entry.modifiedTime, name: entry.name } }, binary: true, signal }), signal),
     status: () => request("status"),
+    sharePicker: () => request("share-picker"),
+    shareSend: (body) => request("share-send", { body }),
+    shareFiles: (id) => request("share-files", { body: { id } }),
+    shareImported: (id) => request("share-imported", { body: { id } }),
+    shareRevoke: (id) => request("share-revoke", { body: { id } }),
+    shareChunk: (body) => request("share-chunk", { body, binary: true }),
     connect: (returnUrl) => request("connect", { body: { returnUrl } }),
     disconnect: () => request("disconnect"),
     async upload(path, file, progress, { signal } = {}) {

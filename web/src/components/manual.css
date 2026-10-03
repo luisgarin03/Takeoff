@@ -20,3 +20,16 @@
 .manual-article pre { overflow-x: auto; background: var(--paper-shadow); padding: 14px; font-size: 12px; }
 dialog[aria-labelledby="user-guide-title"]::backdrop { background: #0009; }
 @media (max-width: 650px) { .manual-layout { flex-direction: column; } .manual-index { width: auto; max-height: 130px; border-right: 0; border-bottom: 1px solid var(--ink-faint); } .manual-article { padding: 18px; } }
+
+.manual-drive-logo { display: inline-block; object-fit: contain; vertical-align: middle; margin-right: 8px; }
+
+@media screen {
+  dialog[aria-labelledby="user-guide-title"] { box-sizing: border-box; width: calc(100vw - 24px) !important; height: calc(100dvh - 24px) !important; max-width: none; max-height: none; }
+  .manual-index button { font-size: 14px; }
+  .manual-article { font-size: 15px; }
+}
+@media (max-width: 650px) {
+  dialog[aria-labelledby="user-guide-title"] { width: 100vw !important; height: 100dvh !important; border-radius: 0 !important; }
+  .manual-index { max-height: 22dvh; padding: 8px; }
+  .manual-article { padding: 16px; }
+}

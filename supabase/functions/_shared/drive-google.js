@@ -1,7 +1,7 @@
 import { fail, uploadUrl, validateFile, limitedBytes, CHUNK } from "./drive-security.js";
 const API = "https://www.googleapis.com/drive/v3/files";
 const UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
-const fields = "id,name,size,mimeType,sha256Checksum,trashed";
+const fields = "id,name,size,mimeType,sha256Checksum,trashed,parents,appProperties,modifiedTime";
 const esc = (s) => String(s).replaceAll("\\", "\\\\").replaceAll("'", "\\'");
 
 export function createDriveGoogle(fetcher = fetch) {
@@ -30,6 +30,45 @@ export function createDriveGoogle(fetcher = fetch) {
   async function metadata(token, id) { return (await request(`${API}/${encodeURIComponent(id)}?fields=${fields}`, token)).json(); }
   return {
     metadata,
+    async shareMetadata(token, id) {
+      return (await request(`${API}/${encodeURIComponent(id)}?fields=id,name,size,mimeType,modifiedTime,trashed,owners(me),capabilities(canShare),sha256Checksum`, token)).json();
+    },
+    async permissions(token, id) {
+      const all = []; let pageToken = "";
+      do {
+        const data = await (await request(`${API}/${encodeURIComponent(id)}/permissions?${new URLSearchParams({ fields: "nextPageToken,permissions(id,type,emailAddress,role,deleted)", pageSize: "100", ...(pageToken ? { pageToken } : {}) })}`, token)).json();
+        all.push(...(data.permissions || [])); pageToken = data.nextPageToken || "";
+      } while (pageToken);
+      return all;
+    },
+    async shareReader(token, id, email, message) {
+      return (await request(`${API}/${encodeURIComponent(id)}/permissions?${new URLSearchParams({ sendNotificationEmail: "true", emailMessage: message, fields: "id" })}`, token, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "user", role: "reader", emailAddress: email }),
+      })).json();
+    },
+    async findFolder(token, key, parent) {
+      const q = `trashed=false and mimeType='application/vnd.google-apps.folder' and appProperties has { key='otkFolder' and value='${esc(key)}' } and '${esc(parent || "root")}' in parents`;
+      const data = await (await request(`${API}?${new URLSearchParams({ q, fields: `files(${fields})`, pageSize: "2" })}`, token)).json();
+      if (data.files?.length > 1) fail("OTK_DRIVE_INTEGRITY", 409);
+      return data.files?.[0] || null;
+    },
+    async children(token, parent) {
+      const files = []; let pageToken = "";
+      do {
+        const data = await (await request(`${API}?${new URLSearchParams({ q: `trashed=false and '${esc(parent)}' in parents`, fields: `nextPageToken,files(${fields})`, pageSize: "1000", ...(pageToken ? { pageToken } : {}) })}`, token)).json();
+        files.push(...(data.files || [])); pageToken = data.nextPageToken || "";
+        if (files.length > 20000) fail("OTK_DRIVE_SIZE", 413);
+      } while (pageToken);
+      return files;
+    },
+    async readChunk(token, file, offset) {
+      const size = Number(file.size), end = Math.min(size, offset + CHUNK) - 1;
+      const res = await request(`${API}/${encodeURIComponent(file.id)}?alt=media`, token, { headers: { Range: `bytes=${offset}-${end}` } });
+      if (res.status !== 206 || res.headers.get("Content-Range") !== `bytes ${offset}-${end}/${size}`) { await res.body?.cancel(); fail("OTK_DRIVE_RANGE", 502); }
+      const bytes = await limitedBytes(res, end - offset + 1);
+      if (bytes.length !== end - offset + 1) fail("OTK_DRIVE_TRANSFER", 502);
+      return bytes;
+    },
     async id(token) { return (await (await request(`${API}/generateIds?count=1&space=drive&type=files`, token)).json()).ids[0]; },
     async folder(token, name, parent, key) {
       const q = `trashed=false and mimeType='application/vnd.google-apps.folder' and appProperties has { key='otkFolder' and value='${esc(key)}' }${parent ? ` and '${esc(parent)}' in parents` : " and 'root' in parents"}`;

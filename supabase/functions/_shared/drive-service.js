@@ -1,9 +1,11 @@
+import { createDriveLibrary } from "./drive-library.js";
+import { createDriveSharing } from "./drive-sharing.js";
 import { DRIVE_SCOPE, CHUNK, MAX_FILE, fail, randomToken, sha256, base64, returnUrl, assertAccess, validateFile } from "./drive-security.js";
 
 const driveName = (value) => String(value || "Untitled project").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/[. ]+$/, "").slice(0, 100) || "Untitled project";
 
-// Google credentials never cross this service boundary. Collaborators are
-// authorized by Supabase on every chunk, not by public links or Drive ACLs.
+// Refresh credentials stay server-side. Only the account owner's short-lived
+// access token can be returned to Google's Picker; recipients never receive it.
 export function createDriveService({ store, google, cipher, config, fetcher = fetch }) {
   async function oauthToken(params) {
     const response = await fetcher("https://oauth2.googleapis.com/token", { method: "POST", signal: AbortSignal.timeout(20000),
@@ -48,6 +50,12 @@ export function createDriveService({ store, google, cipher, config, fetcher = fe
     return result;
   }
   return {
+    library: createDriveLibrary({ store, google, token }),
+    sharing: createDriveSharing({ store, google, token, config }),
+    async picker(user) {
+      if (!config.pickerKey || !config.pickerAppId) fail("OTK_SHARE_SETUP", 503);
+      return { accessToken: await token(user), developerKey: config.pickerKey, appId: config.pickerAppId };
+    },
     async status(user) {
       const row = await store.connection(user);
       return { configured: true, connected: row?.status === "connected", email: row?.email || "", status: row?.status || "disconnected" };
@@ -120,8 +128,11 @@ export function createDriveService({ store, google, cipher, config, fetcher = fe
           try { return await finish(user, file, await google.transfer(auth, await cipher.open(session.session_cipher, `${id}/${hash}`), file, 0)); }
           catch (e) { if (e.code !== "OTK_DRIVE_MISSING") throw e; }
         }
-        const root = await google.folder(auth, "OpenTakeoff", null, "root");
-        const folder = await google.folder(auth, driveName(project.name), root, id);
+        const root = await google.folder(auth, "Estimate save data", null, "root");
+        const projects = await google.folder(auth, "Projects", root, "projects");
+        // Reuse legacy folders by stable app identity; never duplicate on upgrade.
+        const legacy = await google.findFolder(auth, id, root);
+        const folder = await google.folder(auth, driveName(project.name), legacy ? root : projects, id);
         const subfolder = file.file_kind === "originals" ? "PDFs" : file.file_kind === "archive" ? "" : "Assets";
         file.provider_folder_id = subfolder ? await google.folder(auth, subfolder, folder, `${id}/${subfolder.toLowerCase()}`) : folder;
         file.provider_file_id ||= await google.id(auth);

@@ -2,9 +2,11 @@
 
 The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated Estimating by Luis Garin wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
 
-The in-app guide's Contents index selects one of 16 topics. Each topic includes its detailed instructions and relevant visual control references; the schedule, One-Click, and report topics also include images from the app documentation.
+The in-app guide's Contents index selects one of 17 topics. Each topic includes its detailed instructions and relevant visual control references; the schedule, One-Click, and report topics also include images from the app documentation.
 
-Use **User Guide** in the estimating toolbar to read this manual in a centered window. Scroll inside the guide; close it with the × button or Escape. The illustrated button labels are references to controls in the workspace.
+Use **User Guide** in the estimating toolbar to read this manual in a window that fills the available screen. Scroll inside the guide; close it with the × button or Escape. The illustrated button labels are references to controls in the workspace.
+
+On narrow screens, toolbar controls wrap and scroll vertically within the top portion of the screen, leaving room for the plan. All controls remain available. Cloud fills the screen on phones and displays file details as stacked cards; larger screens use a table.
 
 Use **Project → Open Recent** to expand recently used workspaces saved in this browser. The default workspace is a single changing workspace, not an archive of each imported plan. Export a project file when you need a portable backup.
 
@@ -14,26 +16,27 @@ OpenTakeoff is a takeoff canvas that runs in your browser. Open a plan, set the 
 
 On Android Chrome, you can use the browser menu's **Install app** or **Add to home screen** action when running the hosted app or a local server reachable from the phone. The install uses the app manifest and branded icon; it does not make PDFs or project data available offline, so the browser remains the source of truth.
 
-This manual takes you from a blank browser tab to a finished, exported takeoff, and covers every shipped feature along the way. Shortcuts appear inline as you meet each tool; the complete table is in [§15](#15-keyboard-reference).
+This manual takes you from a blank browser tab to a finished, exported takeoff, and covers every shipped feature along the way. Shortcuts appear inline as you meet each tool; the complete table is in [§16](#16-keyboard-reference).
 
 **Contents**
 
 1. [Five minutes to a takeoff](#1-five-minutes-to-a-takeoff)
-2. [Opening plans & moving around](#2-opening-plans--moving-around)
-3. [Scale — set it first](#3-scale--set-it-first)
-4. [Conditions — your finishes](#4-conditions--your-finishes)
-5. [The measuring tools](#5-the-measuring-tools)
-6. [One-Click Area](#6-one-click-area)
-7. [Selecting & editing shapes](#7-selecting--editing-shapes)
-8. [Undo & redo](#8-undo--redo)
-9. [Markups, stamps & RFIs](#9-markups-stamps--rfis)
-10. [The report & exports](#10-the-report--exports)
-11. [Revisions](#11-revisions)
-12. [Saving, your data & Contribute](#12-saving-your-data--contribute)
-13. [The Agent panel](#13-the-agent-panel)
-14. [AI settings & driving OpenTakeoff from an agent](#14-ai-settings--driving-opentakeoff-from-an-agent)
-15. [Keyboard reference](#15-keyboard-reference)
-16. [Troubleshooting](#16-troubleshooting)
+2. [Google Drive Cloud Sync](#2-google-drive-cloud-sync)
+3. [Opening plans & moving around](#3-opening-plans--moving-around)
+4. [Scale — set it first](#4-scale--set-it-first)
+5. [Conditions — your finishes](#5-conditions--your-finishes)
+6. [The measuring tools](#6-the-measuring-tools)
+7. [One-Click Area](#7-one-click-area)
+8. [Selecting & editing shapes](#8-selecting--editing-shapes)
+9. [Undo & redo](#9-undo--redo)
+10. [Markups, stamps & RFIs](#10-markups-stamps--rfis)
+11. [The report & exports](#11-the-report--exports)
+12. [Revisions](#12-revisions)
+13. [Saving, your data & Contribute](#13-saving-your-data--contribute)
+14. [The Agent panel](#14-the-agent-panel)
+15. [AI settings & driving OpenTakeoff from an agent](#15-ai-settings--driving-opentakeoff-from-an-agent)
+16. [Keyboard reference](#16-keyboard-reference)
+17. [Troubleshooting](#17-troubleshooting)
 
 ---
 
@@ -51,100 +54,113 @@ That's the whole loop: open → scale → condition → measure → report. Ever
 
 ---
 
-## Google Drive Cloud Sync
+## 2. Google Drive Cloud Sync
 
-This section describes the **intended Google Drive workflow**. Availability depends on your OpenTakeoff installation; automatic creation of the folders below is not confirmed in this build. Installing Google Drive alone does not connect OpenTakeoff or enable cloud saving.
+Use **Cloud** to browse a Google Drive folder available on your device and open saved **.otk** projects. Google Drive for desktop synchronizes files in that folder; OpenTakeoff keeps your working edits in browser storage until you save a project file. Selecting a source folder does not automatically upload your edits.
 
 ### Install Google Drive
 
-Before using cloud sync, install the official Google Drive app where applicable and sign in with the Google account you want to use with OpenTakeoff. Remain signed in to that same account.
-
-**Windows / PC:** install Google Drive for desktop from Google's official page:
+On your PC, install Google Drive for desktop and sign in with the Google account that owns your project files. Wait for the folder and files to become available on the computer.
 
 [Download Google Drive](https://www.google.com/drive/download/)
 
-https://www.google.com/drive/download/
-
-Already have Google Drive installed?
+Already installed? You can view your files online:
 
 [Open Google Drive](https://drive.google.com/)
 
-https://drive.google.com/
+These official links open in a new tab or window. On phones and tablets, install the official Google Drive app through your device's app store. Folder access depends on the browser and device; installing Drive does not by itself enable OpenTakeoff's folder picker.
 
-**Phones and tablets:** install the official Google Drive app from your device's app store and sign in with the same Google account. The links above open in a new browser tab or window.
+### Sign in and select an existing folder
 
-### First-time cloud setup
+1. Click **Cloud** in the app toolbar.
+2. If prompted, choose **Continue with Google**, or use the available email sign-in or **Create account** options.
+3. On **Select a source folder**, click **Locate Google Drive Folder**.
+4. In the device's folder picker, choose the synced folder you want to browse and allow access. You can select your existing source folder or a specific project folder. The app lists the folder you selected.
+5. The **Source Folder:** line shows the selected folder and the subfolders you enter. This is plain text, not a link. Browsers expose this relative folder path rather than the complete PC or phone filesystem path.
 
-In the intended workflow, click **Cloud** when you first open OpenTakeoff. If you are not connected, sign in with Google and authorize OpenTakeoff to use Drive for project storage. OpenTakeoff should then check for its required storage folders.
+OpenTakeoff remembers the source folder for this account in this browser. When you reopen Cloud, **Loading saved source folder…** appears while the folder is restored, and folder controls are disabled until loading finishes. If permission has expired or the folder cannot be read, locate it again. A different device or browser needs its own folder selection.
 
-The intended main folder is named exactly **Estimate save data**. If missing, OpenTakeoff is intended to create it automatically, including its **Projects** folder. You should not need to create these folders manually. If your Cloud screen offers a different storage service, this Google Drive setup does not apply to that service.
+### Create a new source folder
 
-### Where projects belong
+1. Click **Create New Source Folder**.
+2. Choose the parent location inside your Google Drive for desktop folder. Use your actual Drive location; it does not have to be drive G:.
+3. Review the selected location and proposed structure, then click **Create Folder**. The source-folder name is fixed as **Estimate save data**.
+4. OpenTakeoff creates **Estimate save data** with a **Projects** subfolder, remembers the source folder, and immediately opens Projects. An empty library displays **No projects yet.**
 
-This example shows the intended organization, not a guarantee of the files or subfolders created by this build:
+If **Estimate save data** already exists, choose **Use Existing Folder**, **Choose Another Location**, or **Cancel**. Using the existing folder ensures Projects exists; it does not create a numbered duplicate. Cancel before confirming to leave the current source unchanged. Creating a source folder does not create a project or save your current takeoff into it.
 
 ```text
-Google Drive
+Your Google Drive location
 └── Estimate save data
     └── Projects
-        ├── Habitat Restore - Laurel
-        │   ├── project.otk
-        │   ├── Plans
-        │   │   ├── Civil Plans.pdf
-        │   │   └── Architectural Plans.pdf
-        │   ├── Images
-        │   ├── PDFs
-        │   └── Project Data
-        │
-        └── Another Project
-            └── ...
 ```
 
-- **Estimate save data** is the intended main OpenTakeoff cloud storage folder.
-- **Projects** contains your OpenTakeoff projects.
-- Each project should have its own folder, named using the project title entered or selected in OpenTakeoff.
-- A project folder may contain its **.otk** project file, imported construction plans, PDFs, images, whiteboard/project data, markups, takeoff-related files, and other assets needed to reopen the project. Some information may be stored within the project file rather than in separate files.
+Choose a location that Google Drive actually synchronizes. The picker can accept other local folders; selecting one does not make it cloud storage.
 
-### Folder checks and existing projects
+### Browse folders and open a project
 
-Whenever Google Drive storage is initialized or opened, the intended workflow checks that **Estimate save data → Projects** is configured correctly and recreates missing application-managed folders where appropriate. An existing cloud project should reuse its folder instead of creating unnecessary duplicates. Its title helps you identify the folder.
+- Double-click a folder, or select it and click **Open folder**.
+- Use **↑ Up** to return toward the selected source folder. You cannot navigate above that source with Up.
+- Use **Refresh folder** after files have changed or finished syncing.
+- **Search current folder…** filters names in the current folder; it does not search every folder in Drive.
+- **.otk** files appear first. Click **+ Open** beside an .otk filename, double-click the filename, or select it and click **Open project**.
+- Other listed files provide context; this browser opens folders and .otk projects. Use the main **+ Open** control to import plans and images.
 
-**Managed files:** Do not manually delete, rename, or reorganize files inside the OpenTakeoff cloud project folders unless you know the project is no longer needed. Changing the managed folder structure may prevent OpenTakeoff from locating project files.
+**Last modified** shows file timestamps. For folders, **Latest file change** is based on contained files, not the operating system's folder timestamp. Folders are ordered newest first when dates are available. **Modified by** comes from saved OpenTakeoff project metadata, not Google Drive's activity history. Missing or unreadable metadata appears as **Unknown**; some initial folder listings also show Unknown until refreshed.
 
-### Recommended workflow
+Opening an .otk imports it into a local browser workspace. It does not establish automatic write-back to that original file.
 
-1. Install Google Drive where applicable.
-2. Sign in to your Google account.
-3. Open OpenTakeoff.
-4. Click **Cloud**.
-5. Sign in with Google when prompted.
-6. Allow OpenTakeoff to complete the available cloud setup.
-7. Create or open a project.
-8. In the intended folder workflow, find its cloud files under **Google Drive → Estimate save data → Projects → [Project Name]**.
-9. Continue working normally and confirm the available save/sync status before switching devices.
+### Save your work back to Google Drive
 
-### Setup confirmation
+1. Finish your edits and open the project menu in the toolbar.
+2. Choose **Save project...**. If prompted, name the project and confirm the project filename.
+3. In the save picker, choose the intended .otk location inside your synced Google Drive folder. To update an existing project file, select that file and confirm replacement when prompted.
+4. Wait for the app's save to finish, then let Google Drive finish syncing before opening that file on another device.
+5. Use **Save project as...** for a separate copy or another location. During the current session, ordinary **Save project** can reuse the file selected for this project by the save picker.
 
-Where supported, setup messages may indicate **Connected**, **Setting up**, **Ready**, or **Needs attention**: account connected, folders being prepared, setup complete, or an action required. Exact labels vary by installation; this guide does not add these statuses to the application.
+The selected source folder is a browsing location; it does not automatically become the save destination. Browser autosave and a **saved** indicator refer to the working browser data, not proof that the .otk in Google Drive has been updated. If the browser downloads the .otk instead of showing a save picker, move or upload that downloaded file into the intended Drive folder yourself.
 
-### Local and cloud storage
+### Phones, tablets, and another computer
 
-- **Local:** files and saved work available on the current device. Keep an exported project backup when needed.
-- **Google Drive Cloud:** project files stored or synchronized through your Google account, useful for backup, multiple devices, and supported collaboration workflows. This does not promise real-time collaboration or automatic upload of every local change.
+If folder selection is unavailable, the Locate and Create buttons are disabled. Use **Project → Open project...** to choose an .otk made available by your device's file picker, or download it from the official Google Drive app or website first. After editing, save/export the .otk and place it back in Drive. Wait for sync before switching devices, and avoid editing separate copies at the same time.
+
+### Profile and separate cloud saving
+
+Click your avatar or name beside the app logo to open your profile. It shows your avatar, name, email, **Display name**, **Save profile**, and **Log out**. Editing the display name does not change the Google account email. Drive connection controls are not currently shown in this profile panel.
+
+**Project → Save to Cloud...** is a separate server-connected saving feature. It requires an existing Google Drive connection and configured cloud services; it does not use the folder chosen with Locate as its destination. Signing in to OpenTakeoff or selecting a local folder does not establish that separate Drive connection. If that feature asks you to connect Drive in Profile, the current profile has no connection control; use the project-file workflow above rather than assuming an upload occurred.
 
 ### Troubleshooting
 
-**Google Drive is not connected:** check that you are signed in to the correct Google account. Open Cloud and reconnect Google Drive where that option is available.
+**The saved folder does not open:** check that Google Drive is running, the drive is available, and file access is allowed. Click Locate again and select the correct folder.
 
-**I cannot find my project:** for the intended folder workflow, check **Google Drive → Estimate save data → Projects** and confirm you are using the same account used when the project was saved.
+**Folder controls are temporarily disabled:** wait for the saved source-folder loading message or current operation to finish. Large folders can take longer because modification dates may require reading contained files.
 
-**The Estimate save data folder is missing:** open Cloud and allow the available Drive setup/check to run again. OpenTakeoff is intended to create the required folder automatically. If your installation does not offer this workflow, do not assume a cloud backup was created.
+**A project is missing or out of date:** confirm the Google account and source folder, allow Drive to finish syncing, then use Refresh folder. Check that the latest edits were saved to the .otk, not only to browser storage.
 
-**My files are still syncing:** check your internet connection and allow Google Drive time to finish syncing before shutting down or disconnecting the device. Also confirm OpenTakeoff's save has completed where applicable.
+**Permission denied or folder creation failed:** choose an accessible parent location and allow folder access. A regular file named Estimate save data or Projects can prevent the required folder from being created.
+
+**I cannot open a project:** choose a complete .otk project file. Let Drive finish downloading it locally; an incomplete, invalid, or oversized archive cannot be opened.
 
 ---
 
-## 2. Opening plans & moving around
+### Share a project from your Google Drive
+
+1. Save your latest edits to the project's **.otk** file and let Google Drive finish syncing.
+2. In **Cloud**, click **Share** beside the project folder or .otk file. If needed, use **Connect Google Drive** and finish Google's authorization, then return to Cloud and Share.
+3. Click **Choose files in Google Drive**. Select the actual .otk file and any supporting files you own in Drive (up to 30). The local folder name alone does not identify the remote Drive files.
+4. Enter the recipient's email and click **Share & notify**. The files stay in your Drive. New permissions are read/download only; existing editor access is preserved. Google sends an email for each newly shared file. If the recipient already has access, an app invitation is created without another Google sharing email.
+5. The recipient signs into this app with the invited, verified email. A count on **Cloud** shows new invitations; **Shared with me** lists them. The inbox refreshes every minute while visible, or use **Refresh invitations**.
+6. Click **Import to my Drive**, choose the files, and select the .otk project to open. That archive includes its saved plans and takeoff data; separate supporting files are optional.
+7. Click **Choose Drive folder & import** and select a destination inside your own Google Drive for desktop folder. The app downloads directly from the sender's Drive into a new import folder and opens the project. Google Drive for desktop syncs that folder. Imported copies are independent of the originals.
+
+Automatic folder import requires a desktop browser with folder-write support, such as Chrome or Edge. On other browsers, use Google's sharing email to download files, then use **Project → Open project**. Imports support individual files up to 512 MB. Google-native documents, shortcuts, folders and shared-drive files are not supported by this flow; choose ordinary files you own. If the sender changes a file during download, refresh the invitation and retry.
+
+**Sent invitations** shows incomplete, pending and imported invitations. Canceling an app invitation stops imports through the app; use **Share** in Google Drive to remove the person's Drive permissions. App invitations expire after 30 days, but Google Drive permissions do not expire automatically. A failed import can leave a clearly named partial import folder; no project opens until all selected files finish.
+
+## 3. Opening plans & moving around
+
+The open-sheet tabs and open-sheet dropdown sit immediately after **Report** in the top toolbar and wrap when space is limited. **Schedule** is in the left pencil button’s **Measure** section; select it, then click two opposite corners around the schedule table.
 
 ### What you can open
 
@@ -209,7 +225,7 @@ The **☾** button in the zoom cluster inverts the sheet pixels themselves — a
 
 ---
 
-## 3. Scale — set it first
+## 4. Scale — set it first
 
 Scale is the foundation. Every square foot on your report is pixels × scale², so a wrong scale is every number wrong at once. OpenTakeoff treats scale accordingly: it's **per sheet**, it's verified visually on every acceptance, and nothing prices without it.
 
@@ -257,7 +273,7 @@ The **`ft` / `m`** toggle beside the Scale chip switches the whole display layer
 
 ---
 
-## 4. Conditions — your finishes
+## 5. Conditions — your finishes
 
 A **condition** is one finish or scope item — `perimeterWall`, `tile`, `ceiling` — and it's what every measurement commits into. A fresh workspace seeds a starter set (perimeterWall, wallPartition, exteriorWall, tile, ceiling) that you can rename, reorder, delete, or extend.
 
@@ -270,18 +286,18 @@ A **condition** is one finish or scope item — `perimeterWall`, `tile`, `ceilin
 - **Waste %** — the allowance the Report adds on top of the measured quantity. Per condition, matched to the install: ~8% straight-lay LVP, ~15% diagonal, ~20% herringbone.
 - **Line** color, **Fill** color (or **No fill**), and the **hatch pattern** — a picker grid of CAD hatches (plank, herringbone, tile, terrazzo…) that names the pattern under your cursor, so the canvas reads like the real drawing.
 - **Line style** — the outline dash for this finish's floor and linear takeoffs, on canvas and in the Marked Set.
-- **H** (height, ft) — the default for **new** wall traces (Surface Area SF = LF × H) and the vertical-SF display. Existing walls keep the height they were drawn at — select a wall to change just that one (§5).
+- **H** (height, ft) — the default for **new** wall traces (Surface Area SF = LF × H) and the vertical-SF display. Existing walls keep the height they were drawn at — select a wall to change just that one (§6).
 - **T** (thickness, in) — a Linear run with thickness also computes border/feature-strip SF = LF × T⁄12. Changing it re-flows existing runs.
 
 The finish-tag field in both the top toolbar and Takeoffs panel expands for longer names. Hovering a takeoff shows its condition and measurement in a wrapped card that stays inside the canvas. The **Text note** tool opens a multiline box: Enter (or Alt+Enter) inserts a line, and Ctrl+Enter places the note. Long note text wraps in its annotation box on the sheet.
 
-**Delete** (the row's ✕) asks first when the condition owns shapes — *"Delete 〈TAG〉 and its N takeoff(s)? This can't be undone."* — and means it: the cascade is deliberately outside the undo stack (§8).
+**Delete** (the row's ✕) asks first when the condition owns shapes — *"Delete 〈TAG〉 and its N takeoff(s)? This can't be undone."* — and means it: the cascade is deliberately outside the undo stack (§9).
 
 There's no per-condition duplicate; the Library fills that role — read on.
 
 ### The quick-access palette and `1`–`9`
 
-The band under the toolbar is your working set: **pin** a condition there (the pushpin on its panel row) or **drag** a row onto the band. Palette chips wear cobalt number badges — **that number is the hotkey**: `1`–`9` arm palette conditions in palette order (drag chips to reorder; the numbers follow). Up to 9 pin, mapping 1:1 onto the digits; with nothing pinned, the digits fall back to list order. Single-click a chip to arm it; double-click to open its row in the panel. A digit press only ever arms — it never reassigns a selected shape (§7).
+The band under the toolbar is your working set: **pin** a condition there (the pushpin on its panel row) or **drag** a row onto the band. Palette chips wear cobalt number badges — **that number is the hotkey**: `1`–`9` arm palette conditions in palette order (drag chips to reorder; the numbers follow). Up to 9 pin, mapping 1:1 onto the digits; with nothing pinned, the digits fall back to list order. Single-click a chip to arm it; double-click to open its row in the panel. A digit press only ever arms — it never reassigns a selected shape (§8).
 
 ### The Takeoffs panel
 
@@ -292,7 +308,7 @@ Four tabs:
 - **Takeoffs** — every condition with live totals for the open sheets (`SF · SF wall · LF · EA`), a shape count, a **⌖** that zooms the canvas to the condition's takeoffs (double-clicking the row does the same), the Supporting Materials button, the pin, and delete. Above the list: a filter box, **A→Z** natural sort and **≡ grp** tag-family grouping (views only — hotkey numbering never changes). **⌘-click / ⇧-click** rows to bulk-select conditions, then set waste or line color on all of them, or bulk-delete.
 - **Library** — reusable condition templates, shared across every plan in this browser. **+ save 〈tag〉 to the library** snapshots the active condition (appearance, waste, H/T, materials); **Apply** adds it to any project as a fresh condition. A fresh workspace seeds from this library — tune your house conditions once and every new job starts with them.
 - **Materials** — a browser-wide materials library. Attaching a library material to a condition copies its values and keeps a link (⛓); library edits reach linked lines only when you push them, and overridden fields show amber with a per-field ↺ revert.
-- **Columns** — project-wide **custom columns** (e.g. *CSI Division*) that classify conditions for report grouping and exports, and the **shape-label vocabulary** (§7).
+- **Columns** — project-wide **custom columns** (e.g. *CSI Division*) that classify conditions for report grouping and exports, and the **shape-label vocabulary** (§8).
 
 ### Supporting materials — the buy list's source
 
@@ -306,7 +322,7 @@ Below that, list what actually goes on the order: adhesive, sealer, polyurethane
 - for **grout** lines, an inline **calculator**: enter tile L × W × thickness, joint width (1/32″–1/2″), and bag weight, and the SF/bag rate derives itself, writing its work into the note (`12×24×3/8″ @ 1/8″ · 25 lb`);
 - a **note** field for coats, notch, anything the order needs to remember.
 
-Order quantity = measured basis ÷ coverage, **rounded up to whole units**. The Report sums every condition's lines into one combined buy list (§10).
+Order quantity = measured basis ÷ coverage, **rounded up to whole units**. The Report sums every condition's lines into one combined buy list (§11).
 
 ### Import from schedule
 
@@ -318,9 +334,9 @@ On scanned pages there's no text to parse; team builds with the optional AI back
 
 ---
 
-## 5. The measuring tools
+## 6. The measuring tools
 
-Every measuring tool commits into the active condition and refuses politely without a scale (§3). Trace with click-release; press-drag pans. `⏎` or double-click finishes a shape; `⌫` pops the last point; `Esc` abandons the trace; `⌘Z` mid-trace also pops the last point.
+Every measuring tool commits into the active condition and refuses politely without a scale (§4). Trace with click-release; press-drag pans. `⏎` or double-click finishes a shape; `⌫` pops the last point; `Esc` abandons the trace; `⌘Z` mid-trace also pops the last point.
 
 ### The aim cursor
 
@@ -372,7 +388,7 @@ The top-right readout tracks the armed tool: totals for the tracing tools, `W ×
 
 ---
 
-## 6. One-Click Area
+## 7. One-Click Area
 
 <img src="img/one-click-area.gif" alt="One-Click Area tracing patient rooms wall to wall on the sample plan" width="820"/>
 
@@ -422,11 +438,11 @@ A scanned sheet has no vector linework, so the engine reads the rendered pixels 
 
 ### The provenance receipt
 
-Every shape One-Click creates records how it was made: the method, the seed point you clicked, whether hatch filtering engaged, whether it was traced from scan pixels, any non-default fill sensitivity, and — if you adjusted the proposal — the machine's original ring frozen next to your final one. You'll never need to think about this while measuring; it's what makes the takeoff auditable later, and it's the backbone of the optional Contribute flow (§12).
+Every shape One-Click creates records how it was made: the method, the seed point you clicked, whether hatch filtering engaged, whether it was traced from scan pixels, any non-default fill sensitivity, and — if you adjusted the proposal — the machine's original ring frozen next to your final one. You'll never need to think about this while measuring; it's what makes the takeoff auditable later, and it's the backbone of the optional Contribute flow (§13).
 
 ---
 
-## 7. Selecting & editing shapes
+## 8. Selecting & editing shapes
 
 Arm **Select** (`V`) and click a shape. Selection is one shape at a time on the canvas, and the same edit grammar as One-Click proposals applies:
 
@@ -456,11 +472,11 @@ Labels answer "which part of the job is this?" without more conditions: *Phase 1
 - Its caption shows the **active label** — every new trace you commit gets it. Set it to *Phase 1*, trace the phase, set it to *Phase 2*, keep going.
 - With Select armed and a shape selected, the same dropdown shows **that shape's** label and re-labels it.
 
-Labels drive the Report's *Group: Label* mode and its by-label export sections (§10). Label changes are undoable, and they never mark a shape as edited — classification is not correction.
+Labels drive the Report's *Group: Label* mode and its by-label export sections (§11). Label changes are undoable, and they never mark a shape as edited — classification is not correction.
 
 ---
 
-## 8. Undo & redo
+## 9. Undo & redo
 
 `⌘Z` undoes, `⇧⌘Z` redoes — real undo, over a stack of up to 100 steps.
 
@@ -472,7 +488,7 @@ Labels drive the Report's *Group: Label* mode and its by-label export sections (
 
 **What's deliberately outside the stack:**
 
-- **Deleting a condition.** The confirm says *"This can't be undone"* and means it: the cascade delete of its shapes doesn't record. A condition delete is a decision about the takeoff's structure, not a gesture (Revisions are your parachute — §11).
+- **Deleting a condition.** The confirm says *"This can't be undone"* and means it: the cascade delete of its shapes doesn't record. A condition delete is a decision about the takeoff's structure, not a gesture (Revisions are your parachute — §12).
 - **Rescaling a sheet** and **restoring a revision** both **reset the stack**. Every recorded step froze quantities at the old scale (or the old timeline); undoing across that boundary would resurrect stale numbers, so the boundary clears it. A restore always banks the live takeoff first, so nothing is lost — it's just not on the `⌘Z` stack.
 - **Markups and condition edits.** The undo stack is for measured shapes. Moving a cloud or changing a waste % is a plain edit — change it back by hand.
 
@@ -480,7 +496,7 @@ One more distinction: **Undo last shape** (Edit menu) and `⌫`-with-nothing-in-
 
 ---
 
-## 9. Markups, stamps & RFIs
+## 10. Markups, stamps & RFIs
 
 The markup layer is communication, never quantity: clouds, callouts, notes, highlighter ink, and stamps live on a separate layer the totals never count. The left dock (rail buttons on the canvas's right edge) carries three tabs — **Markups**, **Stamps**, **RFIs**.
 
@@ -513,7 +529,7 @@ RFIs export as **RFI CSV** and **RFI JSON** from the Report, and they ride the M
 
 ---
 
-## 10. The report & exports
+## 11. The report & exports
 
 <img src="img/report.png" alt="The takeoff report — per-condition breakdown and materials buy list" width="780"/>
 
@@ -534,7 +550,7 @@ On screens up to 768px wide, Report controls wrap and the project name uses its 
 - **Columns** — choose what the table (and the CSV) shows. Defaults: Finish, Shapes, Floor SF, Wall SF, Border SF, LF, EA, Waste, SF w/Waste, SY w/Waste. Opt-ins: Total SF, Waste SF, Waste LF, Perimeter LF (reference only — includes openings, never totaled). Custom condition columns, imported product-spec columns (manufacturer, style, color, size, description — from a schedule import), and Labor Type / Subfloor Type (typed into a condition's Supporting Materials panel) appear once they exist. **Labor view** switches to a no-waste actuals set (Total SF in, SF/SY w/Waste out) for tying quantities to labor — attach your own rates externally.
 - **Group** — break the table into sections with subtotals: by **Sheet**, by **Label** (once shapes carry labels), or by any custom column. Grouping by a column always carries that column into the CSV.
 - **Templates** — save a column-plus-grouping layout by name and recall it on this device. Signed in on a team build, **Push to Drive / Load from Drive** carries templates across your own devices — Load only adds what this device doesn't have; it never overwrites a same-name template.
-- **Theme** — import a design-token file (a `tokens.json`) to reskin the report's palette and fonts for output. **Reset** returns the house style.
+- **Theme** — choose **Blueprint**, **Forest**, **Graphite**, or **Classic Paper** for the report’s colors and fonts. The choice is remembered in this browser. **Import theme…** remains available for your own JSON design-token files; importing replaces the active theme. **Reset** returns the house style. Measurements and the app-wide theme are unchanged.
 
 ### Exports
 
@@ -548,23 +564,23 @@ On screens up to 768px wide, Report controls wrap and the project name uses its 
 | **Marked set** | A distribution-ready PDF built in your browser: every sheet that carries takeoffs or markups, the work burned in as drawn — condition colors, hatches, quantity chips, count markers, markups (toggleable) — behind a legend cover with net totals, w/Waste quantities, and a by-sheet breakdown. Exports in your current view: dark canvas → dark PDF. Send it to a GC who will never install anything. |
 | **RFI CSV / JSON** | The RFI register (appears once RFIs exist). |
 
-**Contribute** also lives here — covered with the rest of your data in §12.
+**Contribute** also lives here — covered with the rest of your data in §13.
 
 ---
 
-## 11. Revisions
+## 12. Revisions
 
 Addenda happen. **Revisions** (the clock icon on the rail) makes them data instead of archaeology.
 
 - **Save** the current takeoff — conditions, shapes, markups — as a named revision (the name defaults to *Rev N — date*). Do it at every bid revision, and before anything risky.
 - **Compare** any revision against the live takeoff or against another revision. The diff reads as **quantity deltas**: per condition (measured and ordered), per sheet (base quantities), and on the buy list, with added / removed / changed / unchanged status chips and an **Export compare CSV**. The headline gives you the one number first: ordered SF A → B, and how many conditions moved.
-- **Restore** is never a one-way door: it banks the live takeoff as *Auto-backup before restore* first, then loads the revision. (It does reset the undo stack — §8.)
+- **Restore** is never a one-way door: it banks the live takeoff as *Auto-backup before restore* first, then loads the revision. (It does reset the undo stack — §9.)
 
 **Honest limits.** The compare is deliberately **quantity-level, not geometric**: it won't show you *which wall moved*, only which condition's numbers moved, on which sheet, by how much. Sub-display wobble (re-trace drift below 0.05 SF, or below half an EA) reads as unchanged, so a re-traced room that lands on the same number doesn't cry wolf. Conditions pair by identity first and finish tag second, so deleting and recreating `CPT-1` diffs as the same condition, not a remove-plus-add.
 
 ---
 
-## 12. Saving, your data & Contribute
+## 13. Saving, your data & Contribute
 
 ### Project details
 
@@ -574,25 +590,17 @@ Project details, creation time, and last persisted modification time are stored 
 
 **Save project** suggests `<Project Name>.otk`. In browsers that support retained file handles, the first save asks for a location and later saves update that same file directly. The handle belongs only to the project that selected it: after **New project…** or opening another project, the next Save asks for a new destination and uses that project's name rather than reusing the previous project's file. Use **Save project as…** to choose another name or location; renaming the project changes the next Save As suggestion without silently creating another file.
 
-Google Drive storage is organized as `OpenTakeoff/<Project Name>/`. The portable `<Project Name>.otk` sits at the project-folder root, while separate plan files use `PDFs/` and whiteboard attachments use `Assets/` only when needed. OpenTakeoff tracks these items by stable project and Drive IDs, so another project with the same visible title is not overwritten and renaming reuses the existing folder on the next successful save.
+For the Google Drive folder workflow, see [§2: Google Drive Cloud Sync](#2-google-drive-cloud-sync). New source-folder creation makes **Estimate save data / Projects**. Selecting an existing source displays its actual contents; it does not reorganize your files or select the destination for future saves.
 
 ### Optional cloud projects
 
-The **Cloud** button opens account sign-in and the cloud project browser. Local work and **Project > Save project** continue working without signing in. A deployment must first complete [Supabase setup](SUPABASE_SETUP.md).
+The **Cloud** button opens sign-in and the source-folder browser. Local work and **Project → Save project...** continue working without signing in. Google sign-in identifies your OpenTakeoff account; it does not authorize the separate server-connected Drive storage feature.
 
-On localhost or the HTTPS web app (including mobile Chrome), **Continue with Google** signs into the same Supabase cloud account system. Pending project edits are saved locally before leaving for Google. Return to the same browser/origin to finish sign-in; the current workspace and Cloud panel reopen automatically. Canceling or failing sign-in leaves local work intact. Native Google login remains disabled with an explanation; email/password and email-code recovery remain available. The dedicated Android Drive connection return handler does not change Google login. Supabase Google sign-in does not authorize the separate Google Drive integration.
+Use the avatar or name beside the app logo to edit your display name or log out. Signing out does not erase local browser work or previously downloaded project copies.
 
-Use **Project > Save to Cloud** to upload the current project. Subsequent saves update the same project ID; **Save As** creates a separate project with a new ID. Cloud saving is manual, while existing local autosave continues after edits. **Browse projects** provides My Projects, Shared With Me, and Recent, with Open, Download, Duplicate, Rename, Share, and Delete as permitted by your role. Set your display name under Profile. Opening a cloud project creates a separate local workspace and keeps the previous workspace intact.
+**Project → Save to Cloud...** remains a separate manual upload workflow for installations with configured cloud services and an existing Drive connection. It does not write to the locally selected source folder. The current profile panel has no Connect Google Drive control, and the Cloud panel has no Browse projects tab. Use the source-folder and .otk saving instructions in §2 for the current visible workflow.
 
-The owner can share with another confirmed account by exact email address. Editors can save; viewers can open/download and make their own copies but cannot overwrite the shared cloud project. Revoking sharing does not erase copies already downloaded to another device. Signing out similarly does not erase local project data; avoid shared/untrusted browser profiles for private plans.
-
-If another device saved first, choose **Keep Local Version**, **Use Cloud Version**, or **Save Local as Copy**. Keep Local asks again before replacing the displayed cloud version and fails if that version changes again. There is no automatic drawing merge. After offline edits, reconnect and choose Save to Cloud again.
-
-With **Supabase Storage**, PDFs larger than 50 MB remain **Local Only** while takeoff metadata still saves. Upload failures also retain local originals. Missing whiteboard files appear as placeholders; unavailable plan PDFs need the original file imported with its original filename on the other device. Do not discard the source device or its `.otk` backup until all required files are available. Cloud Download/Duplicate refuses incomplete projects rather than silently omitting files. Copies consume additional cloud file quota.
-
-After [Drive backend setup](GOOGLE_DRIVE_STORAGE.md), **Cloud > Profile > Connect Google Drive** authorizes private storage separately from Google Sign-In. Choose **Google Drive** under **This project > Cloud file storage** before the first file upload, or explicitly choose it for a new **Save As** copy. Existing projects never switch automatically. Shared users can open uploaded PDFs and board assets without connecting their own Google account. File transfers show progress and can be canceled/retried; completed downloads remain available in the local workspace offline. Drive allows up to 2 GiB per file in this app, subject to device memory and existing import limits. Disconnecting the owner's Drive stops new uncached downloads for shared members. Removing a member stops new cloud access, but cannot erase previously downloaded copies. Drive transfers save Supabase Storage space, not proxy bandwidth costs. Downloads also check for cancellation or an account change after saving the verified local cache; retry opening the project after signing in again if needed.
-
-Email verification and password recovery use an emailed code, entered in the same app. Cloud status is refreshed when opening Cloud and after save operations. Browser-global preferences, reusable libraries, and AI keys are not uploaded with the project.
+For an existing server-connected project, subsequent cloud saves update its project ID; **Save As** creates a separate copy. If another device saved first, the app offers **Keep Local Version**, **Use Cloud Version**, or **Save Local as Copy**. There is no automatic drawing merge. Browser-global preferences, reusable libraries, and AI keys are not uploaded with the project. Keep a complete .otk backup before relying on another device.
 
 ### Download the current plan page
 
@@ -638,9 +646,9 @@ Everything — drawings, scales, conditions, markups, RFIs, levels, tabs — aut
 
 If a saved project fails to load, autosave **pauses itself** and a banner says so — a load failure never overwrites your saved work with an empty canvas. And if OpenTakeoff updates in another tab, the stale tab asks for a reload instead of writing over the newer one.
 
-### Optional: projects on Drive
+### Google Drive folders and project files
 
-Team deployments can wire a Google Drive "Projects" root. Then a **project is a Drive folder**: sign in from the opening screen, pick the folder, and the plan PDFs live in it while OpenTakeoff keeps its own sidecars (the takeoff JSON and the working-set manifest) in a hidden `.opentakeoff` subfolder. The gallery grows a **Browse Drive** mode that lists the folder's PDFs — nothing downloads until you add it, so spec books and as-builts stay unopened. Revision snapshots stay in your browser but scope per project; condition and material libraries, stamps, and report preferences stay local to your browser either way. Run OpenTakeoff without signing in and none of this exists.
+See [§2: Google Drive Cloud Sync](#2-google-drive-cloud-sync) for selecting or creating a source folder, opening .otk files, and saving changes back to a synced location. Browser autosave, a saved .otk file, and completed Google Drive synchronization are separate steps.
 
 ### Contribute — what's sent, what never is
 
@@ -668,7 +676,7 @@ The modal asks for an optional credit line and an attestation that you have the 
 
 ---
 
-## 13. The Agent panel
+## 14. The Agent panel
 
 The Agent panel is the newest way to run the engine: describe a takeoff in a sentence, and an AI model — **yours**, on your key, from your browser — works the sheet with the app's own tools and stages **dashed proposals you accept or reject**. It is a proposer, never a committer.
 
@@ -695,14 +703,14 @@ Agent tools refuse an uncalibrated sheet with the same discipline as everything 
 Proposals land on the canvas as **dashed pencil outlines** with a seed star, and in the panel as rows with **evidence chips** — the schedule row it matched (`schedule CPT-1`), the text it matched, the seed it flooded from. Then it's your desk:
 
 - **Accept**: click a proposal on the canvas, use the row's ✓, or **Accept all** / `⏎` for everything on the visible sheets. Accepting commits through the same command layer as your own work — origin *agent*, reviewed by you, the proposed ring frozen, the evidence attached. **A whole accepted batch is one `⌘Z`.**
-- **Correct**: edit an accepted shape like any other (§7). Corrections grade in provenance exactly like One-Click corrections — machine ring frozen, your fix recorded.
+- **Correct**: edit an accepted shape like any other (§8). Corrections grade in provenance exactly like One-Click corrections — machine ring frozen, your fix recorded.
 - **Reject**: the row's ✕, or **Reject all**. Rejection is **local only** — dismissed geometry is discarded and never rides the contribution wire.
 
 A proposal whose sheet you've since closed (or unscaled) is skipped at accept with a message telling you to open the sheet; nothing commits blind.
 
 ### Setup — bring your own key
 
-The panel is honest when unconfigured: it explains itself and offers **AI settings…**. Configure an endpoint (OpenAI-style — most local runtimes speak it and need no key — or Anthropic-style), a vision-capable model id, and an optional key (§14). Unconfigured builds make zero AI network calls.
+The panel is honest when unconfigured: it explains itself and offers **AI settings…**. Configure an endpoint (OpenAI-style — most local runtimes speak it and need no key — or Anthropic-style), a vision-capable model id, and an optional key (§15). Unconfigured builds make zero AI network calls.
 
 ### The keyless demo
 
@@ -716,7 +724,7 @@ Point AI settings at it — endpoint `http://localhost:8787`, API style **Anthro
 
 ---
 
-## 14. AI settings & driving OpenTakeoff from an agent
+## 15. AI settings & driving OpenTakeoff from an agent
 
 ### AI settings (BYO everything)
 
@@ -735,7 +743,7 @@ The same engine speaks [MCP](https://modelcontextprotocol.io), one command away:
 
 ---
 
-## 15. Keyboard reference
+## 16. Keyboard reference
 
 Every shortcut in the app, verified against the code. Letter keys are suppressed while you're typing in a field and while a toolbar menu is open. `Ctrl` stands in for `⌘` on Windows and Linux throughout.
 
@@ -814,7 +822,7 @@ Markup tools also support custom **Ctrl+key** shortcuts. Open **Draw > Markup**,
 
 ---
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 **A sheet renders blank or slow.** Big sheets rasterize on open — give it a beat. If linework goes soft mid-zoom, that's the detail view re-rendering; it sharpens when the gesture settles. For dense sheets, flip **Hi-Res render (this sheet)** in the Render & fill settings menu — display only, quantities unaffected. Side-by-side groups multiply the render load; work single-sheet on a struggling machine.
 
@@ -843,3 +851,15 @@ Use **Trackpad** in the bottom-right canvas controls to open **Trackpad Settings
 ### Startup artwork and app icons
 
 The startup view uses SelfMadeSystem's Uiverse `warm-lion-64` background and the Blueprint icon (Flaticon 1373067, Magnific). The same icon is supplied for web/PWA, Android and Windows Electron. Android's pre-WebView splash uses a static frame; Android 12's system splash uses the Blueprint icon on a dark background. Loading, importing plans and the sample-plan action are unchanged. The startup **Artwork credits** link opens the attribution and license information.
+
+Selecting **Locate Google Drive Folder** now immediately displays that selected local folder’s actual files and subfolders. Use breadcrumbs, Up, Refresh folder, and search to navigate within the selected folder. Double-click a folder or `.otk`, or select it and choose Open folder/Open project. Other file types are listed without launching them. **Cloud Projects** returns to the cloud library. Local listings work offline and do not require Drive folder-list API deployment; they show file modification times and saved project editor metadata. Opening a selected `.otk` uses the normal local importer and does not automatically bind it to a cloud version.
+
+Cloud Projects starts with Sign in/Create account when signed out. After sign-in, an accessible previously selected source folder reopens; otherwise choose a source folder. The cloud project list is loaded only after choosing **Browse cloud library instead** or **Cloud Projects** in the local browser.
+
+Each `.otk` row in the selected local folder has an **Open project** button to open that file directly.
+
+The selected-folder browser puts `.otk` files first, then folders ordered newest first. **Last modified** shows the filesystem timestamp for a file; a folder shows its **Latest file change**, the newest timestamp found recursively inside it (the browser cannot read the folder’s own Windows timestamp). Empty/inaccessible folders show Unknown. **Modified by** uses `project_metadata.lastModifiedByName/lastModifiedByEmail` recorded on new authenticated saves, independently of the original author. Older files and files edited outside the app may not identify an editor; no identity is guessed. Scanning reads file metadata and only inflates project manifests, not PDF/image assets, with depth/entry limits; reading synced archives may trigger Google Drive hydration.
+
+**Create New Source Folder:** in the source-folder screen, choose a parent location in your Google Drive for desktop mount. Confirm creation of the fixed `Estimate save data/Projects` structure. If the source already exists, choose **Use Existing Folder**, **Choose Another Location**, or **Cancel**. Successful creation/reuse automatically remembers the source and opens Projects; no second Locate action is needed. Cancellation before confirmation creates nothing. Creation and remembered-source setup access only the chosen parent and immediate Projects listing, without a recursive drive scan. The browser remembers a directory handle rather than a hard-coded drive letter. It cannot reliably verify that the selected location is synced by Google Drive.
+
+When signed in, your account avatar and display name appear beside the Beitzell Estimating logo. Select either to open Profile, view your email, edit your display name, or log out. The default name/photo come from Google account metadata; a saved display name takes precedence. Missing or unavailable photos use initials.

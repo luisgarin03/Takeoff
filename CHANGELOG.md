@@ -4,6 +4,16 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased
 
+- Hid project sharing controls, invitation inbox/badges, and in-app sharing instructions behind a disabled UI flag. Sharing implementation and stored data are retained.
+
+- Improved responsive layout: capped the phone toolbar height to leave canvas space, normalized control sizing, expanded Cloud and User Guide to the viewport, and stacked cloud file details on phones.
+
+- Added direct Google Drive project sharing with Google Picker, email notifications for new read permissions, a private in-app invitation inbox and Cloud badge, selective download/import, and automatic opening of the imported `.otk`. Files remain in the sender's Drive; no intermediate file-storage bucket is used. Requires the invitation migration and updated Drive function/Picker configuration.
+
+- Moved open-sheet tabs beside Report and Schedule into the Draw menu’s Measure section.
+
+- Added Blueprint, Forest, Graphite, and Classic Paper report themes, retaining custom JSON import and Reset.
+
 - The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated Estimating by Luis Garin wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
 - Theme palette control now opens logo color, effect, brightness, and speed settings, applied live to the real logo and saved locally.
 
@@ -310,3 +320,21 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## 2026-06-15
 - **Initial release** — open-source PDF takeoff canvas for flooring: One-Click Area, manual measure kit, per-sheet scale (auto-detect + calibrate), conditions with CAD hatches, waste %, reports with SF/SY/LF/EA and CSV/JSON export, client-only storage.
+
+### Cloud project library (unreleased)
+
+- Hide idle Local Only when Drive is connected; preserve active sync/error statuses.
+- Simplify This project, add complete-folder ZIP export, scoped folder browsing/search, persistent authors and synced-folder opening without a Drive API binary download.
+- New Drive projects use Estimate save data/Projects; retain existing stable project folder identities and legacy Supabase workflows. Updated Drive Edge Function required; no deployment included.
+
+- Selecting a local Drive folder now displays its actual contents immediately, with subfolder navigation, search and direct `.otk` opening.
+
+- Cloud Projects now starts with authentication or source-folder selection instead of automatically listing cloud projects; accessible saved folders reopen directly.
+
+- Add an Open project button beside every `.otk` in the selected-folder browser.
+
+- Put local `.otk` files first; sort project folders by newest contained-file change. Show modification dates and saved editor names, with explicit Unknown fallbacks. Preserve editor metadata on saves separately from author metadata.
+
+- Add Create New Source Folder alongside Locate, with fixed Estimate save data/Projects initialization, existing-folder reuse, cancellation/error handling, and automatic persistent selection.
+
+- Add a clickable account avatar/name beside the logo and enrich Profile with the avatar, email, editable name and logout. Saved names immediately update the header.

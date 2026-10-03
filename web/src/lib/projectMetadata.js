@@ -43,6 +43,7 @@ export function normalizeProjectMetadata(payload = {}) {
   const name = typeof raw.name === "string" ? raw.name.trim() : (typeof payload.project_name === "string" ? payload.project_name.trim() : "");
   return {
     name,
+    ...Object.fromEntries(["authorId", "authorName", "authorEmail", "lastModifiedById", "lastModifiedByName", "lastModifiedByEmail"].filter((key) => typeof raw[key] === "string" && raw[key].trim()).map((key) => [key, raw[key].trim().slice(0, 254)])),
     submissionDate: isoDate(raw.submissionDate || raw.submission_date || ""),
     status: PROJECT_STATUSES.includes(raw.status) ? raw.status : "Ongoing",
     createdAt: isoInstant(raw.createdAt || raw.created_at),
@@ -59,6 +60,7 @@ export function touchProjectMetadata(metadata, now = new Date().toISOString()) {
 export function metadataPayload(metadata) {
   const normalized = normalizeProjectMetadata({ project_metadata: metadata, project_name: metadata?.name });
   return {
+    ...normalized,
     name: normalized.name,
     submissionDate: normalized.submissionDate,
     status: normalized.status,
@@ -82,4 +84,20 @@ export function formatProjectDate(value, options = {}) {
   if (!value) return "Not set";
   const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value);
   return Number.isNaN(date.getTime()) ? "Not set" : new Intl.DateTimeFormat(undefined, options).format(date);
+}
+
+// Author is portable project metadata, independent of who last edits the project.
+export function withProjectAuthor(metadata, user, profileName = "") {
+  if (metadata?.authorId || metadata?.authorName || metadata?.authorEmail || !user?.id) return metadata;
+  const authorName = profileName || user.user_metadata?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email || "Unknown";
+  return { ...metadata, authorId: user.id, authorName, ...(user.email ? { authorEmail: user.email } : {}) };
+}
+export function cloudStatusLabel({ ready, user, driveConnected, offline, status }) {
+  if (offline) return "Offline";
+  if (user && status && !["Local Only", "Synced"].includes(status)) return status;
+  return ready && user && driveConnected ? "" : "Local Only";
+}
+
+export function withProjectEditor(metadata, user, profileName = "") {
+  return { ...metadata, lastModifiedById: user?.id || "", lastModifiedByName: user ? profileName || user.user_metadata?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email || "Unknown" : "", lastModifiedByEmail: user?.email || "" };
 }
