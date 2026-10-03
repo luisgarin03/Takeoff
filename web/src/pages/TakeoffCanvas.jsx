@@ -6886,7 +6886,7 @@ export default function TakeoffCanvas() {
             style). Moved out of the toolbar so it never wraps a third row. The
             takeoffs toggle mirrors the DOCKED panel's collapsed pref — the rail
             rides the canvas edge, so it stays visible either way. */}
-        <div className="canvas-panel-rail" onClickCapture={(e) => {
+        {view === "canvas" && sheets.length > 0 && <div className="canvas-panel-rail" onClickCapture={(e) => {
           const drawer = e.target.closest("[data-drawer]")?.dataset.drawer;
           if (drawer) setFrontDrawer(drawer);
         }} style={{ position: "absolute", right: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
@@ -6911,7 +6911,7 @@ export default function TakeoffCanvas() {
             style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 34, minHeight: 34, padding: "5px 0 4px", border: `1px solid ${theme === "dark" ? "var(--ink)" : "var(--ink-faint)"}`, background: theme === "dark" ? "var(--ink)" : "var(--paper-bright)", color: theme === "dark" ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 14, lineHeight: 1 }}>
             <Icon name="palette" size={18} />
           </button>
-        </div>
+        </div>}
 
        </div>
 
