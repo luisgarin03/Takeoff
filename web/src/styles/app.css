@@ -1414,6 +1414,9 @@ select {
   white-space: nowrap;
 }
 :root .glass-toolbar-primary > .account-profile-button .account-avatar { flex-shrink: 0; }
+
+/* Keep sheet navigation and Report together; the profile remains pinned right. */
+:root .glass-toolbar-primary > .toolbar-spacer { display: none !important; flex: 0 0 0 !important; }
 @media (max-width: 480px) {
   :root .glass-toolbar-primary:has(> .account-profile-button) { padding-right: calc(var(--profile-button-width, 86px) + 15px) !important; }
   :root .glass-toolbar-primary > .account-profile-button { right: 8px; width: max-content; max-width: 98px; }
