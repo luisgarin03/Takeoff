@@ -1305,6 +1305,54 @@ select {
   .canvas-zoom-rail > button, .canvas-panel-rail > button { min-width: 40px; min-height: 40px !important; }
   .canvas-live-readout { min-width: 0 !important; max-width: min(220px, calc(100% - 112px)) !important; padding: 8px !important; font-size: 12px; }
 }
+
+/* The canvas rails remain usable on phones without crowding the workspace.
+   Keep them below the top toolbar when their columns reach its area, and
+   reduce each control to roughly 70% of the desktop touch target. */
+@media screen and (max-width: 760px) {
+  .canvas-zoom-rail,
+  .canvas-panel-rail {
+    z-index: 10 !important;
+    gap: 3px !important;
+  }
+
+  .canvas-zoom-rail > button,
+  .canvas-panel-rail > button {
+    width: 28px !important;
+    min-width: 28px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    padding: 0 !important;
+  }
+
+  .canvas-zoom-rail > div {
+    height: 28px !important;
+  }
+
+  .canvas-zoom-rail > div > button {
+    width: 28px !important;
+    min-width: 28px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    padding: 0 !important;
+  }
+
+  /* ToolMenu rail controls wrap their trigger in an inline span. */
+  .canvas-zoom-rail > span,
+  .canvas-zoom-rail > span > button {
+    width: 28px !important;
+    min-width: 28px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+  }
+
+  .canvas-zoom-rail > span > button {
+    padding: 0 !important;
+  }
+}
 @media screen and (max-height: 500px) {
   .glass-toolbar-stack { max-height: 42dvh; }
 }
