@@ -120,3 +120,27 @@
   .cloud-file-table td button { overflow-wrap: anywhere; }
   .project-invitations .cloud-actions { align-items: stretch; }
 }
+
+/* Profile shares the toolbar's restrained, theme-aware surfaces. */
+.profile-sections { width: min(960px, 100%); margin: 8px auto; display: grid; gap: 20px; }
+.profile-card { min-width: 0; border: 1px solid var(--ink-faint); border-radius: 12px; padding: clamp(16px, 3vw, 28px); background: var(--paper-bright); }
+.profile-card h3 { margin: 0 0 8px; font-size: 18px; }
+.profile-card p { margin: 8px 0 16px; }
+.profile-card-heading, .profile-identity { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.profile-identity { justify-content: flex-start; margin-bottom: 24px; }
+.profile-identity > div { min-width: 0; overflow-wrap: anywhere; }
+.profile-identity p { margin: 0; }
+.profile-muted { color: var(--ink-muted); }
+.profile-details-form { display: grid; gap: 18px; }
+.profile-details-form input { width: 100%; min-height: 44px; }
+.profile-card button, .profile-card input { border-radius: 7px !important; }
+.profile-card button { min-height: 44px; }
+.profile-card input[readonly] { color: var(--ink-muted); background: var(--paper-shadow); }
+.subscription-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
+.subscription-plan { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0; padding: 20px; border: 1px solid var(--ink-faint); border-radius: 10px; }
+.subscription-plan h4 { font-size: 16px; margin: 0; overflow-wrap: anywhere; }
+.subscription-plan button { margin-top: auto; width: 100%; }
+.subscription-plan .subscription-price { font-size: 28px; margin: 8px 0; }
+.subscription-price span { font-size: 12px; color: var(--ink-muted); }
+.subscription-badge { display: inline-block; padding: 3px 8px; border: 1px solid var(--ink-faint); border-radius: 20px; background: var(--paper-shadow); font-size: 12px; }
+@media (max-width: 700px) { .subscription-plans { grid-template-columns: minmax(0, 1fr); } }

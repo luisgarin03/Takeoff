@@ -12,13 +12,17 @@
 // the calibrated guide bar on the sheet behind the open menu).
 // Optional `accessory` controls are siblings of the action button, so a star
 // toggle can stay open without nesting buttons or triggering navigation.
-import React, { useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../brand/icons.jsx";
+
+import { ToolbarPanelContext } from "./BeitzellToolbar.jsx";
 
 const MENU_W = 232;
 
 export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false, rail = false }) {
+  const toolbarActive = useContext(ToolbarPanelContext);
+  const portaled = rail || toolbarActive !== null;
   const [open, setOpen] = useState(false);
   const [flip, setFlip] = useState(false);
   const rootRef = useRef(null);
@@ -35,6 +39,17 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("pointerdown", onDown, true); document.removeEventListener("keydown", onKey); };
   }, [open]);
+
+  useEffect(() => {
+    if (toolbarActive === false) setOpen(false);
+  }, [toolbarActive]);
+  useEffect(() => {
+    if (!open || toolbarActive === null) return;
+    const close = (event) => { if (!menuRef.current?.contains(event.target)) setOpen(false); };
+    window.addEventListener("resize", close);
+    document.addEventListener("scroll", close, true);
+    return () => { window.removeEventListener("resize", close); document.removeEventListener("scroll", close, true); };
+  }, [open, toolbarActive]);
 
   // Notify strictly in open/close PAIRS: fire true only when opening, and repay
   // it in the cleanup — which also runs if the menu unmounts while open (e.g.
@@ -54,10 +69,10 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
     if (!open && rootRef.current) {
       const r = rootRef.current.getBoundingClientRect();
       setFlip(r.left + menuW > window.innerWidth - 16);
-      if (rail) {
+      if (portaled) {
         const width = Math.min(menuW, window.innerWidth - 24);
-        const top = Math.max(12, Math.min(r.top, window.innerHeight - 320));
-        setRailPosition({ position: "fixed", top, left: Math.max(12, Math.min(r.right + 8, window.innerWidth - width - 12)),
+        const top = Math.max(12, Math.min(rail ? r.top : r.bottom + 4, window.innerHeight - (rail ? 320 : 160)));
+        setRailPosition({ position: "fixed", top, left: Math.max(12, Math.min(rail ? r.right + 8 : r.left, window.innerWidth - width - 12)),
           right: "auto", width, minWidth: 0, maxHeight: Math.max(0, window.innerHeight - top - 12),
           overflowY: "auto", overscrollBehavior: "contain", touchAction: "pan-y", boxSizing: "border-box", zIndex: 1000 });
       }
@@ -67,7 +82,7 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
 
   // A portal keeps rail menus outside the clipped canvas; React events still
   // bubble through the rail wrapper, which isolates every menu interaction.
-  const renderMenu = (node) => rail ? createPortal(node, document.body) : node;
+  const renderMenu = (node) => portaled ? createPortal(node, document.body) : node;
 
   return (
     <span ref={rootRef} style={{ position: "relative", display: "inline-flex" }}
@@ -94,7 +109,7 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
           minWidth: MENU_W, background: "var(--paper-bright)", border: "1px solid var(--ink)",
           boxShadow: "var(--shadow-2)", padding: "4px 0",
           ...menuStyle,
-          ...(rail ? railPosition : {}),
+          ...(portaled ? railPosition : {}),
         }}>
           {items.map((it, i) => {
             if (it === "divider") return <div key={i} style={{ height: 1, background: "var(--ink-faint)", margin: "4px 0" }} />;

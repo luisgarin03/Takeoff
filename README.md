@@ -77,3 +77,10 @@ When signed in, your account avatar and display name appear beside the Beitzell 
 Report appearance includes Blueprint, Forest, Graphite, and Classic Paper presets, plus custom JSON theme import and Reset.
 
 Open-sheet tabs sit after Report in the toolbar; schedule import is available from Draw → Measure → Schedule.
+
+### Estimating toolbar and account
+
+Project, Sheets, and Takeoff tabs organize the existing toolbar without resetting
+the estimate. The logo and account stay outside the tabs. Profile includes account
+cards and a Subscription section with configurable $40/$50/$60 monthly plans;
+checkout is not connected yet. See [control inventory and billing integration](docs/TOOLBAR_SUBSCRIPTIONS.md).

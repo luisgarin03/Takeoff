@@ -21,6 +21,7 @@ import { downloadDriveFolder } from "../lib/supabase/driveLibrary.js";
 import { openLocalDriveProject, localDriveUnavailable, readLocalProjectHandle, SOURCE_FOLDER_NAME, findLocalSourceFolder, createLocalSourceFolder, localSourceFolderView } from "../lib/localDriveProject.js";
 import { jsonHash } from "../lib/supabase/projectState.js";
 import CloudFileBrowser from "./CloudFileBrowser.jsx";
+import ProfileAccountSection from "./ProfileAccountSection.jsx";
 import AccountAvatar from "./AccountAvatar.jsx";
 import LocalFolderBrowser from "./LocalFolderBrowser.jsx";
 import ProjectInvitations from "./ProjectInvitations.jsx";
@@ -353,11 +354,10 @@ export default function CloudProjects({ initialView = "projects", source, getPay
             <button className="btn-primary" disabled={!!busy || cloud.offline} type="submit">{authMode === "signin" ? "Sign in" : "Continue"}</button>
             <div className="cloud-actions">{["signin", "signup", "forgot"].filter((m) => m !== authMode).map((m) => <button key={m} type="button" disabled={!!busy} onClick={() => { setAuthMode(m); setError(""); setPassword(""); }}>{m === "signup" ? "Create account" : m === "forgot" ? "Forgot password" : "Sign in"}</button>)}</div>
           </form> : <>
-            {view === "account" && <>
-              <div className="cloud-profile-summary"><div className="cloud-profile-identity"><AccountAvatar profile={cloud.identity} size={40} /><strong>{cloud.identity.name}</strong><div>{cloud.identity.email}</div></div><button disabled={!!busy} onClick={() => run(async () => { await auth.signOut(); cloud.setStatus("Local Only"); })}>Log out</button></div>
-              <form className="cloud-auth cloud-profile-form" onSubmit={(e) => { e.preventDefault(); run(async () => { await auth.saveProfile(cloud.user.id, displayName); profileDraft.current.edited = false; await cloud.refreshProfile(); setDisplayName(displayName.trim()); setNotice("Profile saved."); }); }}><label>Display name<input value={displayName} maxLength={120} onChange={(e) => { profileDraft.current.edited = true; setDisplayName(e.target.value); }} /></label><button className="btn-primary" disabled={!!busy || cloud.offline}>Save profile</button></form>
-
-            </>}
+            {view === "account" && <ProfileAccountSection cloud={cloud} displayName={displayName} busy={!!busy}
+              onNameChange={(value) => { profileDraft.current.edited = true; setDisplayName(value); }}
+              onSave={(e) => { e.preventDefault(); run(async () => { await auth.saveProfile(cloud.user.id, displayName); profileDraft.current.edited = false; await cloud.refreshProfile(); setDisplayName(displayName.trim()); setNotice("Profile saved."); }); }}
+              onSignOut={() => run(async () => { await auth.signOut(); cloud.setStatus("Local Only"); })} />}
             {view === "save" && <div className="cloud-save"><h3>{getPayload().project_name || "Untitled project"}</h3>
               <p>Cloud status: {currentCloud?.file_provider === "supabase" ? "Existing project uses Supabase Storage" : drive?.connected ? "Google Drive connected" : "Connect Google Drive in Profile"}</p>
               <div className="cloud-actions"><button className="btn-primary" disabled={!!busy || cloud.offline || !!source.listFolder || (!currentCloud && !drive?.connected)} onClick={() => run(() => save())}><Icon name="document" size={16} />Save to Cloud</button><button disabled={!!busy || cloud.offline || currentCloud?.file_provider !== "google_drive"} onClick={() => run(() => download(currentCloud))}>Download Locally</button><button className="btn-ghost" disabled={!!busy || cloud.offline || !!source.listFolder} onClick={() => ask("copy-local")}>Save As...</button></div>

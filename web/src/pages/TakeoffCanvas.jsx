@@ -34,6 +34,7 @@ import { seedStampLibrary, instantiateStamp, markupToStampElement } from "../lib
 import { extractSvgPrimitives, svgToStamp } from "../lib/svgImport.js";
 import { transformPath, svgPlacedBox } from "../lib/svgpath.js";
 import { ingestFiles } from "../lib/ingest.js";
+import BeitzellToolbar from "../components/BeitzellToolbar.jsx";
 import ToolMenu from "../components/ToolMenu.jsx";
 import ThemeSettings from "../components/ThemeSettings.jsx";
 import WorkspaceHelp, { RecentProjectsMenu } from "../components/WorkspaceHelp.jsx";
@@ -5605,21 +5606,24 @@ export default function TakeoffCanvas() {
           </div>
         </div>
       )}
-      {/* toolbar — two fixed decks (issue #61). Deck 1 = things you do to the
-          PROJECT (open, navigate, export, account); deck 2 = things you do to
-          the SHEET (arm tools, toggle aids, set scale). Neither row wraps, and
-          conditional UI renders only into deck 2's reserved ACTION slot, so no
-          control ever changes position. */}
+      {/* Tab selection changes toolbar visibility only; canvas state remains here. */}
       <div
         ref={toolbarStackRef}
-        className={`glass-toolbar-stack${toolbarHidden ? " is-hidden" : ""}`}
+        className={`glass-toolbar-stack tabbed-toolbar-stack${toolbarHidden ? " is-hidden" : ""}`}
         style={{
           left: !overlayDrawers && leftTab ? leftPanelW : 0,
           right: overlayDrawers ? 0 : (takeoffsOpen ? panelW : 0) + (agentOpen ? agentPanelW : 0),
         }}
       >
-        <div className="glass-toolbar glass-toolbar-primary" style={{ display: "flex", gap: 7, alignItems: "center", padding: "6px 14px", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-shadow)", whiteSpace: "nowrap" }}>
+        <BeitzellToolbar
+          logo={<>
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}><BrandText /></strong>
+          </>}
+          account={<>
+        {cloudAccount?.user ? <button type="button" className="account-profile-button" ref={(el) => { if (el) el.parentElement.style.setProperty("--profile-button-width", `${el.getBoundingClientRect().width}px`); }} aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><AccountAvatar profile={cloudAccount.identity} /><span>{cloudAccount.identity.name}</span></button> : <button type="button" className="account-sign-in-button" onClick={() => setCloudView("projects")} disabled={!cloudAccount?.ready} aria-label="Sign in" title="Sign in to your account">Sign in</button>}
+        <AccountChip note={cloudMode ? "Synced to Google Drive" : "Local workspace"} onOpenChange={onMenuDepth} />
+          </>}
+          project={<>
         {projectControls}
         {/* team cloud mode: always a way to leave this project, plus a way to
             browse the rest of the team's projects when the build names a root
@@ -5641,6 +5645,18 @@ export default function TakeoffCanvas() {
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
 
         <span style={{ fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>{saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}</span>
+        {/* Deliberately subtle, not a button: local-first app, cloud mode is an
+            opt-in extra. Only when ALREADY signed in (never a sign-in entry
+            point in the toolbar — that lives solely on the landing link), no
+            cloud project is open, and the build names a Projects root. */}
+        {!cloudMode && googleUser && isGoogleConfigured() && projectHomeFolderId() && (
+          <Link to="/projects" style={{ fontSize: 11.5, color: "var(--ink-muted)", whiteSpace: "nowrap" }}>
+            browse team projects
+          </Link>
+        )}
+        <WorkspaceHelp metadata={projectMetadata} name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
+          </>}
+          sheets={<>
         <button type="button" onClick={() => setView("gallery")}
           title={`Plan set — the visual gallery; open one or several sheets (G)${sheetGroup.length ? ` · ${sheetGroup.length} side-by-side now` : ""}`}
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: `1px solid ${sheetGroup.length ? "var(--cobalt)" : "var(--ink-faint)"}`, background: sheetGroup.length ? "var(--cobalt)" : "transparent", color: sheetGroup.length ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}>
@@ -5662,80 +5678,6 @@ export default function TakeoffCanvas() {
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page >= pageCount) ? 0.4 : 1 }}><Icon name="chevronRight" size={12} /></button>
           </span>
         )}
-        {findOpen && createPortal(
-          <div className="find-dialog-shade" onClick={(event) => { if (event.target === event.currentTarget) closeFind(); }}>
-            <section ref={findDialogRef} className="find-all-dialog" role="dialog" aria-modal="true" aria-label="Find text across loaded plans"
-              style={{ "--find-dialog-x": `${findDialogOffset.x}px`, "--find-dialog-y": `${findDialogOffset.y}px`, "--find-dialog-top": `${findDialogTop}px` }}>
-              <header className="find-dialog-header" onPointerDown={startFindDialogDrag} onPointerMove={moveFindDialog} onPointerUp={endFindDialogDrag} onPointerCancel={endFindDialogDrag}>
-                <strong>Find in loaded plans</strong>
-                <button type="button" onClick={closeFind} aria-label="Close find panel" title="Close find panel">×</button>
-              </header>
-              <div className="find-dialog-content">
-                <label className="find-dialog-label">
-                  Search words or phrases <span>(separate multiple terms with commas)</span>
-                  <input ref={findInputRef} type="search" value={findQuery} placeholder="e.g. fence, gate, dumpster" aria-label="Search text across all loaded plan PDFs"
-                    onChange={(event) => { findRequestRef.current++; setFindBusy(false); setFindQuery(event.target.value); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans."); }}
-                    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (findResults.length && findResultQuery === findQuery.trim().toLocaleLowerCase()) moveFind(event.shiftKey ? -1 : 1); else runFind(); } }} />
-                </label>
-                <section className="find-suggestions-section" aria-label="Scope suggestions">
-                  <div className="find-suggestions-heading">
-                    <span>Scope suggestions · click a name to include or exclude it</span>
-                    <button type="button" onClick={() => setFindSuggestions([...DEFAULT_SCOPE_TERMS])} disabled={findSuggestions.length === DEFAULT_SCOPE_TERMS.length && findSuggestions.every((term, index) => term === DEFAULT_SCOPE_TERMS[index])}>Restore defaults</button>
-                  </div>
-                  <div className="find-suggestions">
-                    {findSuggestions.map((term) => {
-                      const selected = parseFindTerms(findQuery).some((item) => item.toLocaleLowerCase() === term.toLocaleLowerCase());
-                      return <span className="find-suggestion" key={term}>
-                        <button className="find-suggestion-toggle" type="button" aria-pressed={selected} onClick={() => {
-                          const terms = parseFindTerms(findQuery);
-                          const next = selected ? terms.filter((item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase()) : [...terms, term];
-                          findRequestRef.current++; setFindBusy(false); setFindQuery(next.join(", ")); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
-                        }}>{term}</button>
-                        <button className="find-suggestion-remove" type="button" aria-label={`Remove ${term} suggestion`} title={`Remove ${term} suggestion`} onClick={() => {
-                          setFindSuggestions((current) => removeFindSuggestion(current, term));
-                          const next = parseFindTerms(findQuery).filter((item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase());
-                          findRequestRef.current++; setFindBusy(false); setFindQuery(next.join(", ")); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
-                        }}>×</button>
-                      </span>;
-                    })}
-                  </div>
-                  <form className="find-add-suggestion" onSubmit={(event) => {
-                    event.preventDefault();
-                    const additions = parseFindTerms(findSuggestionInput);
-                    if (!additions.length) return;
-                    setFindSuggestions((current) => addFindSuggestions(current, additions));
-                    const terms = parseFindTerms(findQuery);
-                    setFindQuery([...new Map([...terms, ...additions].map((term) => [term.toLocaleLowerCase(), term])).values()].join(", "));
-                    setFindSuggestionInput(""); findRequestRef.current++; setFindBusy(false); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
-                  }}>
-                    <input type="text" value={findSuggestionInput} onChange={(event) => setFindSuggestionInput(event.target.value)} placeholder="Add a scope suggestion" aria-label="New scope suggestion" />
-                    <button type="submit" disabled={!parseFindTerms(findSuggestionInput).length || findSuggestions.length >= 40}>Add</button>
-                  </form>
-                </section>
-                <div className="find-dialog-actions">
-                  <button className="find-run-button" type="button" onClick={() => runFind()} disabled={findBusy || !parseFindTerms(findQuery).length}>
-                    {findBusy ? "Scanning…" : "Find all"}
-                  </button>
-                  <button className="find-mark-button" type="button" onClick={() => setFindMarkAll((value) => !value)} aria-pressed={findMarkAll} title="Show or hide highlights for every search match">
-                    {findMarkAll ? "✓ Mark all matches" : "Mark all matches"}
-                  </button>
-                  {findResults.length > 0 && <span className="find-result-count">{(findIndex + 1).toLocaleString()} / {findResults.length.toLocaleString()}</span>}
-                  <button type="button" onClick={() => moveFind(-1)} disabled={!findResults.length || findBusy} title="Previous match" aria-label="Previous match"><Icon name="chevronUp" size={13} /></button>
-                  <button type="button" onClick={() => moveFind(1)} disabled={!findResults.length || findBusy} title="Next match" aria-label="Next match"><Icon name="chevronDown" size={13} /></button>
-                </div>
-                <div className="find-dialog-status" aria-live="polite">
-                  {findResults.length && !findBusy ? `${findResults.length.toLocaleString()} matches in ${new Set(findResults.map((hit) => hit.file)).size} plans. Press Enter to move to the next match.` : findMessage || `${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"} will be searched.`}
-                </div>
-                <div className="find-dialog-help">Only selectable PDF text is searchable; scanned pages may need OCR. Drag this title bar to move the panel. Escape or click outside to close.</div>
-              </div>
-            </section>
-          </div>, document.body,
-        )}
-        <div className="toolbar-spacer" style={{ flex: 1 }} />
-        <button onClick={() => setShowReport(true)} disabled={!conditions.length} title="Open the takeoff report — per-condition breakdown with waste, plus CSV / JSON export."
-          style={{ padding: "8px 14px", border: "none", background: conditions.length ? "var(--ink)" : "var(--text-faint)", color: "var(--paper-bright)", cursor: conditions.length ? "pointer" : "default", fontWeight: 700, fontFamily: "var(--f-mono)", fontSize: 11, letterSpacing: "0.12em", textTransform: "none" }}>Report</button>
-        <WorkspaceHelp metadata={projectMetadata} name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
-        {cloudAccount?.user ? <button type="button" className="account-profile-button" ref={(el) => { if (el) el.parentElement.style.setProperty("--profile-button-width", `${el.getBoundingClientRect().width}px`); }} aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><AccountAvatar profile={cloudAccount.identity} /><span>{cloudAccount.identity.name}</span></button> : <button type="button" className="account-sign-in-button" onClick={() => setCloudView("projects")} disabled={!cloudAccount?.ready} aria-label="Sign in" title="Sign in to your account">Sign in</button>}
       {/* open-sheet tabs — what you opened from the gallery; click to view,  
           ⊞ to side-by-side, ✕ to close; the dropdown lists every open sheet */}
       {openTabs.length > 0 && (
@@ -5765,6 +5707,10 @@ export default function TakeoffCanvas() {
           )}
         </div>
       )}
+          </>}
+          takeoff={<>
+        <button onClick={() => setShowReport(true)} disabled={!conditions.length} title="Open the takeoff report — per-condition breakdown with waste, plus CSV / JSON export."
+          style={{ padding: "8px 14px", border: "none", background: conditions.length ? "var(--ink)" : "var(--text-faint)", color: "var(--paper-bright)", cursor: conditions.length ? "pointer" : "default", fontWeight: 700, fontFamily: "var(--f-mono)", fontSize: 11, letterSpacing: "0.12em", textTransform: "none" }}>Report</button>
         <div className="toolbar-sheet-tools" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, paddingTop: 14, minWidth: 0 }}>
         {/* Presentation only: rail controls own their anchors and share these actions. */}
         <div style={{ display: "none" }}>
@@ -5888,18 +5834,6 @@ export default function TakeoffCanvas() {
           </span>
         )}
         </div>
-        {/* Deliberately subtle, not a button: local-first app, cloud mode is an
-            opt-in extra. Only when ALREADY signed in (never a sign-in entry
-            point in the toolbar — that lives solely on the landing link), no
-            cloud project is open, and the build names a Projects root. */}
-        {!cloudMode && googleUser && isGoogleConfigured() && projectHomeFolderId() && (
-          <Link to="/projects" style={{ fontSize: 11.5, color: "var(--ink-muted)", whiteSpace: "nowrap" }}>
-            browse team projects
-          </Link>
-        )}
-        <AccountChip note={cloudMode ? "Synced to Google Drive" : "Local workspace"} onOpenChange={onMenuDepth} />
-      </div>
-
       {/* quick-access condition palette — its own slim band under the toolbar
           (like the sheet-tabs / conditions-strip rows), not crammed into the
           already-wrapping top bar. A curated ≤9 pinned conditions for one-click
@@ -5966,6 +5900,77 @@ export default function TakeoffCanvas() {
       )}
 
 
+          </>}
+        />
+        {findOpen && createPortal(
+          <div className="find-dialog-shade" onClick={(event) => { if (event.target === event.currentTarget) closeFind(); }}>
+            <section ref={findDialogRef} className="find-all-dialog" role="dialog" aria-modal="true" aria-label="Find text across loaded plans"
+              style={{ "--find-dialog-x": `${findDialogOffset.x}px`, "--find-dialog-y": `${findDialogOffset.y}px`, "--find-dialog-top": `${findDialogTop}px` }}>
+              <header className="find-dialog-header" onPointerDown={startFindDialogDrag} onPointerMove={moveFindDialog} onPointerUp={endFindDialogDrag} onPointerCancel={endFindDialogDrag}>
+                <strong>Find in loaded plans</strong>
+                <button type="button" onClick={closeFind} aria-label="Close find panel" title="Close find panel">×</button>
+              </header>
+              <div className="find-dialog-content">
+                <label className="find-dialog-label">
+                  Search words or phrases <span>(separate multiple terms with commas)</span>
+                  <input ref={findInputRef} type="search" value={findQuery} placeholder="e.g. fence, gate, dumpster" aria-label="Search text across all loaded plan PDFs"
+                    onChange={(event) => { findRequestRef.current++; setFindBusy(false); setFindQuery(event.target.value); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans."); }}
+                    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (findResults.length && findResultQuery === findQuery.trim().toLocaleLowerCase()) moveFind(event.shiftKey ? -1 : 1); else runFind(); } }} />
+                </label>
+                <section className="find-suggestions-section" aria-label="Scope suggestions">
+                  <div className="find-suggestions-heading">
+                    <span>Scope suggestions · click a name to include or exclude it</span>
+                    <button type="button" onClick={() => setFindSuggestions([...DEFAULT_SCOPE_TERMS])} disabled={findSuggestions.length === DEFAULT_SCOPE_TERMS.length && findSuggestions.every((term, index) => term === DEFAULT_SCOPE_TERMS[index])}>Restore defaults</button>
+                  </div>
+                  <div className="find-suggestions">
+                    {findSuggestions.map((term) => {
+                      const selected = parseFindTerms(findQuery).some((item) => item.toLocaleLowerCase() === term.toLocaleLowerCase());
+                      return <span className="find-suggestion" key={term}>
+                        <button className="find-suggestion-toggle" type="button" aria-pressed={selected} onClick={() => {
+                          const terms = parseFindTerms(findQuery);
+                          const next = selected ? terms.filter((item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase()) : [...terms, term];
+                          findRequestRef.current++; setFindBusy(false); setFindQuery(next.join(", ")); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
+                        }}>{term}</button>
+                        <button className="find-suggestion-remove" type="button" aria-label={`Remove ${term} suggestion`} title={`Remove ${term} suggestion`} onClick={() => {
+                          setFindSuggestions((current) => removeFindSuggestion(current, term));
+                          const next = parseFindTerms(findQuery).filter((item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase());
+                          findRequestRef.current++; setFindBusy(false); setFindQuery(next.join(", ")); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
+                        }}>×</button>
+                      </span>;
+                    })}
+                  </div>
+                  <form className="find-add-suggestion" onSubmit={(event) => {
+                    event.preventDefault();
+                    const additions = parseFindTerms(findSuggestionInput);
+                    if (!additions.length) return;
+                    setFindSuggestions((current) => addFindSuggestions(current, additions));
+                    const terms = parseFindTerms(findQuery);
+                    setFindQuery([...new Map([...terms, ...additions].map((term) => [term.toLocaleLowerCase(), term])).values()].join(", "));
+                    setFindSuggestionInput(""); findRequestRef.current++; setFindBusy(false); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
+                  }}>
+                    <input type="text" value={findSuggestionInput} onChange={(event) => setFindSuggestionInput(event.target.value)} placeholder="Add a scope suggestion" aria-label="New scope suggestion" />
+                    <button type="submit" disabled={!parseFindTerms(findSuggestionInput).length || findSuggestions.length >= 40}>Add</button>
+                  </form>
+                </section>
+                <div className="find-dialog-actions">
+                  <button className="find-run-button" type="button" onClick={() => runFind()} disabled={findBusy || !parseFindTerms(findQuery).length}>
+                    {findBusy ? "Scanning…" : "Find all"}
+                  </button>
+                  <button className="find-mark-button" type="button" onClick={() => setFindMarkAll((value) => !value)} aria-pressed={findMarkAll} title="Show or hide highlights for every search match">
+                    {findMarkAll ? "✓ Mark all matches" : "Mark all matches"}
+                  </button>
+                  {findResults.length > 0 && <span className="find-result-count">{(findIndex + 1).toLocaleString()} / {findResults.length.toLocaleString()}</span>}
+                  <button type="button" onClick={() => moveFind(-1)} disabled={!findResults.length || findBusy} title="Previous match" aria-label="Previous match"><Icon name="chevronUp" size={13} /></button>
+                  <button type="button" onClick={() => moveFind(1)} disabled={!findResults.length || findBusy} title="Next match" aria-label="Next match"><Icon name="chevronDown" size={13} /></button>
+                </div>
+                <div className="find-dialog-status" aria-live="polite">
+                  {findResults.length && !findBusy ? `${findResults.length.toLocaleString()} matches in ${new Set(findResults.map((hit) => hit.file)).size} plans. Press Enter to move to the next match.` : findMessage || `${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"} will be searched.`}
+                </div>
+                <div className="find-dialog-help">Only selectable PDF text is searchable; scanned pages may need OCR. Drag this title bar to move the panel. Escape or click outside to close.</div>
+              </div>
+            </section>
+          </div>, document.body,
+        )}
       </div>
 
       {/* compact conditions strip — OPTIONAL small-project mode. The docked

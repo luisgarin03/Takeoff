@@ -863,3 +863,19 @@ The selected-folder browser puts `.otk` files first, then folders ordered newest
 **Create New Source Folder:** in the source-folder screen, choose a parent location in your Google Drive for desktop mount. Confirm creation of the fixed `Estimate save data/Projects` structure. If the source already exists, choose **Use Existing Folder**, **Choose Another Location**, or **Cancel**. Successful creation/reuse automatically remembers the source and opens Projects; no second Locate action is needed. Cancellation before confirmation creates nothing. Creation and remembered-source setup access only the chosen parent and immediate Projects listing, without a recursive drive scan. The browser remembers a directory handle rather than a hard-coded drive letter. It cannot reliably verify that the selected location is synced by Google Drive.
 
 When signed in, your account avatar and display name appear beside the Beitzell Estimating logo. Select either to open Profile, view your email, edit your display name, or log out. The default name/photo come from Google account metadata; a saved display name takes precedence. Missing or unavailable photos use initials.
+
+## Toolbar tabs and Profile
+
+Use **Project** for project files, save status, Whiteboard and User Guide;
+**Sheets** for gallery, page navigation, open sheets and bookmarks; and
+**Takeoff** for Report, aids, scale, labels, commands and conditions. Tab selection
+preserves the current estimate and drawing tool. Click the selected tab again to
+close its controls; click any tab to open its controls. Logo and account remain
+visible when all tabs are closed. Arrow keys, Home and End move
+between focused toolbar tabs. At narrow widths, scroll the segmented tabs and
+active controls region. Existing canvas shortcuts remain available.
+
+Open your account button to edit your display name, view your authenticated email,
+or log out. **Subscription** expands Starter ($40/month), Professional ($50/month),
+and Business ($60/month). Paid checkout is not connected; choosing a plan displays
+an explanation and does not activate a subscription.

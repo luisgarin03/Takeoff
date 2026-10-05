@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — toolbar and Profile
+
+- Group estimating controls into Project, Sheets and Takeoff tabs, keeping logo/account outside.
+- Preserve mounted control state and use scroll-safe dropdowns on mobile.
+- Restyle Profile with account cards and configurable $40/$50/$60 subscription plans.
+- Add a billing adapter boundary; checkout remains unavailable until a provider/backend is connected.
+
 All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased

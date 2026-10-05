@@ -1,0 +1,48 @@
+/* Scoped chrome: existing canvas, palettes and user theme tokens stay intact. */
+:root .tabbed-toolbar-stack { max-width: 100%; overflow: visible; max-height: none; }
+.estimating-toolbar { min-width: 0; color: var(--ink); background: var(--paper-bright); border: 1px solid var(--ink-faint); border-radius: 10px; }
+.estimating-toolbar-header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; min-width: 0; border-bottom: 1px solid var(--ink-faint); }
+.estimating-toolbar-logo { flex: 0 1 auto; min-width: 0; max-width: 28%; overflow-wrap: anywhere; }
+.estimating-toolbar-logo strong { display: block; }
+.estimating-toolbar-tabs { display: flex; flex: 0 1 auto; min-width: 0; padding: 4px; gap: 3px; overflow-x: auto; background: var(--paper-shadow); border: 1px solid var(--ink-faint); border-radius: 9px; scrollbar-width: thin; }
+.estimating-toolbar-tabs button { flex: 0 0 auto; min-height: 40px; padding: 6px 12px; border: 1px solid transparent; border-radius: 6px !important; background: transparent; color: var(--ink-muted); font: 600 12px var(--f-body); }
+.estimating-toolbar-tabs button:hover { color: var(--ink); }
+.estimating-toolbar-tabs button[aria-selected="true"] { background: var(--paper-bright); color: var(--ink); border-color: var(--ink-faint); box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.estimating-toolbar :focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+.estimating-toolbar-account { margin-left: auto; display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 0; }
+.estimating-toolbar-account button { min-height: 44px; max-width: 160px; }
+.estimating-toolbar-account .account-sign-in-button { border: 1px solid var(--ink-faint); background: transparent; color: var(--ink); padding: 6px 10px; }
+.estimating-toolbar-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; min-width: 0; max-height: 34dvh; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.estimating-toolbar-panel[hidden] { display: none; }
+.estimating-toolbar-panel > * { max-width: 100%; }
+.estimating-toolbar-panel button, .estimating-toolbar-panel select, .estimating-toolbar-panel input:not([type="range"]) { min-height: 40px; border-radius: 6px !important; }
+.estimating-toolbar-panel .toolbar-sheet-tools { border: 0; padding-left: 0; row-gap: 22px !important; }
+.estimating-toolbar-panel .toolbar-cluster { flex-wrap: wrap; max-width: 100%; }
+.estimating-toolbar-panel .toolbar-sheet-tabs { width: 100%; }
+.estimating-toolbar-panel .glass-toolbar-strip { width: 100%; background: var(--paper-bright) !important; box-shadow: none; }
+:root .estimating-toolbar-panel .glass-toolbar { --toolbar-control-height: 40px; }
+:root .estimating-toolbar-panel .sheet-tab { height: auto; max-width: 100% !important; }
+.estimating-toolbar-panel .sheet-tab-icon { min-width: 36px; }
+@media (max-width: 600px) {
+  .estimating-toolbar-header { gap: 6px; padding: 6px; }
+  .estimating-toolbar-logo { max-width: 25%; }
+  .estimating-toolbar-logo strong { font-size: 12px !important; }
+  .estimating-toolbar-tabs { flex: 1 1 0; }
+  .estimating-toolbar-tabs button { min-height: 44px; padding: 6px 10px; }
+  .estimating-toolbar-account .account-profile-button > span:last-child { display: none; }
+  .estimating-toolbar-account button { max-width: 74px; }
+  .estimating-toolbar-panel { padding: 10px 8px; max-height: 30dvh; }
+  .estimating-toolbar-panel button, .estimating-toolbar-panel select, .estimating-toolbar-panel input:not([type="range"]) { min-height: 44px; }
+  :root .estimating-toolbar-panel .glass-toolbar { --toolbar-control-height: 44px; }
+}
+.estimating-toolbar { pointer-events: auto; }
+.tabbed-toolbar-stack.is-hidden .estimating-toolbar { pointer-events: none; visibility: hidden; }
+.estimating-toolbar-panel .condition-name-input { max-width: 100%; min-width: 0; }
+.estimating-toolbar-panel button[title^="#"], .estimating-toolbar-panel button[title="No fill"] { min-width: 32px; min-height: 40px; }
+@media (max-width: 600px), (pointer: coarse) {
+  .estimating-toolbar-panel button { min-width: 44px; min-height: 44px; }
+  .estimating-toolbar-panel button[title^="#"], .estimating-toolbar-panel button[title="No fill"] { min-width: 44px; min-height: 44px; }
+}
+.estimating-toolbar-account .account-sign-in-button { white-space: nowrap; max-width: none; }
+.estimating-toolbar-panel .sheet-tab-icon { align-items: center; justify-content: center; }
+:root[data-theme] .estimating-toolbar-panel .glass-toolbar-strip { background: var(--paper-bright) !important; box-shadow: none; }
