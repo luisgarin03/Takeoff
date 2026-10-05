@@ -19,6 +19,8 @@
     "allowJs": true,
     "checkJs": false,
     "strict": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] },
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true

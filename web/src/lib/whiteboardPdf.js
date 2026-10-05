@@ -1,4 +1,4 @@
-import { base64ToBytes, validateWhiteboard } from "./whiteboard.js";
+import { base64ToBytes, validateWhiteboard, whiteboardDrawingBounds, whiteboardImageCrop } from "./whiteboard.js";
 import { projectFilename } from "./projectFile.js";
 
 // Whiteboard.jsx renders w/h directly as CSS lengths before its camera scale.
@@ -13,7 +13,7 @@ const MAX_TOTAL_RASTER_PIXELS = 64_000_000;
 /** @typedef {BoardRect & {id: string, kind: string, text: string, color: string}} BoardNote */
 /** @typedef {{
  * renderNote?: (item: BoardNote, rect: BoardRect, signal?: AbortSignal) => Promise<Uint8Array>,
- * readImage?: (bytes: Uint8Array, type: string, signal?: AbortSignal) => Promise<{bytes: Uint8Array, type: string, width: number, height: number}>,
+ * readImage?: (bytes: Uint8Array, type: string, crop?: {x:number,y:number,w:number,h:number} | null, signal?: AbortSignal) => Promise<{bytes: Uint8Array, type: string, width: number, height: number}>,
  * renderPdfPage?: (bytes: Uint8Array, page: number, rect: BoardRect, signal?: AbortSignal) => Promise<Uint8Array>
  * }} BoardPdfRenderer */
 
@@ -78,7 +78,8 @@ function exportSnapshot(board, allowEmpty = false) {
   if (!Array.isArray(snapshot?.items)) throw new Error("Invalid whiteboard data.");
   snapshot.items = snapshot.items.filter((item) => !item.hidden && item.visible !== false && !item.deleted);
   snapshot.arrows = Array.isArray(snapshot.arrows) ? snapshot.arrows : [];
-  if (!allowEmpty && !snapshot.items.length && !snapshot.arrows.length) throw new Error("Nothing to export");
+  snapshot.rectangles = Array.isArray(snapshot.rectangles) ? snapshot.rectangles : [];
+  if (!allowEmpty && !snapshot.items.length && !snapshot.arrows.length && !snapshot.rectangles.length) throw new Error("Nothing to export");
   for (const item of snapshot.items) {
     // Fail closed for future scene types instead of silently exporting only
     // their untransformed boxes. Today's board supports note/file cards only.
@@ -124,7 +125,11 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
         prepared.push({ item, rect });
         continue;
       }
-      const key = asset.type === "application/pdf" ? `${asset.id}:${item.page}` : asset.id;
+      const crop = asset.type.startsWith("image/") ? whiteboardImageCrop(item) : null;
+      // One source asset may appear more than once with a different non-destructive
+      // crop. Cache decoded/export-ready pixels by both source and crop so one
+      // item's crop can never leak into another instance of that image.
+      const key = asset.type === "application/pdf" ? `${asset.id}:${item.page}` : `${asset.id}:${JSON.stringify(crop)}`;
       let file = files.get(key);
       if (!file) {
         if (asset.type === "application/pdf") {
@@ -153,7 +158,7 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
           file = { kind: "pdf", embedded, raster, bytes, page: item.page, rotation, width, height };
         } else {
           if (!renderer?.readImage) throw new Error("Image decoder is unavailable. Reload the app and try again.");
-          const image = await renderer.readImage(base64ToBytes(asset.data), asset.type, signal);
+          const image = await renderer.readImage(base64ToBytes(asset.data), asset.type, crop, signal);
           budget(image.width, image.height);
           const embedded = image.type === "image/jpeg" ? await doc.embedJpg(image.bytes) : await doc.embedPng(image.bytes);
           file = { kind: "image", embedded, width: image.width, height: image.height };
@@ -176,7 +181,12 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     x: Math.min(from[0], to[0]), y: Math.min(from[1], to[1]),
     w: Math.max(1, Math.abs(to[0] - from[0])), h: Math.max(1, Math.abs(to[1] - from[1])),
   }));
-  const outputBounds = bounds || boardPdfBounds([...prepared.map(({ rect }) => rect), ...arrowRects]);
+  const exportRectangles = snapshot.rectangles.filter((rectangle) => {
+    const rect = whiteboardDrawingBounds(rectangle, "rectangle");
+    return rect && (!region || boardRectsIntersect(rect, region));
+  });
+  const rectangleRects = exportRectangles.map((rectangle) => whiteboardDrawingBounds(rectangle, "rectangle"));
+  const outputBounds = bounds || boardPdfBounds([...prepared.map(({ rect }) => rect), ...arrowRects, ...rectangleRects]);
   const page = doc.addPage([outputBounds.width, outputBounds.height]);
   for (const setBox of ["setMediaBox", "setCropBox", "setTrimBox", "setBleedBox", "setArtBox"]) page[setBox](0, 0, outputBounds.width, outputBounds.height);
   page.drawRectangle({ x: 0, y: 0, width: outputBounds.width, height: outputBounds.height, color: rgb(1, 1, 1) });
@@ -225,6 +235,16 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
       const path = vertices.map((p, index) => `${index ? "L" : "M"}${p.x} ${-p.y}`).join(" ") + " Z";
       page.drawSvgPath(path, { x: 0, y: 0, color, opacity: .95 });
     }
+  }
+  // Match the live SVG's fixed layer order: cards, arrows, then rectangles.
+  for (const rectangle of exportRectangles) {
+    checkCancelled();
+    const rect = whiteboardDrawingBounds(rectangle, "rectangle");
+    const place = boardPdfPlacement(rect, outputBounds);
+    const colorHex = rectangle.color || "#1f3fc7";
+    const color = rgb(parseInt(colorHex.slice(1, 3), 16) / 255, parseInt(colorHex.slice(3, 5), 16) / 255, parseInt(colorHex.slice(5, 7), 16) / 255);
+    page.drawRectangle({ ...place, borderColor: color,
+      borderWidth: (Number.isFinite(rectangle.strokeWidth) ? rectangle.strokeWidth : 2.5) * BOARD_POINT_SCALE, borderOpacity: .95 });
   }
   checkCancelled();
   return { bytes: await doc.save(), filename: whiteboardPdfFilename(projectName, boardName), bounds: outputBounds };

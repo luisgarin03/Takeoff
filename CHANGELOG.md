@@ -11,6 +11,8 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased
 
+- Added a native Fence Material Calculator with seven extensible, rule-driven calculators; scoped shadcn/ui components; instant validation and order rounding; user presets/favorites; active-takeoff LF/EA import; project, cloud, and `.otk` persistence; and conversion of selected results into the existing Supporting Materials estimate lines.
+
 - Simplified the empty landing page to its background and centered card. Added Open Recent shortcuts with saved author and last-modified details.
 
 - Canvas tool icons no longer appear over the landing page or plan gallery on small screens; they render only while viewing a loaded plan.
@@ -39,6 +41,9 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 - On-canvas note and callout backgrounds use the browser's measured Inter glyph width plus even horizontal breathing room on both sides of captions.
 
 ### Added
+- Whiteboard arrows are now normal selectable objects: a zoom-independent hit area covers the shaft and arrowhead, selected endpoints can be adjusted, whole arrows can be moved or deleted, and every edit participates in the existing undo/redo and save paths.
+- Added a Whiteboard rectangle tool with a transparent colored outline, live drag preview in every direction, shared selection/move/delete behavior, edge/corner resize handles, persistence, and full/selected-area PDF export.
+- Added non-destructive crop editing for pasted and imported Whiteboard images. Eight edge/corner handles, an outside-area mask, Apply/Cancel, re-cropping, undo/redo, backward-compatible crop metadata, and PDF export preserve the original embedded image while showing only the committed crop.
 - Custom browser-local Ctrl+key shortcuts for every markup tool. Assign from **Draw > Markup**, see the active binding in the menu, and clear or remap it without changing project save files.
 - Whiteboard export can now download the full board with the renamed **Export whiteboard as PDF** action or a user-drawn rectangular area. Cropped exports use the selected rectangle as page bounds and clip notes, file content and arrows without changing project save data.
 - Colored arrow markup in both whiteboard and plan drawing: drag over whiteboard references with the selected palette color, or click two points using **Draw > Markup > Arrow** on a sheet. Whiteboard arrows persist compatibly in the existing optional project data and are included in PDF exports.

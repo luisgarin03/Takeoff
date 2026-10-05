@@ -49,6 +49,24 @@ test("whiteboard arrows export over their own board bounds in the selected color
   await assertPage(result, 52.5, 30);
 });
 
+test("whiteboard rectangles export as vector drawings and define rectangle-only board bounds", async () => {
+  const b = { ...board([]), rectangles: [{ id: "rect-1", x: -20, y: 30, w: 200, h: 100, color: "#DC2626", strokeWidth: 4 }] };
+  const result = await buildWhiteboardPdf(b, { renderer });
+  assert.deepEqual(result.bounds, { minX: -20, minY: 30, maxX: 180, maxY: 130, width: 150, height: 75 });
+  await assertPage(result, 150, 75);
+});
+
+test("selected export regions include intersecting rectangles and exclude distant ones", async () => {
+  const b = { ...board([]), rectangles: [
+    { id: "inside", x: 60, y: 60, w: 80, h: 40, color: "#2563EB" },
+    { id: "outside", x: 500, y: 500, w: 100, h: 100, color: "#DC2626" },
+  ] };
+  const region = { x: 50, y: 50, w: 200, h: 100 };
+  const result = await buildWhiteboardPdf(b, { region, renderer });
+  assert.deepEqual(result.bounds, { minX: 50, minY: 50, maxX: 250, maxY: 150, width: 150, height: 75 });
+  await assertPage(result, 150, 75);
+});
+
 test("selected export region sets exact PDF bounds and clips intersecting cards while skipping other cards", async () => {
   const seen: string[] = [];
   const items = [note({ x: 0, y: 0 }), note({ id: "outside", x: 500, y: 500 })];
@@ -137,9 +155,42 @@ test("PDF annotations use a complete page raster rather than disappearing during
 });
 
 test("image content bounds match contain sizing, not its letterboxed card or viewport", async () => {
-  const result = await buildWhiteboardPdf(board([file()], [asset(png, "image/png")]), { renderer });
+  let receivedCrop: unknown = undefined;
+  const result = await buildWhiteboardPdf(board([file()], [asset(png, "image/png")]), { renderer: {
+    ...renderer, readImage: async (bytes, type, crop) => { receivedCrop = crop; return { bytes, width: 1, height: 1, type }; },
+  } });
   await assertPage(result, .75, .75);
+  assert.deepEqual(receivedCrop, { x: 0, y: 0, w: 1, h: 1 }, "legacy images use their complete original pixels");
   assert.deepEqual(boardContentRect(file(), { width: 800, height: 400 }), { x: -399, y: 339, w: 400, h: 200 });
+});
+
+test("image crops are passed to the renderer non-destructively and control exported aspect and bounds", async () => {
+  const crop = { x: .25, y: .2, w: .5, h: .25 };
+  const seen: unknown[] = [];
+  const result = await buildWhiteboardPdf(board([file({ crop })], [asset(png, "image/png")]), { renderer: {
+    ...renderer,
+    readImage: async (bytes, type, received) => {
+      seen.push(received);
+      return { bytes, type, width: 400, height: 100 };
+    },
+  } });
+  assert.deepEqual(seen, [crop]);
+  assert.deepEqual(result.bounds, { minX: -399, minY: 389, maxX: 1, maxY: 489, width: 300, height: 75 });
+  await assertPage(result, 300, 75);
+});
+
+test("image export cache distinguishes two crops of the same source asset", async () => {
+  const calls: unknown[] = [];
+  const crops = [{ x: 0, y: 0, w: .5, h: 1 }, { x: .5, y: 0, w: .5, h: 1 }];
+  const items = [
+    file({ id: "left", crop: crops[0] }),
+    file({ id: "right", x: 100, crop: crops[1] }),
+  ];
+  await buildWhiteboardPdf(board(items, [asset(png, "image/png")]), { renderer: {
+    ...renderer,
+    readImage: async (bytes, type, crop) => { calls.push(crop); return { bytes, type, width: 100, height: 100 }; },
+  } });
+  assert.deepEqual(calls, crops);
 });
 
 test("future groups, card kinds, thick strokes and transforms fail explicitly instead of losing geometry", async () => {

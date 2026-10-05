@@ -14,19 +14,51 @@ export const WHITEBOARD_FILE_HEADER_COLORS = [
   { name: "Red", value: "#DC2626" },
   { name: "Cyan", value: "#0891B2" },
 ];
-export const emptyWhiteboard = () => ({ version: 1, items: [], assets: [], arrows: [] });
+export const WHITEBOARD_MIN_CROP_SIZE = 0.01;
+export const emptyWhiteboard = () => ({ version: 1, items: [], assets: [], arrows: [], rectangles: [] });
+
+const drawingColor = (value) => WHITEBOARD_FILE_HEADER_COLORS.find(({ value: supported }) =>
+  supported.toLowerCase() === String(value).toLowerCase())?.value || "#1f3fc7";
+
+export function normalizeWhiteboardImageCrop(crop) {
+  if (crop == null) return { x: 0, y: 0, w: 1, h: 1 };
+  if (typeof crop !== "object" || Array.isArray(crop) ||
+    ![crop.x, crop.y, crop.w, crop.h].every(Number.isFinite) ||
+    crop.x < 0 || crop.y < 0 || crop.w < WHITEBOARD_MIN_CROP_SIZE || crop.h < WHITEBOARD_MIN_CROP_SIZE ||
+    crop.x >= 1 || crop.y >= 1 || crop.x + crop.w > 1 + 1e-9 || crop.y + crop.h > 1 + 1e-9) return null;
+  // Absorb harmless floating-point drift at the right/bottom edge while still
+  // rejecting genuinely out-of-range project data above.
+  return { x: crop.x, y: crop.y, w: Math.min(crop.w, 1 - crop.x), h: Math.min(crop.h, 1 - crop.y) };
+}
+
+export function whiteboardImageCrop(item) {
+  return normalizeWhiteboardImageCrop(item?.crop) || { x: 0, y: 0, w: 1, h: 1 };
+}
+
+export function setWhiteboardImageCrop(board, id, crop) {
+  const normalized = normalizeWhiteboardImageCrop(crop);
+  if (!normalized) return board;
+  const assets = new Map((board.assets || []).map((asset) => [asset.id, asset]));
+  let changed = false;
+  const items = board.items.map((item) => {
+    const asset = assets.get(item.assetId);
+    if (item.id !== id || item.kind !== "file" || !asset?.type?.startsWith("image/")) return item;
+    const current = whiteboardImageCrop(item);
+    if (["x", "y", "w", "h"].every((key) => current[key] === normalized[key]) && Object.hasOwn(item, "crop")) return item;
+    changed = true;
+    return { ...item, crop: normalized };
+  });
+  return changed ? { ...board, items } : board;
+}
 
 export function sanitizeWhiteboardArrows(board) {
   if (!board || !Object.hasOwn(board, "arrows")) return board;
   if (!Array.isArray(board.arrows)) return { ...board, arrows: [] };
-  const colors = new Set(WHITEBOARD_FILE_HEADER_COLORS.map(({ value }) => value.toLowerCase()));
   const arrows = board.arrows.filter((arrow) => arrow &&
     Array.isArray(arrow.from) && arrow.from.length === 2 && arrow.from.every(Number.isFinite) &&
     Array.isArray(arrow.to) && arrow.to.length === 2 && arrow.to.every(Number.isFinite) &&
     Math.hypot(arrow.to[0] - arrow.from[0], arrow.to[1] - arrow.from[1]) > 0.01
-  ).map((arrow) => ({ ...arrow, color: typeof arrow.color === "string" && colors.has(arrow.color.toLowerCase())
-    ? WHITEBOARD_FILE_HEADER_COLORS.find(({ value }) => value.toLowerCase() === arrow.color.toLowerCase()).value
-    : "#1f3fc7" }));
+  ).map((arrow) => ({ ...arrow, color: drawingColor(arrow.color) }));
   if (arrows.length === board.arrows.length && arrows.every((arrow, index) => arrow === board.arrows[index])) return board;
   return { ...board, arrows };
 }
@@ -34,8 +66,82 @@ export function sanitizeWhiteboardArrows(board) {
 export function appendWhiteboardArrow(board, from, to, color = "#1f3fc7") {
   if (!Array.isArray(from) || from.length !== 2 || !Array.isArray(to) || to.length !== 2 || [...from, ...to].some((value) => !Number.isFinite(value)) ||
     Math.hypot(to[0] - from[0], to[1] - from[1]) < 1) return board;
-  const supported = WHITEBOARD_FILE_HEADER_COLORS.find(({ value }) => value.toLowerCase() === String(color).toLowerCase())?.value || "#1f3fc7";
-  return { ...board, arrows: [...(Array.isArray(board.arrows) ? board.arrows : []), { id: crypto.randomUUID(), from: [...from], to: [...to], color: supported }] };
+  return { ...board, arrows: [...(Array.isArray(board.arrows) ? board.arrows : []), { id: crypto.randomUUID(), from: [...from], to: [...to], color: drawingColor(color) }] };
+}
+
+export function sanitizeWhiteboardRectangles(board) {
+  if (!board || !Object.hasOwn(board, "rectangles")) return board;
+  if (!Array.isArray(board.rectangles)) return { ...board, rectangles: [] };
+  const ids = new Set();
+  const rectangles = board.rectangles.filter((rectangle) => {
+    if (!rectangle || typeof rectangle.id !== "string" || !rectangle.id || ids.has(rectangle.id) ||
+      ![rectangle.x, rectangle.y, rectangle.w, rectangle.h].every(Number.isFinite) ||
+      Math.abs(rectangle.x) > 1e7 || Math.abs(rectangle.y) > 1e7 ||
+      rectangle.w < 1 || rectangle.h < 1 || rectangle.w > 1e7 || rectangle.h > 1e7 ||
+      (rectangle.strokeWidth !== undefined && (!Number.isFinite(rectangle.strokeWidth) || rectangle.strokeWidth <= 0))) return false;
+    ids.add(rectangle.id);
+    return true;
+  }).map((rectangle) => ({ ...rectangle, color: drawingColor(rectangle.color),
+    ...(rectangle.strokeWidth === undefined ? {} : { strokeWidth: Math.min(64, Math.max(.25, rectangle.strokeWidth)) }) }));
+  if (rectangles.length === board.rectangles.length && rectangles.every((rectangle, index) => rectangle === board.rectangles[index])) return board;
+  return { ...board, rectangles };
+}
+
+export function appendWhiteboardRectangle(board, from, to, color = "#1f3fc7", strokeWidth = 2.5) {
+  if (!Array.isArray(from) || from.length !== 2 || !Array.isArray(to) || to.length !== 2 ||
+    [...from, ...to].some((value) => !Number.isFinite(value))) return board;
+  const x = Math.min(from[0], to[0]), y = Math.min(from[1], to[1]);
+  const w = Math.abs(to[0] - from[0]), h = Math.abs(to[1] - from[1]);
+  if (w < 1 || h < 1) return board;
+  const width = Number.isFinite(strokeWidth) ? Math.min(64, Math.max(.25, strokeWidth)) : 2.5;
+  return { ...board, rectangles: [...(Array.isArray(board.rectangles) ? board.rectangles : []),
+    { id: crypto.randomUUID(), x, y, w, h, color: drawingColor(color), strokeWidth: width }] };
+}
+
+function drawingCollection(kind) {
+  if (kind === "arrow" || kind === "arrows") return "arrows";
+  if (kind === "rectangle" || kind === "rect" || kind === "rectangles") return "rectangles";
+  return null;
+}
+
+export function updateWhiteboardDrawing(board, kind, id, changes) {
+  const collection = drawingCollection(kind);
+  if (!collection || typeof id !== "string" || !changes || typeof changes !== "object" || Array.isArray(changes)) return board;
+  const source = Array.isArray(board[collection]) ? board[collection] : [];
+  let changed = false;
+  const drawings = source.map((drawing) => {
+    if (drawing.id !== id) return drawing;
+    changed = true;
+    return { ...drawing, ...changes, id: drawing.id };
+  });
+  if (!changed) return board;
+  const next = { ...board, [collection]: drawings };
+  return collection === "arrows" ? sanitizeWhiteboardArrows(next) : sanitizeWhiteboardRectangles(next);
+}
+
+export function removeWhiteboardDrawing(board, kind, id) {
+  const collection = drawingCollection(kind);
+  if (!collection || typeof id !== "string" || !Array.isArray(board[collection])) return board;
+  const drawings = board[collection].filter((drawing) => drawing.id !== id);
+  return drawings.length === board[collection].length ? board : { ...board, [collection]: drawings };
+}
+
+/** @param {object} drawing @param {string | null} [kind] */
+export function whiteboardDrawingBounds(drawing, kind = null) {
+  const collection = drawingCollection(kind) || (Array.isArray(drawing?.from) && Array.isArray(drawing?.to) ? "arrows" : "rectangles");
+  if (collection === "arrows") {
+    if (!drawing || !Array.isArray(drawing.from) || !Array.isArray(drawing.to) ||
+      drawing.from.length !== 2 || drawing.to.length !== 2 || [...drawing.from, ...drawing.to].some((value) => !Number.isFinite(value))) return null;
+    return { x: Math.min(drawing.from[0], drawing.to[0]), y: Math.min(drawing.from[1], drawing.to[1]),
+      w: Math.max(1, Math.abs(drawing.to[0] - drawing.from[0])), h: Math.max(1, Math.abs(drawing.to[1] - drawing.from[1])) };
+  }
+  if (!drawing || ![drawing.x, drawing.y, drawing.w, drawing.h].every(Number.isFinite) || drawing.w <= 0 || drawing.h <= 0) return null;
+  return { x: drawing.x, y: drawing.y, w: drawing.w, h: drawing.h };
+}
+
+export function whiteboardHasContent(board) {
+  return !!(board && ((Array.isArray(board.items) && board.items.length) ||
+    (Array.isArray(board.arrows) && board.arrows.length) || (Array.isArray(board.rectangles) && board.rectangles.length)));
 }
 
 export function whiteboardFileHeaderColor(value) {
@@ -153,13 +259,19 @@ export function validateWhiteboard(board) {
   for (const item of board.items) {
     if (!item || typeof item.id !== "string" || !item.id || ids.has(item.id) || !["note", "file"].includes(item.kind) ||
       ![item.x, item.y, item.w, item.h].every(Number.isFinite) || Math.abs(item.x) > 1e7 || Math.abs(item.y) > 1e7 ||
-      item.w < 160 || item.h < 140 || item.w > 5000 || item.h > 5000) invalid();
+      item.w > 5000 || item.h > 5000) invalid();
     ids.add(item.id);
     if (item.kind === "note") {
-      if (typeof item.text !== "string" || item.text.length > 100000 || !Object.hasOwn(NOTE_COLORS, item.color)) invalid();
-    } else if (!assets.has(item.assetId) || !Number.isInteger(item.page) || item.page < 1 || item.page > 100000) invalid();
+      if (item.w < 160 || item.h < 140 || typeof item.text !== "string" || item.text.length > 100000 || !Object.hasOwn(NOTE_COLORS, item.color)) invalid();
+    } else {
+      const asset = assets.get(item.assetId);
+      if (!asset || !Number.isInteger(item.page) || item.page < 1 || item.page > 100000) invalid();
+      const hasCrop = Object.hasOwn(item, "crop");
+      if (hasCrop && (!asset.type.startsWith("image/") || !normalizeWhiteboardImageCrop(item.crop))) invalid();
+      if (item.w < (hasCrop ? 42 : 160) || item.h < (hasCrop ? 82 : 140)) invalid();
+    }
   }
-  return sanitizeWhiteboardArrows(sanitizeWhiteboardFileHeaderColors(board));
+  return sanitizeWhiteboardRectangles(sanitizeWhiteboardArrows(sanitizeWhiteboardFileHeaderColors(board)));
 }
 
 export function removeBoardItem(board, id) {
@@ -184,9 +296,7 @@ export function fitBoard(items, width, height) {
 }
 
 export function fitWhiteboard(board, width, height) {
-  const arrows = Array.isArray(board?.arrows) ? board.arrows.map(({ from, to }) => ({
-    x: Math.min(from[0], to[0]), y: Math.min(from[1], to[1]),
-    w: Math.max(1, Math.abs(to[0] - from[0])), h: Math.max(1, Math.abs(to[1] - from[1])),
-  })) : [];
-  return fitBoard([...(board?.items || []), ...arrows], width, height);
+  const arrows = Array.isArray(board?.arrows) ? board.arrows.map((drawing) => whiteboardDrawingBounds(drawing, "arrow")).filter(Boolean) : [];
+  const rectangles = Array.isArray(board?.rectangles) ? board.rectangles.map((drawing) => whiteboardDrawingBounds(drawing, "rectangle")).filter(Boolean) : [];
+  return fitBoard([...(board?.items || []), ...arrows, ...rectangles], width, height);
 }

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { defineConfig, loadEnv } from "vite";
 import { assertPublicCloudEnv } from "./src/lib/supabase/config.js";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
 
 // The one source of truth for the app version — package.json — inlined as
 // __APP_VERSION__ so contributions can carry generator_version without a
@@ -29,6 +30,7 @@ export default defineConfig(({ mode }) => {
       return html.replaceAll("%APP_NAME%", escaped);
     },
   }],
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   server: {
     port: 5173,

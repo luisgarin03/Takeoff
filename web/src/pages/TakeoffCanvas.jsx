@@ -45,7 +45,9 @@ import TrackpadSettings from "../components/TrackpadSettings.jsx";
 import DiagnosticsMonitor from "../components/DiagnosticsMonitor.jsx";
 import PlanNavigator from "../components/PlanNavigator.jsx";
 import Whiteboard from "../components/Whiteboard.jsx";
-import { emptyWhiteboard, sanitizeWhiteboardFileHeaderColors } from "../lib/whiteboard.js";
+import { emptyWhiteboard, sanitizeWhiteboardFileHeaderColors, whiteboardHasContent } from "../lib/whiteboard.js";
+import FenceCalculatorPanel from "../features/fenceCalculator/components/FenceCalculatorPanel.jsx";
+import { calculationToConditionMaterials, emptyFenceCalculatorProject, fenceCalculatorProjectHasContent, getCalculatorDefinition, sanitizeFenceCalculatorProject } from "../features/fenceCalculator/index.ts";
 import ReportPanel from "../components/ReportPanel.jsx";
 import RevisionsPanel from "../components/RevisionsPanel.jsx";
 import TakeoffsPanel, { clampPanelW, PANEL_EXPANSION, CONDITION_DND_MIME, ConditionAppearanceEditor } from "../components/TakeoffsPanel.jsx";
@@ -545,6 +547,8 @@ export default function TakeoffCanvas() {
   const [whiteboard, setWhiteboard] = useState(emptyWhiteboard);
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [whiteboardBusy, setWhiteboardBusy] = useState(false);
+  const [fenceCalculatorProject, setFenceCalculatorProject] = useState(emptyFenceCalculatorProject);
+  const [fenceCalculatorOpen, setFenceCalculatorOpen] = useState(false);
   const [clientInfo, setClientInfo] = useState({});      // per-project client/job fields for branded output; additive payload field
   const fileInputRef = useRef(null);                    // hidden <input type=file> for "Open PDF"
   const projectInputRef = useRef(null);
@@ -1300,6 +1304,8 @@ export default function TakeoffCanvas() {
   // defensive path as a page reload.
   const hydrate = (a) => {
     setWhiteboard(sanitizeWhiteboardFileHeaderColors(a.whiteboard || emptyWhiteboard()));
+    setFenceCalculatorProject(sanitizeFenceCalculatorProject(a.fence_calculator));
+    setFenceCalculatorOpen(false);
     // Same cross-load-transient gap as the panel epoch bump below: a revision
     // Restore runs in-place with the same sheet keys, so a surviving zoneCheck
     // would immediately re-classify the RESTORED shape set against the
@@ -1910,7 +1916,7 @@ export default function TakeoffCanvas() {
     // the default — omits the key, so an old imperial project's payload is
     // byte-identical on round-trip; only a metric project carries the field.
     const metadata = touch ? withProjectEditor(touchProjectMetadata(projectMetadata), cloudAccount?.user, cloudAccount?.profileName) : projectMetadata;
-    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(whiteboard.items.length ? { whiteboard } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
+    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(whiteboardHasContent(whiteboard) ? { whiteboard } : {}), ...(fenceCalculatorProjectHasContent(fenceCalculatorProject) ? { fence_calculator: fenceCalculatorProject } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
   };
 
   async function submitProjectMetadata(draft) {
@@ -2037,6 +2043,12 @@ export default function TakeoffCanvas() {
     return () => onMenuDepth(false);
   }, [whiteboardOpen, onMenuDepth]);
 
+  useEffect(() => {
+    if (!fenceCalculatorOpen) return;
+    onMenuDepth(true);
+    return () => onMenuDepth(false);
+  }, [fenceCalculatorOpen, onMenuDepth]);
+
   // markups MUST be in the deps (a cloud/callout/text or an RFI link is real work);
   // omitting it dropped markup saves and could persist a stale markups array.
   useEffect(() => {
@@ -2076,7 +2088,7 @@ export default function TakeoffCanvas() {
     // state it serializes, so listing buildPayload (a new identity each render)
     // would fire a save on every render instead of only on a real change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard]);
+  }, [shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard, fenceCalculatorProject]);
   useEffect(() => { saveStateRef.current = saveState; }, [saveState]);
 
   // Flush a pending debounced save on navigate-away (unmount), and warn before a
@@ -2111,7 +2123,7 @@ export default function TakeoffCanvas() {
   // a scheduled save, an active drag, the open text editor, an in-flight OCR scan,
   // an agent run and its staged proposals — hydrate() wipes agentProposals and the
   // conditions a mid-run agent minted, so both defer exactly like One-Click review).
-  busyStateRef.current = { poly, calib, check, proposal, scaleGuide, prevScale, agentRunning, agentProposals, whiteboardOpen };
+  busyStateRef.current = { poly, calib, check, proposal, scaleGuide, prevScale, agentRunning, agentProposals, whiteboardOpen: whiteboardOpen || fenceCalculatorOpen };
   const computeBusy = () => isCanvasBusy({
     ...busyStateRef.current,
     saveState: saveStateRef.current,
@@ -4888,6 +4900,32 @@ export default function TakeoffCanvas() {
   // handler, before re-render — the active-based form would hit the old active.
   const updateCondById = (id, patch) => setConditions((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch, updated_at: nowIso() } : c)));
   const updateCond = (patch) => updateCondById(activeCond, patch);
+  const addFenceCalculationToEstimate = (calculation, selectedIds, unitCosts = {}) => {
+    const condition = conditions.find((c) => c.id === activeCond);
+    if (!condition || !calculation?.valid) return 0;
+    const total = conditionTotals([condition], shapes).find((row) => row.id === condition.id);
+    const countBasis = calculation.calculatorId === "post-concrete";
+    const basisQuantity = countBasis ? Number(total?.ea) || 0 : Number(total?.lf) || 0;
+    if (basisQuantity <= 0) {
+      setCommitMsg(countBasis ? "The active condition needs a count takeoff before concrete materials can be added." : "The active condition needs a linear takeoff before fence materials can be added.");
+      return 0;
+    }
+    const calculatorName = getCalculatorDefinition(calculation.calculatorId)?.name || "Fence Material Calculator";
+    const lines = calculationToConditionMaterials(calculation, {
+      basisQuantity,
+      basisType: countBasis ? "count" : "linear",
+      selectedIds,
+      calculatorName,
+      idFactory: () => uid("mat"),
+    }).map((line) => {
+      const cost = Number(unitCosts[line.fence_calculator?.material_id]);
+      return Number.isFinite(cost) && cost >= 0 ? { ...line, unit_cost: cost } : line;
+    });
+    if (!lines.length) return 0;
+    updateCondById(condition.id, { materials: [...(condition.materials || []), ...lines] });
+    setCommitMsg(`Added ${lines.length} ${calculatorName} material line${lines.length === 1 ? "" : "s"} to ${condition.finish_tag}.`);
+    return lines.length;
+  };
 
   // delete a condition entirely (and its takeoffs); pick a new active one
   function deleteCondition(id) {
@@ -5393,6 +5431,7 @@ export default function TakeoffCanvas() {
     onAttachLibMaterial: attachLibMaterial, onPromoteMaterial: promoteMaterial, onRevertMatField: revertMatField,
     onUpdateLibMaterial: updateLibMaterial, onPushLibUpdate: pushLibUpdate,
     onDeleteLibMaterial: deleteLibMaterial, onAddLibMaterial: addLibMaterial,
+    onCalculateFence: (id) => { activateCondition(id, { reassign: false }); setFenceCalculatorOpen(true); },
     matFieldOverridden,   // pure helper, not an event handler — the forwarder returns its result
     onToggleCollapse: toggleTakeoffs, onTogglePin: togglePin,
     // these three are ALREADY stable on their own (setState identity, and
@@ -5565,6 +5604,9 @@ export default function TakeoffCanvas() {
         { id: "download-page", icon: "document", label: pageExportBusy ? "Downloading page..." : "Download this page",
           title: "Download the current sheet with takeoff lines, notes, and markups but no measurement labels", onSelect: downloadCurrentPage,
           disabled: pageExportBusy || !focusPanel.file || !hydrated.current || !!loadError },
+        { id: "fence-calculator", icon: "calculator", label: "Fence Material Calculator...",
+          title: "Calculate fence materials from the active takeoff's LF or count", onSelect: () => setFenceCalculatorOpen(true),
+          disabled: !hydrated.current || !!loadError },
         ...(new URLSearchParams(window.location.search).has("localProject") ? ["divider",
           { id: "local-workspace", label: "Return to default workspace", onSelect: () => window.location.assign(window.location.pathname) }] : []),
       ]} /></>
@@ -5580,13 +5622,20 @@ export default function TakeoffCanvas() {
       <input ref={projectInputRef} type="file" accept=".otk" aria-label="Open project file" style={{ display: "none" }}
         onChange={(e) => { setProjectFilePrompt(e.target.files?.[0] || null); e.target.value = ""; }} />
       {projectMetadataModal && <ProjectMetadataModal mode={projectMetadataModal} initial={projectMetadata}
-        hasWorkspace={!!(sheets.length || shapes.length || markups.length || rfis.length || projectName)} saveState={saveState}
+        hasWorkspace={!!(sheets.length || shapes.length || markups.length || rfis.length || projectName || fenceCalculatorProjectHasContent(fenceCalculatorProject))} saveState={saveState}
         onSubmit={submitProjectMetadata} onClose={() => setProjectMetadataModal(null)} />}
       {cloudView && <CloudProjects initialView={cloudView} source={store} getPayload={buildPayload}
         onPersisted={(lastModifiedAt, savedMetadata) => { if (lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, ...savedMetadata, lastModifiedAt })); }}
         onClose={() => { setCloudView(null); cloudAccount.clearAuthReturn(); cloudAccount.clearDriveReturn(); }} onOpenChange={onMenuDepth} />}
       {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard} onClose={() => setWhiteboardOpen(false)}
         onSave={() => saveProjectFile(false)} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState} />}
+      {fenceCalculatorOpen && <FenceCalculatorPanel
+        projectState={fenceCalculatorProject}
+        onProjectStateChange={setFenceCalculatorProject}
+        takeoffSource={{ condition: aCond, totals: condRow, shape: selShape }}
+        activeCondition={aCond}
+        onAddToEstimate={addFenceCalculationToEstimate}
+        onClose={() => setFenceCalculatorOpen(false)} />}
       {projectSavePrompt !== null && <SaveProjectDialog filename={projectSavePrompt}
         canChooseLocation={typeof window.showSaveFilePicker === "function"} busy={!!projectFileBusy} error={projectFileError}
         onSave={(name) => confirmSaveProjectFile(name, projectSaveAs)} onClose={() => { if (!projectFileLock.current) { setProjectSavePrompt(null); setProjectFileError(""); } }} />}
@@ -6896,6 +6945,7 @@ export default function TakeoffCanvas() {
           if (drawer) setFrontDrawer(drawer);
         }} style={{ position: "absolute", right: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
           {panelBtn(() => setWhiteboardOpen(true), "rectTool", "Open whiteboard", whiteboardOpen, null, { "aria-label": "Whiteboard", disabled: !hydrated.current || !!loadError })}
+          {panelBtn(() => setFenceCalculatorOpen(true), "calculator", "Fence Material Calculator — import the active takeoff's LF or count", fenceCalculatorOpen, null, { "aria-label": "Fence Material Calculator", disabled: !hydrated.current || !!loadError })}
           {panelBtn(() => {
             if (!trackpadStartedRef.current) { trackpadStartedRef.current = true; setTrackpadVisible(true); }
             setSettingsOpen((v) => !v); trackpadPaintRef.current = "";

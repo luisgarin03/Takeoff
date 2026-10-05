@@ -420,7 +420,7 @@ function TakeoffsPanel({
   onUpdateLibMaterial, onPushLibUpdate, onDeleteLibMaterial, onAddLibMaterial,
   onAddColumn, onRenameColumn, onDeleteColumn, onAddColumnValue, onRemoveColumnValue, onRenameColumnValue,
   onAddLabel, onRenameLabel, onRemoveLabel,
-  onToggleCollapse, onHoldGesture, onTogglePin,
+  onToggleCollapse, onHoldGesture, onTogglePin, onCalculateFence,
 }) {
   const [panelTab, setPanelTab] = useState("takeoffs");       // "takeoffs" | "library" | "materials" | "columns"
   const [condQuery, setCondQuery] = useState("");             // live filter over the condition list (transient, never persisted)
@@ -606,6 +606,12 @@ function TakeoffsPanel({
             title="Supporting Materials — labor, subfloor & materials for this condition"
             style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 0, border: "1px solid var(--ink-faint)", background: matOn ? "var(--ink)" : "transparent", color: matOn ? "var(--paper-bright)" : "var(--ink-muted)", cursor: "pointer", fontSize: 11 }}>
             <Icon name="product" size={11} />{c.materials?.length ? c.materials.length : ""}
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onCalculateFence(c.id); }}
+            title="Calculate fence materials from this takeoff's LF or count"
+            aria-label={`Calculate fence materials for ${c.finish_tag}`}
+            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", padding: "2px 5px", borderRadius: 0, border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", lineHeight: 0 }}>
+            <Icon name="calculator" size={12} />
           </button>
           <button onClick={(e) => { e.stopPropagation(); onTogglePin(c.id); }}
             title={pinned ? "Unpin from the top-bar palette" : (palette.length >= 9 ? "Palette is full (9)" : "Pin to the top-bar palette for one-click access")}

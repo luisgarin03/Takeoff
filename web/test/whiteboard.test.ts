@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
 import { unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
-import { emptyWhiteboard, bytesToBase64, base64ToBytes, validateWhiteboard, appendWhiteboardArrow, sanitizeWhiteboardArrows, removeBoardItem, setWhiteboardFileHeaderColor, setWhiteboardItemHeaderColor, sanitizeWhiteboardFileHeaderColors, WHITEBOARD_FILE_HEADER_COLORS, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, zoomBoard, fitBoard, fitWhiteboard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
+import { emptyWhiteboard, bytesToBase64, base64ToBytes, validateWhiteboard, appendWhiteboardArrow, appendWhiteboardRectangle, sanitizeWhiteboardArrows, sanitizeWhiteboardRectangles, removeBoardItem, removeWhiteboardDrawing, updateWhiteboardDrawing, setWhiteboardFileHeaderColor, setWhiteboardItemHeaderColor, sanitizeWhiteboardFileHeaderColors, setWhiteboardImageCrop, normalizeWhiteboardImageCrop, whiteboardImageCrop, whiteboardHasContent, whiteboardDrawingBounds, WHITEBOARD_FILE_HEADER_COLORS, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, zoomBoard, fitBoard, fitWhiteboard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
 import { localStore, createFileProjectStore, importFileProject, ANN_SCHEMA } from "../src/lib/store.js";
 import { exportProjectFile, readProjectFile } from "../src/lib/projectFile.js";
 import { WHITEBOARD_PDF_PREVIEW_MAX_PIXELS, whiteboardPdfPreviewScale } from "../src/lib/whiteboardPdfPreview.js";
@@ -181,6 +181,88 @@ test("whiteboard arrows persist with supported colors and legacy boards without 
   assert.equal(malformed.arrows.length, 1, "bad coordinates are discarded");
   assert.equal(malformed.arrows[0].color, "#1f3fc7", "invalid colors safely use the legacy ink color");
   assert.deepEqual(sanitizeWhiteboardArrows({ ...legacy, arrows: {} }).arrows, [], "a malformed optional field normalizes safely");
+});
+
+test("rectangles normalize every drag direction, sanitize safely and participate in fit", () => {
+  const expected = { x: 10, y: 20, w: 100, h: 100 };
+  for (const [from, to] of [
+    [[10, 20], [110, 120]], [[110, 20], [10, 120]],
+    [[10, 120], [110, 20]], [[110, 120], [10, 20]],
+  ] as const) {
+    const next = appendWhiteboardRectangle(emptyWhiteboard(), from, to, "#2563eb");
+    assert.deepEqual({ x: next.rectangles[0].x, y: next.rectangles[0].y, w: next.rectangles[0].w, h: next.rectangles[0].h }, expected);
+    assert.equal(next.rectangles[0].color, "#2563EB");
+    assert.equal(next.rectangles[0].strokeWidth, 2.5);
+  }
+  const original = emptyWhiteboard();
+  assert.equal(appendWhiteboardRectangle(original, [1, 1], [1, 10]), original, "zero-width rectangles are ignored");
+  const safe = sanitizeWhiteboardRectangles({ ...original, rectangles: [
+    { id: "good", x: -20, y: 30, w: 50, h: 60, color: "unsupported", strokeWidth: 100 },
+    { id: "bad", x: 0, y: 0, w: -1, h: 20 },
+    { id: "good", x: 5, y: 5, w: 20, h: 20 },
+  ] });
+  assert.equal(safe.rectangles.length, 1);
+  assert.equal(safe.rectangles[0].color, "#1f3fc7");
+  assert.equal(safe.rectangles[0].strokeWidth, 64);
+  assert.deepEqual(whiteboardDrawingBounds(safe.rectangles[0], "rectangle"), { x: -20, y: 30, w: 50, h: 60 });
+  assert.notDeepEqual(fitWhiteboard(safe, 800, 600), { x: 0, y: 0, scale: 1 });
+  const legacy = emptyWhiteboard(); delete (legacy as any).rectangles;
+  assert.equal(validateWhiteboard(legacy).rectangles, undefined, "older boards need no rectangles field");
+});
+
+test("drawing updates and removal are immutable and work across arrow and rectangle collections", () => {
+  const withArrow = appendWhiteboardArrow(emptyWhiteboard(), [10, 20], [40, 50], "#2563EB");
+  const arrowId = withArrow.arrows[0].id;
+  const movedArrow = updateWhiteboardDrawing(withArrow, "arrow", arrowId, { from: [30, 40], to: [60, 70] });
+  assert.deepEqual(movedArrow.arrows[0].from, [30, 40]);
+  assert.deepEqual(withArrow.arrows[0].from, [10, 20]);
+  const withRectangle = appendWhiteboardRectangle(movedArrow, [0, 0], [20, 30], "#2F7D54");
+  const rectangleId = withRectangle.rectangles[0].id;
+  const resized = updateWhiteboardDrawing(withRectangle, "rectangle", rectangleId, { x: 5, y: 6, w: 40, h: 50 });
+  assert.deepEqual(whiteboardDrawingBounds(resized.rectangles[0]), { x: 5, y: 6, w: 40, h: 50 });
+  assert.equal(whiteboardHasContent(resized), true);
+  const noRectangle = removeWhiteboardDrawing(resized, "rectangle", rectangleId);
+  assert.equal(noRectangle.rectangles.length, 0);
+  const empty = removeWhiteboardDrawing(noRectangle, "arrows", arrowId);
+  assert.equal(whiteboardHasContent(empty), false);
+  assert.equal(removeWhiteboardDrawing(empty, "arrow", "missing"), empty);
+  assert.equal(updateWhiteboardDrawing(empty, "unknown", "missing", { x: 1 }), empty);
+});
+
+test("image crops default to the full source, validate normalized bounds and permit compact cropped cards", () => {
+  const original = board();
+  assert.deepEqual(whiteboardImageCrop(original.items[2]), { x: 0, y: 0, w: 1, h: 1 });
+  const crop = { x: .1, y: .2, w: .6, h: .5 };
+  const cropped = setWhiteboardImageCrop(original, "i", crop);
+  assert.deepEqual(cropped.items[2].crop, crop);
+  assert.equal(Object.prototype.hasOwnProperty.call(original.items[2], "crop"), false, "crop commits do not mutate undo snapshots");
+  assert.equal(setWhiteboardImageCrop(cropped, "p", crop), cropped, "PDF cards cannot be cropped");
+  assert.equal(setWhiteboardImageCrop(cropped, "i", { x: .9, y: 0, w: .2, h: 1 }), cropped, "invalid crops do not replace a valid crop");
+  assert.equal(normalizeWhiteboardImageCrop({ x: 0, y: 0, w: .009, h: 1 }), null);
+  assert.equal(normalizeWhiteboardImageCrop({ x: 0, y: 0, w: 1, h: 1 })?.w, 1);
+  const compact = { ...cropped, items: cropped.items.map((item: any) => item.id === "i" ? { ...item, w: 42, h: 82 } : item) };
+  assert.equal(validateWhiteboard(compact).items[2].w, 42);
+  for (const bad of [
+    { ...compact, items: compact.items.map((item: any) => item.id === "i" ? { ...item, w: 41 } : item) },
+    { ...cropped, items: cropped.items.map((item: any) => item.id === "i" ? { ...item, crop: { x: -.1, y: 0, w: 1, h: 1 } } : item) },
+    { ...cropped, items: cropped.items.map((item: any) => item.id === "p" ? { ...item, crop } : item) },
+  ]) assert.throws(() => validateWhiteboard(bad), /Invalid whiteboard/);
+  const uncroppedCompact = { ...original, items: original.items.map((item: any) => item.id === "i" ? { ...item, w: 42, h: 82 } : item) };
+  assert.throws(() => validateWhiteboard(uncroppedCompact), /Invalid whiteboard/);
+});
+
+test("rectangle and non-destructive image crop metadata round-trip through portable projects and revisions", async () => {
+  let whiteboard = appendWhiteboardRectangle(board(), [700, 500], [450, 250], "#DC2626", 4);
+  whiteboard = setWhiteboardImageCrop(whiteboard, "i", { x: .125, y: .25, w: .5, h: .6 });
+  const current = { ...payload(), whiteboard };
+  await localStore.saveAnnotations(current);
+  await localStore.saveSnapshot("Before crop adjustment", current);
+  const saved = await exportProjectFile(localStore, current);
+  const reopened = await readProjectFile(saved);
+  assert.deepEqual(reopened.annotations.whiteboard, whiteboard);
+  assert.deepEqual(reopened.snapshots[0].payload.whiteboard, whiteboard);
+  const imported = createFileProjectStore(await importFileProject(reopened));
+  assert.deepEqual((await imported.loadAnnotations()).whiteboard, whiteboard);
 });
 
 test("removal prunes only unused attachments and never mutates the undo snapshot", () => {

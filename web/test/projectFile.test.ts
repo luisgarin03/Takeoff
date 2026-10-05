@@ -17,6 +17,11 @@ const payload = () => ({
   rfis: [{ id: "rfi1", number: 1, subject: "Door" }], sheet_tabs: ["Plan.pdf#2", "Plan.pdf"],
   sheet_group: ["Plan.pdf#2", "Plan.pdf"], last_group: ["Plan.pdf#2", "Plan.pdf"],
   sheet_levels: { "Plan.pdf#2": "L2" }, sheet_bookmarks: ["Plan.pdf#2"], palette: ["c1"], future_field: { preserve: true },
+  fence_calculator: {
+    version: 1,
+    activeCalculatorId: "board-on-board",
+    valuesByCalculator: { "board-on-board": { fenceLength: 128, postSpacing: 8 } },
+  },
 });
 
 async function fixture() {

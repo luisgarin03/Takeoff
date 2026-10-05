@@ -1,5 +1,5 @@
 import { BOARD_EXPORT_SCALE, checkBoardRaster } from "./whiteboardPdf.js";
-import { NOTE_COLORS, WHITEBOARD_FILE_HEADER_COLORS, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor } from "./whiteboard.js";
+import { NOTE_COLORS, WHITEBOARD_FILE_HEADER_COLORS, normalizeWhiteboardImageCrop, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor } from "./whiteboard.js";
 
 function canvasFor(width, height) {
   const size = checkBoardRaster(width, height), canvas = document.createElement("canvas");
@@ -14,12 +14,31 @@ async function pngBytes(canvas) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-export async function readBoardImage(bytes, type, signal) {
+export async function readBoardImage(bytes, type, crop, signal) {
+  // Preserve the former direct-call signature readBoardImage(bytes, type,
+  // signal) while the PDF pipeline now supplies crop as the third argument.
+  if (!signal && crop?.throwIfAborted) { signal = crop; crop = null; }
   signal?.throwIfAborted();
   const image = await createImageBitmap(new Blob([bytes], { type }));
   let canvas;
   try {
     signal?.throwIfAborted();
+    const normalized = normalizeWhiteboardImageCrop(crop);
+    const cropped = normalized && (normalized.x > 0 || normalized.y > 0 || normalized.w < 1 || normalized.h < 1);
+    if (cropped) {
+      // Crop only for this export. The original attachment bytes remain the
+      // project's single source of truth, so re-cropping can reveal hidden
+      // pixels and repeated crop operations never create stored image blobs.
+      const width = Math.max(1, Math.round(image.width * normalized.w));
+      const height = Math.max(1, Math.round(image.height * normalized.h));
+      canvas = canvasFor(width, height);
+      canvas.getContext("2d").drawImage(image,
+        image.width * normalized.x, image.height * normalized.y,
+        image.width * normalized.w, image.height * normalized.h,
+        0, 0, width, height);
+      signal?.throwIfAborted();
+      return { bytes: await pngBytes(canvas), type: "image/png", width, height };
+    }
     checkBoardRaster(image.width, image.height);
     // JPEG EXIF orientation must agree with the browser preview. Decode these
     // at original resolution instead of embedding unoriented JPEG pixels.
