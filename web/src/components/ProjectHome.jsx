@@ -12,6 +12,7 @@ import { BrandText } from "../brand/marks.jsx";
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthChip from "./AuthChip.jsx";
+import LongTaskLoader from "./LongTaskLoader.jsx";
 import { projectHomeFolderId, listProjectFolders, createRecents, browserStorage } from "../lib/projectHome.js";
 import { getAccessToken } from "../lib/google/auth.js";
 
@@ -92,7 +93,10 @@ export default function ProjectHome() {
       {/* folder listing */}
       <div style={{ flex: 1, overflow: "auto" }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "var(--ink-muted)", fontSize: 13 }}>Reading projects…</div>
+          <div style={{ padding: 40, display: "flex", alignItems: "center", justifyContent: "center", gap: 12, color: "var(--ink-muted)", fontSize: 13 }}>
+            <LongTaskLoader active label="Reading projects…" compact />
+            <span aria-hidden="true">Reading projects…</span>
+          </div>
         ) : err ? (
           <div style={{ padding: 40, textAlign: "center", fontSize: 13 }}>
             <div style={{ color: "var(--c-danger)", marginBottom: 12 }}>Couldn't list the projects: {err}</div>

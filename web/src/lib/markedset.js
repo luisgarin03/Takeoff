@@ -24,6 +24,7 @@ import { transformPath, svgPlacedBox } from "./svgpath.js";
 import { rfiStatus } from "./rfi.js";
 import { RENDER_SCALE } from "./sheets";
 import { pdfDashFor, boostForDark, clampWeight } from "./lineStyles.js";
+import { layoutBoxedMarkupText, MARKUP_TEXT_FONT_SIZE_PT } from "./canvasText.js";
 
 const COBALT = "#1f3fc7";
 const DEDUCT_RED = "#b03a26";
@@ -157,7 +158,7 @@ function invertPixels(cv) {
   ctx.restore();
 }
 
-export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, markups, rfis = /** @type {object[]} */ ([]), conditions, getPage, loadPdfData, company, clientInfo, credit = null, coverTitle = "Marked Set", units = "imperial", singleSheet = false, includeShapeLabels = true }) {
+export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, markups, findHighlights = /** @type {object[]} */ ([]), rfis = /** @type {object[]} */ ([]), conditions, getPage, loadPdfData, company, clientInfo, credit = null, coverTitle = "Marked Set", units = "imperial", singleSheet = false, includeShapeLabels = true }) {
   if (singleSheet && sheets.length !== 1) throw new Error("Choose one current sheet to download.");
   // display-unit edge (lib/units contract): quantities arrive as internal feet;
   // metric converts at the drawn string only — legend rows, by-sheet rows, and
@@ -176,8 +177,15 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
     return m;
   };
   const shapesBy = byKey(shapes), marksBy = byKey(markups);
+  const findBy = new Map();
+  for (const hit of findHighlights || []) {
+    if (!hit || typeof hit !== "object" || !String(hit.key || "")) continue;
+    const grouped = findBy.get(hit.key) || [];
+    grouped.push(hit);
+    findBy.set(hit.key, grouped);
+  }
   // A page download includes the requested sheet even before it has any marks.
-  const marked = singleSheet ? sheets : sheets.filter((sh) => (shapesBy.get(sh.key) || []).length || (marksBy.get(sh.key) || []).length);
+  const marked = singleSheet ? sheets : sheets.filter((sh) => (shapesBy.get(sh.key) || []).length || (marksBy.get(sh.key) || []).length || (findBy.get(sh.key) || []).length);
   // a live RFI can outlive its markups, so an RFI-only project still exports
   // (cover + RFI schedule, no per-sheet pages) — only a truly empty set aborts
   if (!marked.length && !rfis?.length) throw new Error("Nothing to export — no sheet carries takeoffs or markups.");
@@ -424,22 +432,34 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
     };
     // Markup captions sit over dense plan linework, so match the canvas's
     // paper-backed notes instead of burning bare colored text into the PDF.
-    // One box per line keeps multiline notes rotation-safe on every source page.
-    const boxedText = (raw, x, y, size, borderRgb, fnt = font) => {
+    // x/y remains the first-line baseline anchor. The shared point-space layout
+    // wraps the whole caption, then this draws one transformed box and one text
+    // operation per nonblank line so rotation/crop offsets stay in visual space.
+    const boxedText = (raw, x, y, borderRgb, fnt = font, borderWeight = 1) => {
       const t = winAnsiSafe(raw);
       if (!t) return;
-      const [px, py] = toPage(x, y);
-      // Helvetica's glyphs occupy about 74% above and 20% below the baseline.
-      // Use those real visual bounds instead of a full extra font-size box,
-      // which made the backing look shifted high and long on the right.
-      const padX = 5.5, descent = size * 0.22, ascent = size * 0.78, padY = 1.4;
-      const w = fnt.widthOfTextAtSize(t, size) + padX * 2;
-      pg.drawRectangle({
-        x: px - padX, y: py - descent - padY, width: w, height: ascent + descent + padY * 2,
-        color: dark ? rgb(0.08, 0.1, 0.12) : rgb(1, 0.97, 0.93), opacity: 0.92,
-        borderColor: borderRgb, borderWidth: 0.6, borderOpacity: 0.9, rotate: chipRot,
+      const layout = layoutBoxedMarkupText(t, {
+        fontSize: MARKUP_TEXT_FONT_SIZE_PT,
+        measureWidth: (value, size) => fnt.widthOfTextAtSize(value, size),
       });
-      pg.drawText(t, { x: px, y: py, size, font: fnt, color: dark ? ink : rgb(0.055, 0.1, 0.18), rotate: chipRot });
+      const firstBaseline = layout.baselines[0];
+      const left = x - layout.padX / ptScale;
+      const top = y - firstBaseline / ptScale;
+      const right = left + layout.width / ptScale;
+      const bottom = top + layout.height / ptScale;
+      pg.drawSvgPath(svgPath([[left, top], [right, top], [right, bottom], [left, bottom]]), {
+        x: 0, y: 0,
+        color: dark ? rgb(0.08, 0.1, 0.12) : rgb(1, 0.97, 0.93), opacity: 0.92,
+        borderColor: borderRgb, borderWidth: 0.8 * borderWeight, borderOpacity: 0.9,
+      });
+      for (const lineMetric of layout.lineMetrics) {
+        if (!lineMetric.text) continue;
+        const [px, py] = toPage(x, y + (lineMetric.baseline - firstBaseline) / ptScale);
+        pg.drawText(lineMetric.text, {
+          x: px, y: py, size: MARKUP_TEXT_FONT_SIZE_PT, font: fnt,
+          color: dark ? ink : rgb(0.055, 0.1, 0.18), rotate: chipRot,
+        });
+      }
     };
     const chip = (raw, x, y, borderRgb) => {
       const t = winAnsiSafe(raw);
@@ -453,6 +473,28 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
       });
       pg.drawText(t, { x: px - w / 2 + 4, y: py - 2.5, size, font, color: ink, rotate: chipRot });
     };
+
+    // Find results are transient canvas state, not saved markups. Burn their
+    // normalized rectangles into a page download as vector overlays, below
+    // takeoffs and annotations, so the original PDF remains crisp and unchanged.
+    for (const hit of findBy.get(sh.key) || []) {
+      const nx0 = Number(hit.x), ny0 = Number(hit.y), nx1 = nx0 + Number(hit.w), ny1 = ny0 + Number(hit.h);
+      if (![nx0, ny0, nx1, ny1].every(Number.isFinite)) continue;
+      const x0 = Math.max(0, Math.min(1, nx0)), y0 = Math.max(0, Math.min(1, ny0));
+      const x1 = Math.max(0, Math.min(1, nx1)), y1 = Math.max(0, Math.min(1, ny1));
+      if (x1 <= x0 || y1 <= y0) continue;
+      const active = !!hit.active;
+      const highlightColor = rgb(...hex(hit.color || (active ? "#ffa600" : "#ffe146")));
+      const r = [[x0 * W, y0 * H], [x1 * W, y0 * H], [x1 * W, y1 * H], [x0 * W, y1 * H]];
+      pg.drawSvgPath(svgPath(r), {
+        x: 0, y: 0,
+        color: highlightColor,
+        opacity: active ? 0.46 : 0.28,
+        borderColor: highlightColor,
+        borderWidth: active ? 1.4 : 0.8,
+        borderOpacity: 0.92,
+      });
+    }
 
     const alphaBoost = dark ? 0.22 : 0;   // honest colors, brighter on negative linework
     for (const s of shapesBy.get(sh.key) || []) {
@@ -522,7 +564,7 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
         const r = [[nx0 * W, ny0 * H], [nx1 * W, ny0 * H], [nx1 * W, ny1 * H], [nx0 * W, ny1 * H]];
         pg.drawSvgPath(svgPath(r), { x: 0, y: 0, color: mcol, opacity: 0.18 + alphaBoost / 2, borderColor: mcol, borderWidth: 1 * mw, borderOpacity: 0.9, ...(mdash ? { borderDashArray: mdash } : {}) });
         const t = lbl(m.text);
-        if (t) boxedText(t, Math.min(nx0, nx1) * W, Math.min(ny0, ny1) * H - 10 / ptScale, 8, mcol, bold);
+        if (t) boxedText(t, Math.min(nx0, nx1) * W, Math.min(ny0, ny1) * H - 10 / ptScale, mcol, bold, mw);
       } else if (m.type === "cloud" && m.rect) {
         const [[nx0, ny0], [nx1, ny1]] = m.rect;
         // real scallops: cloudBezier's CONTROL POINTS survive the affine page
@@ -534,7 +576,7 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
         for (const [c1, c2, end] of cb.segments) d += ` C${P(c1)} ${P(c2)} ${P(end)}`;
         pg.drawSvgPath(d + " Z", { x: 0, y: 0, borderColor: mcol, borderWidth: 1.3 * mw, borderOpacity: 0.95, ...(mdash ? { borderDashArray: mdash } : {}) });
         const t = lbl(m.text);
-        if (t) boxedText(t, Math.min(nx0, nx1) * W, Math.min(ny0, ny1) * H - 10 / ptScale, 8, mcol, bold);
+        if (t) boxedText(t, Math.min(nx0, nx1) * W, Math.min(ny0, ny1) * H - 10 / ptScale, mcol, bold, mw);
         // revision-delta triangle at the top-right corner — clear of the
         // top-left RFI label and the centered note. Absent m.rev → nothing.
         if (Number.isFinite(m.rev) && m.rev > 0) {
@@ -555,7 +597,7 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
         const [ptx, pty] = toPage(m.to[0] * W, m.to[1] * H);
         pg.drawSvgPath(arrowheadPath(pfx, -pfy, ptx, -pty, 6 * mw), { x: 0, y: 0, color: mcol, opacity: 0.95 });
         const t = lbl(m.text);
-        if (t) boxedText(t, (m.from[0] + m.to[0]) / 2 * W, (m.from[1] + m.to[1]) / 2 * H - 6 / ptScale, 8, mcol, bold);
+        if (t) boxedText(t, (m.from[0] + m.to[0]) / 2 * W, (m.from[1] + m.to[1]) / 2 * H - 6 / ptScale, mcol, bold, mw);
       } else if (m.type === "bubble" && m.at) {
         // a circle carrying centered text — detail/section/keynote bubbles and
         // pattern-origin markers. Radius is normalized to sheet WIDTH, so it maps
@@ -579,7 +621,7 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
           const [ptx, pty] = toPage(m.target[0] * W, m.target[1] * H);
           pg.drawSvgPath(arrowheadPath(pax, -pay, ptx, -pty, 5), { x: 0, y: 0, color: mcol, opacity: 0.9 });
         }
-        boxedText(lbl(m.text), m.at[0] * W, m.at[1] * H, 8.5, mcol, bold);
+        boxedText(lbl(m.text), m.at[0] * W, m.at[1] * H, mcol, bold, mw);
       } else if (m.type === "svg" && m.at && Array.isArray(m.vb) && typeof m.path === "string") {
         // a vector symbol — bake local→page px, NEGATING y like every sibling path
         // (drawSvgPath internally applies scale(1,-1), so toPage output must be
@@ -593,11 +635,10 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
           const fillOn = m.fill && m.fill !== "none";
           if (d) pg.drawSvgPath(d, { x: 0, y: 0, borderColor: mcol, borderWidth: 1.2 * mw, borderOpacity: 0.95, ...(fillOn ? { color: rgb(...hex(dark ? boostForDark(m.fill) : m.fill)), opacity: 0.9 } : {}) });
           const t = lbl(m.text);
-          if (t) boxedText(t, m.at[0] * W - bw / 2, y0 - 6 / ptScale, 8, mcol, bold);
+          if (t) boxedText(t, m.at[0] * W - bw / 2, y0 - 6 / ptScale, mcol, bold, mw);
         }
       } else if (m.type === "text" && m.at) {
-        const lines = String(lbl(m.text) || "").split(/\r?\n/);
-        lines.forEach((lineText, index) => boxedText(lineText || " ", m.at[0] * W, m.at[1] * H + index * 13 / ptScale, 8.5, mcol, bold));
+        boxedText(lbl(m.text), m.at[0] * W, m.at[1] * H, mcol, bold, mw);
       }
     }
     // sheet stamp, top-left in visual space

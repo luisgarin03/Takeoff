@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument, degrees } from "pdf-lib";
-import { getDocument } from "pdfjs-dist";
+import { getDocument, OPS } from "pdfjs-dist";
 import { buildMarkedSetPdf } from "../src/lib/markedset.js";
 import { RENDER_SCALE } from "../src/lib/sheets.js";
 
@@ -78,6 +78,76 @@ test("an unmarked current page still downloads in full", async () => {
     assert.equal(output.count, 1);
     assert.equal(output.text.trim(), "CURRENT PAGE");
   } finally { await f.pdf.destroy(); }
+});
+
+test("page download burns current-page Find hits in as vector rectangles across page rotations", async () => {
+  const countOp = async (bytes: Uint8Array, op: number) => {
+    const pdf = await getDocument({ data: bytes.slice(), useSystemFonts: true }).promise;
+    try {
+      const list = await (await pdf.getPage(1)).getOperatorList();
+      return list.fnArray.filter((fn) => fn === op).length;
+    } finally { await pdf.destroy(); }
+  };
+
+  for (const rotation of [0, 90, 180, 270]) {
+    const f = await fixture(rotation);
+    try {
+      const empty = { ...f.options, shapes: [], markups: [], rfis: [] };
+      const baseline = await buildMarkedSetPdf(empty);
+      const highlighted = await buildMarkedSetPdf({
+        ...empty,
+        findHighlights: [
+          { key: sheet.key, x: .16, y: .24, w: .22, h: .06, active: true },
+          { key: "plans.pdf::1", x: .1, y: .1, w: .2, h: .05, active: true },
+        ],
+      });
+      assert.equal(
+        await countOp(highlighted.bytes, OPS.constructPath),
+        await countOp(baseline.bytes, OPS.constructPath) + 1,
+        `one vector highlight is added at ${rotation}° while the foreign-page hit is ignored`,
+      );
+    } finally { await f.pdf.destroy(); }
+  }
+});
+
+test("long markup captions wrap without losing words and use one backing rectangle across page rotations", async () => {
+  const note = "Verify corridor transition expansion joint alignment before flooring installation and retain every word in this exported construction note";
+  const expectedWords = note.split(/\s+/);
+  const countConstructPaths = async (bytes: Uint8Array) => {
+    const pdf = await getDocument({ data: bytes.slice(), useSystemFonts: true }).promise;
+    try {
+      const list = await (await pdf.getPage(1)).getOperatorList();
+      return list.fnArray.filter((fn) => fn === OPS.constructPath).length;
+    } finally { await pdf.destroy(); }
+  };
+
+  for (const rotation of [0, 90, 180, 270]) {
+    const f = await fixture(rotation);
+    try {
+      const empty = { ...f.options, shapes: [], markups: [], rfis: [] };
+      const baseline = await buildMarkedSetPdf(empty);
+      const annotated = await buildMarkedSetPdf({
+        ...empty,
+        markups: [{ ...markup, rfi_id: undefined, at: [.1, .22], text: note }],
+      });
+      const output = await inspect(annotated.bytes);
+      const captionLines = output.positioned
+        .map((item) => item.str.trim())
+        .filter((text) => text && text !== "CURRENT PAGE");
+
+      assert.ok(captionLines.length > 1, `caption wraps onto multiple lines at ${rotation}°`);
+      assert.deepEqual(
+        captionLines.flatMap((line) => line.split(/\s+/)),
+        expectedWords,
+        `wrapping retains every word at ${rotation}°`,
+      );
+      assert.equal(
+        await countConstructPaths(annotated.bytes),
+        await countConstructPaths(baseline.bytes) + 1,
+        `wrapped caption uses one backing path at ${rotation}°`,
+      );
+    } finally { await f.pdf.destroy(); }
+  }
 });
 
 test("page download can omit condition and quantity labels while retaining notes", async () => {

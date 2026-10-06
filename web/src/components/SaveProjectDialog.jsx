@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../brand/icons.jsx";
+import LongTaskLoader from "./LongTaskLoader.jsx";
 
 export default function SaveProjectDialog({ filename, canChooseLocation, busy, error, onSave, onClose }) {
   const [name, setName] = useState(filename);
@@ -37,7 +38,10 @@ export default function SaveProjectDialog({ filename, canChooseLocation, busy, e
       <input ref={input} id="save-project-name" value={name} onChange={(e) => setName(e.target.value)} required readOnly={busy}
         style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px" }} />
       {!canChooseLocation && <p style={{ fontSize: 12, color: "var(--ink-muted)" }}>Save location is managed by your browser.</p>}
-      {busy && <p role="status">Saving project file...</p>}
+      {busy && <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+        <LongTaskLoader active label="Saving project file…" compact delay={300} />
+        <span>Saving project file...</span>
+      </div>}
       {error && <p role="alert" style={{ color: "var(--c-danger)", overflowWrap: "anywhere" }}>{error}</p>}
       <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 8, marginTop: 20 }}>
         <button className="btn-ghost" type="button" disabled={busy} onClick={onClose}>Cancel</button>

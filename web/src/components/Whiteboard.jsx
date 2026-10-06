@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Icon } from "../brand/icons.jsx";
+import LongTaskLoader from "./LongTaskLoader.jsx";
 import { ARROW_COLORS } from "../lib/canvasConstants.js";
 import { downloadBytes } from "../lib/markedset.js";
 import { boardContentRect, buildWhiteboardPdf } from "../lib/whiteboardPdf.js";
@@ -520,10 +521,12 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   const canCropImage = !!activeAsset?.type?.startsWith("image/") && !activeAsset.missing;
   const hasPdf = board.assets.some((asset) => asset.type === "application/pdf");
   const drawingCount = (board.arrows?.length || 0) + (board.rectangles?.length || 0);
+  const longTaskLabel = exporting ? "Exporting whiteboard PDF…" : busy ? "Adding files to the whiteboard…" : saveState === "saving" ? "Saving whiteboard…" : "";
   return createPortal(<section className="wb" role="dialog" aria-modal="true" aria-label="Whiteboard" tabIndex={-1} ref={root}
     onPaste={paste}
     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
     onDrop={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+    <LongTaskLoader active={!!longTaskLabel} label={longTaskLabel} delay={saveState === "saving" && !busy && !exporting ? 800 : 350} variant="fixed" />
     <header className="wb-header">
       <Button icon="chevronLeft" label="Close whiteboard" onClick={onClose} disabled={busy} />
       <div className="wb-title"><strong>Whiteboard</strong><span>{projectName || "Untitled project"}</span></div>
@@ -576,7 +579,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         <button type="button" className="wb-refresh" title="Render visible PDF previews again at the selected detail" aria-label="Refresh PDF previews"
           disabled={busy || exporting} onClick={() => setPdfRefreshKey((key) => key + 1)}>Refresh</button>
       </>}
-      <span className="wb-status" role="status">{exporting ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved locally" : ""}</span>
+      <span className="wb-status" role="status" aria-hidden={longTaskLabel ? "true" : undefined}>{exporting ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved locally" : ""}</span>
     </div>
     {error && <div className="wb-error" role="alert"><span>{error}</span><Button icon="close" label="Dismiss whiteboard error" onClick={() => setError("")} /></div>}
     <div ref={viewport} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}${mode === "arrow" ? " is-arrow" : ""}${mode === "rectangle" ? " is-rectangle" : ""}${mode === "export-area" ? " is-crop" : ""}${imageCrop ? " is-image-crop" : ""}`} aria-label="Whiteboard canvas"

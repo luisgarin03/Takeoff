@@ -11,6 +11,16 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased
 
+- Fixed one-page and marked-set PDF annotations that exported as tiny, unwrapped single rows. Captions now use one bounded multi-line paper-backed box at 12 pt, retain every word across rotated/cropped pages, and use the same sheet-relative layout, stroke widths, and arrowheads on the estimating canvas so zoom accurately previews the download.
+
+- Added a shared white four-bar loading indicator for longer plan loads and renders, Find scans, exports, and project saves.
+
+- Reworked PDF Find into a persistent, movable, non-modal panel. Searches now start only after **Find pages** is pressed, results are grouped into a clickable page list with per-page keywords and counts, and the arrow controls move between matching pages while pan, zoom, and drawing tools remain usable. Added **Find in this page** for the focused sheet. Every completed run is an additive, deduplicated Search marks job with independent visibility, removal, and highlight-color controls, plus Unmark/Mark all pages and Remove all actions.
+
+- Made the Find panel resizable, moved its long usage guidance into a dedicated **Help** tab, and removed the nested scrollbar from Search-mark color rows so completed searches display in full.
+
+- **Download this page** now includes the current page's visible Find-job keyword highlights in each job's selected color; the source PDF and saved project remain unchanged.
+
 - Added a native Fence Material Calculator with seven extensible, rule-driven calculators; scoped shadcn/ui components; instant validation and order rounding; user presets/favorites; active-takeoff LF/EA import; project, cloud, and `.otk` persistence; and conversion of selected results into the existing Supporting Materials estimate lines.
 
 - Simplified the empty landing page to its background and centered card. Added Open Recent shortcuts with saved author and last-modified details.

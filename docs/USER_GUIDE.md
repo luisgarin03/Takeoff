@@ -172,6 +172,8 @@ Drag onto the canvas (or click the **Open your plans** target on the empty scree
 
 Nothing uploads anywhere. The file is read locally, rendered locally, and stored locally.
 
+Longer plan loads and renders display a white four-bar loading indicator until the canvas is ready.
+
 ### The sheet gallery (`G`)
 
 Press `G` (or click **Sheets** in the toolbar) for the visual gallery: one card per sheet, with its title-block sheet number, a thumbnail, and status badges — a level chip, **open** if it's already a tab, a shape count, and a scale status (**scale ✓** green, **plan: 1/4″ = 1′-0″** amber when a scale note was detected but not yet adopted, **no scale** red).
@@ -193,7 +195,11 @@ In the gallery, select sheets and hit **Assign level…** (`"L1"`, `"Level 2"`, 
 
 ### Find text in a PDF
 
-Click **Find** in the top sheet toolbar (or press `Ctrl+F`, `⌘F` on Mac) to open the movable cross-plan search panel at the top-right, above the plans. The surrounding view stays undimmed. It starts with common scope terms such as fence, fencing, gate, enclosure, dumpster, trash, board-on-board, privacy, chain-link, ornamental, bollard, backstop, and netting. Click a suggestion to include/exclude it in the current search, use its × button to remove it from the suggestion list, or add your own suggestions. These suggestion changes are kept in this browser. You can also enter comma-separated words and phrases directly, then choose **Find all**. OpenTakeoff scans selectable text on every page of every loaded plan and highlights the matches; use the up/down buttons (or Enter) to move between matches across plans. **Mark all matches** toggles the on-screen highlights. Drag the title bar to move the panel; close it with Escape, the × button, or by clicking outside. The temporary search highlights are not saved into the PDF/project. Scanned-image PDFs need OCR before their text can be found.
+Click **Find** in the top sheet toolbar (or press `Ctrl+F`, `⌘F` on Mac) to open the movable cross-plan search panel at the top-right, above the plans. Opening the panel does not start a scan. It begins with common scope terms such as fence, fencing, gate, enclosure, dumpster, trash, board-on-board, privacy, chain-link, ornamental, bollard, backstop, and netting. Click a suggestion to include or exclude it, use its × button to remove it from the suggestion list, or add your own suggestions. These suggestion changes are kept in this browser. You can also enter comma-separated words and phrases directly. Choose **Find pages** (or press Enter in the search field) to scan selectable text on every page of every loaded plan. Choose **Find in this page** to scan only the currently focused sheet; in side-by-side view, click the desired sheet first. The shared white four-bar loading indicator remains visible while a longer scan runs.
+
+Results are grouped by PDF page instead of by individual word. Use the left/right buttons to move between matching pages, or click a row in the page list to open it directly. Each row shows the keywords and occurrence count found on that page; all matches on the current result page are highlighted together. Every completed **Find pages** or **Find in this page** run appears as a separate job under **Search marks**. Use its Marked/Show button to hide or restore only that job, its color control to change that job's highlight color, or × to remove that search and its marks. **Unmark all pages** hides every job without deleting it; **Mark all pages** restores them, and **Remove all** clears the completed search jobs. Editing the input, finding no matches, or starting another search does not remove existing jobs, and an identical repeated hit is not counted or drawn twice. The temporary highlights are not added to the source PDF or saved as project markups, but visible jobs are burned into **Project > Download this page** using their selected colors.
+
+The panel is non-modal: drag its title bar to reposition it, drag either lower corner to resize it, then continue to pan, zoom, select, measure, or draw on the PDF while it remains open. Search-mark rows—including their individual color controls—expand naturally without a separate nested scrollbar; the long matching-page list keeps its own scrollbar. Open the **Help** tab in the panel header for the usage guidance. The panel stays open when you change tools or click the plan. Close it explicitly with × or by clicking the active **Find** toolbar button. Scanned-image PDFs need OCR before their text can be found.
 
 ### Pan & zoom
 
@@ -521,6 +527,8 @@ The **Markup** section of the bottom-left Draw menu holds six tools:
 
 Every markup is editable after the fact: with Select, click to pick it, drag to move it, **double-click to edit its text in place**. The Markups panel lists them all with an edit pencil, a **color** row (auto or any palette color), **line style** and **weight** controls, and a **Hide layer / Show layer** toggle for the whole layer. (Markup moves are plain edits, not undo steps — the `⌘Z` stack is for measured shapes.)
 
+Markup ink is sized in sheet/PDF points, not fixed screen pixels. Zoom therefore enlarges or reduces notes, backgrounds, strokes, and arrowheads together with the plan instead of changing their footprint relative to the drawing. Long note and callout text wraps inside the same bounded 12-point paper-backed box used by PDF export, so the estimating canvas shows where the downloaded annotation will sit.
+
 ### Stamps
 
 A **stamp** is a reusable annotation — one or several markup elements saved as a named group and placed with a click. The library seeds with flooring basics (**Plank / tile direction**, **Seam direction**, **Pattern origin**) and is browser-global: build it once, use it on every plan.
@@ -572,6 +580,8 @@ On screens up to 768px wide, Report controls wrap and the project name uses its 
 | **Marked set** | A distribution-ready PDF built in your browser: every sheet that carries takeoffs or markups, the work burned in as drawn — condition colors, hatches, quantity chips, count markers, markups (toggleable) — behind a legend cover with net totals, w/Waste quantities, and a by-sheet breakdown. Exports in your current view: dark canvas → dark PDF. Send it to a GC who will never install anything. |
 | **RFI CSV / JSON** | The RFI register (appears once RFIs exist). |
 
+Longer exports show the shared white four-bar loading indicator until the file is ready.
+
 **Contribute** also lives here — covered with the rest of your data in §13.
 
 ---
@@ -612,7 +622,7 @@ For an existing server-connected project, subsequent cloud saves update its proj
 
 ### Download the current plan page
 
-Choose **Project > Download this page** to download a one-page PDF of the complete current sheet with all committed takeoff lines, notes, and markups, even if the markup layer is hidden. Automatic takeoff labels—condition titles and SF/LF quantities—are omitted so the page carries only the drawing work and annotations. Text-based markup captions receive a translucent paper background and colored border so plan linework does not obscure them. Finish any trace or annotation in progress first. In side-by-side view, click the desired sheet first. Zoom/pan and toolbar visibility do not affect the export. The original page dimensions and rotation are retained in normal plan view; an inverted plan exports in its current dark appearance. No report cover, RFI schedule or extra sheet stamp is added. This is a shareable PDF, not an editable `.otk` project backup. The Report's **Marked set** export still includes condition and quantity labels.
+Choose **Project > Download this page** to download a one-page PDF of the complete current sheet with all committed takeoff lines, notes, and markups, even if the markup layer is hidden. Automatic takeoff labels—condition titles and SF/LF quantities—are omitted so the page carries only the drawing work and annotations. Text-based markup captions wrap at a bounded width inside one translucent, colored-border box; the shared 12-point font, line spacing, padding, strokes, and arrowheads match the estimating canvas. Zoom/pan and toolbar visibility do not change that sheet-relative layout, so zooming the canvas is a preview rather than a different annotation size. Visible Find jobs on the current page are included in the downloaded PDF using each job's selected highlight color; hide or remove a job to export without its marks. Finish any trace or annotation in progress first. In side-by-side view, click the desired sheet first. The original page dimensions and rotation are retained in normal plan view; an inverted plan exports in its current dark appearance. No report cover, RFI schedule or extra sheet stamp is added. This is a shareable PDF, not an editable `.otk` project backup. The Report's **Marked set** export still includes condition and quantity labels.
 
 ### Whiteboard notes
 
@@ -645,6 +655,8 @@ The board autosaves with this project and is included in revision snapshots. **S
 Use **Project > Save project...** in the top toolbar or Plan Set header to save an `.otk` file. Enter the filename, then choose **Choose location...** to open the browser's Save As picker and select a folder. The same dialog opens from the whiteboard's Save project button. Browsers without this picker show **Download** instead and manage the destination through their download settings. Cancelling leaves the project unchanged; changing the filename does not rename the project itself.
 
 The file contains all loaded plan PDFs (including images previously converted to PDFs), conditions and attached materials, measurements, calibration scales, markups, RFIs, sheet tabs/groups/levels/bookmarks, project/client details, and revision snapshots. Finish any in-progress trace before saving.
+
+Larger project saves show the shared white four-bar loading indicator while the archive is being prepared and written.
 
 Use **Project > Open project...** to reopen that file. It is validated first, then opened as a separate local workspace; the current project and same-named PDFs are not replaced. The imported workspace autosaves in this browser and survives reloading its URL. Each import creates a separate copy. **Return to default workspace** returns to the original local canvas. You can reopen another `.otk` file at any time to switch projects.
 
@@ -864,7 +876,7 @@ Use **Trackpad** in the bottom-right canvas controls to open **Trackpad Settings
 
 ### Startup artwork and app icons
 
-The startup view uses SelfMadeSystem's Uiverse `warm-lion-64` background and the Blueprint icon (Flaticon 1373067, Magnific). The same icon is supplied for web/PWA, Android and Windows Electron. Android's pre-WebView splash uses a static frame; Android 12's system splash uses the Blueprint icon on a dark background. Loading, importing plans and the sample-plan action are unchanged. The startup **Artwork credits** link opens the attribution and license information.
+The startup view uses SelfMadeSystem's Uiverse `warm-lion-64` background and the Blueprint icon (Flaticon 1373067, Magnific). The same icon is supplied for web/PWA, Android and Windows Electron. Android's pre-WebView splash uses a static frame; Android 12's system splash uses the Blueprint icon on a dark background. Plan imports and the sample-plan action keep their existing entry points; longer loads and renders now show the shared white four-bar loading indicator. The startup **Artwork credits** link opens the attribution and license information.
 
 Selecting **Locate Google Drive Folder** now immediately displays that selected local folder’s actual files and subfolders. Use breadcrumbs, Up, Refresh folder, and search to navigate within the selected folder. Double-click a folder or `.otk`, or select it and choose Open folder/Open project. Other file types are listed without launching them. **Cloud Projects** returns to the cloud library. Local listings work offline and do not require Drive folder-list API deployment; they show file modification times and saved project editor metadata. Opening a selected `.otk` uses the normal local importer and does not automatically bind it to a cloud version.
 

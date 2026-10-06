@@ -25,6 +25,7 @@ import { store, emptyAnnotations, isStaleTabError, STALE_TAB_MESSAGE, projectIdF
 import { exportProjectFile, readProjectFile, projectFilename, MAX_PROJECT_FILE_BYTES } from "../lib/projectFile.js";
 import { projectFileHandleFor, saveProjectArchive } from "../lib/saveProjectFile.js";
 import SaveProjectDialog from "../components/SaveProjectDialog.jsx";
+import LongTaskLoader from "../components/LongTaskLoader.jsx";
 import ProjectMetadataModal from "../components/ProjectMetadataModal.jsx";
 import { EMPTY_PROJECT_METADATA, withProjectEditor, withProjectAuthor, createProjectMetadata, formatProjectDate, metadataPayload, normalizeProjectMetadata, preserveUnknownProjectFields, touchProjectMetadata } from "../lib/projectMetadata.js";
 import CloudProjects from "../components/CloudProjects.jsx";
@@ -58,7 +59,7 @@ import { normalizeLoadedGroups } from "../lib/sheetGroups";
 import { isCanvasBusy } from "../lib/canvasBusy";
 import { parseSchedule, rowToSeed } from "../lib/scheduleParse";
 import { normalizeScanRows, postScanWithRetry, SCAN_ENDPOINT, scanRasterScale } from "../lib/scheduleScan";
-import { DEFAULT_SCOPE_TERMS, addFindSuggestions, findTextItemMatches, normalizeFindSuggestions, parseFindTerms, removeFindSuggestion } from "../lib/findText.js";
+import { DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, addFindSuggestions, findHighlightsForPageExport, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, normalizeFindSuggestions, parseFindTerms, removeFindSuggestion, stepFindPageIndex } from "../lib/findText.js";
 import { MARKUP_SHORTCUTS_KEY, assignMarkupShortcut, clearMarkupShortcut, normalizeMarkupShortcutMap } from "../lib/markupShortcuts.js";
 import { normalizeTag } from "../lib/scheduleEdit";
 import { isGoogleConfigured, isSignedIn, isAllowedDomain, getAccessToken, orgDomainHint } from "../lib/google/auth.js";
@@ -75,7 +76,7 @@ import { resolveBranding, loadBrandingSelection } from "../lib/branding.js";
 import { BrandText } from "../brand/marks.jsx";
 import { starPath, cloudPath, thinStroke, strokePathD, chiselRibbon, buildSnapGrid, nearestSnap, ANGLE_TOL, angleSnap, closedMetrics, openLen, pointInPoly, hitShape, arrowheadPath, distToSeg, reflectVertsNorm } from "../lib/geometry.js";
 import { flattenCurve } from "../lib/curve.js";
-import { dashArrayFor, boostForDark, clampWeight, snapWeight, LINE_STYLES, LINE_STYLE_IDS, WEIGHT_STEPS } from "../lib/lineStyles.js";
+import { dashArrayFor, pdfDashFor, boostForDark, clampWeight, snapWeight, LINE_STYLES, LINE_STYLE_IDS, WEIGHT_STEPS } from "../lib/lineStyles.js";
 import { nextRfiNumber } from "../lib/rfi.js";
 import { libFields, matFieldOverridden, libPushPatch, libRevertPatch, libEntryPatch, matEditPatch } from "../lib/materials.js";
 import RfiPanel from "../components/RfiPanel.jsx";
@@ -96,7 +97,7 @@ import { useGoogleAuth } from "../lib/google/AuthContext.jsx";
 import { projectHomeFolderId } from "../lib/projectHome.js";
 import { getTheme, toggleTheme, onThemeChange } from "../lib/theme.js";
 import { useFullscreen } from "../lib/fullscreen.js";
-import { measureCanvasMarkupText, wrapCanvasNoteText } from "../lib/canvasText.js";
+import { MARKUP_TEXT_FONT_FAMILY, layoutBoxedMarkupText, measureCanvasMarkupText, scaleMarkupTextMetrics } from "../lib/canvasText.js";
 // Pure data constants (render/zoom budgets, snap tuning, tool descriptors,
 // starter conditions) live in lib/canvasConstants.js; the pure
 // module-scope helpers (autoRenderScale, invertCanvasPixels, uid, clamp,
@@ -153,6 +154,16 @@ function hitShapeC(s, x, y, w, h, thr) {
   return hitShape({ ...s, verts_norm: flat.map(([px, py]) => [px / w, py / h]) }, x, y, w, h, thr);
 }
 
+// Persisted markup is sized in PDF points, then mapped into the sheet raster.
+// The camera zoom deliberately does not participate: the stage transform zooms
+// the annotation and drawing together, so the live view matches the download.
+function canvasMarkupTextLayout(value, pixelsPerPoint, weight = 700) {
+  return layoutBoxedMarkupText(String(value ?? ""), {
+    ...scaleMarkupTextMetrics(pixelsPerPoint),
+    measureWidth: (text, size) => measureCanvasMarkupText(text, size, weight),
+  });
+}
+
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 // Hatch templates, palette, NO_FILL, and the HatchPattern/HatchSwatch pieces
@@ -195,6 +206,7 @@ export default function TakeoffCanvas() {
   const [page, setPage] = useState(1);           // 1-based page within the active PDF
   const [pageCount, setPageCount] = useState(1); // pages in the active PDF
   const [findOpen, setFindOpen] = useState(false);
+  const [findPanelTab, setFindPanelTab] = useState("find");
   const [findQuery, setFindQuery] = useState("");
   const [findSuggestions, setFindSuggestions] = useState(() => {
     try {
@@ -205,20 +217,27 @@ export default function TakeoffCanvas() {
     } catch { return [...DEFAULT_SCOPE_TERMS]; }
   });
   const [findSuggestionInput, setFindSuggestionInput] = useState("");
-  const [findResults, setFindResults] = useState([]);
-  const [findIndex, setFindIndex] = useState(-1);
-  const [findResultQuery, setFindResultQuery] = useState("");
+  const [findJobs, setFindJobs] = useState([]);
+  const [activeFindPageKey, setActiveFindPageKey] = useState("");
   const [findBusy, setFindBusy] = useState(false);
-  const [findMarkAll, setFindMarkAll] = useState(true);
+  const [findBusyScope, setFindBusyScope] = useState("");
   const [findMessage, setFindMessage] = useState("");
   const [pendingFind, setPendingFind] = useState(null);
   const [findDialogOffset, setFindDialogOffset] = useState({ x: 0, y: 0 });
   const [findDialogTop, setFindDialogTop] = useState(12);
+  const [findDialogSize, setFindDialogSize] = useState({ width: 0, height: 0 });
   const findInputRef = useRef(null);
-  const findPanelRef = useRef(null);
   const findDialogRef = useRef(null);
   const findDragRef = useRef(null);
+  const findResizeRef = useRef(null);
   const findRequestRef = useRef(0);
+  const findJobSequenceRef = useRef(0);
+  const findJobsRef = useRef([]);
+  const findResults = useMemo(() => findVisibleMatches(findJobs), [findJobs]);
+  const findPages = useMemo(() => groupFindMatchesByPage(findResults), [findResults]);
+  const matchedFindPageIndex = findPages.findIndex((resultPage) => resultPage.key === activeFindPageKey);
+  const findPageIndex = matchedFindPageIndex >= 0 ? matchedFindPageIndex : (findPages.length ? 0 : -1);
+  const activeFindPage = findPages[findPageIndex] || null;
   const [view, setView] = useState("canvas");    // "gallery"/"picker" overlay the canvas (gallery-first on empty projects)
   // Cloud mode = the active store is a Drive-backed cloudStore (it has listFolder;
   // localStore does not). In cloud mode an empty project shows the Drive file
@@ -568,6 +587,9 @@ export default function TakeoffCanvas() {
   const pendingProjectSaveRef = useRef(null);
   const [pageExportBusy, setPageExportBusy] = useState(false);
   const pageExportLock = useRef(false);
+  const [planImportBusy, setPlanImportBusy] = useState(false);
+  const [markedSetExportBusy, setMarkedSetExportBusy] = useState(false);
+  const markedSetExportLock = useRef(false);
 
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -1021,33 +1043,68 @@ export default function TakeoffCanvas() {
     findRequestRef.current++;
     setFindOpen(false);
     setFindBusy(false);
+    setFindBusyScope("");
+    setFindMessage("");
     setPendingFind(null);
   }, []);
+  const commitFindJobs = useCallback((update) => {
+    const current = findJobsRef.current;
+    const next = typeof update === "function" ? update(current) : update;
+    findJobsRef.current = next;
+    setFindJobs(next);
+    return next;
+  }, []);
+  const updateFindDraft = useCallback((value) => {
+    findRequestRef.current++;
+    setFindBusy(false);
+    setFindBusyScope("");
+    setFindQuery(value);
+    setFindMessage(findJobs.length
+      ? "Keywords updated. Existing highlights remain marked; choose Find pages or Find in this page to start another search."
+      : "Choose Find pages or Find in this page to start searching.");
+  }, [findJobs.length]);
   useEffect(() => {
     try { localStorage.setItem("opentakeoff.find-scope-suggestions", JSON.stringify(findSuggestions)); }
     catch { /* Suggestions remain usable for this session if storage is unavailable. */ }
   }, [findSuggestions]);
-  const runFind = useCallback(async (rawQuery = findQuery) => {
+  const showFindPage = useCallback((resultPage) => {
+    if (!resultPage) return;
+    setOpenTabs((tabs) => tabs.includes(resultPage.key) ? tabs : [...tabs, resultPage.key]);
+    setView("canvas");
+    const target = parseSheetKey(resultPage.key);
+    setActive(target.file); setPage(target.page); setSheetGroup([]);
+    if (resultPage.firstMatch) setPendingFind({ ...resultPage.firstMatch, request: findRequestRef.current });
+  }, []);
+  const runFind = useCallback(async (scope = "all", rawQuery = findQuery) => {
     const query = rawQuery.trim();
     const terms = parseFindTerms(query);
+    const currentPage = scope === "page" && focusPanel
+      ? { key: focusPanel.key, file: focusPanel.file, page: focusPanel.page }
+      : null;
+    const targets = findSearchTargets(sheets, scope, currentPage);
     const request = ++findRequestRef.current;
     setFindQuery(rawQuery);
-    setFindResults([]);
-    setFindIndex(-1);
-    setFindResultQuery("");
     setFindMessage("");
     setPendingFind(null);
     if (!terms.length) { setFindMessage("Enter a word or choose a scope suggestion."); return; }
     if (!sheets.length) { setFindMessage("Load a plan PDF to search."); return; }
+    if (!targets.length) { setFindMessage("Open a PDF page before searching this page."); return; }
     setFindBusy(true);
+    setFindBusyScope(scope);
     try {
       const matches = [];
-      for (let sheetIndex = 0; sheetIndex < sheets.length; sheetIndex++) {
+      for (let targetIndex = 0; targetIndex < targets.length; targetIndex++) {
         if (request !== findRequestRef.current) return;
-        const file = sheets[sheetIndex].name;
-        setFindMessage(`Scanning plan ${sheetIndex + 1} of ${sheets.length}: ${file}`);
+        const target = targets[targetIndex];
+        const file = target.file;
+        setFindMessage(scope === "page"
+          ? `Scanning current page: ${target.key}`
+          : `Scanning plan ${targetIndex + 1} of ${targets.length}: ${file}`);
         const pdf = await docFor(file);
-        for (let pageNum = 1; pageNum <= (pdf.numPages || 1); pageNum++) {
+        const pageNumbers = target.page == null
+          ? Array.from({ length: pdf.numPages || 1 }, (_, index) => index + 1)
+          : [target.page];
+        for (const pageNum of pageNumbers) {
           if (request !== findRequestRef.current) return;
           const pageObj = await pdf.getPage(pageNum);
           const key = pageNum > 1 ? `${file}#${pageNum}` : file;
@@ -1062,6 +1119,7 @@ export default function TakeoffCanvas() {
             // Store normalized page coordinates. This keeps highlights aligned
             // with each panel's raster size, independent of zoom/render scale.
             matches.push({ key, file, page: pageNum, term: match.term,
+              itemIndex: match.itemIndex, start: match.start, length: match.length,
               x: (transform[4] + charWidth * match.start) / viewport.width,
               y: (transform[5] - height) / viewport.height,
               w: Math.max(charWidth * match.length, charWidth) / viewport.width,
@@ -1070,43 +1128,88 @@ export default function TakeoffCanvas() {
         }
       }
       if (request !== findRequestRef.current) return;
-      setFindResults(matches);
       if (matches.length) {
-        setFindResultQuery(query.toLocaleLowerCase().trim());
-        setFindIndex(0);
-        setFindMessage(`${matches.length.toLocaleString()} matches across ${new Set(matches.map((hit) => hit.file)).size} plan${new Set(matches.map((hit) => hit.file)).size === 1 ? "" : "s"}.`);
-        setOpenTabs((tabs) => tabs.includes(matches[0].file) ? tabs : [...tabs, matches[0].file]);
-        setView("canvas");
-        const first = parseSheetKey(matches[0].key);
-        setActive(first.file); setPage(first.page); setSheetGroup([]);
-        setPendingFind({ ...matches[0], request });
-      } else setFindMessage(`No matches in ${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"}. Scanned selectable PDF text; scanned drawings need OCR.`);
+        const matchingPages = groupFindMatchesByPage(matches);
+        const sequence = findJobSequenceRef.current++;
+        const job = {
+          id: `find-${Date.now()}-${sequence}`,
+          scope,
+          query,
+          targetKey: currentPage?.key || "",
+          color: FIND_HIGHLIGHT_COLORS[sequence % FIND_HIGHLIGHT_COLORS.length],
+          visible: true,
+          matches,
+        };
+        const currentJobs = findJobsRef.current;
+        const previousResults = findVisibleMatches(currentJobs);
+        const nextJobs = commitFindJobs([...currentJobs, job]);
+        const combined = findVisibleMatches(nextJobs);
+        const addedCount = combined.length - previousResults.length;
+        if (scope === "page") {
+          setActiveFindPageKey(matchingPages[0].key);
+          setFindMessage(`${matches.length.toLocaleString()} match${matches.length === 1 ? "" : "es"} found on ${matchingPages[0].key}${addedCount ? ` · ${addedCount.toLocaleString()} new mark${addedCount === 1 ? "" : "s"}` : " · already marked"}. Existing highlighted pages remain marked.`);
+        } else {
+          const pdfCount = new Set(matchingPages.map((resultPage) => resultPage.file)).size;
+          setActiveFindPageKey(matchingPages[0].key);
+          setFindMessage(`${matches.length.toLocaleString()} matches on ${matchingPages.length.toLocaleString()} page${matchingPages.length === 1 ? "" : "s"} across ${pdfCount.toLocaleString()} PDF${pdfCount === 1 ? "" : "s"}${addedCount ? ` · ${addedCount.toLocaleString()} new mark${addedCount === 1 ? "" : "s"}` : " · already marked"}.`);
+          showFindPage(matchingPages[0]);
+        }
+      } else if (scope === "page") {
+        setFindMessage(`No matches on ${currentPage.key}. Existing highlighted pages remain marked.`);
+      } else {
+        setFindMessage(`No matches in ${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"}. ${findJobsRef.current.length ? "Completed search highlights remain marked. " : ""}Scanned selectable PDF text; scanned drawings need OCR.`);
+      }
     } catch (error) {
       if (request === findRequestRef.current) setFindMessage(`Couldn't search this PDF: ${error?.message || error}`);
     } finally {
-      if (request === findRequestRef.current) setFindBusy(false);
+      if (request === findRequestRef.current) {
+        setFindBusy(false);
+        setFindBusyScope("");
+      }
     }
-  }, [docFor, findQuery, sheets]);
+  }, [commitFindJobs, docFor, findQuery, focusPanel, sheets, showFindPage]);
   const openFind = useCallback(() => {
     const initialQuery = findQuery.trim() ? findQuery : findSuggestions.join(", ");
+    setFindPanelTab("find");
     setFindOpen(true);
-    setFindDialogOffset({ x: 0, y: 0 });
-    setFindDialogTop(12);
-    setFindQuery(initialQuery);
+    if (!findQuery.trim()) setFindQuery(initialQuery);
+    if (!findJobs.length && !findBusy) setFindMessage("Choose Find pages or Find in this page to start searching.");
     requestAnimationFrame(() => findInputRef.current?.focus());
-    runFind(initialQuery);
-  }, [findQuery, findSuggestions, runFind]);
-  const moveFind = useCallback((direction) => {
-    if (!findResults.length) return;
-    const next = (findIndex + direction + findResults.length) % findResults.length;
-    setFindIndex(next);
-    const result = findResults[next];
-    setOpenTabs((tabs) => tabs.includes(result.file) ? tabs : [...tabs, result.file]);
-    setView("canvas");
-    const target = parseSheetKey(result.key);
-    setActive(target.file); setPage(target.page); setSheetGroup([]);
-    setPendingFind({ ...result, request: findRequestRef.current });
-  }, [findIndex, findResults]);
+  }, [findBusy, findJobs.length, findQuery, findSuggestions]);
+  const goToFindPage = useCallback((index) => {
+    const resultPage = findPages[index];
+    if (!resultPage) return;
+    setActiveFindPageKey(resultPage.key);
+    showFindPage(resultPage);
+  }, [findPages, showFindPage]);
+  const moveFindPage = useCallback((direction) => {
+    const next = stepFindPageIndex(findPageIndex, direction, findPages.length);
+    if (next >= 0) goToFindPage(next);
+  }, [findPageIndex, findPages.length, goToFindPage]);
+  const setFindJobVisible = useCallback((jobId, visible) => {
+    commitFindJobs((jobs) => jobs.map((job) => job.id === jobId ? { ...job, visible } : job));
+    setFindMessage(visible ? "Search marks shown." : "Search marks hidden; the completed search is still available below.");
+  }, [commitFindJobs]);
+  const setFindJobColor = useCallback((jobId, color) => {
+    if (!/^#[0-9a-f]{6}$/i.test(String(color || ""))) return;
+    commitFindJobs((jobs) => jobs.map((job) => job.id === jobId ? { ...job, color } : job));
+    setFindMessage("Search highlight color updated.");
+  }, [commitFindJobs]);
+  const removeFindJob = useCallback((jobId) => {
+    commitFindJobs((jobs) => jobs.filter((job) => job.id !== jobId));
+    setFindMessage("Search and its marks removed.");
+  }, [commitFindJobs]);
+  const toggleAllFindJobs = useCallback(() => {
+    const shouldShow = !findJobsRef.current.some((job) => job.visible !== false);
+    commitFindJobs((jobs) => jobs.map((job) => ({ ...job, visible: shouldShow })));
+    setFindMessage(shouldShow ? "All completed search marks shown." : "All pages unmarked. Completed searches remain available below.");
+  }, [commitFindJobs]);
+  const clearFindJobs = useCallback(() => {
+    commitFindJobs([]);
+    setActiveFindPageKey("");
+    setPendingFind(null);
+    setFindMessage("All completed searches and marks removed.");
+  }, [commitFindJobs]);
 
   useEffect(() => {
     if (!pendingFind || pendingFind.key !== sheetKey) return;
@@ -1123,15 +1226,6 @@ export default function TakeoffCanvas() {
 
   useEffect(() => {
     if (!findOpen) return undefined;
-    const onPointerDown = (event) => {
-      if (!findPanelRef.current?.contains(event.target) && !findDialogRef.current?.contains(event.target)) closeFind();
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onPointerDown, true);
-  }, [closeFind, findOpen]);
-
-  useEffect(() => {
-    if (!findOpen) return undefined;
     const onResize = () => {
       setFindDialogOffset({ x: 0, y: 0 });
       const panel = findDialogRef.current;
@@ -1143,6 +1237,29 @@ export default function TakeoffCanvas() {
     const frame = requestAnimationFrame(onResize);
     window.addEventListener("resize", onResize);
     return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", onResize); };
+  }, [findOpen]);
+
+  useEffect(() => {
+    if (!findOpen || typeof ResizeObserver === "undefined") return undefined;
+    const panel = findDialogRef.current;
+    if (!panel) return undefined;
+    const keepPanelInView = () => {
+      const rect = panel.getBoundingClientRect();
+      const margin = window.innerWidth <= 600 ? 8 : 12;
+      setFindDialogOffset((offset) => {
+        let x = offset.x;
+        let y = offset.y;
+        if (rect.left < margin) x += margin - rect.left;
+        else if (rect.right > window.innerWidth - margin) x -= rect.right - (window.innerWidth - margin);
+        if (rect.top < margin) y += margin - rect.top;
+        else if (rect.bottom > window.innerHeight - margin) y -= rect.bottom - (window.innerHeight - margin);
+        return Math.abs(x - offset.x) < 0.5 && Math.abs(y - offset.y) < 0.5 ? offset : { x, y };
+      });
+    };
+    const observer = new ResizeObserver(keepPanelInView);
+    observer.observe(panel);
+    const frame = requestAnimationFrame(keepPanelInView);
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
   }, [findOpen]);
 
   const startFindDialogDrag = (event) => {
@@ -1175,23 +1292,115 @@ export default function TakeoffCanvas() {
   const endFindDialogDrag = (event) => {
     if (findDragRef.current?.pointerId === event.pointerId) findDragRef.current = null;
   };
+  const onFindPanelTabKeyDown = (event) => {
+    let next = "";
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") next = findPanelTab === "find" ? "help" : "find";
+    else if (event.key === "Home") next = "find";
+    else if (event.key === "End") next = "help";
+    if (!next) return;
+    event.preventDefault();
+    setFindPanelTab(next);
+    requestAnimationFrame(() => document.getElementById(next === "find" ? "find-search-tab" : "find-help-tab")?.focus());
+  };
+  const startFindDialogResize = (event, edge) => {
+    if (event.button !== 0) return;
+    const rect = findDialogRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    findResizeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      offsetX: findDialogOffset.x,
+      edge,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const moveFindDialogResize = (event) => {
+    const resize = findResizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+    if (event.pointerType === "mouse" && event.buttons === 0) { findResizeRef.current = null; return; }
+    const margin = window.innerWidth <= 600 ? 8 : 12;
+    const minWidth = Math.min(360, window.innerWidth - margin * 2);
+    const availableHeight = Math.max(1, window.innerHeight - resize.top - margin);
+    const minHeight = Math.min(260, availableHeight);
+    const maxWidth = Math.max(minWidth, resize.edge === "left"
+      ? resize.left + resize.width - margin
+      : window.innerWidth - resize.left - margin);
+    const maxHeight = Math.max(minHeight, Math.min(760, availableHeight));
+    const horizontalDelta = event.clientX - resize.startX;
+    const width = Math.max(minWidth, Math.min(maxWidth, resize.width + (resize.edge === "left" ? -horizontalDelta : horizontalDelta)));
+    const height = Math.max(minHeight, Math.min(maxHeight, resize.height + event.clientY - resize.startY));
+    // The left grip uses the panel's natural right anchor; the right grip
+    // offsets by the width delta so the opposite edge remains stationary.
+    setFindDialogOffset((offset) => ({ ...offset, x: resize.edge === "left" ? resize.offsetX : resize.offsetX + width - resize.width }));
+    setFindDialogSize({ width, height });
+    event.preventDefault();
+  };
+  const endFindDialogResize = (event) => {
+    if (findResizeRef.current?.pointerId === event.pointerId) findResizeRef.current = null;
+  };
+  const resizeFindDialogWithKeyboard = (event, edge) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    const rect = findDialogRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    event.preventDefault();
+    const margin = window.innerWidth <= 600 ? 8 : 12;
+    const step = event.shiftKey ? 40 : 12;
+    const availableWidth = edge === "left" ? rect.right - margin : window.innerWidth - rect.left - margin;
+    const availableHeight = Math.max(1, window.innerHeight - rect.top - margin);
+    const minWidth = Math.min(360, availableWidth);
+    const minHeight = Math.min(260, availableHeight);
+    const maxWidth = Math.max(minWidth, availableWidth);
+    const maxHeight = Math.max(minHeight, Math.min(760, availableHeight));
+    const widthDelta = event.key === "ArrowLeft" ? (edge === "left" ? step : -step)
+      : event.key === "ArrowRight" ? (edge === "right" ? step : -step) : 0;
+    const heightDelta = event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
+    const width = Math.max(minWidth, Math.min(maxWidth, rect.width + widthDelta));
+    const height = Math.max(minHeight, Math.min(maxHeight, rect.height + heightDelta));
+    if (edge === "right") setFindDialogOffset((offset) => ({ ...offset, x: offset.x + width - rect.width }));
+    setFindDialogSize({ width, height });
+  };
 
   useEffect(() => {
-    if (!findResults.length) return;
+    // A file may be closed while pdf.js is still extracting its text. Invalidate
+    // that request before pruning so a late completion cannot restore stale hits.
+    findRequestRef.current++;
+    setFindBusy(false);
+    setFindBusyScope("");
+    setFindMessage((message) => message.startsWith("Scanning ")
+      ? "Plan list changed. The active search stopped; completed highlights remain marked."
+      : message);
+    setPendingFind(null);
     const loaded = new Set(sheets.map((sheet) => sheet.name));
-    setFindResults((hits) => hits.filter((hit) => loaded.has(hit.file)));
-  }, [sheets, findResults.length]);
+    commitFindJobs((jobs) => jobs.map((job) => ({ ...job, matches: job.matches.filter((hit) => loaded.has(hit.file)) })).filter((job) => job.matches.length));
+  }, [commitFindJobs, sheets]);
+
+  useEffect(() => {
+    if (!findPages.length) {
+      if (activeFindPageKey) setActiveFindPageKey("");
+      return;
+    }
+    if (!findPages.some((resultPage) => resultPage.key === activeFindPageKey)) {
+      setActiveFindPageKey(findPages[0].key);
+    }
+  }, [activeFindPageKey, findPages]);
 
   useEffect(() => {
     const onFindShortcut = (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
         openFind();
-      } else if (event.key === "Escape" && findOpen) closeFind();
+      }
     };
     window.addEventListener("keydown", onFindShortcut);
     return () => window.removeEventListener("keydown", onFindShortcut);
-  }, [closeFind, findOpen, openFind]);
+  }, [openFind]);
 
   // ── local PDFs (dropped into this browser) ─────────────────────────────────
   const refreshSheets = useCallback(async () => {
@@ -1243,28 +1452,33 @@ export default function TakeoffCanvas() {
       else setProjectFilePrompt(incoming[0]);
       return;
     }
-    setCommitMsg("Reading files…");
-    let pdfs = [], skipped = [];
-    try { ({ pdfs, skipped } = await ingestFiles(incoming, { onProgress: setCommitMsg })); }
-    catch (e) { setCommitMsg(`Couldn't read those files: ${e.message || e}`); return; }
-    if (!pdfs.length) {
-      setCommitMsg(skipped.length
-        ? `Nothing to open — ${skipped.length} file${skipped.length === 1 ? "" : "s"} skipped. ${APP_NAME} reads PDFs, images, and .zip plan sets.`
-        : "No supported files found. Drop a PDF, an image, or a .zip plan set.");
-      return;
+    setPlanImportBusy(true);
+    try {
+      setCommitMsg("Reading files…");
+      let pdfs = [], skipped = [];
+      try { ({ pdfs, skipped } = await ingestFiles(incoming, { onProgress: setCommitMsg })); }
+      catch (e) { setCommitMsg(`Couldn't read those files: ${e.message || e}`); return; }
+      if (!pdfs.length) {
+        setCommitMsg(skipped.length
+          ? `Nothing to open — ${skipped.length} file${skipped.length === 1 ? "" : "s"} skipped. ${APP_NAME} reads PDFs, images, and .zip plan sets.`
+          : "No supported files found. Drop a PDF, an image, or a .zip plan set.");
+        return;
+      }
+      for (const f of pdfs) { try { await store.addPdf(f); } catch (e) { setCommitMsg(`Couldn't open ${f.name}: ${e.message || e}`); } }
+      await refreshSheets();
+      const names = pdfs.map((f) => f.name);
+      const tail = skipped.length ? ` · ${skipped.length} skipped` : "";
+      if (names.length === 1) {
+        setOpenTabs((t) => (t.includes(names[0]) ? t : [...t, names[0]]));
+        goToSheet(names[0]);
+        setView("canvas");
+      } else {
+        setView("gallery");   // a plan set → land in the gallery to pick sheets
+      }
+      setCommitMsg(`Opened ${names.length} sheet${names.length === 1 ? "" : "s"}${tail}.`);
+    } finally {
+      setPlanImportBusy(false);
     }
-    for (const f of pdfs) { try { await store.addPdf(f); } catch (e) { setCommitMsg(`Couldn't open ${f.name}: ${e.message || e}`); } }
-    await refreshSheets();
-    const names = pdfs.map((f) => f.name);
-    const tail = skipped.length ? ` · ${skipped.length} skipped` : "";
-    if (names.length === 1) {
-      setOpenTabs((t) => (t.includes(names[0]) ? t : [...t, names[0]]));
-      goToSheet(names[0]);
-      setView("canvas");
-    } else {
-      setView("gallery");   // a plan set → land in the gallery to pick sheets
-    }
-    setCommitMsg(`Opened ${names.length} sheet${names.length === 1 ? "" : "s"}${tail}.`);
   }
   // The empty-project landing view (the Drive picker for an empty cloud project,
   // else the gallery) depends on BOTH the sheet list and the annotations (open
@@ -2531,6 +2745,13 @@ export default function TakeoffCanvas() {
     if (editingRef.current) return;
     // Pan WITHOUT leaving the draw tool: middle-drag, right-drag, Space-drag, or Pan tool.
     if (tool === "pan" || e.button === 1 || e.button === 2 || spaceRef.current) {
+      // In a side-by-side view, the last panel pressed remains the focused
+      // sheet even when that press begins a pan gesture. Page-scoped Find and
+      // the other focused-sheet commands therefore target what the user just
+      // interacted with, not the previously focused panel.
+      const panPoint = toImage(e.clientX, e.clientY);
+      const panPanel = panelAt(panPoint[0]);
+      if (panPanel?.key && panPanel.key !== focusKey) setFocusKey(panPanel.key);
       panRef.current = { sx: e.clientX, sy: e.clientY, ox: tfRef.current.x, oy: tfRef.current.y };
       e.currentTarget.setPointerCapture(e.pointerId);
       if (containerRef.current) containerRef.current.style.cursor = "var(--cursor-grabbing, grabbing)";
@@ -2597,17 +2818,26 @@ export default function TakeoffCanvas() {
   }
   // Markups carry no verts_norm (cloud rect / callout at+target / text at), so
   // hitShape can't test them — this is a purpose-built bbox/point test in the
-  // markup's OWN panel frame. p is stage px. Labels are screen-constant, so their
-  // extent divides by the current scale.
+  // markup's OWN panel frame. p is stage px. Visible annotation bounds use the
+  // sheet raster's PDF-point scale; only the outer click tolerance is camera-
+  // zoom-aware, so hit testing stays forgiving without changing paper layout.
   function hitMarkup(m, p, thr) {
     const sp = panelByKey(m.sheet_id);
     if (!sp || !sp.img.w) return false;
     const W = sp.img.w, H = sp.img.h, ox = sp.xOffset;
-    const X = p[0], Y = p[1], sc = tfRef.current.scale;
+    const X = p[0], Y = p[1];
+    const pixelsPerPoint = renderScalesRef.current.get(m.sheet_id) || RENDER_SCALE;
+    const hitsCaption = (raw, baselineX, baselineY) => {
+      if (raw == null || String(raw) === "") return false;
+      const layout = canvasMarkupTextLayout(raw, pixelsPerPoint);
+      const boxX = baselineX - layout.padX, boxY = baselineY - layout.baselines[0];
+      return X >= boxX - thr && X <= boxX + layout.width + thr && Y >= boxY - thr && Y <= boxY + layout.height + thr;
+    };
     if (m.type === "cloud" && m.rect) {
       const [[a0, b0], [a1, b1]] = m.rect;
       const x0 = Math.min(a0, a1) * W + ox, x1 = Math.max(a0, a1) * W + ox;
       const y0 = Math.min(b0, b1) * H, y1 = Math.max(b0, b1) * H;
+      if (hitsCaption(m.text, x0, y0 - 10 * pixelsPerPoint)) return true;
       // a cloud renders hollow (fill="none"), so hit only its border band — a shape
       // (or vertex) enclosed by the cloud must stay clickable through the interior.
       const inX = X >= x0 - thr && X <= x1 + thr, inY = Y >= y0 - thr && Y <= y1 + thr;
@@ -2618,12 +2848,14 @@ export default function TakeoffCanvas() {
     if (m.type === "arrow" && m.from && m.to) {
       const ax = m.from[0] * W + ox, ay = m.from[1] * H;
       const bx = m.to[0] * W + ox, by = m.to[1] * H;
-      return distToSeg(X, Y, ax, ay, bx, by) <= thr + 3 / sc;
+      if (hitsCaption(m.text, (ax + bx) / 2, (ay + by) / 2 - 6 * pixelsPerPoint)) return true;
+      return distToSeg(X, Y, ax, ay, bx, by) <= thr + 3 * pixelsPerPoint;
     }
     if (m.type === "callout" && m.at) {
       const ax = m.at[0] * W + ox, ay = m.at[1] * H;
-      const lw = (measureCanvasMarkupText(m.text || " ") + 20) / sc;
-      if (X >= ax - 5 / sc - thr && X <= ax - 5 / sc + lw + thr && Y >= ay - 18 / sc - thr && Y <= ay + thr) return true;
+      const layout = canvasMarkupTextLayout(m.text || " ", pixelsPerPoint);
+      const boxX = ax - layout.padX, boxY = ay - layout.baselines[0];
+      if (X >= boxX - thr && X <= boxX + layout.width + thr && Y >= boxY - thr && Y <= boxY + layout.height + thr) return true;
       if (m.target) {
         const tx = m.target[0] * W + ox, ty = m.target[1] * H;
         if (Math.hypot(X - tx, Y - ty) < thr * 2) return true;
@@ -2633,10 +2865,9 @@ export default function TakeoffCanvas() {
     }
     if (m.type === "text" && m.at) {
       const ax = m.at[0] * W + ox, ay = m.at[1] * H;
-      const lines = wrapCanvasNoteText(m.text);
-      const width = Math.max(80, Math.min(320, Math.max(...lines.map((line) => line.length), 1) * 7 + 18)) / sc;
-      const height = Math.max(20, lines.length * 16 + 8) / sc;
-      return X >= ax - 6 / sc - thr && X <= ax + width && Y >= ay - 16 / sc - thr && Y <= ay + height - 10 / sc + thr;
+      const layout = canvasMarkupTextLayout(m.text || " ", pixelsPerPoint);
+      const boxX = ax - layout.padX, boxY = ay - layout.baselines[0];
+      return X >= boxX - thr && X <= boxX + layout.width + thr && Y >= boxY - thr && Y <= boxY + layout.height + thr;
     }
     if (m.type === "highlight" && Array.isArray(m.pts)) {
       // a freehand highlighter stroke — hit the ink band itself (reach = half the
@@ -2656,6 +2887,7 @@ export default function TakeoffCanvas() {
       const [[a0, b0], [a1, b1]] = m.rect;
       const x0 = Math.min(a0, a1) * W + ox, x1 = Math.max(a0, a1) * W + ox;
       const y0 = Math.min(b0, b1) * H, y1 = Math.max(b0, b1) * H;
+      if (hitsCaption(m.text, x0, y0 - 10 * pixelsPerPoint)) return true;
       return X >= x0 - thr && X <= x1 + thr && Y >= y0 - thr && Y <= y1 + thr;
     }
     if (m.type === "arrow" && m.from && m.to) {
@@ -2673,6 +2905,7 @@ export default function TakeoffCanvas() {
       // viewBox extent the renderer uses, so hit size == render size).
       const { bw, bh } = svgPlacedBox(m.vb, m.w, W);
       const cx = m.at[0] * W + ox, cy = m.at[1] * H;
+      if (hitsCaption(m.text, cx - bw / 2, cy - bh / 2 - 6 * pixelsPerPoint)) return true;
       return X >= cx - bw / 2 - thr && X <= cx + bw / 2 + thr && Y >= cy - bh / 2 - thr && Y <= cy + bh / 2 + thr;
     }
     return false;
@@ -3951,17 +4184,18 @@ export default function TakeoffCanvas() {
       // Snapshot the focused sheet and its committed marks before async PDF work.
       // Side-by-side exports only the last-clicked sheet, never the whole group.
       const sheet = { key: focusPanel.key, file: focusPanel.file, page: focusPanel.page, label: tabLabel(focusPanel.key) };
+      const findHighlights = findHighlightsForPageExport(findResults, sheet.key, true, activeFindPage?.key);
       setCommitMsg(`Building ${sheet.label} PDF...`);
       const { bytes, filename } = await buildMarkedSetPdf({
         projectName, dark: darkMode, units, singleSheet: true, includeShapeLabels: false, sheets: [sheet],
         shapes: shapes.filter((s) => s.sheet_id === sheet.key),
-        markups: markups.filter((m) => m.sheet_id === sheet.key), rfis, conditions,
+        markups: markups.filter((m) => m.sheet_id === sheet.key), findHighlights, rfis, conditions,
         getPage: async (file, pageNum) => (await docFor(file)).getPage(pageNum),
         loadPdfData: (file) => store.loadPdfData(file),
       });
       const safeFilename = projectFilename(filename.slice(0, -4)).replace(/\.otk$/, ".pdf");
       downloadBytes(safeFilename, bytes);
-      setCommitMsg(`Page downloaded - ${safeFilename}`);
+      setCommitMsg(`Page downloaded - ${safeFilename}${findHighlights.length ? ` · ${findHighlights.length} keyword highlight${findHighlights.length === 1 ? "" : "s"}` : ""}`);
     } catch (e) {
       setCommitMsg(`Page download failed: ${e.message || e}`);
     } finally {
@@ -3977,6 +4211,9 @@ export default function TakeoffCanvas() {
   // the canvas layer-hide (showMarkups): only this flag drops markups from the
   // PDF. Off → pass []; the RFI-only export still works (empty-guard unaffected).
   async function exportMarkedSet(includeMarkups = true) {
+    if (markedSetExportLock.current) return;
+    markedSetExportLock.current = true;
+    setMarkedSetExportBusy(true);
     try {
       setCommitMsg("Building the marked set…");
       const exportMarkups = includeMarkups ? markups : [];
@@ -3998,6 +4235,9 @@ export default function TakeoffCanvas() {
       setCommitMsg(`Marked set downloaded — ${filename}`);
     } catch (e) {
       setCommitMsg(`Marked set failed: ${e.message || e}`);
+    } finally {
+      markedSetExportLock.current = false;
+      setMarkedSetExportBusy(false);
     }
   }
 
@@ -5612,6 +5852,14 @@ export default function TakeoffCanvas() {
       ]} /></>
   );
 
+  const longTaskLabel = planImportBusy
+    ? "Loading plan files…"
+    : markedSetExportBusy
+      ? "Exporting marked-set PDF…"
+      : pageExportBusy
+        ? "Exporting current page PDF…"
+        : "";
+
   return (
     // .app-shell: the print stylesheet collapses this 100vh flex column while the report is open
     <div
@@ -5621,6 +5869,7 @@ export default function TakeoffCanvas() {
       style={{ "--workspace-toolbar-height": `${toolbarHidden ? 0 : toolbarHeight}px`, position: "relative", display: "flex", flexDirection: "column", height: "100vh" }}>
       <input ref={projectInputRef} type="file" accept=".otk" aria-label="Open project file" style={{ display: "none" }}
         onChange={(e) => { setProjectFilePrompt(e.target.files?.[0] || null); e.target.value = ""; }} />
+      <LongTaskLoader active={!!longTaskLabel} label={longTaskLabel || "Working…"} variant="fixed" delay={350} />
       {projectMetadataModal && <ProjectMetadataModal mode={projectMetadataModal} initial={projectMetadata}
         hasWorkspace={!!(sheets.length || shapes.length || markups.length || rfis.length || projectName || fenceCalculatorProjectHasContent(fenceCalculatorProject))} saveState={saveState}
         onSubmit={submitProjectMetadata} onClose={() => setProjectMetadataModal(null)} />}
@@ -5643,7 +5892,8 @@ export default function TakeoffCanvas() {
         <div role="dialog" aria-modal="true" aria-label="Project file" onDrop={(e) => e.stopPropagation()}
           style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", padding: 16 }}>
           <div className="panel" style={{ background: "var(--paper-bright)", color: "var(--ink)", padding: 24, maxWidth: 420 }}>
-            <p role={projectFileError ? "alert" : "status"} style={{ overflowWrap: "anywhere" }}>{projectFileError || projectFileBusy || `Open ${projectFilePrompt.name}?`}</p>
+            <LongTaskLoader active={!!projectFileBusy} label={projectFileBusy || "Opening project…"} compact delay={300} />
+            <p role={projectFileError ? "alert" : undefined} style={{ overflowWrap: "anywhere" }}>{projectFileError || projectFileBusy || `Open ${projectFilePrompt.name}?`}</p>
             {projectFilePrompt && <>
               <p>Your current project stays saved in this browser. Finish any drawing in progress before switching.</p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -5693,7 +5943,10 @@ export default function TakeoffCanvas() {
         <input name="sheet-file" ref={fileInputRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
 
-        <span style={{ fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>{saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>
+          <LongTaskLoader active={saveState === "saving"} label="Saving project…" compact delay={500} />
+          {saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}
+        </span>
         {/* Deliberately subtle, not a button: local-first app, cloud mode is an
             opt-in extra. Only when ALREADY signed in (never a sign-in entry
             point in the toolbar — that lives solely on the landing link), no
@@ -5952,19 +6205,32 @@ export default function TakeoffCanvas() {
           </>}
         />
         {findOpen && createPortal(
-          <div className="find-dialog-shade" onClick={(event) => { if (event.target === event.currentTarget) closeFind(); }}>
-            <section ref={findDialogRef} className="find-all-dialog" role="dialog" aria-modal="true" aria-label="Find text across loaded plans"
-              style={{ "--find-dialog-x": `${findDialogOffset.x}px`, "--find-dialog-y": `${findDialogOffset.y}px`, "--find-dialog-top": `${findDialogTop}px` }}>
+          <div className="find-dialog-shade">
+            <section ref={findDialogRef} className="find-all-dialog" role="dialog" aria-modal="false" aria-labelledby="find-dialog-title"
+              onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); closeFind(); } }}
+              style={{
+                "--find-dialog-x": `${findDialogOffset.x}px`,
+                "--find-dialog-y": `${findDialogOffset.y}px`,
+                "--find-dialog-top": `${findDialogTop}px`,
+                ...(findDialogSize.width ? { width: `${findDialogSize.width}px` } : {}),
+                ...(findDialogSize.height ? { height: `${findDialogSize.height}px` } : {}),
+              }}>
               <header className="find-dialog-header" onPointerDown={startFindDialogDrag} onPointerMove={moveFindDialog} onPointerUp={endFindDialogDrag} onPointerCancel={endFindDialogDrag}>
-                <strong>Find in loaded plans</strong>
-                <button type="button" onClick={closeFind} aria-label="Close find panel" title="Close find panel">×</button>
+                <strong id="find-dialog-title">Find in loaded plans</strong>
+                <span className="find-dialog-header-actions">
+                  <span className="find-dialog-tabs" role="tablist" aria-label="Find panel sections">
+                    <button id="find-search-tab" type="button" role="tab" tabIndex={findPanelTab === "find" ? 0 : -1} aria-selected={findPanelTab === "find"} aria-controls="find-search-panel" onKeyDown={onFindPanelTabKeyDown} onClick={() => setFindPanelTab("find")}>Find</button>
+                    <button id="find-help-tab" type="button" role="tab" tabIndex={findPanelTab === "help" ? 0 : -1} aria-selected={findPanelTab === "help"} aria-controls="find-help-panel" onKeyDown={onFindPanelTabKeyDown} onClick={() => setFindPanelTab("help")}>Help</button>
+                  </span>
+                  <button className="find-dialog-close" type="button" onClick={closeFind} aria-label="Close find panel" title="Close find panel">×</button>
+                </span>
               </header>
-              <div className="find-dialog-content">
+              {findPanelTab === "find" ? <div id="find-search-panel" className="find-dialog-content" role="tabpanel" aria-labelledby="find-search-tab">
                 <label className="find-dialog-label">
                   Search words or phrases <span>(separate multiple terms with commas)</span>
-                  <input ref={findInputRef} type="search" value={findQuery} placeholder="e.g. fence, gate, dumpster" aria-label="Search text across all loaded plan PDFs"
-                    onChange={(event) => { findRequestRef.current++; setFindBusy(false); setFindQuery(event.target.value); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans."); }}
-                    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (findResults.length && findResultQuery === findQuery.trim().toLocaleLowerCase()) moveFind(event.shiftKey ? -1 : 1); else runFind(); } }} />
+                  <input ref={findInputRef} type="search" value={findQuery} placeholder="e.g. fence, gate, dumpster" aria-label="Keywords for PDF text search"
+                    onChange={(event) => updateFindDraft(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (!findBusy) runFind(); } }} />
                 </label>
                 <section className="find-suggestions-section" aria-label="Scope suggestions">
                   <div className="find-suggestions-heading">
@@ -5978,12 +6244,12 @@ export default function TakeoffCanvas() {
                         <button className="find-suggestion-toggle" type="button" aria-pressed={selected} onClick={() => {
                           const terms = parseFindTerms(findQuery);
                           const next = selected ? terms.filter((item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase()) : [...terms, term];
-                          findRequestRef.current++; setFindBusy(false); setFindQuery(next.join(", ")); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
+                          updateFindDraft(next.join(", "));
                         }}>{term}</button>
                         <button className="find-suggestion-remove" type="button" aria-label={`Remove ${term} suggestion`} title={`Remove ${term} suggestion`} onClick={() => {
                           setFindSuggestions((current) => removeFindSuggestion(current, term));
                           const next = parseFindTerms(findQuery).filter((item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase());
-                          findRequestRef.current++; setFindBusy(false); setFindQuery(next.join(", ")); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
+                          updateFindDraft(next.join(", "));
                         }}>×</button>
                       </span>;
                     })}
@@ -5994,8 +6260,8 @@ export default function TakeoffCanvas() {
                     if (!additions.length) return;
                     setFindSuggestions((current) => addFindSuggestions(current, additions));
                     const terms = parseFindTerms(findQuery);
-                    setFindQuery([...new Map([...terms, ...additions].map((term) => [term.toLocaleLowerCase(), term])).values()].join(", "));
-                    setFindSuggestionInput(""); findRequestRef.current++; setFindBusy(false); setFindResults([]); setFindIndex(-1); setFindResultQuery(""); setFindMessage("Press Find all to scan the loaded plans.");
+                    updateFindDraft([...new Map([...terms, ...additions].map((term) => [term.toLocaleLowerCase(), term])).values()].join(", "));
+                    setFindSuggestionInput("");
                   }}>
                     <input type="text" value={findSuggestionInput} onChange={(event) => setFindSuggestionInput(event.target.value)} placeholder="Add a scope suggestion" aria-label="New scope suggestion" />
                     <button type="submit" disabled={!parseFindTerms(findSuggestionInput).length || findSuggestions.length >= 40}>Add</button>
@@ -6003,20 +6269,88 @@ export default function TakeoffCanvas() {
                 </section>
                 <div className="find-dialog-actions">
                   <button className="find-run-button" type="button" onClick={() => runFind()} disabled={findBusy || !parseFindTerms(findQuery).length}>
-                    {findBusy ? "Scanning…" : "Find all"}
+                    {findBusy && findBusyScope === "all" ? "Scanning…" : "Find pages"}
                   </button>
-                  <button className="find-mark-button" type="button" onClick={() => setFindMarkAll((value) => !value)} aria-pressed={findMarkAll} title="Show or hide highlights for every search match">
-                    {findMarkAll ? "✓ Mark all matches" : "Mark all matches"}
+                  <button className="find-current-page-button" type="button" onClick={() => runFind("page")} disabled={findBusy || !focusPanel?.file || !parseFindTerms(findQuery).length}
+                    title={focusPanel?.key ? `Search only ${tabLabel(focusPanel.key)} and keep completed highlights` : "Open a PDF page to search it"}>
+                    {findBusy && findBusyScope === "page" ? "Scanning…" : "Find in this page"}
                   </button>
-                  {findResults.length > 0 && <span className="find-result-count">{(findIndex + 1).toLocaleString()} / {findResults.length.toLocaleString()}</span>}
-                  <button type="button" onClick={() => moveFind(-1)} disabled={!findResults.length || findBusy} title="Previous match" aria-label="Previous match"><Icon name="chevronUp" size={13} /></button>
-                  <button type="button" onClick={() => moveFind(1)} disabled={!findResults.length || findBusy} title="Next match" aria-label="Next match"><Icon name="chevronDown" size={13} /></button>
+                  <LongTaskLoader active={findBusy} label={findMessage || "Finding keyword matches…"} compact delay={250} />
+                  <button className="find-mark-button" type="button" onClick={toggleAllFindJobs} disabled={!findJobs.length}
+                    aria-pressed={findJobs.some((job) => job.visible !== false)} title="Show or hide highlights for all completed searches">
+                    {findJobs.some((job) => job.visible !== false) ? "Unmark all pages" : "Mark all pages"}
+                  </button>
+                  <span className="find-page-navigation">
+                    {findPages.length > 0 && <span className="find-result-count">Page {(findPageIndex + 1).toLocaleString()} / {findPages.length.toLocaleString()}</span>}
+                    <button type="button" onClick={() => moveFindPage(-1)} disabled={!findPages.length || findBusy} title="Previous matching page" aria-label="Previous matching page"><Icon name="chevronLeft" size={13} /></button>
+                    <button type="button" onClick={() => moveFindPage(1)} disabled={!findPages.length || findBusy} title="Next matching page" aria-label="Next matching page"><Icon name="chevronRight" size={13} /></button>
+                  </span>
                 </div>
-                <div className="find-dialog-status" aria-live="polite">
-                  {findResults.length && !findBusy ? `${findResults.length.toLocaleString()} matches in ${new Set(findResults.map((hit) => hit.file)).size} plans. Press Enter to move to the next match.` : findMessage || `${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"} will be searched.`}
+                <div className="find-dialog-status" aria-live={findBusy ? "off" : "polite"}>
+                  {findMessage || (findResults.length && !findBusy ? `${findResults.length.toLocaleString()} matches on ${findPages.length.toLocaleString()} page${findPages.length === 1 ? "" : "s"} across ${new Set(findPages.map((resultPage) => resultPage.file)).size.toLocaleString()} PDF${new Set(findPages.map((resultPage) => resultPage.file)).size === 1 ? "" : "s"}.` : `${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"} will be searched.`)}
                 </div>
-                <div className="find-dialog-help">Only selectable PDF text is searchable; scanned pages may need OCR. Drag this title bar to move the panel. Escape or click outside to close.</div>
-              </div>
+                {findJobs.length > 0 && <section className="find-job-results" aria-label="Completed searches and highlight controls">
+                  <div className="find-job-results-heading">
+                    <span>Search marks</span>
+                    <button type="button" onClick={clearFindJobs}>Remove all</button>
+                  </div>
+                  <ol>
+                    {findJobs.map((job) => {
+                      const jobPageCount = groupFindMatchesByPage(job.matches).length;
+                      const jobLabel = job.scope === "page" ? `This page · ${tabLabel(job.targetKey)}` : "All loaded pages";
+                      return <li key={job.id} className={job.visible === false ? "is-hidden" : ""}>
+                        <button className="find-job-visibility" type="button" onClick={() => setFindJobVisible(job.id, job.visible === false)}
+                          aria-pressed={job.visible !== false} aria-label={`${job.visible === false ? "Show" : "Hide"} search marks for ${jobLabel}: ${job.query}`}
+                          title={job.visible === false ? "Show these marks" : "Hide these marks"}>
+                          {job.visible === false ? "Show" : "✓ Marked"}
+                        </button>
+                        <input className="find-job-color" type="color" value={job.color} onChange={(event) => setFindJobColor(job.id, event.target.value)}
+                          aria-label={`Highlight color for ${jobLabel}: ${job.query}`} title="Change this search's highlight color" />
+                        <span className="find-job-copy">
+                          <strong>{jobLabel}</strong>
+                          <span>{job.query}</span>
+                        </span>
+                        <span className="find-job-count">{job.matches.length.toLocaleString()} match{job.matches.length === 1 ? "" : "es"} · {jobPageCount.toLocaleString()} page{jobPageCount === 1 ? "" : "s"}</span>
+                        <button className="find-job-remove" type="button" onClick={() => removeFindJob(job.id)} aria-label={`Remove search marks for ${jobLabel}: ${job.query}`} title="Remove this search and its marks">×</button>
+                      </li>;
+                    })}
+                  </ol>
+                </section>}
+                {findPages.length > 0 && !findBusy && <section className="find-page-results" aria-label="Pages containing search keywords">
+                  <div className="find-page-results-heading">Matching pages</div>
+                  <ol>
+                    {findPages.map((resultPage, index) => {
+                      const current = index === findPageIndex;
+                      return <li key={resultPage.key}>
+                        <button type="button" onClick={() => goToFindPage(index)} aria-current={current ? "page" : undefined}>
+                          <span className="find-page-result-title">
+                            <strong>{tabLabel(resultPage.key)}</strong>
+                            <span>{resultPage.file.replace(/\.pdf$/i, "")} · PDF page {resultPage.page}</span>
+                          </span>
+                          <span className="find-page-result-terms">
+                            {resultPage.terms.map(({ term, count }) => <span key={term.toLocaleLowerCase()}>{term}{count > 1 ? ` ×${count}` : ""}</span>)}
+                          </span>
+                          <span className="find-page-result-count">{resultPage.matchCount.toLocaleString()} match{resultPage.matchCount === 1 ? "" : "es"}</span>
+                        </button>
+                      </li>;
+                    })}
+                  </ol>
+                </section>}
+              </div> : <div id="find-help-panel" className="find-dialog-content find-dialog-help-panel" role="tabpanel" aria-labelledby="find-help-tab">
+                <h3>Find help</h3>
+                <p>Find pages scans every loaded PDF. Find in this page scans only the focused sheet and adds a separate search.</p>
+                <p>Use Search marks to show, hide, recolor, or remove each completed search. Unmark all pages hides them together without deleting them.</p>
+                <p>Only selectable PDF text is searchable; scanned pages may need OCR.</p>
+                <p>Drag the title bar to move this panel, or drag either lower corner to resize it. It stays open while you pan, zoom, or use other tools; close it with × or the active Find button.</p>
+              </div>}
+              <button className="find-dialog-resize-handle is-left" type="button" aria-label="Resize find panel from lower-left corner" title="Drag or use arrow keys to resize"
+                onKeyDown={(event) => resizeFindDialogWithKeyboard(event, "left")}
+                onPointerDown={(event) => startFindDialogResize(event, "left")} onPointerMove={moveFindDialogResize} onPointerUp={endFindDialogResize}
+                onPointerCancel={endFindDialogResize} onLostPointerCapture={endFindDialogResize} />
+              <button className="find-dialog-resize-handle is-right" type="button" aria-label="Resize find panel from lower-right corner" title="Drag or use arrow keys to resize"
+                onKeyDown={(event) => resizeFindDialogWithKeyboard(event, "right")}
+                onPointerDown={(event) => startFindDialogResize(event, "right")} onPointerMove={moveFindDialogResize} onPointerUp={endFindDialogResize}
+                onPointerCancel={endFindDialogResize} onLostPointerCapture={endFindDialogResize} />
             </section>
           </div>, document.body,
         )}
@@ -6312,9 +6646,9 @@ export default function TakeoffCanvas() {
                 const label = labelFor(p);
                 return (
                   <g key={p.key} transform={`translate(${p.xOffset},0)`}>
-                    {findMarkAll && findResults.map((hit, index) => hit.key === p.key && <rect key={`find-${index}`} x={hit.x * p.img.w} y={hit.y * p.img.h} width={hit.w * p.img.w} height={hit.h * p.img.h}
-                      fill={index === findIndex ? "rgba(255,166,0,.46)" : "rgba(255,225,70,.28)"}
-                      stroke={index === findIndex ? "#d06b00" : "#d0a900"} strokeWidth={(index === findIndex ? 2 : 1) / tf.scale} pointerEvents="none" />)}
+                    {findResults.map((hit, index) => hit.key === p.key && <rect key={`find-${index}`} x={hit.x * p.img.w} y={hit.y * p.img.h} width={hit.w * p.img.w} height={hit.h * p.img.h}
+                      fill={hit.color || FIND_HIGHLIGHT_COLORS[0]} fillOpacity={hit.key === activeFindPage?.key ? .46 : .28}
+                      stroke={hit.color || FIND_HIGHLIGHT_COLORS[0]} strokeOpacity={.92} strokeWidth={(hit.key === activeFindPage?.key ? 2 : 1) / tf.scale} pointerEvents="none" />)}
                     {panels.length > 1 && <text x={0} y={-26} fontSize={64} fontWeight={700} fill={darkMode ? "#9a917f" : "#6b6256"}>{label}</text>}
                     {pShapes.map((s) => {
                       const cond = condById[s.condition_id];
@@ -6395,9 +6729,10 @@ export default function TakeoffCanvas() {
                       .slice().sort((a, b) => (a.type === "highlight" ? 0 : 1) - (b.type === "highlight" ? 0 : 1))
                       .map((m) => {
                       const z = tf.scale;
+                      const pixelsPerPoint = renderScalesRef.current.get(p.key) || RENDER_SCALE;
                       const base = m.color || (m.rfi_id ? "#1f3fc7" : "#c47a10");
                       const mk = darkMode ? boostForDark(base) : base;   // literal — SVG attrs don't resolve CSS vars
-                      const dash = dashArrayFor(m.line_style || "solid", z);
+                      const dash = pdfDashFor(m.line_style || "solid")?.map((n) => n * pixelsPerPoint).join(" ");
                       const w = clampWeight(m.weight);   // stroke-width multiplier over each element's base, default ×1
                       const selM = m.id === selectedMarkupId;
                       // linkage badge — unconditional for any linked markup (a note-less
@@ -6406,7 +6741,7 @@ export default function TakeoffCanvas() {
                       const linked = m.rfi_id ? rfis.find((r) => r.id === m.rfi_id) : null;
                       const badgeCol = darkMode ? boostForDark("#1f3fc7") : "#1f3fc7";
                       const badge = (bx, by) => (m.rfi_id ? (
-                        <text x={bx} y={by} fill={badgeCol} fontSize={12 / z} fontWeight="700" textAnchor="middle" dominantBaseline="central" style={{ pointerEvents: "none" }}>{"⬢"}{linked && linked.number != null && linked.number !== "" ? " " + linked.number : ""}</text>
+                        <text x={bx} y={by} fill={badgeCol} fontSize={12 * pixelsPerPoint} fontWeight="700" fontFamily={MARKUP_TEXT_FONT_FAMILY} textAnchor="middle" dominantBaseline="central" style={{ pointerEvents: "none" }}>{"⬢"}{linked && linked.number != null && linked.number !== "" ? " " + linked.number : ""}</text>
                       ) : null);
                       // revision-delta △n — a small numbered triangle at a cloud corner,
                       // clear of the halo, the top-left RFI badge, and the centered note.
@@ -6416,8 +6751,8 @@ export default function TakeoffCanvas() {
                       // canvas, and would wash out on white).
                       const revTri = (rx, ry) => (Number.isFinite(m.rev) && m.rev > 0 ? (
                         <g style={{ pointerEvents: "none" }}>
-                          <path d={`M${rx},${ry - 9 / z} L${rx + 8 / z},${ry + 6 / z} L${rx - 8 / z},${ry + 6 / z} Z`} fill="#fff" stroke={base} strokeWidth={1.4 / z} />
-                          <text x={rx} y={ry + 2.5 / z} fill={base} fontSize={9 / z} fontWeight="700" textAnchor="middle" dominantBaseline="central">{m.rev}</text>
+                          <path d={`M${rx},${ry - 9 * pixelsPerPoint} L${rx + 9 * pixelsPerPoint},${ry + 9 * pixelsPerPoint} L${rx - 9 * pixelsPerPoint},${ry + 9 * pixelsPerPoint} Z`} fill="#fff" stroke={base} strokeWidth={1 * pixelsPerPoint} />
+                          <text x={rx} y={ry + 6 * pixelsPerPoint} fill={base} fontSize={7 * pixelsPerPoint} fontWeight="700" fontFamily={MARKUP_TEXT_FONT_FAMILY} textAnchor="middle" dominantBaseline="central">{m.rev}</text>
                         </g>
                       ) : null);
                       // halo ring widths scale with weight so a heavy stroke never overruns them
@@ -6427,6 +6762,30 @@ export default function TakeoffCanvas() {
                           <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill="none" stroke="#1f3fc7" strokeWidth={(2 * w) / z} />
                         </>
                       ) : null);
+                      // Shared PDF-point text box. The stored anchor remains the
+                      // first-line baseline for backwards compatibility; the box
+                      // grows down for wrapped lines exactly like the PDF export.
+                      const boxedLabel = (raw, baselineX, baselineY, selection = false) => {
+                        if (raw == null || String(raw) === "") return null;
+                        const layout = canvasMarkupTextLayout(raw, pixelsPerPoint);
+                        const boxX = baselineX - layout.padX;
+                        const boxY = baselineY - layout.baselines[0];
+                        const uiPad = 3 / z;
+                        return (
+                          <g style={{ pointerEvents: "none" }}>
+                            {selection && halo(boxX - uiPad, boxY - uiPad, boxX + layout.width + uiPad, boxY + layout.height + uiPad)}
+                            <rect x={boxX} y={boxY} width={layout.width} height={layout.height}
+                              fill={darkMode ? "rgba(20,26,31,.92)" : "rgba(255,247,237,.92)"}
+                              stroke={mk} strokeWidth={0.8 * w * pixelsPerPoint} />
+                            <text x={baselineX} fill={darkMode ? "#f5f2e8" : "#0e1a2e"}
+                              fontSize={layout.fontSize} fontWeight="700" fontFamily={MARKUP_TEXT_FONT_FAMILY}>
+                              {layout.lines.map((line, index) => (
+                                <tspan key={index} x={baselineX} y={boxY + layout.baselines[index]}>{line || " "}</tspan>
+                              ))}
+                            </text>
+                          </g>
+                        );
+                      };
                       if (m.type === "highlight" && Array.isArray(m.pts)) {
                         // freehand highlighter stroke — the ink keeps its OWN hue (a highlight
                         // IS its color; dark legibility comes from the higher opacity, not a
@@ -6448,7 +6807,7 @@ export default function TakeoffCanvas() {
                               </>
                             )}
                             {ink}
-                            {badge(ip[0][0], ip[0][1] - 9 / z)}
+                            {badge(ip[0][0], ip[0][1] - 9 * pixelsPerPoint)}
                           </g>
                         );
                       }
@@ -6460,9 +6819,9 @@ export default function TakeoffCanvas() {
                         return (
                           <g key={m.id}>
                             {halo(hx0 - pad, hy0 - pad, hx1 + pad, hy1 + pad)}
-                            <rect x={hx0} y={hy0} width={hx1 - hx0} height={hy1 - hy0} fill={mk} fillOpacity={0.18} stroke={mk} strokeWidth={(2 * w) / z} strokeDasharray={dash} />
-                            {m.text && <text x={(hx0 + hx1) / 2} y={(hy0 + hy1) / 2} fill={mk} fontSize={13 / z} fontWeight="700" textAnchor="middle" dominantBaseline="central" style={{ pointerEvents: "none" }}>{m.text}</text>}
-                            {badge(hx0, hy0 - pad - 9 / z)}
+                            <rect x={hx0} y={hy0} width={hx1 - hx0} height={hy1 - hy0} fill={mk} fillOpacity={0.18} stroke={mk} strokeWidth={1 * w * pixelsPerPoint} strokeDasharray={dash} />
+                            {boxedLabel(m.text, hx0, hy0 - 10 * pixelsPerPoint)}
+                            {badge(hx0, hy0 - 18 * pixelsPerPoint)}
                           </g>
                         );
                       }
@@ -6474,25 +6833,22 @@ export default function TakeoffCanvas() {
                         return (
                           <g key={m.id}>
                             {halo(bx0, by0, bx1, by1)}
-                            <path d={cloudPath(c0[0] * p.img.w, c0[1] * p.img.h, c1[0] * p.img.w, c1[1] * p.img.h)} fill="none" stroke={mk} strokeWidth={(2 * w) / z} strokeDasharray={dash} />
-                            {m.text && <text x={(c0[0] + c1[0]) / 2 * p.img.w} y={(c0[1] + c1[1]) / 2 * p.img.h} fill={mk} fontSize={13 / z} fontWeight="700" textAnchor="middle" dominantBaseline="central" style={{ pointerEvents: "none" }}>{m.text}</text>}
-                            {badge(bx0, by0 - 9 / z)}
-                            {revTri(bx1, by0 - 9 / z)}
+                            <path d={cloudPath(c0[0] * p.img.w, c0[1] * p.img.h, c1[0] * p.img.w, c1[1] * p.img.h)} fill="none" stroke={mk} strokeWidth={1.3 * w * pixelsPerPoint} strokeDasharray={dash} />
+                            {boxedLabel(m.text, Math.min(c0[0], c1[0]) * p.img.w, Math.min(c0[1], c1[1]) * p.img.h - 10 * pixelsPerPoint)}
+                            {badge(Math.min(c0[0], c1[0]) * p.img.w, Math.min(c0[1], c1[1]) * p.img.h - 18 * pixelsPerPoint)}
+                            {revTri(Math.max(c0[0], c1[0]) * p.img.w, Math.min(c0[1], c1[1]) * p.img.h - 9 * pixelsPerPoint)}
                           </g>
                         );
                       }
                       if (m.type === "callout") {
                         const [tx, ty] = m.target, [ax, ay] = m.at;
-                        const lw = (measureCanvasMarkupText(m.text || " ") + 20) / z;
                         return (
                           <g key={m.id}>
-                            {halo(ax * p.img.w - 9 / z, ay * p.img.h - 18 / z, ax * p.img.w - 5 / z + lw + 4 / z, ay * p.img.h + 4 / z)}
-                            <line x1={tx * p.img.w} y1={ty * p.img.h} x2={ax * p.img.w} y2={ay * p.img.h} stroke={mk} strokeWidth={(2 * w) / z} strokeDasharray={dash} />
+                            <line x1={tx * p.img.w} y1={ty * p.img.h} x2={ax * p.img.w} y2={ay * p.img.h} stroke={mk} strokeWidth={0.9 * w * pixelsPerPoint} strokeDasharray={dash} />
                             {/* arrowhead at the target end — replaces the old vertex star */}
-                            <path d={arrowheadPath(ax * p.img.w, ay * p.img.h, tx * p.img.w, ty * p.img.h, 9 / z)} fill={mk} />
-                            <rect x={ax * p.img.w - 5 / z} y={ay * p.img.h - 16 / z} width={lw} height={20 / z} fill="rgba(255,255,255,.92)" stroke={mk} strokeWidth={(1 * w) / z} strokeDasharray={dash} rx={3 / z} />
-                            <text x={(ax * p.img.w) + 5 / z} y={(ay * p.img.h) - 2 / z} fill="#0e1a2e" fontSize={12 / z}>{m.text}</text>
-                            {badge(ax * p.img.w, ay * p.img.h - 24 / z)}
+                            <path d={arrowheadPath(ax * p.img.w, ay * p.img.h, tx * p.img.w, ty * p.img.h, 5 * pixelsPerPoint)} fill={mk} />
+                            {boxedLabel(m.text || " ", ax * p.img.w, ay * p.img.h, selM)}
+                            {badge(ax * p.img.w, ay * p.img.h - 24 * pixelsPerPoint)}
                           </g>
                         );
                       }
@@ -6505,11 +6861,11 @@ export default function TakeoffCanvas() {
                         return (
                           <g key={m.id}>
                             {halo(hx0 - pad, hy0 - pad, hx1 + pad, hy1 + pad)}
-                            <line x1={fx} y1={fy} x2={tx} y2={ty} stroke={mk} strokeWidth={(2 * w) / z} strokeDasharray={dash} strokeLinecap="round" />
+                            <line x1={fx} y1={fy} x2={tx} y2={ty} stroke={mk} strokeWidth={1.3 * w * pixelsPerPoint} strokeDasharray={dash} strokeLinecap="round" />
                             {/* filled arrowhead at the `to` end */}
-                            <path d={arrowheadPath(fx, fy, tx, ty, 11 / z)} fill={mk} />
-                            {m.text && <text x={midx} y={midy - 6 / z} fill={mk} fontSize={12 / z} fontWeight="700" textAnchor="middle" dominantBaseline="central" style={{ pointerEvents: "none" }}>{m.text}</text>}
-                            {badge(hx0, hy0 - pad - 9 / z)}
+                            <path d={arrowheadPath(fx, fy, tx, ty, 6 * w * pixelsPerPoint)} fill={mk} />
+                            {boxedLabel(m.text, midx, midy - 6 * pixelsPerPoint)}
+                            {badge(hx0, hy0 - 15 * pixelsPerPoint)}
                           </g>
                         );
                       }
@@ -6520,9 +6876,9 @@ export default function TakeoffCanvas() {
                         return (
                           <g key={m.id}>
                             {halo(cx - rad - pad, cy - rad - pad, cx + rad + pad, cy + rad + pad)}
-                            <circle cx={cx} cy={cy} r={rad} fill={darkMode ? "rgba(12,15,20,.85)" : "rgba(255,255,255,.85)"} stroke={mk} strokeWidth={(2 * w) / z} strokeDasharray={dash} />
-                            {m.text && <text x={cx} y={cy} fill={mk} fontSize={Math.min(13, rad * z * 0.9) / z} fontWeight="700" textAnchor="middle" dominantBaseline="central" style={{ pointerEvents: "none" }}>{m.text}</text>}
-                            {badge(cx + rad, cy - rad - 4 / z)}
+                            <circle cx={cx} cy={cy} r={rad} fill={darkMode ? "rgba(12,15,20,.85)" : "rgba(255,255,255,.85)"} stroke={mk} strokeWidth={1.2 * w * pixelsPerPoint} strokeDasharray={dash} />
+                            {m.text && <text x={cx} y={cy} fill={mk} fontSize={Math.min(8 * pixelsPerPoint, rad * 0.9)} fontWeight="700" fontFamily={MARKUP_TEXT_FONT_FAMILY} textAnchor="middle" dominantBaseline="central" style={{ pointerEvents: "none" }}>{m.text}</text>}
+                            {badge(cx + rad, cy - rad - 4 * pixelsPerPoint)}
                           </g>
                         );
                       }
@@ -6541,24 +6897,17 @@ export default function TakeoffCanvas() {
                         return (
                           <g key={m.id}>
                             {halo(x0, y0, x0 + bw, y0 + bh)}
-                            <path d={d} fill={fcol} fillOpacity={fillOn ? 0.9 : undefined} stroke={mk} strokeWidth={(1.6 * w) / z} strokeLinejoin="round" style={{ pointerEvents: "none" }} />
-                            {badge(x0, y0 - 9 / z)}
+                            <path d={d} fill={fcol} fillOpacity={fillOn ? 0.9 : undefined} stroke={mk} strokeWidth={1.2 * w * pixelsPerPoint} strokeLinejoin="round" style={{ pointerEvents: "none" }} />
+                            {boxedLabel(m.text, x0, y0 - 6 * pixelsPerPoint)}
+                            {badge(x0, y0 - 15 * pixelsPerPoint)}
                           </g>
                         );
                       }
                       const [x, y] = m.at;
-                      const lines = m.type === "text" ? wrapCanvasNoteText(m.text) : [m.text || ""];
-                      const measuredWidth = Math.max(...lines.map((line) => measureCanvasMarkupText(line, 12, 600)), 1);
-                      const lw = (m.type === "text" ? Math.max(80, Math.min(340, measuredWidth + 20)) : measuredWidth + 20) / z;
-                      const lh = m.type === "text" ? Math.max(20, lines.length * 16 + 8) / z : 20 / z;
                       return (
                         <g key={m.id}>
-                          {halo(x * p.img.w - 10 / z, y * p.img.h - 16 / z, x * p.img.w - 8 / z + lw + 3 / z, y * p.img.h + lh - 10 / z)}
-                          <rect x={x * p.img.w - 8 / z} y={y * p.img.h - 14 / z} width={lw} height={lh} fill="rgba(255,247,237,.92)" stroke={mk} strokeWidth={(1 * w) / z} strokeDasharray={dash} rx={3 / z} />
-                          <text x={x * p.img.w + 2 / z} y={y * p.img.h} fill="#0e1a2e" fontSize={12 / z} fontWeight="600">
-                            {lines.map((line, index) => <tspan key={index} x={x * p.img.w + 2 / z} dy={index === 0 ? 0 : `${16 / z}px`}>{line || " "}</tspan>)}
-                          </text>
-                          {badge(x * p.img.w, y * p.img.h - 22 / z)}
+                          {boxedLabel(m.text || " ", x * p.img.w, y * p.img.h, selM)}
+                          {badge(x * p.img.w, y * p.img.h - 24 * pixelsPerPoint)}
                         </g>
                       );
                     })}
@@ -6733,10 +7082,11 @@ export default function TakeoffCanvas() {
             </svg>
           </div>
 
-          {status !== "ready" && (
+          {(status === "loading" || status === "rendering") && (
+            <LongTaskLoader active label={status === "loading" ? "Loading sheets…" : "Rendering sheet…"} variant="overlay" delay={300} />
+          )}
+          {(status === "empty" || status === "error") && (
             <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-muted)", fontSize: 15 }}>
-              {status === "loading" && "Loading sheets…"}
-              {status === "rendering" && "Rendering sheet…"}
               {status === "empty" && "No PDFs yet — click “Open PDF” or drag a plan onto the canvas."}
               {status === "error" && <span style={{ color: "var(--c-danger)" }}>Error: {err}</span>}
             </div>
@@ -6750,7 +7100,7 @@ export default function TakeoffCanvas() {
           <div className="canvas-zoom-rail" onPointerDown={(e) => { if (e.button === 0 && !spaceRef.current) e.stopPropagation(); }} onDoubleClick={(e) => e.stopPropagation()}
             style={{ position: "absolute", left: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6 }}>
             {panelBtn(toggleFullscreen, isFullscreen ? "fullscreenExit" : "fullscreen", isFullscreen ? "Exit fullscreen" : "Enter fullscreen", isFullscreen, null, { "aria-label": isFullscreen ? "Exit fullscreen" : "Enter fullscreen", "aria-pressed": isFullscreen })}
-            {sheets.length > 0 && <div ref={findPanelRef} style={{ display: "flex" }}>
+            {sheets.length > 0 && <div style={{ display: "flex" }}>
               {panelBtn(() => findOpen ? closeFind() : openFind(), "target", "Find and mark text in all loaded plans (Ctrl+F)", findOpen, null, { "aria-label": "Find text in all loaded plans", "aria-expanded": findOpen })}
             </div>}
             <ToolMenu rail title="Draw — measurement, cut out, and markup tools"

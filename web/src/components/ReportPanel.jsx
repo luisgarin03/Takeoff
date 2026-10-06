@@ -5,6 +5,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../brand/icons.jsx";
 import ToolMenu from "./ToolMenu.jsx";
+import LongTaskLoader from "./LongTaskLoader.jsx";
 import { conditionTotals, grandTotals, sheetTotals, sheetGroupedRows, labelGroupedRows, round2, totalsToCsv, downloadText, materialsSummary, reportJson, hasMultipliers, BY_SHEET_BASE_NOTE } from "../lib/totals.js";
 import { TABLE_PROFILE, CSV_PROFILE, colGetter, customColProfile, specColProfile, laborColProfile, partitionRowsBy, forceIncludeGroupCol, loadColPrefs, saveColPrefs, loadGroupBy, saveGroupBy, visibleCols, floorPerimeterLf, applyUnits } from "../lib/reportColumns.js";
 import { areaVal, areaUnit, lenVal, lenUnit } from "../lib/units";
@@ -51,6 +52,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
   // panel's root so the theme scopes to the document subtree (screen + print +
   // masthead) without touching app chrome. Held in state so an import applies live.
   const [theme, setTheme] = useState(() => activeTheme());
+  const [exportingXlsx, setExportingXlsx] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
   const themeRef = useRef(null);
   const themeFileRef = useRef(null);
@@ -304,9 +306,15 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
   // Excel workbook — same sources as the CSV/JSON (Conditions tab follows the
   // column picker like the CSV); buildXlsx lazy-loads fflate on first use
   const exportXlsx = async () => {
-    const sheets = reportWorkbook({ rows, bySheet, shapeRows: shapesDetail(conditions, shapes, sheetLabel), cols: csvCols, ctx, sheetLabel, units });
-    const bytes = await buildXlsx(sheets);
-    downloadText(`${baseName}.xlsx`, bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    if (exportingXlsx) return;
+    setExportingXlsx(true);
+    try {
+      const sheets = reportWorkbook({ rows, bySheet, shapeRows: shapesDetail(conditions, shapes, sheetLabel), cols: csvCols, ctx, sheetLabel, units });
+      const bytes = await buildXlsx(sheets);
+      downloadText(`${baseName}.xlsx`, bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    } finally {
+      setExportingXlsx(false);
+    }
   };
   const exportShapesCsv = () => downloadText(`${baseName}_shapes.csv`, shapesToCsv(shapesDetail(conditions, shapes, sheetLabel), projectName, brand.brandName), "text/csv");
   const exportShapesJson = () => downloadText(`${baseName}_shapes.json`,
@@ -376,6 +384,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
   return (
     // Foreground app layer: canvas drawers reach 120; the toolbar toggle is 140.
     <div className="report-panel" style={{ ...theme.vars, position: "absolute", inset: 0, zIndex: 150, display: "flex", flexDirection: "column", background: "var(--paper-cream)" }}>
+      <LongTaskLoader active={exportingXlsx} label="Building Excel workbook…" variant="fixed" />
       <div className="report-toolbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 18px", borderBottom: "1px solid var(--ink)", background: "var(--paper-bright)" }}>
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>Takeoff report</strong>
         <input name="project-name" value={projectName} onChange={(e) => onProjectName(e.target.value)} placeholder="Project name (optional)"
@@ -542,7 +551,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
           items={[
             { section: "Report" },
             { id: "csv", icon: "document", label: "CSV", disabled: !rows.length, onSelect: exportCsv },
-            { id: "xlsx", icon: "document", label: "Excel", disabled: !rows.length, title: "Excel workbook — Conditions / By sheet / Materials / Shapes", onSelect: exportXlsx },
+            { id: "xlsx", icon: "document", label: "Excel", disabled: !rows.length || exportingXlsx, title: "Excel workbook — Conditions / By sheet / Materials / Shapes", onSelect: exportXlsx },
             { id: "json", icon: "document", label: "JSON", disabled: !rows.length && !markups.length && !rfis.length, title: "JSON — works markups-only / RFI-only too", onSelect: exportJson },
             { section: "Shapes" },
             { id: "shapes-csv", icon: "document", label: "Shapes CSV", disabled: !shapes.length, title: "Per-shape measured quantities — no multiplier, no waste", onSelect: exportShapesCsv },

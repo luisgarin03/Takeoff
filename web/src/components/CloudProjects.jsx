@@ -25,6 +25,7 @@ import ProfileAccountSection from "./ProfileAccountSection.jsx";
 import AccountAvatar from "./AccountAvatar.jsx";
 import LocalFolderBrowser from "./LocalFolderBrowser.jsx";
 import ProjectInvitations from "./ProjectInvitations.jsx";
+import LongTaskLoader from "./LongTaskLoader.jsx";
 
 import "../styles/cloud.css";
 
@@ -335,12 +336,14 @@ export default function CloudProjects({ initialView = "projects", source, getPay
   </>;
   const authentication = !cloud.user || authMode === "password";
   const storageOptions = <><option value="supabase">Supabase Storage</option><option value="google_drive" disabled={!drive?.connected}>Google Drive{!drive?.connected ? " (connect in Profile)" : ""}</option></>;
+  const longTaskLabel = busy || (restoringSource ? "Loading saved source folder…" : cloud.configuration.configured && (!cloud.ready || !auth) ? "Restoring cloud account…" : "");
   return createPortal(<div className="cloud-shade" onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+    <LongTaskLoader active={!!longTaskLabel} label={longTaskLabel} variant="fixed" />
     <section ref={root} className="cloud-dialog" role="dialog" aria-modal="true" aria-label={view === "account" ? "Profile" : "Cloud projects"} tabIndex={-1}>
       <header><h2>{view === "account" ? "Profile" : "Cloud projects"}</h2>{cloud.user && view !== "account" && <div className="cloud-header-account"><AccountAvatar profile={cloud.identity} size={28} /><span title={cloud.user.email}>{cloud.user.email}</span></div>}<span className="cloud-status">{cloud.displayStatus}</span>
         <button type="button" title={view === "account" ? "Close profile" : "Close cloud projects"} aria-label={view === "account" ? "Close profile" : "Close cloud projects"} disabled={!!busy} onClick={onClose}><Icon name="close" size={18} /></button></header>
       <div className="cloud-content">
-        {!cloud.configuration.configured ? <p role="status">{cloud.configuration.error || "Cloud is not configured. Local saving remains available."}</p> : !cloud.ready || !auth ? <p role="status">Restoring account...</p> : <>
+        {!cloud.configuration.configured ? <p role="status">{cloud.configuration.error || "Cloud is not configured. Local saving remains available."}</p> : !cloud.ready || !auth ? <p>Restoring account...</p> : <>
           {authentication ? <form onSubmit={authenticate} className="cloud-auth">
             <h3>{{ signin: "Sign in", signup: "Create account", forgot: "Forgot password", confirm: "Confirm email", recover: "Recovery code", password: "New password" }[authMode]}</h3>
             {["signin", "signup"].includes(authMode) && <>
@@ -365,7 +368,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
               {source.listFolder && <p>Export this Drive project and open its local .otk copy before saving to Supabase.</p>}
             </div>}
             {view === "projects" && <>
-              {restoringSource && <p role="status" aria-live="polite">Loading saved source folder…</p>}
+              {restoringSource && <p>Loading saved source folder…</p>}
               {!restoringSource && !localBrowser && !showCloudLibrary && <section><h3>Select a source folder</h3><p>You are signed in. Select or create your Google Drive folder on this computer to display its files.</p></section>}
               <div className="cloud-actions">{showCloudLibrary && !localBrowser && <><select aria-label="Project filter" value={filter} disabled={(!!busy || restoringSource)} onChange={(e) => setFilter(e.target.value)}><option value="mine">My Projects</option>{SHARING_UI_ENABLED && <option value="shared">Shared With Me</option>}<option value="recent">Recent</option><option value="legacy">Legacy storage</option></select><button disabled={(!!busy || restoringSource) || cloud.offline} onClick={() => run(refresh)}>Refresh projects</button></>}<button disabled={(!!busy || restoringSource) || !window.showDirectoryPicker} onClick={() => run(locateDrive)}><img src={googleDriveLogo} alt="" aria-hidden="true" width={18} height={18} style={{ objectFit: "contain", flexShrink: 0 }} />Locate Google Drive Folder</button></div>
               {!restoringSource && !localBrowser && !showCloudLibrary && <p>Locate an existing source folder, or create a new source folder in Google Drive for desktop.</p>}
@@ -396,7 +399,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
               <div className="cloud-actions"><button disabled={!!busy} onClick={() => setConfirm(null)}>Cancel</button><button className="btn-primary" disabled={!!busy || (["rename", "copy-local", "copy-cloud"].includes(confirm.type) && !name.trim())} onClick={() => run(action)}>Confirm</button></div></section>}
           </>}
         </>}
-        {busy && <p role="status">{busy}{/Uploading|Downloading/.test(busy) && <button type="button" onClick={() => transfer.current?.abort()}>Cancel transfer</button>}</p>}{notice && <p role="status">{notice}</p>}{error && <p role="alert" className="cloud-error">{error}</p>}
+        {busy && <p>{busy}{/Uploading|Downloading/.test(busy) && <button type="button" onClick={() => transfer.current?.abort()}>Cancel transfer</button>}</p>}{notice && <p role="status">{notice}</p>}{error && <p role="alert" className="cloud-error">{error}</p>}
         {savedCopy && <a href={savedCopy}>Open saved copy</a>}
         {warnings.length > 0 && <ul className="cloud-warnings">{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
       </div>

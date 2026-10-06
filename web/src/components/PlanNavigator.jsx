@@ -24,6 +24,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../brand/icons.jsx";
 import { BrandText } from "../brand/marks.jsx";
 import AuthChip from "./AuthChip.jsx";
+import LongTaskLoader from "./LongTaskLoader.jsx";
 import { useGoogleAuth } from "../lib/google/AuthContext.jsx";
 import { parseSheetKey, extractSheetNumber, detectScale, RENDER_SCALE, MAX_GROUP } from "../lib/sheets";
 import { isGoogleConfigured } from "../lib/google/auth.js";
@@ -654,6 +655,11 @@ export default function PlanNavigator({
       style={canClose
         ? { position: "relative", width: "min(1100px, 92vw)", height: "85vh", display: "flex", flexDirection: "column", background: "var(--paper-cream)", boxShadow: "var(--shadow-2)", overflow: "hidden" }
         : { position: "absolute", inset: 0, display: "flex", flexDirection: "column", background: "var(--paper-cream)" }}>
+      <LongTaskLoader
+        active={adding || sampleBusy || driveBusy || (mode === "browse" && bLoading)}
+        label={adding ? "Adding selected plans…" : sampleBusy ? "Loading sample plan…" : driveBusy ? "Signing in to Google Drive…" : "Reading plan folder…"}
+        variant="overlay"
+      />
       {(mode !== "plan" || sheets.length > 0 || canClose) && header}
       {onAddFiles && (
         <input name="sheet-file" ref={fileRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
