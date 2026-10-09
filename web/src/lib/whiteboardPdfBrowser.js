@@ -37,16 +37,19 @@ export async function readBoardImage(bytes, type, crop, signal) {
         image.width * normalized.w, image.height * normalized.h,
         0, 0, width, height);
       signal?.throwIfAborted();
-      return { bytes: await pngBytes(canvas), type: "image/png", width, height };
+      return { bytes: await pngBytes(canvas), type: "image/png", width, height,
+        layoutWidth: image.width * normalized.w, layoutHeight: image.height * normalized.h };
     }
     checkBoardRaster(image.width, image.height);
     // JPEG EXIF orientation must agree with the browser preview. Decode these
     // at original resolution instead of embedding unoriented JPEG pixels.
     const exif = type === "image/jpeg" && bytes.some((b, i) => b === 69 && bytes[i + 1] === 120 && bytes[i + 2] === 105 && bytes[i + 3] === 102 && bytes[i + 4] === 0);
-    if (type === "image/png" || (type === "image/jpeg" && !exif)) return { bytes, type, width: image.width, height: image.height };
+    if (type === "image/png" || (type === "image/jpeg" && !exif)) return { bytes, type, width: image.width, height: image.height,
+      layoutWidth: image.width, layoutHeight: image.height };
     canvas = canvasFor(image.width, image.height);
     canvas.getContext("2d").drawImage(image, 0, 0);
-    return { bytes: await pngBytes(canvas), type: "image/png", width: image.width, height: image.height };
+    return { bytes: await pngBytes(canvas), type: "image/png", width: image.width, height: image.height,
+      layoutWidth: image.width, layoutHeight: image.height };
   } finally { image.close(); if (canvas) canvas.width = canvas.height = 0; }
 }
 

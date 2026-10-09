@@ -8,7 +8,7 @@ import { ARROW_COLORS } from "../lib/canvasConstants.js";
 import { downloadBytes } from "../lib/markedset.js";
 import { boardContentRect, buildWhiteboardPdf } from "../lib/whiteboardPdf.js";
 import { whiteboardPdfRenderer } from "../lib/whiteboardPdfBrowser.js";
-import { whiteboardPdfPreviewScale } from "../lib/whiteboardPdfPreview.js";
+import { whiteboardPdfLayoutSize, whiteboardPdfPreviewScale } from "../lib/whiteboardPdfPreview.js";
 import { base64ToBytes, bytesToBase64, appendWhiteboardArrow, appendWhiteboardRectangle, fitWhiteboard, normalizeWhiteboardImageCrop, NOTE_COLORS, removeBoardItem, removeWhiteboardDrawing, setWhiteboardImageCrop, setWhiteboardItemHeaderColor, updateWhiteboardDrawing, WHITEBOARD_FILE_HEADER_COLORS, WHITEBOARD_FILE_LIMIT, WHITEBOARD_TOTAL_LIMIT, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, whiteboardFileType, whiteboardImageCrop, zoomBoard } from "../lib/whiteboard.js";
 import "../styles/whiteboard.css";
 
@@ -63,10 +63,12 @@ const FilePreview = memo(function FilePreview({ asset, page, crop, onPages, reso
         if (stopped) return;
         const native = pdfPage.getViewport({ scale: 1 });
         const viewport = pdfPage.getViewport({ scale: whiteboardPdfPreviewScale(native.width, native.height, resolution) });
+        const layout = whiteboardPdfLayoutSize(native.width, native.height);
         // Render offscreen and publish only while this page owns the preview.
         // A cancelled/older page must never replace the current page's pixels.
         const canvas = document.createElement("canvas");
         canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+        canvas.style.width = `${layout.width}px`; canvas.style.height = `${layout.height}px`;
         canvas.setAttribute("aria-label", `${asset.name}, page ${page}`);
         task = pdfPage.render({ canvasContext: canvas.getContext("2d"), viewport });
         await task.promise;
@@ -190,7 +192,8 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const importLock = useRef(false), alive = useRef(true);
   const exportTask = useRef(null);
-  const [exporting, setExporting] = useState(false);
+  const [exportMode, setExportMode] = useState(null);
+  const exporting = !!exportMode;
   const [preview, setPreview] = useState(null);
   const [pdfResolution, setPdfResolution] = useState(2);
   const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
@@ -500,17 +503,19 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
       x: visible.x - 1, y: visible.y - 39, w: Math.max(42, visible.w + 2), h: Math.max(82, visible.h + 80) } : item) };
     clearImageCrop(); commit(next); setSelected(state.itemId);
   }
-  async function exportPdf(region = null) {
+  async function exportPdf(region = null, pageMode = null) {
     if (exportTask.current || importLock.current) return;
     const controller = new AbortController();
-    exportTask.current = controller; setExporting(true); setError("");
+    const nextExportMode = pageMode === "pages" ? "pages" : region ? "selection" : "single";
+    exportTask.current = controller; setExportMode(nextExportMode); setError("");
     try {
-      const result = await buildWhiteboardPdf(boardRef.current, { projectName, ...(region ? { region, boardName: "Whiteboard selection" } : {}),
+      const result = await buildWhiteboardPdf(boardRef.current, { projectName,
+        ...(pageMode === "pages" ? { pageMode: "pages", boardName: "Whiteboard pages" } : region ? { region, boardName: "Whiteboard selection" } : {}),
         renderer: whiteboardPdfRenderer(pdfjsLib), signal: controller.signal });
       if (alive.current && !controller.signal.aborted) downloadBytes(result.filename, result.bytes);
     } catch (e) {
       if (alive.current && !controller.signal.aborted) setError(e.message || "Whiteboard PDF export failed. Please try again.");
-    } finally { if (exportTask.current === controller) exportTask.current = null; if (alive.current) setExporting(false); }
+    } finally { if (exportTask.current === controller) exportTask.current = null; if (alive.current) setExportMode(null); }
   }
   const activeItem = board.items.find((item) => item.id === selected);
   const activeArrow = (board.arrows || []).find((arrow) => arrow.id === selected);
@@ -521,7 +526,10 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
   const canCropImage = !!activeAsset?.type?.startsWith("image/") && !activeAsset.missing;
   const hasPdf = board.assets.some((asset) => asset.type === "application/pdf");
   const drawingCount = (board.arrows?.length || 0) + (board.rectangles?.length || 0);
-  const longTaskLabel = exporting ? "Exporting whiteboard PDF…" : busy ? "Adding files to the whiteboard…" : saveState === "saving" ? "Saving whiteboard…" : "";
+  const exportTaskLabel = exportMode === "pages" ? "Exporting whiteboard pages…"
+    : exportMode === "selection" ? "Exporting selected whiteboard area…"
+      : exportMode === "single" ? "Exporting whiteboard PDF…" : "";
+  const longTaskLabel = exportTaskLabel || (busy ? "Adding files to the whiteboard…" : saveState === "saving" ? "Saving whiteboard…" : "");
   return createPortal(<section className="wb" role="dialog" aria-modal="true" aria-label="Whiteboard" tabIndex={-1} ref={root}
     onPaste={paste}
     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
@@ -534,7 +542,8 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         <button type="button" onClick={() => input.current.click()} disabled={busy}><Icon name="plus" size={16} />Add files</button>
         <button type="button" onClick={() => addNote()} disabled={busy || board.items.length >= 2000}><Icon name="textNote" size={16} />Note</button>
         <button type="button" onClick={onSave} disabled={busy}><Icon name="document" size={16} />Save project</button>
-        <Button icon="document" label="Export whiteboard as PDF" onClick={() => exportPdf()} disabled={busy || exporting} aria-busy={exporting}>{exporting ? "Exporting..." : "Export whiteboard as PDF"}</Button>
+        <Button icon="document" label="Export whiteboard as PDF" onClick={() => exportPdf()} disabled={busy || exporting} aria-busy={exportMode === "single"}>{exportMode === "single" ? "Exporting…" : "Export whiteboard as PDF"}</Button>
+        <Button icon="sheets" label="Export whiteboard as pages" onClick={() => exportPdf(null, "pages")} disabled={busy || exporting} aria-busy={exportMode === "pages"}>{exportMode === "pages" ? "Exporting pages…" : "Export whiteboard as pages"}</Button>
       </div>
       <input ref={input} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp" aria-label="Whiteboard files" hidden
         onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
@@ -554,7 +563,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         <Button icon="close" label="Cancel image crop" onClick={clearImageCrop}>Cancel</Button>
       </div>}
       {exportArea && <div className="wb-export-actions" role="group" aria-label="Selected PDF export area">
-        <button type="button" onClick={() => exportPdf(exportArea)} disabled={busy || exporting}>{exporting ? "Exporting selection…" : "Export selected area as PDF"}</button>
+        <button type="button" onClick={() => exportPdf(exportArea)} disabled={busy || exporting} aria-busy={exportMode === "selection"}>{exportMode === "selection" ? "Exporting selection…" : "Export selected area as PDF"}</button>
         <button type="button" onClick={() => setExportArea(null)} disabled={exporting}>Clear area</button>
       </div>}
       {(mode === "arrow" || mode === "rectangle") && <div className="wb-colors wb-arrow-colors" role="group" aria-label={`${mode === "arrow" ? "Arrow" : "Rectangle"} color`}>
@@ -579,7 +588,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         <button type="button" className="wb-refresh" title="Render visible PDF previews again at the selected detail" aria-label="Refresh PDF previews"
           disabled={busy || exporting} onClick={() => setPdfRefreshKey((key) => key + 1)}>Refresh</button>
       </>}
-      <span className="wb-status" role="status" aria-hidden={longTaskLabel ? "true" : undefined}>{exporting ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved locally" : ""}</span>
+      <span className="wb-status" role="status" aria-hidden={longTaskLabel ? "true" : undefined}>{exportMode === "pages" ? "Exporting pages..." : exportMode === "selection" ? "Exporting selection..." : exportMode === "single" ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved locally" : ""}</span>
     </div>
     {error && <div className="wb-error" role="alert"><span>{error}</span><Button icon="close" label="Dismiss whiteboard error" onClick={() => setError("")} /></div>}
     <div ref={viewport} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}${mode === "arrow" ? " is-arrow" : ""}${mode === "rectangle" ? " is-rectangle" : ""}${mode === "export-area" ? " is-crop" : ""}${imageCrop ? " is-image-crop" : ""}`} aria-label="Whiteboard canvas"

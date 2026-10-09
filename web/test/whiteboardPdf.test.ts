@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PDFDocument, PDFDict, PDFRawStream, PDFName, PDFNumber, degrees, rgb } from "pdf-lib";
+import { PDFArray, PDFDocument, PDFDict, PDFRawStream, PDFName, PDFNumber, decodePDFRawStream, degrees, rgb } from "pdf-lib";
 import { base64ToBytes, bytesToBase64 } from "../src/lib/whiteboard.js";
-import { boardContentRect, boardNoteCardRect, boardPdfBounds, boardPdfPlacement, boardRectsIntersect, buildWhiteboardPdf, checkBoardRaster, whiteboardPdfFilename } from "../src/lib/whiteboardPdf.js";
+import { boardArrowPaintBounds, boardContentRect, boardNoteCardRect, boardPdfBounds, boardPdfPlacement, boardRectanglePaintBounds, boardRectsIntersect, buildWhiteboardPdf, checkBoardRaster, whiteboardPdfFilename } from "../src/lib/whiteboardPdf.js";
 import type { BoardPdfRenderer } from "../src/lib/whiteboardPdf.js";
 
 const png = base64ToBytes("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j8ioAAAAASUVORK5CYII=");
@@ -29,6 +29,33 @@ async function assertPage(result: Awaited<ReturnType<typeof buildWhiteboardPdf>>
   return page;
 }
 
+function assertPageBoxes(page: ReturnType<PDFDocument["getPage"]>, width: number, height: number) {
+  for (const getBox of ["getMediaBox", "getCropBox", "getBleedBox", "getTrimBox", "getArtBox"] as const) {
+    assert.deepEqual(page[getBox](), { x: 0, y: 0, width, height });
+  }
+}
+
+function pageContent(doc: PDFDocument, page: ReturnType<PDFDocument["getPage"]>) {
+  const contents = page.node.Contents();
+  if (!contents) return "";
+  const refs = contents instanceof PDFArray ? contents.asArray() : [contents];
+  return refs.map((ref) => {
+    const stream = doc.context.lookup(ref);
+    assert.ok(stream instanceof PDFRawStream);
+    return new TextDecoder().decode(decodePDFRawStream(stream).decode());
+  }).join("\n");
+}
+
+function pageXObjectCount(page: ReturnType<PDFDocument["getPage"]>) {
+  const resources = page.node.Resources();
+  const xobjects = resources?.lookupMaybe(PDFName.of("XObject"), PDFDict);
+  return xobjects?.keys().length || 0;
+}
+
+function assertPrintableClip(doc: PDFDocument, page: ReturnType<PDFDocument["getPage"]>) {
+  assert.match(pageContent(doc, page), /18 18 756 576 re\s+W\s+n/, "page content is clipped to the 18pt printable margin");
+}
+
 test("note export includes its title/header colors and complete card while rendering the colored body", async () => {
   const b = board();
   assert.deepEqual(boardContentRect(b.items[0]), { x: 1, y: 39, w: 278, h: 180 });
@@ -45,15 +72,24 @@ test("note export includes its title/header colors and complete card while rende
 test("whiteboard arrows export over their own board bounds in the selected color", async () => {
   const b = { ...board([]), arrows: [{ id: "arrow-1", from: [10, 20], to: [80, 60], color: "#2563EB" }] };
   const result = await buildWhiteboardPdf(b, { renderer });
-  assert.deepEqual(result.bounds, { minX: 10, minY: 20, maxX: 80, maxY: 60, width: 52.5, height: 30 });
-  await assertPage(result, 52.5, 30);
+  const painted = boardArrowPaintBounds(b.arrows[0])!;
+  assert.deepEqual(result.bounds, { minX: painted.x, minY: painted.y, maxX: painted.x + painted.w, maxY: painted.y + painted.h,
+    width: painted.w * .75, height: painted.h * .75 });
+  await assertPage(result, painted.w * .75, painted.h * .75);
+});
+
+test("arrow paint bounds retain a horizontal shaft and complete arrowhead", () => {
+  const bounds = boardArrowPaintBounds({ from: [100, 100], to: [200, 100] })!;
+  assert.deepEqual({ x: bounds.x, y: bounds.y, w: bounds.w }, { x: 98.75, y: 94.12, w: 101.25 });
+  assert.ok(Math.abs(bounds.h - 11.76) < 1e-10);
 });
 
 test("whiteboard rectangles export as vector drawings and define rectangle-only board bounds", async () => {
   const b = { ...board([]), rectangles: [{ id: "rect-1", x: -20, y: 30, w: 200, h: 100, color: "#DC2626", strokeWidth: 4 }] };
   const result = await buildWhiteboardPdf(b, { renderer });
-  assert.deepEqual(result.bounds, { minX: -20, minY: 30, maxX: 180, maxY: 130, width: 150, height: 75 });
-  await assertPage(result, 150, 75);
+  assert.deepEqual(boardRectanglePaintBounds(b.rectangles[0]), { x: -22, y: 28, w: 204, h: 104 });
+  assert.deepEqual(result.bounds, { minX: -22, minY: 28, maxX: 182, maxY: 132, width: 153, height: 78 });
+  await assertPage(result, 153, 78);
 });
 
 test("selected export regions include intersecting rectangles and exclude distant ones", async () => {
@@ -65,6 +101,13 @@ test("selected export regions include intersecting rectangles and exclude distan
   const result = await buildWhiteboardPdf(b, { region, renderer });
   assert.deepEqual(result.bounds, { minX: 50, minY: 50, maxX: 250, maxY: 150, width: 150, height: 75 });
   await assertPage(result, 150, 75);
+});
+
+test("selected regions include drawing ink even when the centerline is outside", async () => {
+  const b = { ...board([]), rectangles: [{ id: "edge", x: 101, y: 20, w: 40, h: 40, color: "#2563EB", strokeWidth: 4 }] };
+  const result = await buildWhiteboardPdf(b, { region: { x: 0, y: 0, w: 100, h: 100 }, renderer });
+  const page = await assertPage(result, 75, 75);
+  assert.ok(page.node.Contents(), "the visible half-stroke is exported into the selected area");
 });
 
 test("selected export region sets exact PDF bounds and clips intersecting cards while skipping other cards", async () => {
@@ -88,6 +131,158 @@ test("selection crops arrows to the requested area and can export blank selected
   await assertPage(result, 150, 75);
   const blank = await buildWhiteboardPdf(board([note()]), { region: { x: 700, y: 800, w: 80, h: 60 }, renderer });
   await assertPage(blank, 60, 45);
+});
+
+test("paged export uses fixed Letter pages and reports sparse tiles in row-major order", async () => {
+  const result = await buildWhiteboardPdf(board([
+    note({ id: "top-left", x: 0, y: 0 }),
+    note({ id: "top-right", x: 2200, y: 0 }),
+    note({ id: "lower-left", x: 0, y: 850 }),
+  ]), { pageMode: "pages", projectName: "Job: A/B", boardName: "Whiteboard pages", renderer });
+  const doc = await PDFDocument.load(result.bytes);
+
+  assert.equal(doc.getPageCount(), 3, "blank tiles are omitted instead of becoming empty PDF pages");
+  for (const page of doc.getPages()) {
+    assertPageBoxes(page, 792, 612);
+    assertPrintableClip(doc, page);
+    assert.equal(pageXObjectCount(page), 1, "each occupied tile contains its one note card");
+  }
+  assert.deepEqual((result as any).pages, [
+    { row: 0, col: 0, bounds: { x: 0, y: 0, w: 1008, h: 768 } },
+    { row: 0, col: 2, bounds: { x: 2016, y: 0, w: 1008, h: 768 } },
+    { row: 1, col: 0, bounds: { x: 0, y: 768, w: 1008, h: 768 } },
+  ]);
+  assert.equal(result.filename, "Job_ A_B - Whiteboard pages.pdf");
+});
+
+test("paged export assigns a boundary touch once and repeats only content that crosses it", async () => {
+  const calls: string[] = [];
+  const draw: BoardPdfRenderer = { ...renderer, renderNote: async (item) => { calls.push(item.id); return png; } };
+  const exact = await buildWhiteboardPdf(board([
+    note({ id: "anchor", x: 0, y: 0 }),
+    note({ id: "edge", x: 1008, y: 0 }),
+  ]), { pageMode: "pages", renderer: draw });
+  const exactDoc = await PDFDocument.load(exact.bytes);
+  assert.deepEqual((exact as any).pages.map(({ row, col }: any) => [row, col]), [[0, 0], [0, 1]]);
+  assert.deepEqual(exactDoc.getPages().map(pageXObjectCount), [1, 1], "touching the tile edge does not duplicate a card");
+  assert.deepEqual(calls, ["anchor", "edge"], "each note is rendered once before page placement");
+
+  calls.length = 0;
+  const crossing = await buildWhiteboardPdf(board([
+    note({ id: "anchor", x: 0, y: 0 }),
+    note({ id: "crossing", x: 1007, y: 0 }),
+  ]), { pageMode: "pages", renderer: draw });
+  const crossingDoc = await PDFDocument.load(crossing.bytes);
+  assert.deepEqual(crossingDoc.getPages().map(pageXObjectCount), [2, 1], "a card with painted area on both sides continues on both pages");
+  for (const page of crossingDoc.getPages()) assertPrintableClip(crossingDoc, page);
+  assert.deepEqual(calls, ["anchor", "crossing"], "a crossing card is rasterized once and reused");
+});
+
+test("paged export supports sparse boards beyond the single-page size limit", async () => {
+  const distant = board([
+    note({ id: "origin", x: 0, y: 0 }),
+    note({ id: "distant", x: 20160, y: 0 }),
+  ]);
+  await assert.rejects(buildWhiteboardPdf(distant, { renderer }), /single-page PDF limit/);
+
+  const calls: string[] = [];
+  const result = await buildWhiteboardPdf(distant, { pageMode: "pages", renderer: {
+    ...renderer, renderNote: async (item) => { calls.push(item.id); return png; },
+  } });
+  const doc = await PDFDocument.load(result.bytes);
+  assert.equal(doc.getPageCount(), 2);
+  assert.deepEqual((result as any).pages.map(({ row, col }: any) => [row, col]), [[0, 0], [0, 20]]);
+  assert.deepEqual(calls, ["origin", "distant"], "empty columns do not cause repeated note rendering");
+});
+
+test("long paged exports yield so cancellation can stop page construction", async () => {
+  const controller = new AbortController();
+  const b = { ...board([note()]), rectangles: [
+    { id: "long", x: 0, y: 300, w: 1008 * 10 - 10, h: 100, color: "#2563EB", strokeWidth: 4 },
+  ] };
+  await assert.rejects(buildWhiteboardPdf(b, { pageMode: "pages", signal: controller.signal, renderer: {
+    ...renderer,
+    renderNote: async () => {
+      setTimeout(() => controller.abort(), 0);
+      return png;
+    },
+  } }), { name: "AbortError" });
+});
+
+test("paged export keeps multi-page drawings as vectors", async () => {
+  const b = { ...board([]), rectangles: [
+    { id: "wide", x: 0, y: 0, w: 1100, h: 100, color: "#DC2626", strokeWidth: 4 },
+  ] };
+  const result = await buildWhiteboardPdf(b, { pageMode: "pages", renderer });
+  const doc = await PDFDocument.load(result.bytes);
+  assert.equal(doc.getPageCount(), 2);
+  for (const page of doc.getPages()) {
+    assertPageBoxes(page, 792, 612);
+    assertPrintableClip(doc, page);
+    assert.equal(pageXObjectCount(page), 0, "rectangle paths stay vector instead of becoming images");
+    assert.match(pageContent(doc, page), /\bRG\b[\s\S]*\bS\b/, "the rectangle stroke is drawn on every intersected tile");
+  }
+});
+
+test("paged export reuses vector PDF content at exact positions across page edges", async () => {
+  const source = await PDFDocument.create();
+  source.addPage([1200, 100]).drawRectangle({ x: 0, y: 0, width: 1200, height: 100, color: rgb(.2, .4, .8) });
+  const item = file({ x: 0, y: 0, w: 1202, h: 280 });
+  const result = await buildWhiteboardPdf(board([item], [asset(await source.save())]), { pageMode: "pages" });
+  const doc = await PDFDocument.load(result.bytes);
+  assert.equal(doc.getPageCount(), 2);
+  const translations = [[18, 518.7857142857143], [-738, 518.7857142857143]];
+  doc.getPages().forEach((page, index) => {
+    const xobjects = page.node.Resources()!.lookup(PDFName.of("XObject"), PDFDict);
+    const forms = xobjects.keys().map((key) => xobjects.lookup(key)).filter((value) => value instanceof PDFRawStream
+      && value.dict.get(PDFName.of("Subtype"))?.toString() === "/Form");
+    assert.equal(forms.length, 1, "the source PDF remains a reusable vector Form XObject");
+    const [x, y] = translations[index];
+    assert.match(pageContent(doc, page), new RegExp(`1 0 0 1 ${x} ${y} cm`));
+  });
+});
+
+test("paged export omits blank interior tiles for hollow rectangles", async () => {
+  const b = { ...board([]), rectangles: [
+    { id: "outline", x: 0, y: 0, w: 2200, h: 1700, color: "#2563EB", strokeWidth: 4 },
+  ] };
+  const result = await buildWhiteboardPdf(b, { pageMode: "pages", renderer });
+  assert.deepEqual((result as any).pages.map(({ row, col }: any) => [row, col]), [
+    [0, 0], [0, 1], [0, 2],
+    [1, 0], [1, 2],
+    [2, 0], [2, 1], [2, 2],
+  ]);
+  const doc = await PDFDocument.load(result.bytes);
+  assert.equal(doc.getPageCount(), 8);
+  for (const page of doc.getPages()) assert.match(pageContent(doc, page), /\bRG\b[\s\S]*\bS\b/);
+});
+
+test("paged export follows a long diagonal arrow without blank bounding-box pages", async () => {
+  const b = { ...board([]), arrows: [
+    { id: "diagonal", from: [0, 0], to: [2200, 1700], color: "#DC2626" },
+  ] };
+  const result = await buildWhiteboardPdf(b, { pageMode: "pages", renderer });
+  assert.deepEqual((result as any).pages.map(({ row, col }: any) => [row, col]), [
+    [0, 0], [1, 0], [1, 1], [2, 1], [2, 2],
+  ]);
+  const doc = await PDFDocument.load(result.bytes);
+  assert.equal(doc.getPageCount(), 5);
+  for (const page of doc.getPages()) assert.match(pageContent(doc, page), /\bm\b[\s\S]*\bl\b/);
+});
+
+test("single-page mode keeps its existing custom-size behavior", async () => {
+  const b = board([
+    note({ id: "left", x: 0, y: 0 }),
+    note({ id: "right", x: 1100, y: 0 }),
+  ]);
+  const single = await buildWhiteboardPdf(b, { renderer });
+  await assertPage(single, 1035, 165);
+  assert.equal(single.filename, "Untitled project - Whiteboard.pdf");
+
+  const paged = await buildWhiteboardPdf(b, { pageMode: "pages", boardName: "Whiteboard pages", renderer });
+  const doc = await PDFDocument.load(paged.bytes);
+  assert.equal(doc.getPageCount(), 2);
+  for (const page of doc.getPages()) assertPageBoxes(page, 792, 612);
 });
 
 test("board rectangle intersection detects touching edges as outside", () => {
@@ -164,6 +359,25 @@ test("image content bounds match contain sizing, not its letterboxed card or vie
   assert.deepEqual(boardContentRect(file(), { width: 800, height: 400 }), { x: -399, y: 339, w: 400, h: 200 });
 });
 
+test("small PDF pages use the same logical contain size in full and selected-area exports", async () => {
+  const doc = await PDFDocument.create();
+  doc.addPage([100, 50]);
+  const pdf = asset(await doc.save());
+  const item = file({ x: 10, y: 20, w: 402, h: 280 });
+  const full = await buildWhiteboardPdf(board([item], [pdf]));
+  assert.deepEqual(full.bounds, { minX: 111, minY: 109, maxX: 311, maxY: 209, width: 150, height: 75 });
+  await assertPage(full, 150, 75);
+
+  const annotated = await PDFDocument.load(await doc.save());
+  annotated.getPage(0).node.set(PDFName.of("Annots"), annotated.context.obj([annotated.context.obj({ Subtype: "Text" })]));
+  let renderedRect: { x: number; y: number; w: number; h: number } | undefined;
+  const region = { x: 50, y: 50, w: 200, h: 100 };
+  await buildWhiteboardPdf(board([item], [asset(await annotated.save())]), { region, renderer: {
+    ...renderer, renderPdfPage: async (_bytes, _page, rect) => { renderedRect = rect; return png; },
+  } });
+  assert.deepEqual(renderedRect, { x: 111, y: 109, w: 200, h: 100 });
+});
+
 test("image crops are passed to the renderer non-destructively and control exported aspect and bounds", async () => {
   const crop = { x: .25, y: .2, w: .5, h: .25 };
   const seen: unknown[] = [];
@@ -177,6 +391,15 @@ test("image crops are passed to the renderer non-destructively and control expor
   assert.deepEqual(seen, [crop]);
   assert.deepEqual(result.bounds, { minX: -399, minY: 389, maxX: 1, maxY: 489, width: 300, height: 75 });
   await assertPage(result, 300, 75);
+});
+
+test("fractional image crops keep their live logical size instead of shifting after raster rounding", async () => {
+  const crop = { x: 0, y: 0, w: .5, h: 1 };
+  const result = await buildWhiteboardPdf(board([file({ x: 10, y: 20, w: 402, h: 500, crop })], [asset(png, "image/png")]), { renderer: {
+    ...renderer,
+    readImage: async (bytes, type) => ({ bytes, type, width: 201, height: 301, layoutWidth: 200.5, layoutHeight: 301 }),
+  } });
+  assert.deepEqual(result.bounds, { minX: 110.75, minY: 118.5, maxX: 311.25, maxY: 419.5, width: 150.375, height: 225.75 });
 });
 
 test("image export cache distinguishes two crops of the same source asset", async () => {
@@ -208,6 +431,11 @@ test("empty, degenerate, corrupt and oversized content produce actionable errors
   await assert.rejects(buildWhiteboardPdf(board([note({ w: 5000, h: 5000 })]), { renderer }), /16-megapixel/);
   await assert.rejects(buildWhiteboardPdf(board(Array.from({ length: 5 }, (_, i) => note({ id: String(i), w: 1300, h: 1300 }))), { renderer }), /64-megapixel/);
   await assert.rejects(buildWhiteboardPdf(board([note(), note({ id: "far", x: 30000 })]), { renderer }), /single-page PDF limit/);
+  await assert.rejects(buildWhiteboardPdf({ ...board([]), rectangles: [
+    { id: "too-many-pages", x: 0, y: 0, w: 1008 * 501, h: 100, color: "#2563EB", strokeWidth: 4 },
+  ] }, { pageMode: "pages", renderer }), /500 pages/);
+  await assert.rejects(buildWhiteboardPdf(board(), { pageMode: "pages", region: { x: 0, y: 0, w: 100, h: 100 }, renderer }), /single-page PDF format/);
+  await assert.rejects(buildWhiteboardPdf(board(), { pageMode: "unknown" as any, renderer }), /Unknown whiteboard PDF page mode/);
   await assert.rejects(buildWhiteboardPdf(board([file()], [asset(new Uint8Array([1, 2, 3]))])), /Reference.pdf/);
   await assert.rejects(buildWhiteboardPdf(board(), { renderer: { ...renderer, renderNote: async () => { throw new Error("Enlarge the note"); } } }), /Enlarge the note/);
 });

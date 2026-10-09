@@ -6,7 +6,7 @@ import { unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
 import { emptyWhiteboard, bytesToBase64, base64ToBytes, validateWhiteboard, appendWhiteboardArrow, appendWhiteboardRectangle, sanitizeWhiteboardArrows, sanitizeWhiteboardRectangles, removeBoardItem, removeWhiteboardDrawing, updateWhiteboardDrawing, setWhiteboardFileHeaderColor, setWhiteboardItemHeaderColor, sanitizeWhiteboardFileHeaderColors, setWhiteboardImageCrop, normalizeWhiteboardImageCrop, whiteboardImageCrop, whiteboardHasContent, whiteboardDrawingBounds, WHITEBOARD_FILE_HEADER_COLORS, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, zoomBoard, fitBoard, fitWhiteboard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
 import { localStore, createFileProjectStore, importFileProject, ANN_SCHEMA } from "../src/lib/store.js";
 import { exportProjectFile, readProjectFile } from "../src/lib/projectFile.js";
-import { WHITEBOARD_PDF_PREVIEW_MAX_PIXELS, whiteboardPdfPreviewScale } from "../src/lib/whiteboardPdfPreview.js";
+import { WHITEBOARD_PDF_PREVIEW_MAX_PIXELS, whiteboardPdfLayoutSize, whiteboardPdfPreviewScale } from "../src/lib/whiteboardPdfPreview.js";
 
 beforeEach(() => { globalThis.indexedDB = new IDBFactory(); });
 const pdf = strToU8("%PDF-1.7\nwhiteboard reference\n%%EOF");
@@ -307,6 +307,10 @@ test("PDF preview resolution increases detail but caps canvas pixel area", () =>
   const huge = whiteboardPdfPreviewScale(10000, 14000, 3);
   assert.ok(10000 * huge * 14000 * huge <= WHITEBOARD_PDF_PREVIEW_MAX_PIXELS + 1);
   assert.equal(whiteboardPdfPreviewScale(0, 792, 3), 1);
+  assert.deepEqual(whiteboardPdfLayoutSize(100, 50), { width: 200, height: 100 }, "logical layout preserves the legacy 2x upscaling cap");
+  assert.deepEqual(whiteboardPdfLayoutSize(standardPage.width, standardPage.height), {
+    width: Math.ceil(standardPage.width * normal), height: Math.ceil(standardPage.height * normal),
+  }, "logical layout stays fixed while backing detail changes");
 });
 
 test("clipboard content accepts files or plain text without duplicating image fallback text", () => {

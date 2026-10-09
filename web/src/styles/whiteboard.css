@@ -63,7 +63,7 @@ path.wb-drawing-hit { fill: transparent; pointer-events: all; }
 .wb-empty button { pointer-events: auto; }
 .wb-item { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; flex-direction: column; border: 1px solid var(--ink-faint); border-radius: 4px; box-shadow: 0 2px 8px #00000014; background: var(--paper-bright); overflow: hidden; }
 .wb-item.is-selected { outline: 2px solid var(--cobalt); }
-.wb-item-title { display: flex; align-items: center; gap: 8px; padding: 10px 12px; min-height: 38px; flex-shrink: 0; cursor: var(--cursor-move, move); border-bottom: 1px solid var(--ink-faint); user-select: none; }
+.wb-item-title { display: flex; align-items: center; gap: 8px; padding: 10px 12px; height: 38px; min-height: 38px; flex-shrink: 0; cursor: var(--cursor-move, move); border-bottom: 1px solid var(--ink-faint); user-select: none; }
 .wb-item-title > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wb-item-title svg { flex-shrink: 0; }
 .wb .wb-item-title.wb-color-title { position: relative; }
@@ -116,9 +116,10 @@ path.wb-drawing-hit { fill: transparent; pointer-events: all; }
 @media (max-width: 600px) {
   .wb-header { padding: 8px; gap: 8px; }
   .wb-actions { width: 100%; }
-  .wb-actions button { flex: 1; }
+  .wb-actions button { flex: 1 1 140px; }
   .wb-tools, .wb-bottom { padding-left: 8px; padding-right: 8px; }
   .wb button { min-height: 38px; }
+  .wb .wb-file-footer button { min-height: 28px; }
   .wb-colors button { min-height: 22px; }
 }
 @media (pointer: coarse) {

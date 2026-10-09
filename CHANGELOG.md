@@ -11,6 +11,10 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased
 
+- Added **Export whiteboard as pages** beside the existing single-page action. It creates a multi-page Letter-landscape PDF for easier sharing and printing while preserving the Whiteboard's canonical arrangement, attachment crops, notes, arrows, and rectangles.
+
+- Whiteboard full-page and selected-area PDF exports now share the exact logical attachment geometry used by the live board. PDF detail changes sharpness without moving content, fractional image crops retain their unrounded layout size, mobile file controls no longer change the exportable preview box, and drawing bounds retain complete arrowheads and outline strokes at page/selection edges.
+
 - Fixed one-page and marked-set PDF annotations that exported as tiny, unwrapped single rows. Captions now use one bounded multi-line paper-backed box at 12 pt, retain every word across rotated/cropped pages, and use the same sheet-relative layout, stroke widths, and arrowheads on the estimating canvas so zoom accurately previews the download.
 
 - Added a shared white four-bar loading indicator for longer plan loads and renders, Find scans, exports, and project saves.
