@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeSheetBookmarks, toggleSheetBookmark, sheetBookmarkGroups } from "../src/lib/sheetBookmarks.js";
+import { fileBookmarkGroups, sanitizeFileBookmarks, sanitizeSheetBookmarks, toggleFileBookmark, toggleSheetBookmark, sheetBookmarkGroups } from "../src/lib/sheetBookmarks.js";
 
 test("older or malformed projects reset bookmarks; valid keys deduplicate without renaming", () => {
   for (const input of [undefined, null, {}, "Plan.pdf", 1]) assert.deepEqual(sanitizeSheetBookmarks(input), []);
@@ -54,4 +54,15 @@ test("large sets include offscreen sheets; clearing bookmarks returns the origin
   assert.equal(groups.other.length, 147);
   assert.equal(new Set([...groups.bookmarked, ...groups.other]).size, 150);
   assert.deepEqual(sheetBookmarkGroups(tabs, [], sheets), { bookmarked: [], other: tabs });
+});
+
+test("file favorites are independent from page bookmarks and retain file order", () => {
+  const sheets = [{ name: "B.pdf" }, { name: "A.pdf" }, { name: "C.pdf" }];
+  assert.deepEqual(sanitizeFileBookmarks(["A.pdf", null, "", "A.pdf", "Missing.pdf"]), ["A.pdf", "Missing.pdf"]);
+  const favorites = toggleFileBookmark(Object.freeze(["A.pdf"]), "B.pdf");
+  assert.deepEqual(favorites, ["A.pdf", "B.pdf"]);
+  assert.deepEqual(fileBookmarkGroups(sheets, favorites), { bookmarked: ["B.pdf", "A.pdf"], other: ["C.pdf"] });
+  assert.deepEqual(toggleFileBookmark(favorites, "A.pdf"), ["B.pdf"]);
+  assert.equal(toggleFileBookmark(favorites, ""), favorites);
+  assert.deepEqual(fileBookmarkGroups([], ["Missing.pdf"]), { bookmarked: [], other: [] }, "unavailable favorites stay persisted but hidden");
 });

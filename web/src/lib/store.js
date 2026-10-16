@@ -37,6 +37,7 @@ const MATLIB_KEY = "material_library";
 // pattern as templates/materials, its own key in the keyPath-less meta store
 // (no DB version bump). Persists across projects; export/import as JSON.
 const STAMPLIB_KEY = "stamp_library";
+const pdfCompatibilityKey = (name) => `pdf_compatibility:${name}`;
 const ANN_SCHEMA = "opentakeoff.takeoff_canvas.v1";
 
 // The empty-project annotations shape. One definition so the local store and the
@@ -163,17 +164,34 @@ function createWorkspaceStore(databaseName = DB_NAME) {
     return new Uint8Array(rec.bytes);
   },
 
-  async addPdf(file) {
+  async loadPdfCompatibility(name) {
+    return withDb((db) => tx(db, META_STORE, "readonly", (os) => os.get(pdfCompatibilityKey(name))));
+  },
+
+  async savePdfCompatibility(name, compatibility) {
+    const key = pdfCompatibilityKey(name);
+    await withDb((db) => tx(db, META_STORE, "readwrite", (os) => compatibility ? os.put(compatibility, key) : os.delete(key)));
+  },
+
+  /** @param {{name: string, arrayBuffer: () => Promise<ArrayBuffer>}} file @param {any} [compatibility] @param {Uint8Array|ArrayBuffer|null} [preparedBytes] */
+  async addPdf(file, compatibility = null, preparedBytes = null) {
     // read the bytes BEFORE opening — don't hold a connection across an
-    // unrelated (possibly slow, file-sized) await
-    const bytes = await file.arrayBuffer();
+    // unrelated (possibly slow, file-sized) await. Import validation may have
+    // already read the file, so accept those bytes instead of doing it twice.
+    const bytes = preparedBytes instanceof Uint8Array
+      ? preparedBytes.buffer.slice(preparedBytes.byteOffset, preparedBytes.byteOffset + preparedBytes.byteLength)
+      : preparedBytes instanceof ArrayBuffer ? preparedBytes.slice(0) : await file.arrayBuffer();
     // de-dupe by name: a re-dropped file replaces the old bytes
     await withDb((db) => tx(db, PDF_STORE, "readwrite", (os) => os.put({ name: file.name, bytes })));
+    await withDb((db) => tx(db, META_STORE, "readwrite", (os) => compatibility
+      ? os.put(compatibility, pdfCompatibilityKey(file.name))
+      : os.delete(pdfCompatibilityKey(file.name))));
     return { name: file.name };
   },
 
   async removePdf(name) {
     await withDb((db) => tx(db, PDF_STORE, "readwrite", (os) => os.delete(name)));
+    await withDb((db) => tx(db, META_STORE, "readwrite", (os) => os.delete(pdfCompatibilityKey(name))));
   },
 
   async loadAnnotations() {
@@ -327,7 +345,10 @@ export async function importFileProject({ annotations, pdfs, snapshots }) {
     t.onabort = () => reject(t.error || new Error("Project import was cancelled."));
     try {
       t.objectStore(META_STORE).put({ ...annotations, schema: ANN_SCHEMA }, ANN_KEY);
-      for (const pdf of pdfs) t.objectStore(PDF_STORE).put({ name: pdf.name, bytes: pdf.bytes.slice().buffer });
+      for (const pdf of pdfs) {
+        t.objectStore(PDF_STORE).put({ name: pdf.name, bytes: pdf.bytes.slice().buffer });
+        if (pdf.compatibility) t.objectStore(META_STORE).put(pdf.compatibility, pdfCompatibilityKey(pdf.name));
+      }
       for (const snapshot of snapshots) t.objectStore(SNAP_STORE).put({ ...snapshot, project: null });
     } catch (error) { t.abort(); reject(error); }
   }), fileProjectDb(id));

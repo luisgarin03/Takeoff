@@ -4,7 +4,7 @@ import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import { ANN_SCHEMA, localStore, createFileProjectStore, importFileProject } from "../src/lib/store.js";
-import { exportProjectFile, readProjectFile, projectFilename, projectFolderName } from "../src/lib/projectFile.js";
+import { digest, exportProjectFile, readProjectFile, projectFilename, projectFolderName } from "../src/lib/projectFile.js";
 
 beforeEach(() => { globalThis.indexedDB = new IDBFactory(); });
 const pdf = (text: string) => new File([`%PDF-1.7\n${text}\n%%EOF`], "Plan.pdf", { type: "application/pdf" });
@@ -16,7 +16,7 @@ const payload = () => ({
   sheets: [{ sheet_id: "Plan.pdf#2", units_per_px: .0375, scale_source: "calibrated" }],
   rfis: [{ id: "rfi1", number: 1, subject: "Door" }], sheet_tabs: ["Plan.pdf#2", "Plan.pdf"],
   sheet_group: ["Plan.pdf#2", "Plan.pdf"], last_group: ["Plan.pdf#2", "Plan.pdf"],
-  sheet_levels: { "Plan.pdf#2": "L2" }, sheet_bookmarks: ["Plan.pdf#2"], palette: ["c1"], future_field: { preserve: true },
+  sheet_levels: { "Plan.pdf#2": "L2" }, sheet_bookmarks: ["Plan.pdf#2"], file_bookmarks: ["Plan.pdf"], palette: ["c1"], future_field: { preserve: true },
   fence_calculator: {
     version: 1,
     activeCalculatorId: "board-on-board",
@@ -91,12 +91,30 @@ test("rejects missing, damaged, unlisted plans and unsupported archive versions 
   assert.deepEqual(await localStore.loadAnnotations(), payload());
 });
 
+test("archive parsing preserves hash-valid plan bytes for the PDF compatibility gate", async () => {
+  const original = unzipSync(await fixture());
+  const manifest = JSON.parse(strFromU8(original["project.json"]));
+  const disguised = strToU8("This is not actually a PDF");
+  manifest.plans[0] = {
+    ...manifest.plans[0],
+    size: disguised.length,
+    sha256: await digest(disguised),
+  };
+  const project = await readProjectFile(zipSync({
+    ...original,
+    "project.json": strToU8(JSON.stringify(manifest)),
+    "plans/0.pdf": disguised,
+  }));
+  assert.deepEqual(project.pdfs[0].bytes, disguised);
+});
+
 test("rejects malformed annotation arrays, duplicate plans and unsafe archive paths", async () => {
   const original = unzipSync(await fixture());
   const manifest = JSON.parse(strFromU8(original["project.json"]));
   const pack = (value: unknown) => zipSync({ ...original, "project.json": strToU8(JSON.stringify(value)) });
   await assert.rejects(readProjectFile(pack({ ...manifest, annotations: { ...payload(), shapes: [null] } })), /Invalid project shapes/);
   await assert.rejects(readProjectFile(pack({ ...manifest, annotations: { ...payload(), sheet_bookmarks: [null] } })), /Invalid project sheet_bookmarks/);
+  await assert.rejects(readProjectFile(pack({ ...manifest, annotations: { ...payload(), file_bookmarks: [null] } })), /Invalid project file_bookmarks/);
   await assert.rejects(readProjectFile(pack({ ...manifest, plans: [...manifest.plans, ...manifest.plans] })), /duplicate plan/);
   await assert.rejects(readProjectFile(zipSync({ ...original, "../other.pdf": strToU8("junk") })), /Unexpected file/);
 });

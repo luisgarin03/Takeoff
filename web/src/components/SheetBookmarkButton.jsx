@@ -1,8 +1,10 @@
 import React from "react";
 import { Icon } from "../brand/icons.jsx";
 
-export default function SheetBookmarkButton({ label, bookmarked, onToggle }) {
-  const title = `${bookmarked ? "Remove bookmark from" : "Bookmark"} ${label}`;
+export default function SheetBookmarkButton({ label, bookmarked, onToggle, favorite = false }) {
+  const title = favorite
+    ? (bookmarked ? `Remove ${label} from favorite files` : `Add ${label} to favorite files`)
+    : `${bookmarked ? "Remove bookmark from" : "Bookmark"} ${label}`;
   return (
     <button type="button" className="sheet-tab-icon sheet-bookmark" title={title}
       aria-label={title} aria-pressed={bookmarked}

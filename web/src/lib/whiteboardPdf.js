@@ -25,8 +25,9 @@ const BOARD_ARROW_HEAD_HALF = .42;
 /** @typedef {BoardRect & {id: string, kind: string, text: string, color: string}} BoardNote */
 /** @typedef {{
  * renderNote?: (item: BoardNote, rect: BoardRect, signal?: AbortSignal) => Promise<Uint8Array>,
+ * renderSow?: (sow: object, brandingAsset?: object | null, signal?: AbortSignal) => Promise<{bytes: Uint8Array, width: number, height: number, layoutWidth: number, layoutHeight: number}>,
  * readImage?: (bytes: Uint8Array, type: string, crop?: {x:number,y:number,w:number,h:number} | null, signal?: AbortSignal) => Promise<{bytes: Uint8Array, type: string, width: number, height: number, layoutWidth?: number, layoutHeight?: number}>,
- * renderPdfPage?: (bytes: Uint8Array, page: number, rect: BoardRect, signal?: AbortSignal) => Promise<Uint8Array>
+ * renderPdfPage?: (bytes: Uint8Array, page: number, rect: BoardRect, signal?: AbortSignal) => Promise<Uint8Array | {bytes: Uint8Array, type: "image/png" | "image/jpeg"}>
  * }} BoardPdfRenderer */
 
 export function checkBoardRaster(width, height) {
@@ -283,7 +284,8 @@ function exportSnapshot(board, allowEmpty = false) {
   snapshot.items = snapshot.items.filter((item) => !item.hidden && item.visible !== false && !item.deleted);
   snapshot.arrows = Array.isArray(snapshot.arrows) ? snapshot.arrows : [];
   snapshot.rectangles = Array.isArray(snapshot.rectangles) ? snapshot.rectangles : [];
-  if (!allowEmpty && !snapshot.items.length && !snapshot.arrows.length && !snapshot.rectangles.length) throw new Error("Nothing to export");
+  const hasSow = (Array.isArray(snapshot.sows) && snapshot.sows.length) || snapshot.sow;
+  if (!allowEmpty && !snapshot.items.length && !snapshot.arrows.length && !snapshot.rectangles.length && !hasSow) throw new Error("Nothing to export");
   for (const item of snapshot.items) {
     // Fail closed for future scene types instead of silently exporting only
     // their untransformed boxes. Today's board supports note/file cards only.
@@ -307,7 +309,7 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
   const bounds = region ? boardPdfBounds([region]) : null;
   const checkCancelled = () => signal?.throwIfAborted();
   checkCancelled();
-  const { PDFDocument, PDFName, PDFNumber, StandardFonts, rgb, degrees,
+  const { PDFDocument, PDFName, PDFNumber, StandardFonts, rgb,
     pushGraphicsState, popGraphicsState, rectangle, clip, endPath } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   doc.setTitle(`${projectName || "Untitled project"} - ${boardName}`);
@@ -358,11 +360,12 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
           // Use the preview's stable logical footprint. Render detail changes
           // backing pixels only and must never change board/export placement.
           const { width, height } = whiteboardPdfLayoutSize(nativeW, nativeH);
-          // embedPage does not copy annotations, optional-content configuration,
-          // or a page transparency group. Flatten just these pages with PDF.js.
-          const raster = !!(page.node.Annots()?.size() || page.node.has(PDFName.of("Group")) || pdf.catalog.has(PDFName.of("OCProperties")));
-          const embedded = !raster && page.node.Contents() ? await doc.embedPage(page, box) : null;
-          file = { kind: "pdf", embedded, raster, bytes, page: item.page, rotation, width, height };
+          // Distribution exports flatten every source PDF page. Copying or
+          // embedding a page retains its selectable text/OCR, fonts, nested
+          // forms and other complex resources; those made real-world exports
+          // unnecessarily large and slow in estimating viewers. PDF.js paints
+          // the visible page only, then the browser renderer compresses it.
+          file = { kind: "pdf", bytes, page: item.page, rotation, width, height };
         } else {
           if (!renderer?.readImage) throw new Error("Image decoder is unavailable. Reload the app and try again.");
           const image = await renderer.readImage(base64ToBytes(asset.data), asset.type, crop, signal);
@@ -374,11 +377,23 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
         files.set(key, file);
       }
       const rect = boardContentRect(item, file);
-      if (file.raster) budget(rect.w * BOARD_EXPORT_SCALE, rect.h * BOARD_EXPORT_SCALE);
+      if (file.kind === "pdf") budget(rect.w * BOARD_EXPORT_SCALE, rect.h * BOARD_EXPORT_SCALE);
       prepared.push({ item, file, rect });
     } catch (error) {
       checkCancelled();
       throw new Error(`${label}: ${error.message || "Could not read attachment. Re-add the file and try again."}`, { cause: error });
+    }
+  }
+  const sowPrepared = [];
+  for (const sow of snapshot.sows || []) {
+    if (!renderer?.renderSow) throw new Error("The SOW export renderer is unavailable. Reload the app and try again.");
+    checkCancelled();
+    const brandingAsset = sow.brandAssetId ? snapshot.assets.find((asset) => asset.id === sow.brandAssetId) : null;
+    const rendered = await renderer.renderSow(sow, brandingAsset, signal);
+    budget(rendered.width, rendered.height);
+    const rect = { x: sow.x, y: sow.y, w: rendered.layoutWidth, h: rendered.layoutHeight };
+    if (!region || boardRectsIntersect(rect, region)) {
+      sowPrepared.push({ id: sow.id, rect, embedded: await doc.embedPng(rendered.bytes) });
     }
   }
   const exportArrows = snapshot.arrows.filter((arrow) => {
@@ -391,21 +406,22 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     return rect && (!region || boardRectsIntersect(rect, region));
   });
   const rectangleEntries = exportRectangles.map((drawing) => ({ drawing, rect: boardRectanglePaintBounds(drawing) }));
-  const sceneRects = [...prepared.map(({ rect }) => rect), ...arrowEntries.map(({ rect }) => rect), ...rectangleEntries.map(({ rect }) => rect)];
-  const occupiedRects = [...prepared.map(({ rect }) => rect), ...exportRectangles.flatMap(boardRectanglePaintRects)];
+  const sceneRects = [...prepared.map(({ rect }) => rect), ...arrowEntries.map(({ rect }) => rect), ...rectangleEntries.map(({ rect }) => rect), ...sowPrepared.map(({ rect }) => rect)];
+  const occupiedRects = [...prepared.map(({ rect }) => rect), ...exportRectangles.flatMap(boardRectanglePaintRects), ...sowPrepared.map(({ rect }) => rect)];
   const outputBounds = bounds || (pageMode === "pages" ? boardPdfBoundsUnchecked(sceneRects) : boardPdfBounds(sceneRects));
 
-  // Notes and annotation-flattened PDF pages may cross a page boundary. Embed
-  // their pixels once, then reuse the same PDF image on every touched tile.
+  // Notes and flattened PDF pages may cross a page boundary. Embed their
+  // pixels once, then reuse the same compressed image on every touched tile.
   for (const entry of prepared) {
     const { item, file, rect } = entry;
-    if (file && !file.raster) continue;
+    if (file?.kind === "image") continue;
     checkCancelled();
     try {
-      const png = !file ? await renderer?.renderNote(item, rect, signal) : await renderer?.renderPdfPage(file.bytes, file.page, rect, signal);
-      if (!png) throw new Error("Export renderer is unavailable. Reload the app and try again.");
+      const rendered = !file ? await renderer?.renderNote(item, rect, signal) : await renderer?.renderPdfPage(file.bytes, file.page, rect, signal);
+      if (!rendered) throw new Error("Export renderer is unavailable. Reload the app and try again.");
       checkCancelled();
-      entry.rasterEmbedded = await doc.embedPng(png);
+      const raster = rendered instanceof Uint8Array ? { bytes: rendered, type: "image/png" } : rendered;
+      entry.rasterEmbedded = raster.type === "image/jpeg" ? await doc.embedJpg(raster.bytes) : await doc.embedPng(raster.bytes);
     } catch (error) {
       checkCancelled();
       throw new Error(`${assets.get(item.assetId)?.name || `Note ${item.id}`}: ${error.message || "Export failed. Try again."}`, { cause: error });
@@ -428,21 +444,12 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
       checkCancelled();
       const place = addOffset(boardPdfPlacement(rect, pageBounds), offsetX, offsetY);
       try {
-        if (!file || file.raster) {
+        if (!file || file.kind === "pdf") {
           page.drawImage(rasterEmbedded, place);
         } else if (file.kind === "image") {
           // Transparent image pixels sit on the same white backing as FilePreview.
           page.drawRectangle({ ...place, color: rgb(1, 1, 1) });
           page.drawImage(file.embedded, place);
-        } else {
-          // A PDF page is opaque white in FilePreview, including blank PDF pages.
-          page.drawRectangle({ ...place, color: rgb(1, 1, 1) });
-          if (file.embedded) {
-            const { x, y, width: w, height: h } = place;
-            const origins = { 0: [x, y], 90: [x, y + h], 180: [x + w, y + h], 270: [x + w, y] };
-            page.drawPage(file.embedded, { x: origins[file.rotation][0], y: origins[file.rotation][1],
-              width: file.rotation % 180 ? h : w, height: file.rotation % 180 ? w : h, rotate: degrees(-file.rotation) });
-          }
         }
       } catch (error) {
         checkCancelled();
@@ -471,6 +478,13 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
       const place = addOffset(boardPdfPlacement(rect, pageBounds), offsetX, offsetY);
       page.drawRectangle({ ...place, borderColor: parseColor(rectangleDrawing.color),
         borderWidth: (Number.isFinite(rectangleDrawing.strokeWidth) ? rectangleDrawing.strokeWidth : 2.5) * BOARD_POINT_SCALE, borderOpacity: .95 });
+    }
+    // Movable SOW worksheets are topmost in the live board. Editor-only panel
+    // controls and add buttons are intentionally omitted by renderSow.
+    for (const preparedSow of sowPrepared) {
+      if (!boardRectsIntersect(preparedSow.rect, worldRect)) continue;
+      checkCancelled();
+      page.drawImage(preparedSow.embedded, addOffset(boardPdfPlacement(preparedSow.rect, pageBounds), offsetX, offsetY));
     }
   };
 

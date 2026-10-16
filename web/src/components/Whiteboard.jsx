@@ -4,12 +4,13 @@ import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Icon } from "../brand/icons.jsx";
 import LongTaskLoader from "./LongTaskLoader.jsx";
+import SOWPanel from "./SOWPanel.jsx";
 import { ARROW_COLORS } from "../lib/canvasConstants.js";
 import { downloadBytes } from "../lib/markedset.js";
 import { boardContentRect, buildWhiteboardPdf } from "../lib/whiteboardPdf.js";
 import { whiteboardPdfRenderer } from "../lib/whiteboardPdfBrowser.js";
 import { whiteboardPdfLayoutSize, whiteboardPdfPreviewScale } from "../lib/whiteboardPdfPreview.js";
-import { base64ToBytes, bytesToBase64, appendWhiteboardArrow, appendWhiteboardRectangle, fitWhiteboard, normalizeWhiteboardImageCrop, NOTE_COLORS, removeBoardItem, removeWhiteboardDrawing, setWhiteboardImageCrop, setWhiteboardItemHeaderColor, updateWhiteboardDrawing, WHITEBOARD_FILE_HEADER_COLORS, WHITEBOARD_FILE_LIMIT, WHITEBOARD_TOTAL_LIMIT, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, whiteboardFileType, whiteboardImageCrop, zoomBoard } from "../lib/whiteboard.js";
+import { addWhiteboardSowPanel, base64ToBytes, bytesToBase64, appendWhiteboardArrow, appendWhiteboardRectangle, fitWhiteboard, normalizeWhiteboardImageCrop, NOTE_COLORS, removeBoardItem, removeWhiteboardDrawing, setWhiteboardImageCrop, setWhiteboardItemHeaderColor, updateWhiteboardDrawing, updateWhiteboardSowLayout, WHITEBOARD_FILE_HEADER_COLORS, WHITEBOARD_FILE_LIMIT, WHITEBOARD_TOTAL_LIMIT, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, whiteboardFileType, whiteboardImageCrop, zoomBoard } from "../lib/whiteboard.js";
 import "../styles/whiteboard.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -177,16 +178,18 @@ const FileCard = memo(function FileCard({ asset, item, onPage, visible, resoluti
   </>;
 });
 
-export default function Whiteboard({ board, onChange, onClose, onSave, onBusyChange, projectName, saveState }) {
+export default function Whiteboard({ board, onChange, onClose, onSave, onBusyChange, projectName, saveState,
+  initialFiles = null, onInitialFilesHandled }) {
   const root = useRef(null), viewport = useRef(null), input = useRef(null);
-  const boardRef = useRef(board), callbacks = useRef({ onChange, onClose, onBusyChange, onSave });
-  boardRef.current = board; callbacks.current = { onChange, onClose, onBusyChange, onSave };
+  const boardRef = useRef(board), callbacks = useRef({ onChange, onClose, onBusyChange, onSave, onInitialFilesHandled });
+  boardRef.current = board; callbacks.current = { onChange, onClose, onBusyChange, onSave, onInitialFilesHandled };
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const viewRef = useRef(view); viewRef.current = view;
   const [selected, setSelected] = useState(null), [mode, setMode] = useState("select");
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const [exportArea, setExportArea] = useState(null), [areaDraft, setAreaDraft] = useState(null);
   const [drawingColor, setDrawingColor] = useState(ARROW_COLORS[0].value), [drawingPreview, setDrawingPreview] = useState(null);
+  const [sowPreview, setSowPreview] = useState(null);
   const [imageCrop, setImageCrop] = useState(null);
   const imageCropRef = useRef(imageCrop); imageCropRef.current = imageCrop;
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -312,7 +315,10 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     }
     if (pointers.current.size > 2) return;
     const drawingMode = mode === "arrow" || mode === "rectangle";
-    const kind = mode === "export-area" && e.button === 0 ? "export-area" : drawingMode && e.button === 0 ? `draw-${mode}` :
+    const kind = mode === "export-area" && e.button === 0 ? "export-area" :
+      target?.type === "sow-logo" && e.button === 0 ? "sow-logo-resize" :
+      target?.type === "sow" && handle && e.button === 0 ? "sow-resize" :
+      target?.type === "sow" && e.button === 0 ? "sow-move" : drawingMode && e.button === 0 ? `draw-${mode}` :
       target?.type === "item" && mode === "select" && e.button === 0 ? (handle ? "item-resize" : "item-move") :
         target && mode === "select" && e.button === 0 ? (handle ? "drawing-resize" : "drawing-move") : "pan";
     gesture.current = { kind, p, to: p, target, handle, view: viewRef.current, color: drawingColor };
@@ -358,6 +364,21 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
       const draft = resizeImageCrop(g.crop, g.handle, dx / (g.base.w * g.view.scale), dy / (g.base.h * g.view.scale), g.minW, g.minH);
       setImageCrop((current) => current ? { ...current, draft } : current);
     }
+    else if (g.kind === "sow-move") {
+      const next = { x: g.target.value.x + dx / g.view.scale, y: g.target.value.y + dy / g.view.scale };
+      g.sow = next; setSowPreview({ id: g.target.value.id, ...next });
+    }
+    else if (g.kind === "sow-resize") {
+      const sow = g.target.value, wx = dx / g.view.scale;
+      const w = Math.max(240, Math.min(800, sow.w + (g.handle === "left" ? -wx : wx)));
+      const next = g.handle === "left" ? { x: sow.x + sow.w - w, y: sow.y, w } : { x: sow.x, y: sow.y, w };
+      g.sow = next; setSowPreview({ id: sow.id, ...next });
+    }
+    else if (g.kind === "sow-logo-resize") {
+      const sow = g.target.value, wx = dx / g.view.scale;
+      const logoWidth = Math.max(72, Math.min(240, sow.w - 128, sow.logoWidth + wx));
+      g.sow = { logoWidth }; setSowPreview({ id: sow.id, logoWidth });
+    }
     else if (g.kind === "item-move" || g.kind === "item-resize") {
       const item = g.target.value;
       const croppedImage = item.kind === "file" && item.crop;
@@ -395,6 +416,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
       setAreaDraft(null);
     }
     if (!cancel && g?.changes) patch(g.target.value.id, g.changes);
+    if (!cancel && g?.sow) commit(updateWhiteboardSowLayout(boardRef.current, g.sow, g.target.value.id));
     if (!cancel && g?.drawing) commit(updateWhiteboardDrawing(boardRef.current, g.target.type, g.target.value.id, g.drawing));
     if (!cancel && g?.kind === "draw-arrow" && Math.hypot((g.to.x - g.p.x), (g.to.y - g.p.y)) >= 8) {
       const v = g.view;
@@ -406,7 +428,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     }
     pointers.current.delete(e.pointerId);
     if (viewport.current.hasPointerCapture(e.pointerId)) viewport.current.releasePointerCapture(e.pointerId);
-    gesture.current = null; setPreview(null); setDrawingPreview(null);
+    gesture.current = null; setPreview(null); setDrawingPreview(null); setSowPreview(null);
     if (pointers.current.size === 1) gesture.current = { kind: "pan", p: [...pointers.current.values()][0], view: viewRef.current };
   }
   function addNote(text = "", at = null) {
@@ -462,6 +484,14 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
       }
     } finally { importLock.current = false; callbacks.current.onBusyChange(false); if (alive.current) setBusy(false); }
   }
+  useEffect(() => {
+    if (!initialFiles?.length) return;
+    let cancelled = false;
+    addFiles(initialFiles).finally(() => {
+      if (!cancelled) callbacks.current.onInitialFilesHandled?.();
+    });
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- initialFiles are a mount-only import request.
   function paste(e) {
     if (busy || importLock.current || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
     const content = whiteboardClipboardContent(e.clipboardData);
@@ -541,6 +571,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
       <div className="wb-actions">
         <button type="button" onClick={() => input.current.click()} disabled={busy}><Icon name="plus" size={16} />Add files</button>
         <button type="button" onClick={() => addNote()} disabled={busy || board.items.length >= 2000}><Icon name="textNote" size={16} />Note</button>
+        <button type="button" onClick={() => commit(addWhiteboardSowPanel(boardRef.current))} disabled={busy}><Icon name="plus" size={16} />SOW panel</button>
         <button type="button" onClick={onSave} disabled={busy}><Icon name="document" size={16} />Save project</button>
         <Button icon="document" label="Export whiteboard as PDF" onClick={() => exportPdf()} disabled={busy || exporting} aria-busy={exportMode === "single"}>{exportMode === "single" ? "Exporting…" : "Export whiteboard as PDF"}</Button>
         <Button icon="sheets" label="Export whiteboard as pages" onClick={() => exportPdf(null, "pages")} disabled={busy || exporting} aria-busy={exportMode === "pages"}>{exportMode === "pages" ? "Exporting pages…" : "Export whiteboard as pages"}</Button>
@@ -661,6 +692,15 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
         width: exportArea.w * view.scale, height: exportArea.h * view.scale,
       }} />}
       {areaDraft && <div className="wb-export-area is-draft" aria-hidden="true" style={{ left: areaDraft.x, top: areaDraft.y, width: areaDraft.w, height: areaDraft.h }} />}
+      {(board.sows || []).map((sow) => {
+        const panelPreview = sowPreview?.id === sow.id ? sowPreview : null;
+        return <SOWPanel key={sow.id} board={board} sow={sow} onCommit={commit} onEditEnd={() => { editGroup.current = null; }} onError={setError}
+          position={{ x: view.x + (panelPreview?.x ?? sow.x) * view.scale, y: view.y + (panelPreview?.y ?? sow.y) * view.scale,
+            w: panelPreview?.w ?? sow.w, logoWidth: panelPreview?.logoWidth ?? sow.logoWidth, scale: view.scale }}
+          onStartMove={(event) => start(event, { type: "sow", value: sow })}
+          onStartLogoResize={(event) => start(event, { type: "sow-logo", value: sow })}
+          onStartResize={(event, handle) => start(event, { type: "sow", value: sow }, handle)} />;
+      })}
     </div>
     <footer className="wb-bottom"><span>{board.items.length + drawingCount} items</span><div>
       <Button icon="chevronDown" label="Zoom out whiteboard" onClick={() => zoom(1 / 1.2)} />

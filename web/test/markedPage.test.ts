@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { PDFDocument, degrees } from "pdf-lib";
 import { getDocument, OPS } from "pdfjs-dist";
 import { buildMarkedSetPdf } from "../src/lib/markedset.js";
-import { RENDER_SCALE } from "../src/lib/sheets.js";
+import { base64ToBytes } from "../src/lib/whiteboard.js";
+
+const png = base64ToBytes("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j8ioAAAAASUVORK5CYII=");
 
 const sheet = { key: "plans.pdf::2", file: "plans.pdf", page: 2, label: "A-102" };
 const condition = { id: "c", finish_tag: "FLOOR-1", color: "#008800", fill: "none", hatch: "solid" };
@@ -28,7 +30,7 @@ async function fixture(rotation = 0) {
       conditions: [condition], rfis: [{ id: "r", number: "RFI-007", subject: "Door", status: "open" }],
       company: undefined, clientInfo: undefined,
       getPage: async (file: string, number: number) => { calls.push([file, number]); return pdf.getPage(number); },
-      loadPdfData: async () => bytes.slice(),
+      renderPage: async () => ({ bytes: png, type: "image/png" }),
     },
   };
 }
@@ -63,7 +65,7 @@ test("page download includes current-page takeoffs, markups and RFI labels, with
     assert.deepEqual(f.calls, [["plans.pdf", 2]]);
     const output = await inspect(result.bytes);
     assert.equal(output.count, 1);
-    assert.match(output.text, /CURRENT PAGE/);
+    assert.doesNotMatch(output.text, /CURRENT PAGE/, "source PDF text and OCR are flattened out of the distribution copy");
     assert.match(output.text, /FLOOR-1.*42 SF/);
     assert.match(output.text, /RFI-007 VERIFY DOOR/);
     assert.doesNotMatch(output.text, /OTHER PAGE|OTHER NOTE|OTHER CONDITION|RFI SCHEDULE|marked set|BY SHEET/);
@@ -76,7 +78,7 @@ test("an unmarked current page still downloads in full", async () => {
     const result = await buildMarkedSetPdf({ ...f.options, shapes: [], markups: [], rfis: [] });
     const output = await inspect(result.bytes);
     assert.equal(output.count, 1);
-    assert.equal(output.text.trim(), "CURRENT PAGE");
+    assert.equal(output.text.trim(), "", "an unmarked page retains no searchable source text or OCR");
   } finally { await f.pdf.destroy(); }
 });
 
@@ -133,7 +135,7 @@ test("long markup captions wrap without losing words and use one backing rectang
       const output = await inspect(annotated.bytes);
       const captionLines = output.positioned
         .map((item) => item.str.trim())
-        .filter((text) => text && text !== "CURRENT PAGE");
+        .filter(Boolean);
 
       assert.ok(captionLines.length > 1, `caption wraps onto multiple lines at ${rotation}°`);
       assert.deepEqual(
@@ -155,7 +157,7 @@ test("page download can omit condition and quantity labels while retaining notes
   try {
     const result = await buildMarkedSetPdf({ ...f.options, includeShapeLabels: false });
     const output = await inspect(result.bytes);
-    assert.match(output.text, /CURRENT PAGE/);
+    assert.doesNotMatch(output.text, /CURRENT PAGE/);
     assert.match(output.text, /RFI-007 VERIFY DOOR/);
     assert.doesNotMatch(output.text, /FLOOR-1|42 SF/);
   } finally { await f.pdf.destroy(); }
@@ -170,14 +172,13 @@ test("linear quantity chips sit closer to their line without touching it", async
     const chip = output.positioned.find((item) => item.str.includes("12.9 LF"));
     assert.ok(chip, "export contains the linear quantity chip");
 
-    const sourcePage = await f.pdf.getPage(2);
-    const sourceViewport = sourcePage.getViewport({ scale: RENDER_SCALE });
-    const [, lineY] = sourceViewport.convertToPdfPoint(0, sourceViewport.height * .5);
+    const exported = await PDFDocument.load(result.bytes);
+    const lineY = exported.getPage(0).getHeight() / 2;
     assert.ok(Math.abs((chip.y - lineY) - 7.5) < .1, `chip baseline is 7.5pt above the line; measured ${chip.y - lineY}pt (${lineY}, ${chip.y}; ${chip.str})`);
   } finally { await f.pdf.destroy(); }
 });
 
-test("single-page export preserves PDF page size, crop box and rotation", async () => {
+test("single-page export flattens the visible crop and rotation into a lightweight page", async () => {
   for (const rotation of [0, 90, 180, 270]) {
     const f = await fixture(rotation);
     try {
@@ -185,10 +186,12 @@ test("single-page export preserves PDF page size, crop box and rotation", async 
       const output = await PDFDocument.load(bytes);
       const page = output.getPage(0);
       assert.equal(output.getPageCount(), 1);
-      assert.deepEqual(page.getSize(), { width: 600, height: 400 });
-      assert.deepEqual(page.getCropBox(), { x: 40, y: 20, width: 520, height: 360 });
-      assert.equal(page.getRotation().angle, rotation);
+      const expected = rotation % 180 ? { width: 360, height: 520 } : { width: 520, height: 360 };
+      assert.deepEqual(page.getSize(), expected);
+      assert.deepEqual(page.getCropBox(), { x: 0, y: 0, ...expected });
+      assert.equal(page.getRotation().angle, 0);
       assert.match((await inspect(bytes)).text, /VERIFY DOOR/);
+      assert.doesNotMatch((await inspect(bytes)).text, /CURRENT PAGE/);
     } finally { await f.pdf.destroy(); }
   }
 });

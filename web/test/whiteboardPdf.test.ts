@@ -8,7 +8,8 @@ import type { BoardPdfRenderer } from "../src/lib/whiteboardPdf.js";
 const png = base64ToBytes("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j8ioAAAAASUVORK5CYII=");
 const note = (extra = {}) => ({ id: "note", kind: "note", text: "Door dimensions", color: "yellow", x: 0, y: 0, w: 280, h: 220, ...extra });
 const board = (items: Array<ReturnType<typeof note> | ReturnType<typeof file>> = [note()], assets: ReturnType<typeof asset>[] = []) => ({ version: 1, items, assets });
-const renderer: BoardPdfRenderer = { renderNote: async () => png, readImage: async (bytes) => ({ bytes, width: 1, height: 1, type: "image/png" }) };
+const renderer: BoardPdfRenderer = { renderNote: async () => png, renderPdfPage: async () => png,
+  readImage: async (bytes) => ({ bytes, width: 1, height: 1, type: "image/png" }) };
 const asset = (bytes: Uint8Array, type = "application/pdf") => ({ id: "a", name: "Reference.pdf", type, size: bytes.length, data: bytesToBase64(bytes) });
 const file = (extra = {}) => ({ id: "file", kind: "file", assetId: "a", page: 1, x: -400, y: 300, w: 402, h: 280, ...extra });
 async function pdfBytes(rotation = 0) {
@@ -67,6 +68,42 @@ test("note export includes its title/header colors and complete card while rende
   const page = await assertPage(result, 210, 165);
   assert.deepEqual(renderedRect, { x: 0, y: 0, w: 280, h: 220 });
   assert.ok(page.node.Resources()!.lookup(PDFName.of("XObject"), PDFDict).keys().length > 0, "complete note card is embedded in the PDF");
+});
+
+test("movable branded SOW content participates in full, selected and paged exports", async () => {
+  const branding = asset(png, "image/png");
+  const sow = { id: "sow-1", x: -40, y: 25, w: 440, logoWidth: 176, takeoffTitle: "SITE FENCING TAKEOFF", sectionTitle: "SCOPE OF WORK", brandAssetId: branding.id, activeTabId: "scope-1", tabs: [{ id: "scope-1", name: "Scope 1",
+    entries: [{ id: "title-1", kind: "title", text: "Included" }, { id: "entry-1", text: "Install fence\nInclude gates", color: "#C96442" }] }] };
+  const calls: { value: object, branding?: object | null }[] = [];
+  const sowRenderer: BoardPdfRenderer = { ...renderer, renderSow: async (value, brandingAsset) => {
+    calls.push({ value, branding: brandingAsset }); return { bytes: png, width: 1320, height: 720, layoutWidth: 440, layoutHeight: 240 };
+  } };
+  const result = await buildWhiteboardPdf({ ...board([], [branding]), sows: [sow] }, { renderer: sowRenderer });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].branding, branding, "the custom branding image is supplied to the SOW export renderer");
+  assert.deepEqual(result.bounds, { minX: -40, minY: 25, maxX: 400, maxY: 265, width: 330, height: 180 });
+  const exported = await PDFDocument.load(result.bytes);
+  assert.equal(pageXObjectCount(exported.getPage(0)), 1);
+  const selected = await buildWhiteboardPdf({ ...board([], [branding]), sows: [sow] }, { region: { x: 0, y: 50, w: 100, h: 90 }, renderer: sowRenderer });
+  await assertPage(selected, 75, 67.5);
+  const paged = await buildWhiteboardPdf({ ...board([], [branding]), sows: [sow] }, { pageMode: "pages", renderer: sowRenderer });
+  assert.ok(paged.pages?.length);
+});
+
+test("every simultaneous SOW panel is included at its own whiteboard position", async () => {
+  const base = { w: 280, logoWidth: 128, takeoffTitle: "FENCE TAKEOFF", sectionTitle: "SOW" };
+  const sows = [
+    { ...base, id: "sow-a", x: 20, y: 30, activeTabId: "scope-a", tabs: [{ id: "scope-a", name: "Exterior", entries: [] }] },
+    { ...base, id: "sow-b", x: 520, y: 260, activeTabId: "scope-b", tabs: [{ id: "scope-b", name: "Interior", entries: [] }] },
+  ];
+  const calls: string[] = [];
+  const result = await buildWhiteboardPdf({ ...board([]), sows }, { renderer: { ...renderer, renderSow: async (sow) => {
+    calls.push((sow as any).id); return { bytes: png, width: 840, height: 600, layoutWidth: 280, layoutHeight: 200 };
+  } } });
+  assert.deepEqual(calls, ["sow-a", "sow-b"]);
+  assert.deepEqual(result.bounds, { minX: 20, minY: 30, maxX: 800, maxY: 460, width: 585, height: 322.5 });
+  const exported = await PDFDocument.load(result.bytes);
+  assert.equal(pageXObjectCount(exported.getPage(0)), 2);
 });
 
 test("whiteboard arrows export over their own board bounds in the selected color", async () => {
@@ -224,19 +261,22 @@ test("paged export keeps multi-page drawings as vectors", async () => {
   }
 });
 
-test("paged export reuses vector PDF content at exact positions across page edges", async () => {
+test("paged export reuses one flattened PDF-page image at exact positions across page edges", async () => {
   const source = await PDFDocument.create();
   source.addPage([1200, 100]).drawRectangle({ x: 0, y: 0, width: 1200, height: 100, color: rgb(.2, .4, .8) });
   const item = file({ x: 0, y: 0, w: 1202, h: 280 });
-  const result = await buildWhiteboardPdf(board([item], [asset(await source.save())]), { pageMode: "pages" });
+  let renders = 0;
+  const result = await buildWhiteboardPdf(board([item], [asset(await source.save())]), { pageMode: "pages",
+    renderer: { ...renderer, renderPdfPage: async () => { renders++; return png; } } });
+  assert.equal(renders, 1, "one lightweight raster is reused by every touched output page");
   const doc = await PDFDocument.load(result.bytes);
   assert.equal(doc.getPageCount(), 2);
   const translations = [[18, 518.7857142857143], [-738, 518.7857142857143]];
   doc.getPages().forEach((page, index) => {
     const xobjects = page.node.Resources()!.lookup(PDFName.of("XObject"), PDFDict);
-    const forms = xobjects.keys().map((key) => xobjects.lookup(key)).filter((value) => value instanceof PDFRawStream
-      && value.dict.get(PDFName.of("Subtype"))?.toString() === "/Form");
-    assert.equal(forms.length, 1, "the source PDF remains a reusable vector Form XObject");
+    const images = xobjects.keys().map((key) => xobjects.lookup(key)).filter((value) => value instanceof PDFRawStream
+      && value.dict.get(PDFName.of("Subtype"))?.toString() === "/Image");
+    assert.equal(images.length, 1, "the source PDF is a reusable flattened image with no source text/OCR layer");
     const [x, y] = translations[index];
     assert.match(pageContent(doc, page), new RegExp(`1 0 0 1 ${x} ${y} cm`));
   });
@@ -318,25 +358,34 @@ test("hidden/deleted objects are excluded; locked notes still export", async () 
   assert.deepEqual(seen, ["note"]);
 });
 
-test("rotated/cropped source PDF pages stay vector and preserve their displayed aspect ratio", async () => {
+test("rotated/cropped source PDF pages flatten while preserving their displayed aspect ratio", async () => {
   for (const rotation of [0, 90, 180, 270]) {
-    const result = await buildWhiteboardPdf(board([file()], [asset(await pdfBytes(rotation))]));
+    let renderedRect: { x: number; y: number; w: number; h: number } | undefined;
+    const result = await buildWhiteboardPdf(board([file()], [asset(await pdfBytes(rotation))]), { renderer: {
+      ...renderer, renderPdfPage: async (_bytes, _page, rect) => { renderedRect = rect; return png; },
+    } });
     const page = await assertPage(result, rotation % 180 ? 75 : 300, 150);
+    assert.deepEqual(renderedRect, rotation % 180
+      ? { x: -249, y: 339, w: 100, h: 200 }
+      : { x: -399, y: 339, w: 400, h: 200 });
     const xobjects = page.node.Resources()!.lookup(PDFName.of("XObject"), PDFDict);
     assert.equal(xobjects.keys().length, 1);
-    const form = xobjects.lookup(xobjects.keys()[0]);
-    assert.ok(form instanceof PDFRawStream);
-    assert.equal(form.dict.get(PDFName.of("Subtype"))!.toString(), "/Form");
-    assert.equal(form.dict.get(PDFName.of("BBox"))!.toString(), "[ 40 20 440 220 ]");
+    const image = xobjects.lookup(xobjects.keys()[0]);
+    assert.ok(image instanceof PDFRawStream);
+    assert.equal(image.dict.get(PDFName.of("Subtype"))!.toString(), "/Image");
   }
 });
 
 test("selected PDF page is exported, and nonexistent pages fail clearly", async () => {
   const doc = await PDFDocument.create(); doc.addPage([100, 100]); doc.addPage([800, 400]);
   const a = asset(await doc.save());
-  const result = await buildWhiteboardPdf(board([file({ page: 2 })], [a]));
+  let renderedPage = 0;
+  const result = await buildWhiteboardPdf(board([file({ page: 2 })], [a]), { renderer: {
+    ...renderer, renderPdfPage: async (_bytes, page) => { renderedPage = page; return png; },
+  } });
+  assert.equal(renderedPage, 2);
   await assertPage(result, 300, 150);
-  await assert.rejects(buildWhiteboardPdf(board([file({ page: 3 })], [a])), /Page 3 does not exist/);
+  await assert.rejects(buildWhiteboardPdf(board([file({ page: 3 })], [a]), { renderer }), /Page 3 does not exist/);
 });
 
 test("PDF annotations use a complete page raster rather than disappearing during vector embedding", async () => {
@@ -364,7 +413,7 @@ test("small PDF pages use the same logical contain size in full and selected-are
   doc.addPage([100, 50]);
   const pdf = asset(await doc.save());
   const item = file({ x: 10, y: 20, w: 402, h: 280 });
-  const full = await buildWhiteboardPdf(board([item], [pdf]));
+  const full = await buildWhiteboardPdf(board([item], [pdf]), { renderer });
   assert.deepEqual(full.bounds, { minX: 111, minY: 109, maxX: 311, maxY: 209, width: 150, height: 75 });
   await assertPage(full, 150, 75);
 

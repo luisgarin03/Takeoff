@@ -16,7 +16,7 @@ export function validateAnnotations(a) {
   }
   if (!Array.isArray(a.conditions) || !Array.isArray(a.shapes)) fail("Project takeoff data is missing.");
   if (a.project_name !== undefined && typeof a.project_name !== "string") fail("Invalid project name.");
-  for (const key of ["sheet_tabs", "sheet_group", "last_group", "sheet_bookmarks", "palette"]) {
+  for (const key of ["sheet_tabs", "sheet_group", "last_group", "sheet_bookmarks", "file_bookmarks", "palette"]) {
     if (a[key] !== undefined && (!Array.isArray(a[key]) || !a[key].every((v) => typeof v === "string"))) fail(`Invalid project ${key}.`);
   }
 }
@@ -128,7 +128,11 @@ export async function readProjectFile(bytes) {
       typeof plan.path !== "string" || !/^plans\/\d+\.pdf$/.test(plan.path) || usedPaths.has(plan.path)) fail("Invalid or duplicate plan in project.");
     usedNames.add(plan.name); usedPaths.add(plan.path);
     const data = entries[plan.path];
-    if (!data || data.length !== plan.size || !strFromU8(data.subarray(0, 1024)).includes("%PDF-") || await digest(data) !== plan.sha256) {
+    // Archive integrity belongs here; PDF compatibility belongs to the shared
+    // pdf.js validation gate. Keeping those concerns separate lets a mixed
+    // project open with compatible plans while reporting a renamed, protected,
+    // or structurally invalid plan instead of rejecting the whole archive.
+    if (!data || data.length !== plan.size || await digest(data) !== plan.sha256) {
       fail(`Missing or damaged plan: ${plan.name}`);
     }
     pdfs.push({ name: plan.name, bytes: data });

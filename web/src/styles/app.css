@@ -1280,6 +1280,85 @@ select {
 /* Shared condition editor: 88px -> 132px, with real editable space. */
 .condition-name-input { width: auto; flex: 0 0 auto; min-width: min(132px, 100%); max-width: 100%; }
 .canvas-workspace { position: relative; min-width: 0; }
+
+/* PDF compatibility dialogs ------------------------------------------------ */
+.pdf-password-dialog,
+.pdf-import-report,
+.pdf-opening-settings,
+.pdf-ocr-prompt { display: flex; min-width: 0; flex-direction: column; }
+.pdf-password-dialog .ui-dialog-description { display: grid; gap: 8px; }
+.pdf-password-dialog .ui-dialog-description strong { color: var(--ink); overflow-wrap: anywhere; }
+.pdf-password-field { display: grid; gap: 6px; padding: 4px 20px 0; color: var(--ink-muted); font-size: 12px; }
+.pdf-password-field input { min-width: 0; padding: 9px 10px; border: 1px solid var(--ink-faint); border-radius: 5px; background: var(--paper-bright); color: var(--ink); font: 16px var(--f-body); }
+.pdf-password-field input:focus { border-color: var(--cobalt); outline: 2px solid color-mix(in srgb, var(--cobalt) 24%, transparent); }
+.pdf-password-privacy { margin: 8px 20px 0; color: var(--ink-muted); font-size: 11px; line-height: 1.45; }
+.pdf-password-dialog button,
+.pdf-import-report button,
+.pdf-opening-settings button,
+.pdf-ocr-prompt button { min-height: 36px; padding: 7px 12px; border: 1px solid var(--ink-faint); border-radius: 5px; background: transparent; color: var(--ink); font: 600 12px var(--f-body); cursor: pointer; }
+.pdf-password-dialog button.primary,
+.pdf-import-report button.primary,
+.pdf-opening-settings button.primary,
+.pdf-ocr-prompt button.primary { border-color: var(--cobalt); background: var(--cobalt); color: var(--accent-contrast); }
+.pdf-password-dialog button:disabled { cursor: default; opacity: .45; }
+.pdf-import-report-body { display: grid; min-height: 0; gap: 12px; padding: 4px 20px; }
+.pdf-opening-settings-body { display: grid; gap: 16px; padding: 4px 20px; }
+.pdf-opening-settings-body fieldset { display: grid; gap: 7px; margin: 0; padding: 0; border: 0; }
+.pdf-opening-settings-body legend { margin-bottom: 6px; color: var(--ink); font: 700 12px var(--f-body); }
+.pdf-opening-settings-body label { display: grid; grid-template-columns: 18px 1fr; align-items: start; gap: 8px; padding: 9px 10px; border: 1px solid var(--ink-faint); border-radius: 6px; cursor: pointer; }
+.pdf-opening-settings-body label:has(input:checked) { border-color: var(--cobalt); background: color-mix(in srgb, var(--cobalt) 7%, transparent); }
+.pdf-opening-settings-body input { margin: 2px 0 0; accent-color: var(--cobalt); }
+.pdf-opening-settings-body span { display: grid; gap: 3px; }
+.pdf-opening-settings-body strong { color: var(--ink); font-size: 12.5px; }
+.pdf-opening-settings-body small,
+.pdf-opening-settings-body > p,
+.pdf-ocr-prompt-body { color: var(--ink-muted); font-size: 11.5px; line-height: 1.45; }
+.pdf-opening-settings-body > p { margin: 0; }
+.pdf-ocr-prompt-body { padding: 4px 20px; }
+.pdf-import-summary { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; }
+.pdf-import-summary .danger { color: var(--c-danger); }
+.pdf-import-table-wrap { max-height: min(48vh, 430px); overflow: auto; border: 1px solid var(--ink-faint); border-radius: 6px; }
+.pdf-import-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.pdf-import-table th { position: sticky; top: 0; z-index: 1; padding: 8px 10px; background: var(--paper-cream); color: var(--ink-muted); text-align: left; }
+.pdf-import-table th:first-child { width: 42%; }
+.pdf-import-table td { padding: 9px 10px; border-top: 1px solid var(--ink-faint); color: var(--ink); vertical-align: top; overflow-wrap: anywhere; }
+.pdf-import-table td span,
+.pdf-import-table td small { display: block; }
+.pdf-import-table td small { margin-top: 5px; color: var(--ink-muted); font: 10.5px/1.4 var(--f-mono); }
+
+/* Transparent PDF.js text runs sit over the bitmap only in Select mode. The
+   stage owns zoom/pan, so this layer is laid out once per opened page rather
+   than recomputed for every camera movement. */
+.takeoff-pdf-text-layer { position: absolute; top: 0; overflow: clip; line-height: 1; text-align: initial; text-size-adjust: none; transform-origin: 0 0; caret-color: CanvasText; user-select: text; }
+.takeoff-pdf-text-layer :is(span, br) { position: absolute; color: transparent; white-space: pre; cursor: text; transform-origin: 0 0; }
+.takeoff-pdf-text-layer.is-selectable span:not([role="img"]) { pointer-events: auto; }
+.takeoff-pdf-text-layer > :not(.markedContent),
+.takeoff-pdf-text-layer .markedContent span:not(.markedContent) { z-index: 1; }
+.takeoff-pdf-text-layer span.markedContent { top: 0; height: 0; }
+.takeoff-pdf-text-layer span[role="img"] { cursor: default; user-select: none; }
+.takeoff-pdf-text-layer ::selection { background: color-mix(in srgb, var(--cobalt) 34%, transparent); }
+.takeoff-pdf-text-layer br::selection { background: transparent; }
+.takeoff-pdf-text-layer .endOfContent { position: absolute; inset: 100% 0 0; display: block; z-index: 0; cursor: default; user-select: none; }
+.takeoff-pdf-text-layer.selecting .endOfContent { top: 0; }
+
+/* PDF.js creates temporary font-measurement canvases beside #root while it
+   builds selectable text layers. Keep its upstream hiding rule here so those
+   300 x 150 helper canvases never extend the document or create page scroll. */
+#hiddenCopyElement,
+.hiddenCanvasElement {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .pdf-import-report .ui-dialog-footer { flex-wrap: wrap; }
+  .pdf-import-report .ui-dialog-footer button { flex: 1 1 auto; min-height: 44px; }
+  .pdf-import-table th:first-child { width: 38%; }
+}
 .glass-drawer { max-width: 100%; min-width: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .takeoffs-tabs, .takeoffs-tabs > span { flex-wrap: wrap; }
 .takeoffs-tabs > span:first-child { flex: 1 1 240px; }

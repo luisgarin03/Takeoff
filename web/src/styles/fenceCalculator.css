@@ -21,6 +21,13 @@
 .fence-card-title-row { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
 .fence-preset-quick { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; margin-top:9px; }
 .fence-input-groups { display:grid; gap:15px; }
+.fence-preview { display:grid; gap:7px; margin:0; }
+.fence-preview-frame { position:relative; height:clamp(190px, 25vh, 270px); overflow:hidden; border:1px solid var(--ink-faint); border-radius:var(--radius-control); background:#fff; }
+.fence-preview-frame img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 43%; }
+.fence-preview-kicker { position:absolute; top:8px; left:8px; padding:4px 7px; border:1px solid color-mix(in srgb, var(--ink) 14%, transparent); border-radius:999px; background:color-mix(in srgb, var(--paper-bright) 90%, transparent); color:var(--ink); font:700 9px/1 var(--f-mono); letter-spacing:.09em; text-transform:uppercase; box-shadow:0 1px 4px color-mix(in srgb, var(--ink) 12%, transparent); }
+.fence-preview figcaption { display:flex; align-items:baseline; justify-content:space-between; gap:10px; color:var(--ink-muted); font-size:10.5px; }
+.fence-preview figcaption strong { color:var(--ink); font-size:11.5px; }
+.fence-preview figcaption span { text-align:right; }
 .fence-input-group h3 { margin:0 0 9px; color:var(--ink-muted); font:700 9.5px/1.2 var(--f-mono); letter-spacing:.12em; text-transform:uppercase; }
 .fence-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
 .fence-field { display:grid; align-content:start; gap:5px; min-width:0; }
@@ -72,6 +79,9 @@
   .fence-import-banner .ui-badge { display:none; }
   .fence-calculator-grid { gap:9px; padding:9px; }
   .fence-calculator-list, .fence-fields, .fence-rule-fields { grid-template-columns:1fr; }
+  .fence-preview-frame { height:190px; }
+  .fence-preview figcaption { align-items:flex-start; flex-direction:column; gap:2px; }
+  .fence-preview figcaption span { text-align:left; }
   .fence-selector-card .ui-card-header { padding-bottom:6px; }
   .fence-save-preset, .fence-preset-row { grid-template-columns:1fr; }
   .fence-preset-row > div:last-child { justify-content:flex-start; }

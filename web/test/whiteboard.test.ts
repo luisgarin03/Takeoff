@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
 import { unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
-import { emptyWhiteboard, bytesToBase64, base64ToBytes, validateWhiteboard, appendWhiteboardArrow, appendWhiteboardRectangle, sanitizeWhiteboardArrows, sanitizeWhiteboardRectangles, removeBoardItem, removeWhiteboardDrawing, updateWhiteboardDrawing, setWhiteboardFileHeaderColor, setWhiteboardItemHeaderColor, sanitizeWhiteboardFileHeaderColors, setWhiteboardImageCrop, normalizeWhiteboardImageCrop, whiteboardImageCrop, whiteboardHasContent, whiteboardDrawingBounds, WHITEBOARD_FILE_HEADER_COLORS, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, zoomBoard, fitBoard, fitWhiteboard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
+import { emptyWhiteboard, emptyWhiteboardSow, bytesToBase64, base64ToBytes, validateWhiteboard, appendWhiteboardArrow, appendWhiteboardRectangle, sanitizeWhiteboardArrows, sanitizeWhiteboardRectangles, sanitizeWhiteboardSow, removeBoardItem, removeWhiteboardDrawing, updateWhiteboardDrawing, setWhiteboardFileHeaderColor, setWhiteboardItemHeaderColor, sanitizeWhiteboardFileHeaderColors, setWhiteboardImageCrop, normalizeWhiteboardImageCrop, whiteboardImageCrop, whiteboardHasContent, whiteboardDrawingBounds, addWhiteboardSowPanel, duplicateWhiteboardSowPanel, removeWhiteboardSowPanel, renameWhiteboardSowTab, addWhiteboardSowEntry, addWhiteboardSowTitle, setWhiteboardSowBranding, updateWhiteboardSowEntry, updateWhiteboardSowSectionTitle, updateWhiteboardSowTakeoffTitle, duplicateWhiteboardSowEntry, removeWhiteboardSowEntry, moveWhiteboardSowEntry, updateWhiteboardSowLayout, whiteboardSowLogoWidth, wrapWhiteboardSowText, WHITEBOARD_FILE_HEADER_COLORS, WHITEBOARD_SOW_COLORS, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, zoomBoard, fitBoard, fitWhiteboard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
 import { localStore, createFileProjectStore, importFileProject, ANN_SCHEMA } from "../src/lib/store.js";
 import { exportProjectFile, readProjectFile } from "../src/lib/projectFile.js";
 import { WHITEBOARD_PDF_PREVIEW_MAX_PIXELS, whiteboardPdfLayoutSize, whiteboardPdfPreviewScale } from "../src/lib/whiteboardPdfPreview.js";
@@ -19,7 +19,7 @@ function board() {
     { id: "note", kind: "note", title: "Field note", text: "Verify door dimensions", color: "yellow", x: -125, y: 200, w: 300, h: 220, headerColor: "#0D9488" },
     { id: "p", kind: "file", assetId: "pdf", page: 3, x: 300, y: -90, w: 440, h: 520, headerColor: "#C96442" },
     { id: "i", kind: "file", assetId: "img", page: 1, x: 800, y: 30, w: 300, h: 220 },
-  ] };
+  ], sows: [emptyWhiteboardSow()] };
 }
 const payload = () => ({ schema: ANN_SCHEMA, conditions: [{id: "c"}], shapes: [{id: "s", verts_norm: [[.1,.2],[.3,.4]]}],
   sheets: [{sheet_id: "Plan.pdf", units_per_px: .25}], units: "imperial", whiteboard: board() });
@@ -224,9 +224,111 @@ test("drawing updates and removal are immutable and work across arrow and rectan
   const noRectangle = removeWhiteboardDrawing(resized, "rectangle", rectangleId);
   assert.equal(noRectangle.rectangles.length, 0);
   const empty = removeWhiteboardDrawing(noRectangle, "arrows", arrowId);
-  assert.equal(whiteboardHasContent(empty), false);
+  assert.equal(whiteboardHasContent(empty), true, "the default SOW is persistent whiteboard content");
+  assert.equal(whiteboardHasContent({ version: 1, items: [], assets: [], sows: [] }), true, "deleting the final SOW panel survives save and reload");
+  assert.equal(whiteboardHasContent({ version: 1, items: [], assets: [] }), false, "a legacy board without SOW or objects is empty");
   assert.equal(removeWhiteboardDrawing(empty, "arrow", "missing"), empty);
   assert.equal(updateWhiteboardDrawing(empty, "unknown", "missing", { x: 1 }), empty);
+});
+
+test("scope-of-work panels duplicate, edit independently, delete and survive validation", () => {
+  let current: any = emptyWhiteboard();
+  assert.deepEqual(current.sows[0], { id: "sow-1", x: 40, y: 40, w: 280, logoWidth: 128, takeoffTitle: "FENCE TAKEOFF", sectionTitle: "SOW", activeTabId: "scope-1", tabs: [{ id: "scope-1", name: "Scope 1", entries: [] }] });
+  assert.deepEqual(WHITEBOARD_SOW_COLORS, WHITEBOARD_FILE_HEADER_COLORS, "SOW uses the full ten-color whiteboard palette");
+  current = updateWhiteboardSowLayout(current, { x: -120, y: 275, w: 610 });
+  assert.deepEqual({ x: current.sows[0].x, y: current.sows[0].y, w: current.sows[0].w }, { x: -120, y: 275, w: 610 });
+  assert.equal(updateWhiteboardSowLayout(current, { w: 100 }).sows[0].w, 240, "resize width is clamped to a compact usable minimum");
+  assert.equal(updateWhiteboardSowLayout(current, { w: 1200 }).sows[0].w, 800, "resize width is clamped to the maximum");
+  current = updateWhiteboardSowLayout(current, { logoWidth: 148 });
+  assert.equal(current.sows[0].logoWidth, 148, "the logo area width is stored independently from the complete SOW width");
+  assert.equal(whiteboardSowLogoWidth(updateWhiteboardSowLayout(current, { w: 240 }).sows[0]), 112, "narrowing the SOW keeps enough room for its title field");
+  current = updateWhiteboardSowTakeoffTitle(current, "SITE FENCING TAKEOFF");
+  assert.equal(current.sows[0].takeoffTitle, "SITE FENCING TAKEOFF", "the editable takeoff title is persisted with the SOW widget");
+  current = updateWhiteboardSowSectionTitle(current, "SCOPE OF WORK");
+  assert.equal(current.sows[0].sectionTitle, "SCOPE OF WORK", "the former hard-coded SOW heading is editable and persisted");
+  current = addWhiteboardSowEntry(current, "scope-1", "Install drywall\nPrime and paint", "#60a5fa", "entry-1");
+  current = addWhiteboardSowTitle(current, "scope-1", "Included work", "title-1");
+  assert.deepEqual(current.sows[0].tabs[0].entries[1], { id: "title-1", kind: "title", text: "Included work" });
+  assert.equal(Object.prototype.hasOwnProperty.call(current.sows[0].tabs[0].entries[1], "color"), false, "titles do not carry a selectable color");
+  assert.deepEqual(updateWhiteboardSowEntry(current, "scope-1", "title-1", { color: "#2563EB" }), current, "title colors cannot be changed");
+  current = duplicateWhiteboardSowEntry(current, "scope-1", "entry-1", "entry-1-copy");
+  current = updateWhiteboardSowEntry(current, "scope-1", "entry-1-copy", { text: "A".repeat(501), color: "#9333ea" });
+  assert.equal(current.sows[0].tabs[0].entries[1].text.length, 501, "long descriptions remain one complete entry");
+  assert.equal(current.sows[0].tabs[0].entries[1].color, "#9333EA");
+  current = moveWhiteboardSowEntry(current, "scope-1", "entry-1-copy", "entry-1");
+  assert.deepEqual(current.sows[0].tabs[0].entries.map((entry: any) => entry.id), ["entry-1-copy", "entry-1", "title-1"]);
+  current = removeWhiteboardSowEntry(current, "scope-1", "entry-1");
+  current = renameWhiteboardSowTab(current, "scope-1", "Exterior");
+  current = duplicateWhiteboardSowPanel(current, "sow-1");
+  assert.equal(current.sows.length, 2);
+  assert.equal(current.sows[1].tabs[0].name, "Exterior copy");
+  assert.notEqual(current.sows[1].tabs[0].entries[0].id, current.sows[0].tabs[0].entries[0].id, "duplicated panels receive independent item identities");
+  current = updateWhiteboardSowSectionTitle(current, "ALTERNATE", current.sows[1].id);
+  assert.equal(current.sows[0].sectionTitle, "SCOPE OF WORK", "editing the duplicate does not alter the source panel");
+  assert.equal(current.sows[1].sectionTitle, "ALTERNATE");
+  assert.deepEqual(validateWhiteboard(current), current, "SOW data uses the existing project validation path");
+  current = removeWhiteboardSowPanel(current, "sow-1");
+  assert.equal(current.sows.length, 1);
+  current = removeWhiteboardSowPanel(current, current.sows[0].id);
+  assert.equal(current.sows.length, 0, "the final panel can be deleted because the toolbar can add a new one");
+  assert.equal(addWhiteboardSowPanel(current).sows.length, 1);
+});
+
+test("linked automatic SOW rows persist while duplicated rows become independent", () => {
+  const linked: any = addWhiteboardSowEntry(emptyWhiteboard(), "scope-1", "[20 LF] - Fence", "#2563EB", "linked", "sow-1", "shape-1");
+  assert.equal(linked.sows[0].tabs[0].entries[0].measurementShapeId, "shape-1");
+  assert.deepEqual(validateWhiteboard(linked), linked, "measurement linkage survives project validation");
+  const aggregated: any = { ...linked, sows: linked.sows.map((sow: any) => ({ ...sow, tabs: sow.tabs.map((tab: any) => ({ ...tab,
+    entries: tab.entries.map((entry: any) => {
+      const { measurementShapeId: _measurementShapeId, ...manualFields } = entry;
+      return { ...manualFields, measurementConditionId: "condition-1", measurementShapeIds: ["shape-1", "shape-2"] };
+    }) })) })) };
+  const validated: any = validateWhiteboard(aggregated);
+  assert.deepEqual(validated.sows[0].tabs[0].entries[0].measurementShapeIds, ["shape-1", "shape-2"], "aggregate links survive project validation");
+  const duplicated: any = duplicateWhiteboardSowEntry(validated, "scope-1", "linked", "manual-copy");
+  assert.equal(duplicated.sows[0].tabs[0].entries[1].measurementShapeId, undefined, "a user duplicate is no longer controlled by the source measurement");
+  assert.equal(duplicated.sows[0].tabs[0].entries[1].measurementConditionId, undefined);
+  assert.equal(duplicated.sows[0].tabs[0].entries[1].measurementShapeIds, undefined);
+  const duplicatedPanel: any = duplicateWhiteboardSowPanel(validated, "sow-1");
+  assert.equal(duplicatedPanel.sows[1].tabs[0].entries[0].measurementShapeId, undefined, "a duplicated panel is also an independent scope copy");
+  assert.equal(duplicatedPanel.sows[1].tabs[0].entries[0].measurementConditionId, undefined);
+  assert.equal(duplicatedPanel.sows[1].tabs[0].entries[0].measurementShapeIds, undefined);
+});
+
+test("custom SOW branding uses a normal embedded image asset and can return to the default", () => {
+  const branding = { id: "brand-1", name: "Company.png", type: "image/png", size: png.length, data: bytesToBase64(png) };
+  const custom: any = setWhiteboardSowBranding(emptyWhiteboard(), branding);
+  assert.equal(custom.sows[0].brandAssetId, "brand-1");
+  assert.deepEqual(custom.assets, [branding]);
+  assert.deepEqual(validateWhiteboard(custom), custom);
+  const reset = setWhiteboardSowBranding(custom, null);
+  assert.equal(reset.sows[0].brandAssetId, undefined);
+  assert.deepEqual(reset.assets, [], "an unused custom branding asset is removed with the selection");
+});
+
+test("scope text wraps only between complete words for screen-fit and PDF layout", () => {
+  const measure = (value: string) => value.length;
+  assert.deepEqual(wrapWhiteboardSowText(measure, "ONE PEDESTRIAN GATES", 14), ["ONE PEDESTRIAN", "GATES"]);
+  assert.deepEqual(wrapWhiteboardSowText(measure, "RETAINING\nWALL", 20), ["RETAINING", "WALL"], "manual lines remain explicit");
+  assert.deepEqual(wrapWhiteboardSowText(measure, "SUPERCALIFRAGILISTIC", 5), ["SUPERCALIFRAGILISTIC"], "an unusually long word is never cut into fragments");
+});
+
+test("legacy SOW tabs migrate into simultaneous panels and malformed imported SOW data is rejected", () => {
+  const absent: any = emptyWhiteboard();
+  delete absent.sows;
+  assert.deepEqual(sanitizeWhiteboardSow(absent).sows, [emptyWhiteboardSow()]);
+  assert.equal(validateWhiteboard(absent).sows, undefined, "portable validation remains byte-compatible until UI hydration adds the default");
+  const legacy: any = { ...emptyWhiteboard(), sow: { ...emptyWhiteboardSow(), tabs: [
+    { id: "scope-1", name: "Exterior", entries: [{ id: "entry-1", text: "Fence", color: "#C96442" }] },
+    { id: "scope-2", name: "Interior", entries: [{ id: "entry-2", text: "Guardrail", color: "#2563EB" }] }], activeTabId: "scope-2" } };
+  delete legacy.sows;
+  const migrated = sanitizeWhiteboardSow(legacy);
+  assert.deepEqual(migrated.sows.map((sow: any) => sow.tabs[0].name), ["Exterior", "Interior"]);
+  assert.equal(migrated.sows[1].x, migrated.sows[0].x + 32, "legacy tabs are offset into separately visible panels");
+  assert.equal(Object.prototype.hasOwnProperty.call(migrated, "sow"), false);
+  const invalid: any = { ...emptyWhiteboard(), sow: { activeTabId: "bad", tabs: [{ id: "bad", name: "Bad", entries: [{ id: "entry", text: "text", color: "url(attack)" }] }] } };
+  delete invalid.sows;
+  assert.throws(() => validateWhiteboard(invalid), /Invalid whiteboard/);
 });
 
 test("image crops default to the full source, validate normalized bounds and permit compact cropped cards", () => {

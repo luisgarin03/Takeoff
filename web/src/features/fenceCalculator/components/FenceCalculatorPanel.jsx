@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import aluminumFencePreview from "../../../assets/fence-previews/aluminum-fence-isometric.png";
+import boardOnBoardPreview from "../../../assets/fence-previews/board-on-board-isometric.png";
+import chainLinkPreview from "../../../assets/fence-previews/chain-link-isometric.png";
+import privacyFencePreview from "../../../assets/fence-previews/privacy-fence-isometric.png";
+import vinylFencePreview from "../../../assets/fence-previews/vinyl-fence-isometric.png";
 import { Icon } from "../../../brand/icons.jsx";
 import { Alert, AlertDescription, AlertTitle } from "../../../components/ui/alert.jsx";
 import { Badge } from "../../../components/ui/badge.jsx";
@@ -37,6 +42,44 @@ const SECTION_LABELS = {
   advanced: "Advanced",
 };
 const SECTION_ORDER = ["dimensions", "layout", "materials", "gates", "advanced"];
+
+const FENCE_PREVIEWS = {
+  privacy: {
+    src: privacyFencePreview,
+    alt: "Isometric view of a solid wood privacy fence with a gate",
+    label: "Wood privacy fence",
+  },
+  "board-on-board": {
+    src: boardOnBoardPreview,
+    alt: "Isometric view of a board-on-board semi-privacy wood fence with a gate",
+    label: "Board-on-board wood fence",
+  },
+  "chain-link": {
+    src: chainLinkPreview,
+    alt: "Isometric view of a chain-link fence with a swing gate",
+    label: "Chain-link fence",
+  },
+  vinyl: {
+    src: vinylFencePreview,
+    alt: "Isometric view of a vinyl privacy fence with a gate",
+    label: "Vinyl fence",
+  },
+  aluminum: {
+    src: aluminumFencePreview,
+    alt: "Isometric view of an aluminum fence surrounding a pool",
+    label: "Aluminum fence",
+  },
+  temporary: {
+    src: chainLinkPreview,
+    alt: "Isometric chain-link fence shown as a representative preview for temporary fence panels",
+    label: "Temporary chain-link panels",
+  },
+  "post-concrete": {
+    src: privacyFencePreview,
+    alt: "Isometric wood fence shown as a representative preview for fence post and concrete quantities",
+    label: "Fence posts and concrete",
+  },
+};
 
 const formatQty = (value, digits = 3) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits });
 
@@ -215,6 +258,14 @@ export default function FenceCalculatorPanel({
     section,
     inputs: calculator.inputs.filter((input) => (input.section || "dimensions") === section && (!input.visibleWhen || input.visibleWhen.values.includes(values[input.visibleWhen.field]))),
   })).filter((group) => group.inputs.length);
+  const preview = FENCE_PREVIEWS[calculator.id] || FENCE_PREVIEWS.privacy;
+  const previewFacts = [
+    values.fenceLength !== undefined && `${formatQty(values.fenceLength)} LF`,
+    values.fenceHeight !== undefined && `${formatQty(values.fenceHeight)} FT high`,
+    values.panelLength !== undefined && `${formatQty(values.panelLength)} FT panels`,
+    values.postQuantity !== undefined && `${formatQty(values.postQuantity)} posts`,
+    Number(values.gateQuantity) > 0 && `${formatQty(values.gateQuantity)} gate${Number(values.gateQuantity) === 1 ? "" : "s"}`,
+  ].filter(Boolean);
 
   return createPortal(
     <section className="fence-calculator" role="dialog" aria-modal="true" aria-label="Fence Material Calculator" tabIndex={-1}
@@ -282,6 +333,16 @@ export default function FenceCalculatorPanel({
             </div>
           </CardHeader>
           <CardContent className="fence-input-groups">
+            <figure className="fence-preview">
+              <div className="fence-preview-frame">
+                <img src={preview.src} alt={preview.alt} decoding="async" />
+                <span className="fence-preview-kicker">Fence preview</span>
+              </div>
+              <figcaption>
+                <strong>{preview.label}</strong>
+                {previewFacts.length > 0 && <span>{previewFacts.join(" · ")}</span>}
+              </figcaption>
+            </figure>
             {groups.map((group, groupIndex) => <React.Fragment key={group.section}>
               {groupIndex > 0 && <Separator />}
               <section className="fence-input-group">

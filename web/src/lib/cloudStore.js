@@ -147,7 +147,7 @@ export function createCloudStore(folderId, drive, { local = localStore } = {}) {
   // longer both take putJson's create branch (which would spawn a duplicate
   // sheets.json and lose one set of picks — the exact hazard ensureAnnId guards).
   let manifestP = null;
-  /** @type {{ id: string, name: string }[]} */
+  /** @type {{ id: string, name: string, compatibility?: object }[]} */
   let manifestFiles = [];
   /** @type {string | null} */
   let sheetsId = null;
@@ -184,7 +184,7 @@ export function createCloudStore(folderId, drive, { local = localStore } = {}) {
   // array. If putJson throws, in-memory state is left untouched (so a failed
   // write can't diverge memory from disk) and the error propagates.
   let writeChain = Promise.resolve();
-  /** @param {(files: { id: string, name: string }[]) => { id: string, name: string }[]} fn */
+  /** @param {(files: { id: string, name: string, compatibility?: object }[]) => { id: string, name: string, compatibility?: object }[]} fn */
   function mutateManifest(fn) {
     const run = writeChain.then(async () => {
       await ensureManifest();
@@ -223,7 +223,7 @@ export function createCloudStore(folderId, drive, { local = localStore } = {}) {
       // live `manifestFiles` (not the promise's array), since writes swap it for
       // a fresh array on commit.
       await ensureManifest();
-      return manifestFiles.map((f) => ({ name: f.name }));
+      return manifestFiles.map((f) => ({ name: f.name, ...(f.compatibility ? { compatibility: f.compatibility } : {}) }));
     },
 
     async loadPdfData(name) {
@@ -234,6 +234,26 @@ export function createCloudStore(folderId, drive, { local = localStore } = {}) {
       if (!entry) throw new Error(`PDF not in project sheet set: ${name}`);
       const bytes = await drive.getFileBytes(entry.id);
       // hand pdf.js a fresh view each call — getDocument({data}) may detach it
+      return new Uint8Array(bytes);
+    },
+
+    async loadPdfCompatibility(name) {
+      await ensureManifest();
+      return manifestFiles.find((file) => file.name === name)?.compatibility || null;
+    },
+
+    async savePdfCompatibility(name, compatibility) {
+      await mutateManifest((files) => files.map((file) => file.name === name
+        ? { ...file, compatibility: compatibility || null }
+        : file));
+    },
+
+    // Candidate reads do not mutate sheets.json. The picker uses this to run
+    // the same pdf.js compatibility gate as drag/drop before addSheets commits
+    // the file to the working set.
+    async loadPdfCandidate(item) {
+      if (!item?.id || !item?.name) throw new Error("Invalid PDF selection.");
+      const bytes = await drive.getFileBytes(item.id);
       return new Uint8Array(bytes);
     },
 
@@ -260,7 +280,7 @@ export function createCloudStore(folderId, drive, { local = localStore } = {}) {
     /**
      * Add picked PDFs to the working set, deduping by id AND by name (a file
      * already present under either key is skipped), then persist sheets.json.
-     * @param {{ id: string, name: string }[]} items
+     * @param {{ id: string, name: string, compatibility?: object }[]} items
      */
     async addSheets(items) {
       // Append, deduping by id AND name against the CURRENT committed set. Build
@@ -269,8 +289,13 @@ export function createCloudStore(folderId, drive, { local = localStore } = {}) {
       return mutateManifest((files) => {
         const next = [...files];
         for (const it of items) {
-          if (next.some((f) => f.id === it.id || f.name === it.name)) continue;
-          next.push({ id: it.id, name: it.name });
+          const sameId = next.findIndex((f) => f.id === it.id);
+          if (sameId >= 0) {
+            if (it.compatibility) next[sameId] = { ...next[sameId], compatibility: it.compatibility };
+            continue;
+          }
+          if (next.some((f) => f.name === it.name)) continue;
+          next.push({ id: it.id, name: it.name, ...(it.compatibility ? { compatibility: it.compatibility } : {}) });
         }
         return next;
       });
@@ -300,8 +325,13 @@ export function createCloudStore(folderId, drive, { local = localStore } = {}) {
       await mutateManifest((cur) => cur.filter((f) => f.name !== name));
     },
 
-    async addPdf(file) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
+    /** @param {File} file @param {any} [compatibility] @param {Uint8Array|ArrayBuffer|null} [preparedBytes] */
+    async addPdf(file, compatibility = null, preparedBytes = null) {
+      // The compatibility gate already has the bytes for newly dropped plans.
+      // Reuse them so large cloud uploads do not read the File a second time.
+      const bytes = preparedBytes instanceof Uint8Array
+        ? preparedBytes.slice()
+        : preparedBytes instanceof ArrayBuffer ? new Uint8Array(preparedBytes.slice(0)) : new Uint8Array(await file.arrayBuffer());
       // de-dupe by name: a re-dropped file replaces the existing bytes
       const existing = await drive.findChild(folderId, file.name);
       let fileId;
@@ -312,8 +342,15 @@ export function createCloudStore(folderId, drive, { local = localStore } = {}) {
         const created = await drive.uploadFile({ name: file.name, parentId: folderId, mimeType: PDF_MIME, bytes });
         fileId = created.id;
       }
-      // a dropped PDF joins the working set (dedupe by id/name in addSheets)
-      await this.addSheets([{ id: fileId, name: file.name }]);
+      // A dropped PDF joins the working set. Replacing bytes under an existing
+      // name also replaces its compatibility result so stale verification can
+      // never be reused for the new file.
+      await mutateManifest((files) => {
+        const index = files.findIndex((entry) => entry.id === fileId || entry.name === file.name);
+        const record = { id: fileId, name: file.name, compatibility: compatibility || null };
+        if (index < 0) return [...files, record];
+        const next = [...files]; next[index] = record; return next;
+      });
       return { name: file.name };
     },
 

@@ -15,7 +15,386 @@ export const WHITEBOARD_FILE_HEADER_COLORS = [
   { name: "Cyan", value: "#0891B2" },
 ];
 export const WHITEBOARD_MIN_CROP_SIZE = 0.01;
-export const emptyWhiteboard = () => ({ version: 1, items: [], assets: [], arrows: [], rectangles: [] });
+export const WHITEBOARD_SOW_COLORS = WHITEBOARD_FILE_HEADER_COLORS;
+export const WHITEBOARD_SOW_DEFAULT_COLOR = WHITEBOARD_SOW_COLORS[0].value;
+export const WHITEBOARD_SOW_MAX_TABS = 100;
+export const WHITEBOARD_SOW_MAX_PANELS = 100;
+export const WHITEBOARD_SOW_MAX_ENTRIES = 5000;
+export const WHITEBOARD_SOW_MAX_TEXT = 100000;
+export const WHITEBOARD_SOW_MAX_TAKEOFF_TITLE = 120;
+export const WHITEBOARD_SOW_DEFAULT_TAKEOFF_TITLE = "FENCE TAKEOFF";
+export const WHITEBOARD_SOW_MAX_SECTION_TITLE = 80;
+export const WHITEBOARD_SOW_DEFAULT_SECTION_TITLE = "SOW";
+const SOW_COLOR = /^#[0-9a-f]{6}$/i;
+const SOW_ENTRY_KINDS = new Set(["line", "title"]);
+
+export const emptyWhiteboardSow = (id = "sow-1", tabId = "scope-1") => ({ id, x: 40, y: 40, w: 280, logoWidth: 128, takeoffTitle: WHITEBOARD_SOW_DEFAULT_TAKEOFF_TITLE,
+  sectionTitle: WHITEBOARD_SOW_DEFAULT_SECTION_TITLE,
+  activeTabId: tabId, tabs: [{ id: tabId, name: "Scope 1", entries: [] }] });
+export const emptyWhiteboard = () => ({ version: 1, items: [], assets: [], arrows: [], rectangles: [], sows: [emptyWhiteboardSow()] });
+
+const uniqueId = (prefix) => `${prefix}-${crypto.randomUUID()}`;
+const sowColor = (value) => typeof value === "string" && SOW_COLOR.test(value) ? value.toUpperCase() : WHITEBOARD_SOW_DEFAULT_COLOR;
+
+function normalizeWhiteboardSow(value, strict = false) {
+  const fail = () => { if (strict) throw new Error("Invalid whiteboard data in project."); return emptyWhiteboardSow(); };
+  if (!value || typeof value !== "object" || Array.isArray(value) || !Array.isArray(value.tabs) ||
+    !value.tabs.length || value.tabs.length > WHITEBOARD_SOW_MAX_TABS) return fail();
+  const tabIds = new Set(), entryIds = new Set();
+  let entryCount = 0;
+  const tabs = [];
+  for (const [tabIndex, tab] of value.tabs.entries()) {
+    if (!tab || typeof tab !== "object" || Array.isArray(tab) || typeof tab.id !== "string" || !tab.id || tab.id.length > 128 ||
+      tabIds.has(tab.id) || typeof tab.name !== "string" || !tab.name.trim() || tab.name.length > 80 || !Array.isArray(tab.entries)) return fail();
+    tabIds.add(tab.id);
+    const entries = [];
+    for (const entry of tab.entries) {
+      entryCount += 1;
+      const kind = entry?.kind == null ? "line" : entry.kind;
+      if (entryCount > WHITEBOARD_SOW_MAX_ENTRIES || !entry || typeof entry !== "object" || Array.isArray(entry) ||
+        typeof entry.id !== "string" || !entry.id || entry.id.length > 128 || entryIds.has(entry.id) ||
+        typeof entry.text !== "string" || entry.text.length > WHITEBOARD_SOW_MAX_TEXT || !SOW_ENTRY_KINDS.has(kind) ||
+        (kind === "line" && (typeof entry.color !== "string" || !SOW_COLOR.test(entry.color)))) return fail();
+      const measurementShapeId = typeof entry.measurementShapeId === "string" && entry.measurementShapeId && entry.measurementShapeId.length <= 128
+        ? entry.measurementShapeId : null;
+      const measurementConditionId = typeof entry.measurementConditionId === "string" && entry.measurementConditionId && entry.measurementConditionId.length <= 128
+        ? entry.measurementConditionId : null;
+      const measurementShapeIds = Array.isArray(entry.measurementShapeIds) && entry.measurementShapeIds.length <= WHITEBOARD_SOW_MAX_ENTRIES
+        && entry.measurementShapeIds.every((id) => typeof id === "string" && id && id.length <= 128)
+        && new Set(entry.measurementShapeIds).size === entry.measurementShapeIds.length
+        ? entry.measurementShapeIds : null;
+      if (strict && Object.hasOwn(entry, "measurementShapeId") && !measurementShapeId) return fail();
+      if (strict && Object.hasOwn(entry, "measurementConditionId") && !measurementConditionId) return fail();
+      if (strict && Object.hasOwn(entry, "measurementShapeIds") && !measurementShapeIds) return fail();
+      if (strict && kind === "title" && (measurementShapeId || measurementConditionId || measurementShapeIds)) return fail();
+      entryIds.add(entry.id);
+      entries.push(kind === "title" ? { id: entry.id, kind: "title", text: entry.text } :
+        { id: entry.id, text: entry.text, color: entry.color.toUpperCase(), ...(entry.kind === "line" ? { kind: "line" } : {}),
+          ...(measurementShapeId ? { measurementShapeId } : {}),
+          ...(measurementConditionId ? { measurementConditionId } : {}),
+          ...(measurementShapeIds ? { measurementShapeIds: [...measurementShapeIds] } : {}) });
+    }
+    tabs.push({ id: tab.id, name: tab.name.trim() || `Scope ${tabIndex + 1}`, entries });
+  }
+  const activeTabId = typeof value.activeTabId === "string" && tabIds.has(value.activeTabId) ? value.activeTabId : tabs[0].id;
+  const x = Number.isFinite(value.x) && Math.abs(value.x) <= 1e7 ? value.x : 40;
+  const y = Number.isFinite(value.y) && Math.abs(value.y) <= 1e7 ? value.y : 40;
+  const w = Number.isFinite(value.w) && value.w >= 240 && value.w <= 800 ? value.w : 280;
+  const defaultLogoWidth = Math.min(128, Math.max(72, w - 128));
+  const logoWidth = Number.isFinite(value.logoWidth)
+    ? Math.max(72, Math.min(240, w - 128, value.logoWidth))
+    : defaultLogoWidth;
+  if (strict && Object.hasOwn(value, "logoWidth") && !Number.isFinite(value.logoWidth)) return fail();
+  const takeoffTitle = typeof value.takeoffTitle === "string"
+    ? value.takeoffTitle.slice(0, WHITEBOARD_SOW_MAX_TAKEOFF_TITLE)
+    : WHITEBOARD_SOW_DEFAULT_TAKEOFF_TITLE;
+  if (strict && Object.hasOwn(value, "takeoffTitle") && typeof value.takeoffTitle !== "string") return fail();
+  const sectionTitle = typeof value.sectionTitle === "string"
+    ? value.sectionTitle.slice(0, WHITEBOARD_SOW_MAX_SECTION_TITLE)
+    : WHITEBOARD_SOW_DEFAULT_SECTION_TITLE;
+  if (strict && Object.hasOwn(value, "sectionTitle") && typeof value.sectionTitle !== "string") return fail();
+  const brandAssetId = typeof value.brandAssetId === "string" && value.brandAssetId && value.brandAssetId.length <= 128 ? value.brandAssetId : null;
+  if (strict && Object.hasOwn(value, "brandAssetId") && !brandAssetId) return fail();
+  return { x, y, w, logoWidth, takeoffTitle, sectionTitle, activeTabId, tabs, ...(brandAssetId ? { brandAssetId } : {}) };
+}
+
+function normalizedSowPanels(board, strict = false, includeDefault = true) {
+  const fail = () => { if (strict) throw new Error("Invalid whiteboard data in project."); return includeDefault ? [emptyWhiteboardSow()] : []; };
+  const isLegacy = !Array.isArray(board?.sows) && board?.sow && typeof board.sow === "object";
+  const source = Array.isArray(board?.sows) ? board.sows : isLegacy ? [board.sow] : includeDefault ? [emptyWhiteboardSow()] : [];
+  if (source.length > WHITEBOARD_SOW_MAX_PANELS) return fail();
+  const panels = [], panelIds = new Set();
+  for (const [panelIndex, raw] of source.entries()) {
+    const normalized = normalizeWhiteboardSow(raw, strict);
+    const suppliedId = typeof raw?.id === "string" && raw.id && raw.id.length <= 128 ? raw.id : null;
+    if (strict && Object.hasOwn(raw || {}, "id") && !suppliedId) return fail();
+    for (const [tabIndex, tab] of normalized.tabs.entries()) {
+      if (panels.length >= WHITEBOARD_SOW_MAX_PANELS) return fail();
+      let id = tabIndex ? `${suppliedId || `sow-${panelIndex + 1}`}-${tab.id}` : suppliedId || `sow-${panelIndex + 1}`;
+      while (panelIds.has(id)) id = `${id}-copy`;
+      panelIds.add(id);
+      const offset = isLegacy && tabIndex ? tabIndex * 32 : 0;
+      panels.push({ ...normalized, id, x: normalized.x + offset, y: normalized.y + offset,
+        activeTabId: tab.id, tabs: [{ ...tab, name: tab.name || `Scope ${panels.length + 1}` }] });
+    }
+  }
+  return panels;
+}
+
+/** Add a safe default to legacy/local boards without changing their other data. */
+export function sanitizeWhiteboardSow(board) {
+  if (!board || typeof board !== "object" || Array.isArray(board)) return board;
+  const includeDefault = !Object.hasOwn(board, "sows") && !Object.hasOwn(board, "sow");
+  const sows = normalizedSowPanels(board, false, includeDefault).map((sow) => {
+    const branding = sow.brandAssetId && Array.isArray(board.assets) ? board.assets.find((asset) =>
+      asset?.id === sow.brandAssetId && typeof asset.type === "string" && asset.type.startsWith("image/")) : null;
+    return sow.brandAssetId && !branding ? (({ brandAssetId: _brandAssetId, ...rest }) => rest)(sow) : sow;
+  });
+  const next = { ...board, sows };
+  delete next.sow;
+  return next;
+}
+
+function withSow(board, update, sowId = null) {
+  const safe = sanitizeWhiteboardSow(board);
+  const index = sowId ? safe.sows.findIndex((sow) => sow.id === sowId) : 0;
+  if (index < 0) return safe;
+  const sow = update(safe.sows[index]);
+  if (sow === safe.sows[index]) return safe;
+  const sows = [...safe.sows]; sows[index] = sow;
+  return { ...safe, sows };
+}
+
+export function addWhiteboardSowPanel(board, position = null) {
+  const safe = sanitizeWhiteboardSow(board);
+  if (safe.sows.length >= WHITEBOARD_SOW_MAX_PANELS) return safe;
+  const previous = safe.sows.at(-1);
+  const number = safe.sows.length + 1;
+  const panel = emptyWhiteboardSow(uniqueId("sow"), uniqueId("scope"));
+  panel.tabs[0].name = `Scope ${number}`;
+  panel.x = Number.isFinite(position?.x) ? position.x : previous ? previous.x + 32 : 40;
+  panel.y = Number.isFinite(position?.y) ? position.y : previous ? previous.y + 32 : 40;
+  return { ...safe, sows: [...safe.sows, panel] };
+}
+
+export function duplicateWhiteboardSowPanel(board, sowId) {
+  const safe = sanitizeWhiteboardSow(board);
+  if (safe.sows.length >= WHITEBOARD_SOW_MAX_PANELS) return safe;
+  const source = safe.sows.find((sow) => sow.id === sowId);
+  if (!source) return safe;
+  const tab = source.tabs[0];
+  const duplicate = { ...source, id: uniqueId("sow"), x: source.x + 32, y: source.y + 32,
+    activeTabId: uniqueId("scope"), tabs: [{ ...tab, id: "", name: `${tab.name} copy`.slice(0, 80),
+      entries: tab.entries.map((entry) => {
+        const { measurementShapeId: _measurementShapeId, measurementConditionId: _measurementConditionId,
+          measurementShapeIds: _measurementShapeIds, ...copy } = entry;
+        return { ...copy, id: uniqueId(entry.kind === "title" ? "sow-title" : "sow-entry") };
+      }) }] };
+  duplicate.tabs[0].id = duplicate.activeTabId;
+  return { ...safe, sows: [...safe.sows, duplicate] };
+}
+
+export function removeWhiteboardSowPanel(board, sowId) {
+  const safe = sanitizeWhiteboardSow(board);
+  const sows = safe.sows.filter((sow) => sow.id !== sowId);
+  if (sows.length === safe.sows.length) return safe;
+  const used = new Set(safe.items.map((item) => item.assetId));
+  for (const sow of sows) if (sow.brandAssetId) used.add(sow.brandAssetId);
+  return { ...safe, sows, assets: safe.assets.filter((asset) => used.has(asset.id)) };
+}
+
+export function addWhiteboardSowTab(board, requestedName = "", sowId = null) {
+  return withSow(board, (sow) => {
+    if (sow.tabs.length >= WHITEBOARD_SOW_MAX_TABS) return sow;
+    const used = new Set(sow.tabs.map((tab) => tab.name.toLowerCase()));
+    let number = 1;
+    while (used.has(`scope ${number}`)) number += 1;
+    const name = String(requestedName || "").trim().slice(0, 80) || `Scope ${number}`;
+    const tab = { id: uniqueId("scope"), name, entries: [] };
+    return { ...sow, activeTabId: tab.id, tabs: [...sow.tabs, tab] };
+  }, sowId);
+}
+
+export function setWhiteboardSowActiveTab(board, tabId, sowId = null) {
+  return withSow(board, (sow) => sow.tabs.some((tab) => tab.id === tabId) && sow.activeTabId !== tabId ? { ...sow, activeTabId: tabId } : sow, sowId);
+}
+
+export function renameWhiteboardSowTab(board, tabId, name, sowId = null) {
+  const nextName = String(name || "").trim().slice(0, 80);
+  if (!nextName) return board;
+  return withSow(board, (sow) => {
+    let changed = false;
+    const tabs = sow.tabs.map((tab) => {
+      if (tab.id !== tabId || tab.name === nextName) return tab;
+      changed = true; return { ...tab, name: nextName };
+    });
+    return changed ? { ...sow, tabs } : sow;
+  }, sowId);
+}
+
+export function removeWhiteboardSowTab(board, tabId, sowId = null) {
+  return withSow(board, (sow) => {
+    if (sow.tabs.length <= 1 || !sow.tabs.some((tab) => tab.id === tabId)) return sow;
+    const tabs = sow.tabs.filter((tab) => tab.id !== tabId);
+    return { ...sow, activeTabId: sow.activeTabId === tabId ? tabs[0].id : sow.activeTabId, tabs };
+  }, sowId);
+}
+
+export function updateWhiteboardSowLayout(board, changes, sowId = null) {
+  return withSow(board, (sow) => {
+    const x = Number.isFinite(changes?.x) ? Math.max(-1e7, Math.min(1e7, changes.x)) : sow.x;
+    const y = Number.isFinite(changes?.y) ? Math.max(-1e7, Math.min(1e7, changes.y)) : sow.y;
+    const w = Number.isFinite(changes?.w) ? Math.max(240, Math.min(800, changes.w)) : sow.w;
+    const requestedLogoWidth = Number.isFinite(changes?.logoWidth) ? changes.logoWidth : sow.logoWidth;
+    const logoWidth = Math.max(72, Math.min(240, w - 128, requestedLogoWidth));
+    return x === sow.x && y === sow.y && w === sow.w && logoWidth === sow.logoWidth ? sow : { ...sow, x, y, w, logoWidth };
+  }, sowId);
+}
+
+export function whiteboardSowLogoWidth(sow) {
+  const w = Number.isFinite(sow?.w) ? Math.max(240, Math.min(800, sow.w)) : 280;
+  const requested = Number.isFinite(sow?.logoWidth) ? sow.logoWidth : Math.min(128, w - 128);
+  return Math.max(72, Math.min(240, w - 128, requested));
+}
+
+export function updateWhiteboardSowTakeoffTitle(board, title, sowId = null) {
+  const nextTitle = String(title ?? "").slice(0, WHITEBOARD_SOW_MAX_TAKEOFF_TITLE);
+  return withSow(board, (sow) => sow.takeoffTitle === nextTitle ? sow : { ...sow, takeoffTitle: nextTitle }, sowId);
+}
+
+export function updateWhiteboardSowSectionTitle(board, title, sowId = null) {
+  const nextTitle = String(title ?? "").slice(0, WHITEBOARD_SOW_MAX_SECTION_TITLE);
+  return withSow(board, (sow) => sow.sectionTitle === nextTitle ? sow : { ...sow, sectionTitle: nextTitle }, sowId);
+}
+
+/** Wrap SOW copy at whitespace boundaries so screen and PDF never split words. */
+export function wrapWhiteboardSowText(measureText, text, width) {
+  const lines = [];
+  for (const paragraph of String(text || "").replace(/\r\n?/g, "\n").split("\n")) {
+    if (!paragraph.trim()) { lines.push(""); continue; }
+    let line = "";
+    for (const word of paragraph.trim().split(/\s+/)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (line && measureText(candidate) > width) { lines.push(line); line = word; }
+      else line = candidate;
+    }
+    lines.push(line);
+  }
+  return lines.length ? lines : [""];
+}
+
+/**
+ * @param {object} board
+ * @param {string} tabId
+ * @param {string} [text]
+ * @param {string} [color]
+ * @param {string} [id]
+ * @param {string | null} [sowId]
+ * @param {string | null} [measurementShapeId]
+ */
+export function addWhiteboardSowEntry(board, tabId, text = "", color = WHITEBOARD_SOW_DEFAULT_COLOR, id = uniqueId("sow-entry"), sowId = null, measurementShapeId = null) {
+  const nextText = String(text).slice(0, WHITEBOARD_SOW_MAX_TEXT);
+  const linkedShapeId = typeof measurementShapeId === "string" && measurementShapeId && measurementShapeId.length <= 128 ? measurementShapeId : null;
+  return withSow(board, (sow) => {
+    if (sow.tabs.reduce((sum, tab) => sum + tab.entries.length, 0) >= WHITEBOARD_SOW_MAX_ENTRIES ||
+      sow.tabs.some((tab) => tab.entries.some((entry) => entry.id === id))) return sow;
+    let changed = false;
+    const tabs = sow.tabs.map((tab) => {
+      if (tab.id !== tabId) return tab;
+      changed = true;
+      return { ...tab, entries: [...tab.entries, { id, text: nextText, color: sowColor(color), ...(linkedShapeId ? { measurementShapeId: linkedShapeId } : {}) }] };
+    });
+    return changed ? { ...sow, tabs } : sow;
+  }, sowId);
+}
+
+export function addWhiteboardSowTitle(board, tabId, text = "", id = uniqueId("sow-title"), sowId = null) {
+  const nextText = String(text).slice(0, WHITEBOARD_SOW_MAX_TEXT);
+  return withSow(board, (sow) => {
+    if (sow.tabs.reduce((sum, tab) => sum + tab.entries.length, 0) >= WHITEBOARD_SOW_MAX_ENTRIES ||
+      sow.tabs.some((tab) => tab.entries.some((entry) => entry.id === id))) return sow;
+    let changed = false;
+    const tabs = sow.tabs.map((tab) => {
+      if (tab.id !== tabId) return tab;
+      changed = true;
+      return { ...tab, entries: [...tab.entries, { id, kind: "title", text: nextText }] };
+    });
+    return changed ? { ...sow, tabs } : sow;
+  }, sowId);
+}
+
+/** @param {object} board @param {object | null} [asset] */
+export function setWhiteboardSowBranding(board, asset = null, sowId = null) {
+  const safe = sanitizeWhiteboardSow(board);
+  const index = sowId ? safe.sows.findIndex((sow) => sow.id === sowId) : 0;
+  if (index < 0) return safe;
+  const previousId = safe.sows[index].brandAssetId;
+  if (asset && (!asset.id || !asset.type?.startsWith("image/") || !WHITEBOARD_TYPES.includes(asset.type) ||
+    !Number.isInteger(asset.size) || asset.size <= 0 || asset.size > WHITEBOARD_FILE_LIMIT || typeof asset.data !== "string")) return safe;
+  if (!asset && !previousId) return safe;
+  const usedElsewhere = (id) => safe.items.some((item) => item.assetId === id) || safe.sows.some((sow, sowIndex) => sowIndex !== index && sow.brandAssetId === id);
+  let assets = safe.assets.filter((candidate) => candidate.id !== previousId || usedElsewhere(previousId));
+  if (asset) assets = [...assets.filter((candidate) => candidate.id !== asset.id), asset];
+  const sow = { ...safe.sows[index] };
+  if (asset) sow.brandAssetId = asset.id;
+  else delete sow.brandAssetId;
+  const sows = [...safe.sows]; sows[index] = sow;
+  return { ...safe, assets, sows };
+}
+
+export function updateWhiteboardSowEntry(board, tabId, entryId, changes, sowId = null) {
+  if (!changes || typeof changes !== "object" || Array.isArray(changes)) return board;
+  return withSow(board, (sow) => {
+    let changed = false;
+    const tabs = sow.tabs.map((tab) => {
+      if (tab.id !== tabId) return tab;
+      let tabChanged = false;
+      const entries = tab.entries.map((entry) => {
+        if (entry.id !== entryId) return entry;
+        const next = { ...entry };
+        if (Object.hasOwn(changes, "text")) next.text = String(changes.text).slice(0, WHITEBOARD_SOW_MAX_TEXT);
+        if (entry.kind !== "title" && Object.hasOwn(changes, "color") && typeof changes.color === "string" && SOW_COLOR.test(changes.color)) next.color = changes.color.toUpperCase();
+        if (next.text === entry.text && next.color === entry.color) return entry;
+        changed = true; tabChanged = true; return next;
+      });
+      return tabChanged ? { ...tab, entries } : tab;
+    });
+    return changed ? { ...sow, tabs } : sow;
+  }, sowId);
+}
+
+export function removeWhiteboardSowEntry(board, tabId, entryId, sowId = null) {
+  return withSow(board, (sow) => {
+    let changed = false;
+    const tabs = sow.tabs.map((tab) => {
+      if (tab.id !== tabId) return tab;
+      const entries = tab.entries.filter((entry) => entry.id !== entryId);
+      if (entries.length === tab.entries.length) return tab;
+      changed = true; return { ...tab, entries };
+    });
+    return changed ? { ...sow, tabs } : sow;
+  }, sowId);
+}
+
+export function duplicateWhiteboardSowEntry(board, tabId, entryId, id = uniqueId("sow-entry"), sowId = null) {
+  return withSow(board, (sow) => {
+    if (sow.tabs.reduce((sum, tab) => sum + tab.entries.length, 0) >= WHITEBOARD_SOW_MAX_ENTRIES) return sow;
+    let changed = false;
+    const tabs = sow.tabs.map((tab) => {
+      if (tab.id !== tabId) return tab;
+      const index = tab.entries.findIndex((entry) => entry.id === entryId);
+      if (index < 0) return tab;
+      const entries = [...tab.entries];
+      // A duplicate is an intentionally independent/manual row; keeping the
+      // source measurement link would make both copies update or disappear.
+      const { measurementShapeId: _measurementShapeId, measurementConditionId: _measurementConditionId,
+        measurementShapeIds: _measurementShapeIds, ...copy } = tab.entries[index];
+      entries.splice(index + 1, 0, { ...copy, id });
+      changed = true; return { ...tab, entries };
+    });
+    return changed ? { ...sow, tabs } : sow;
+  }, sowId);
+}
+
+/** @param {object} board @param {string} tabId @param {string} entryId @param {string | null} [targetId] */
+export function moveWhiteboardSowEntry(board, tabId, entryId, targetId = null, sowId = null) {
+  return withSow(board, (sow) => {
+    let changed = false;
+    const tabs = sow.tabs.map((tab) => {
+      if (tab.id !== tabId) return tab;
+      const from = tab.entries.findIndex((entry) => entry.id === entryId);
+      if (from < 0 || targetId === entryId) return tab;
+      const entries = [...tab.entries];
+      const [entry] = entries.splice(from, 1);
+      const to = targetId == null ? entries.length : entries.findIndex((candidate) => candidate.id === targetId);
+      if (to < 0) return tab;
+      entries.splice(to, 0, entry);
+      if (entries.every((candidate, index) => candidate === tab.entries[index])) return tab;
+      changed = true; return { ...tab, entries };
+    });
+    return changed ? { ...sow, tabs } : sow;
+  }, sowId);
+}
 
 const drawingColor = (value) => WHITEBOARD_FILE_HEADER_COLORS.find(({ value: supported }) =>
   supported.toLowerCase() === String(value).toLowerCase())?.value || "#1f3fc7";
@@ -141,7 +520,10 @@ export function whiteboardDrawingBounds(drawing, kind = null) {
 
 export function whiteboardHasContent(board) {
   return !!(board && ((Array.isArray(board.items) && board.items.length) ||
-    (Array.isArray(board.arrows) && board.arrows.length) || (Array.isArray(board.rectangles) && board.rectangles.length)));
+    (Array.isArray(board.arrows) && board.arrows.length) || (Array.isArray(board.rectangles) && board.rectangles.length) ||
+    // An explicit empty panel collection is meaningful: it records that the
+    // user deleted the final SOW panel and must not be replaced on reload.
+    Array.isArray(board.sows) || (board.sow && Array.isArray(board.sow.tabs) && board.sow.tabs.length)));
 }
 
 export function whiteboardFileHeaderColor(value) {
@@ -271,12 +653,24 @@ export function validateWhiteboard(board) {
       if (item.w < (hasCrop ? 42 : 160) || item.h < (hasCrop ? 82 : 140)) invalid();
     }
   }
-  return sanitizeWhiteboardRectangles(sanitizeWhiteboardArrows(sanitizeWhiteboardFileHeaderColors(board)));
+  let withValidatedSow = board;
+  if (Object.hasOwn(board, "sows") || Object.hasOwn(board, "sow")) {
+    const sows = normalizedSowPanels(board, true, false);
+    withValidatedSow = { ...board, sows };
+    delete withValidatedSow.sow;
+    for (const sow of sows) {
+      if (!sow.brandAssetId) continue;
+      const branding = assets.get(sow.brandAssetId);
+      if (!branding || !branding.type.startsWith("image/")) invalid();
+    }
+  }
+  return sanitizeWhiteboardRectangles(sanitizeWhiteboardArrows(sanitizeWhiteboardFileHeaderColors(withValidatedSow)));
 }
 
 export function removeBoardItem(board, id) {
   const items = board.items.filter((item) => item.id !== id);
   const used = new Set(items.map((item) => item.assetId));
+  for (const sow of board.sows || (board.sow ? [board.sow] : [])) if (sow.brandAssetId) used.add(sow.brandAssetId);
   return { ...board, items, assets: board.assets.filter((asset) => used.has(asset.id)) };
 }
 
@@ -298,5 +692,15 @@ export function fitBoard(items, width, height) {
 export function fitWhiteboard(board, width, height) {
   const arrows = Array.isArray(board?.arrows) ? board.arrows.map((drawing) => whiteboardDrawingBounds(drawing, "arrow")).filter(Boolean) : [];
   const rectangles = Array.isArray(board?.rectangles) ? board.rectangles.map((drawing) => whiteboardDrawingBounds(drawing, "rectangle")).filter(Boolean) : [];
-  return fitBoard([...(board?.items || []), ...arrows, ...rectangles], width, height);
+  const sows = (Array.isArray(board?.sows) ? board.sows : board?.sow ? [board.sow] : []).map((sow) => {
+    const active = sow.tabs.find((tab) => tab.id === sow.activeTabId) || sow.tabs[0];
+    const entriesHeight = (active?.entries || []).reduce((sum, entry) => {
+      const isTitle = entry.kind === "title";
+      const lines = wrapWhiteboardSowText((value) => value.length * 4, entry.text, sow.w - (isTitle ? 12 : 40)).length;
+      return sum + (isTitle ? Math.max(16, lines * 11 + 3) : Math.max(20, lines * 10 + 5)) + 3;
+    }, 0);
+    const chromeHeight = active?.entries?.length ? 138 : 200;
+    return { x: sow.x, y: sow.y, w: sow.w, h: chromeHeight + entriesHeight };
+  });
+  return fitBoard([...(board?.items || []), ...arrows, ...rectangles, ...sows], width, height);
 }

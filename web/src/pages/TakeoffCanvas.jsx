@@ -35,18 +35,22 @@ import { seedStampLibrary, instantiateStamp, markupToStampElement } from "../lib
 import { extractSvgPrimitives, svgToStamp } from "../lib/svgImport.js";
 import { transformPath, svgPlacedBox } from "../lib/svgpath.js";
 import { ingestFiles } from "../lib/ingest.js";
+import { isCurrentPdfCompatibility, pdfCompatibilityRecord, PDF_VALIDATION_MODES, validatePdfBytes } from "../lib/pdfCompatibility.js";
+import { FindOcrPermissionDialog, PdfImportReportDialog, PdfOpeningSettingsDialog, PdfPasswordDialog } from "../components/PdfImportDialogs.jsx";
+import { loadPdfPreferences, pdfValidationModeForPreferences, PDF_OCR_MODES, PDF_OPEN_MODES, savePdfPreferences } from "../lib/pdfPreferences.js";
 import BeitzellToolbar from "../components/BeitzellToolbar.jsx";
 import ToolMenu from "../components/ToolMenu.jsx";
 import ThemeSettings from "../components/ThemeSettings.jsx";
 import WorkspaceHelp, { RecentProjectsMenu } from "../components/WorkspaceHelp.jsx";
 import SheetBookmarkButton from "../components/SheetBookmarkButton.jsx";
-import { sanitizeSheetBookmarks, toggleSheetBookmark, sheetBookmarkGroups } from "../lib/sheetBookmarks.js";
+import { fileBookmarkGroups, sanitizeFileBookmarks, sanitizeSheetBookmarks, toggleFileBookmark, toggleSheetBookmark, sheetBookmarkGroups } from "../lib/sheetBookmarks.js";
 import VirtualTrackpad from "../components/VirtualTrackpad.jsx";
 import TrackpadSettings from "../components/TrackpadSettings.jsx";
 import DiagnosticsMonitor from "../components/DiagnosticsMonitor.jsx";
 import PlanNavigator from "../components/PlanNavigator.jsx";
 import Whiteboard from "../components/Whiteboard.jsx";
-import { emptyWhiteboard, sanitizeWhiteboardFileHeaderColors, whiteboardHasContent } from "../lib/whiteboard.js";
+import { addWhiteboardSowEntry, addWhiteboardSowPanel, emptyWhiteboard, sanitizeWhiteboardFileHeaderColors, sanitizeWhiteboardSow, whiteboardHasContent } from "../lib/whiteboard.js";
+import { measurementCallout, measurementSowText, syncMeasurementCallouts, syncMeasurementSowBoard } from "../lib/measurementSow.js";
 import FenceCalculatorPanel from "../features/fenceCalculator/components/FenceCalculatorPanel.jsx";
 import { calculationToConditionMaterials, emptyFenceCalculatorProject, fenceCalculatorProjectHasContent, getCalculatorDefinition, sanitizeFenceCalculatorProject } from "../features/fenceCalculator/index.ts";
 import ReportPanel from "../components/ReportPanel.jsx";
@@ -60,6 +64,7 @@ import { isCanvasBusy } from "../lib/canvasBusy";
 import { parseSchedule, rowToSeed } from "../lib/scheduleParse";
 import { normalizeScanRows, postScanWithRetry, SCAN_ENDPOINT, scanRasterScale } from "../lib/scheduleScan";
 import { DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, addFindSuggestions, findHighlightsForPageExport, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, normalizeFindSuggestions, parseFindTerms, removeFindSuggestion, stepFindPageIndex } from "../lib/findText.js";
+import { disposeFindOcr, recognizePdfPageForFind } from "../lib/findOcr.js";
 import { MARKUP_SHORTCUTS_KEY, assignMarkupShortcut, clearMarkupShortcut, normalizeMarkupShortcutMap } from "../lib/markupShortcuts.js";
 import { normalizeTag } from "../lib/scheduleEdit";
 import { isGoogleConfigured, isSignedIn, isAllowedDomain, getAccessToken, orgDomainHint } from "../lib/google/auth.js";
@@ -131,6 +136,14 @@ import * as panelGeom from "../lib/panelGeometry.js";
 // turns amber at/past it so the estimator sees where seams fall while tracing.
 const CARPET_ROLL_FT = 12;
 const PREVIEW_RESOLUTION_KEY = "opentakeoff_preview_resolution";
+const PENDING_PDF_REPORT_KEY = "opentakeoff.pending-pdf-compatibility-report";
+const takePendingPdfReport = () => {
+  try {
+    const raw = sessionStorage.getItem(PENDING_PDF_REPORT_KEY);
+    sessionStorage.removeItem(PENDING_PDF_REPORT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+};
 const normalizePreviewResolution = (value) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return LOW_ZOOM_PREVIEW_DEFAULT_SCALE;
@@ -263,6 +276,7 @@ export default function TakeoffCanvas() {
   const browseProjects = projectHomeFolderId() ? () => navigate("/projects") : null;
   const [openTabs, setOpenTabs] = useState([]);   // sheetKeys open as tabs across the top
   const [sheetBookmarks, setSheetBookmarks] = useState([]);
+  const [fileBookmarks, setFileBookmarks] = useState([]);
   const [galleryLabels, setGalleryLabels] = useState({}); // sheetKey → title-block number, all files
   const [pageLabels, setPageLabels] = useState({}); // { pageNum: "A003" } from the title block
   const [sheetGroup, setSheetGroup] = useState([]);   // sheetKeys shown side-by-side; [] = single-sheet mode
@@ -476,17 +490,105 @@ export default function TakeoffCanvas() {
   //     `computed` the recorded commands froze).
   const undoStackRef = useRef([]);   // [{ cmd, inverse }]
   const redoStackRef = useRef([]);
-  function dispatchShape(cmd, { record = true, reset = false } = {}) {
+  function collectMeasurementDocumentation(ids) {
+    const wanted = new Set(ids || []);
+    if (!wanted.size) return null;
+    const linkedMarkups = markups.filter((markup) => wanted.has(markup.measurement_shape_id));
+    const sowEntries = [];
+    for (const sow of whiteboard.sows || []) for (const tab of sow.tabs || []) {
+      tab.entries.forEach((entry, index) => {
+        const linkedIds = Array.isArray(entry.measurementShapeIds)
+          ? entry.measurementShapeIds : entry.measurementShapeId ? [entry.measurementShapeId] : [];
+        if (linkedIds.some((id) => wanted.has(id))) sowEntries.push({ sowId: sow.id, tabId: tab.id, index, entry });
+      });
+    }
+    return linkedMarkups.length || sowEntries.length ? { markups: linkedMarkups, sowEntries } : null;
+  }
+  function syncMeasurementDocumentation(nextShapes, nextConditions = conditions, nextUnits = units) {
+    setMarkups((current) => syncMeasurementCallouts(current, nextShapes, nextConditions, nextUnits));
+    setWhiteboard((current) => syncMeasurementSowBoard(current, nextShapes, nextConditions, nextUnits));
+  }
+  function restoreMeasurementDocumentation(docs, nextShapes) {
+    if (!docs) { syncMeasurementDocumentation(nextShapes); return; }
+    setMarkups((current) => {
+      const ids = new Set(current.map((markup) => markup.id));
+      const restored = [...current, ...(docs.markups || []).filter((markup) => !ids.has(markup.id))];
+      return syncMeasurementCallouts(restored, nextShapes, conditions, units);
+    });
+    setWhiteboard((current) => {
+      let changed = false;
+      const rowsByTab = new Map();
+      for (const row of docs.sowEntries || []) {
+        const key = `${row.sowId}\u0000${row.tabId}`;
+        if (!rowsByTab.has(key)) rowsByTab.set(key, []);
+        rowsByTab.get(key).push(row);
+      }
+      const sows = (current.sows || []).map((sow) => {
+        let sowChanged = false;
+        const tabs = (sow.tabs || []).map((tab) => {
+          const rows = rowsByTab.get(`${sow.id}\u0000${tab.id}`);
+          if (!rows?.length) return tab;
+          const entries = [...tab.entries];
+          for (const row of rows.slice().sort((a, b) => a.index - b.index)) {
+            const existingIndex = entries.findIndex((entry) => entry.id === row.entry.id);
+            if (existingIndex >= 0) entries[existingIndex] = row.entry;
+            else entries.splice(Math.min(row.index, entries.length), 0, row.entry);
+            changed = true; sowChanged = true;
+          }
+          return sowChanged ? { ...tab, entries } : tab;
+        });
+        return sowChanged ? { ...sow, tabs } : sow;
+      });
+      const restored = changed ? { ...current, sows } : current;
+      return syncMeasurementSowBoard(restored, nextShapes, conditions, units);
+    });
+  }
+  function dispatchShape(cmd, { record = true, reset = false, documentMeasurement = false } = {}) {
+    const measurementDocs = cmd.type === "delete" ? collectMeasurementDocumentation(cmd.ids) : null;
     const res = applyShapeCommand(shapes, cmd);
     setShapes(res.shapes);
     if (res.counted) countDeleted(res.counted);
     if (reset) { undoStackRef.current = []; redoStackRef.current = []; }
     else if (record && res.inverse) {
-      const st = recordCommand(undoStackRef.current, { cmd, inverse: res.inverse });
+      const st = recordCommand(undoStackRef.current, { cmd, inverse: res.inverse, ...(measurementDocs ? { measurementDocs } : {}) });
       undoStackRef.current = st.undo;
       redoStackRef.current = st.redo;   // a new command discards the redone future
     }
+    if (documentMeasurement && cmd.type === "add" && !cmd.restore && res.inverse?.type === "delete") {
+      const createdIds = new Set(res.inverse.ids);
+      documentCompletedMeasurements(res.shapes.filter((shape) => createdIds.has(shape.id)), res.shapes);
+    } else if (cmd.type !== "add") syncMeasurementDocumentation(res.shapes);
     return res;
+  }
+
+  // A completed takeoff documents itself in both places the estimator needs:
+  // a persistent plan callout (boxed condition name + arrow to the measured
+  // geometry) and the first Whiteboard SOW panel. This runs only when an actual
+  // measurement commit opts in; condition creation, live previews, edits,
+  // copy/paste, hydration and undo/redo never create duplicate documentation.
+  function documentCompletedMeasurements(createdShapes, allShapes) {
+    if (!createdShapes.length) return;
+    const liveConditions = agentStateRef.current.conditions || [];
+    const rows = createdShapes.map((shape) => {
+      const condition = conditions.find((item) => item.id === shape.condition_id)
+        || liveConditions.find((item) => item.id === shape.condition_id)
+        || { finish_tag: "Condition", color: "#C96442" };
+      return { shape, condition };
+    });
+    setMarkups((current) => [...current, ...rows.map(({ shape, condition }) => ({
+      id: uid("mk"), created_at: nowIso(), sheet_id: shape.sheet_id, rfi_id: "",
+      ...measurementCallout(shape, condition, units),
+    }))]);
+    setWhiteboard((current) => {
+      let next = sanitizeWhiteboardSow(current);
+      if (!next.sows.length) next = addWhiteboardSowPanel(next);
+      const sow = next.sows[0];
+      const tab = sow.tabs.find((item) => item.id === sow.activeTabId) || sow.tabs[0];
+      for (const { shape, condition } of rows) {
+        next = addWhiteboardSowEntry(next, tab.id, measurementSowText(shape, condition, units), condition.color, undefined, sow.id, shape.id);
+      }
+      return syncMeasurementSowBoard(next, allShapes, liveConditions.length ? liveConditions : conditions, units);
+    });
   }
   // ⌘Z / ⇧⌘Z — apply the recorded inverse (undo) or the exact-restore command
   // (redo). Undoing swaps the entry's cmd for the inverse-of-the-undo before
@@ -501,18 +603,24 @@ export default function TakeoffCanvas() {
     const entry = undoStackRef.current[undoStackRef.current.length - 1];
     if (!entry) return;
     undoStackRef.current = undoStackRef.current.slice(0, -1);
+    const measurementDocs = entry.inverse.type === "delete" ? collectMeasurementDocumentation(entry.inverse.ids) : entry.measurementDocs;
     const res = applyShapeCommand(shapes, entry.inverse);
     setShapes(res.shapes);
-    redoStackRef.current = [...redoStackRef.current, { cmd: res.inverse, inverse: entry.inverse }];
+    if (entry.inverse.type === "add") restoreMeasurementDocumentation(measurementDocs, res.shapes);
+    else syncMeasurementDocumentation(res.shapes);
+    redoStackRef.current = [...redoStackRef.current, { cmd: res.inverse, inverse: entry.inverse, ...(measurementDocs ? { measurementDocs } : {}) }];
     setSelVert(null);   // vertex counts may have changed — a stale index must not aim the next ⌫
   }
   function redoShapeCommand() {
     const entry = redoStackRef.current[redoStackRef.current.length - 1];
     if (!entry) return;
     redoStackRef.current = redoStackRef.current.slice(0, -1);
+    const measurementDocs = entry.cmd.type === "delete" ? collectMeasurementDocumentation(entry.cmd.ids) : entry.measurementDocs;
     const res = applyShapeCommand(shapes, entry.cmd);
     setShapes(res.shapes);
-    undoStackRef.current = [...undoStackRef.current, { cmd: entry.cmd, inverse: res.inverse }];
+    if (entry.cmd.type === "add") restoreMeasurementDocumentation(measurementDocs, res.shapes);
+    else syncMeasurementDocumentation(res.shapes);
+    undoStackRef.current = [...undoStackRef.current, { cmd: entry.cmd, inverse: res.inverse, ...(measurementDocs ? { measurementDocs } : {}) }];
     setSelVert(null);   // same stale-index guard as undo
   }
   // selecting a shape clears any markup selection and vice-versa — one live
@@ -538,7 +646,7 @@ export default function TakeoffCanvas() {
   // a thin, stable-shaped wrapper so the ~48 call sites below stay untouched.
   const [commitMsgState, setCommitMsgState] = useState({ text: "" });
   const commitMsg = commitMsgState.text;   // misnamed for history; just the message bar
-  const setCommitMsg = (text) => setCommitMsgState({ text });
+  const setCommitMsg = useCallback((text) => setCommitMsgState({ text }), []);
   // transient means transient: every message dismisses itself after ~6s (a
   // repeat message restarts the clock — see above). Three things don't age
   // out on a timer: the stale-tab lockout (STALE_TAB_MESSAGE — sticky until
@@ -553,7 +661,7 @@ export default function TakeoffCanvas() {
     if (!text || isDangerMsg(text) || text.endsWith("…")) return;
     const t = setTimeout(() => setCommitMsg(""), 6000);
     return () => clearTimeout(t);
-  }, [commitMsgState]);
+  }, [commitMsgState, setCommitMsg]);
   const [showReport, setShowReport] = useState(false);  // Reports overlay (STACK-style breakdown + export)
   const [showRevisions, setShowRevisions] = useState(false); // Revisions overlay (save / compare any two, buy-list deltas, CSV, auto-banked restore)
   const [importRows, setImportRows] = useState(null);        // Import-from-schedule approval rows (null = dialog closed)
@@ -566,6 +674,8 @@ export default function TakeoffCanvas() {
   const [whiteboard, setWhiteboard] = useState(emptyWhiteboard);
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [whiteboardBusy, setWhiteboardBusy] = useState(false);
+  const [whiteboardImportRequest, setWhiteboardImportRequest] = useState(null);
+  const [whiteboardImportBusy, setWhiteboardImportBusy] = useState(false);
   const [fenceCalculatorProject, setFenceCalculatorProject] = useState(emptyFenceCalculatorProject);
   const [fenceCalculatorOpen, setFenceCalculatorOpen] = useState(false);
   const [clientInfo, setClientInfo] = useState({});      // per-project client/job fields for branded output; additive payload field
@@ -588,12 +698,28 @@ export default function TakeoffCanvas() {
   const [pageExportBusy, setPageExportBusy] = useState(false);
   const pageExportLock = useRef(false);
   const [planImportBusy, setPlanImportBusy] = useState(false);
+  const [pdfPasswordPrompt, setPdfPasswordPrompt] = useState(null);
+  const [pdfImportReport, setPdfImportReport] = useState(takePendingPdfReport);
+  const [pdfOpeningSettingsOpen, setPdfOpeningSettingsOpen] = useState(false);
+  const [pdfPreferences, setPdfPreferences] = useState(loadPdfPreferences);
+  const pdfPreferencesRef = useRef(pdfPreferences);
+  pdfPreferencesRef.current = pdfPreferences;
+  const pdfPasswordResolverRef = useRef(null);
+  const [findOcrPrompt, setFindOcrPrompt] = useState(null);
+  const findOcrResolverRef = useRef(null);
+  const pdfPasswordsRef = useRef(new Map()); // session-only; never serialized or written to browser storage
+  const pdfCompatibilityCacheRef = useRef(new Map()); // file name → persisted compatibility record
+  const pdfExcludedNamesRef = useRef(new Set()); // quarantined stored plans stay hidden without deleting source bytes
+  const importAbortRef = useRef(null);
   const [markedSetExportBusy, setMarkedSetExportBusy] = useState(false);
   const markedSetExportLock = useRef(false);
 
   const containerRef = useRef(null);
   const stageRef = useRef(null);
   const panelCanvasRefs = useRef(new Map()); // sheetKey → <canvas>
+  const panelTextLayerRefs = useRef(new Map()); // sheetKey → selectable PDF.js text layer
+  const panelTextLayerTasksRef = useRef(new Map()); // sheetKey → TextLayer render task
+  const panelTextContentRef = useRef(new Map()); // open sheetKey → Promise<TextContent>
   const previewCanvasRefs = useRef(new Map()); // sheetKey → low-zoom canvas in the same stage space
   const previewReadyRef = useRef(new Map());   // sheetKey → base-render generation that produced it
   const previewBaseGenerationsRef = useRef(new Map()); // sheetKey → completed base-render generation
@@ -621,7 +747,7 @@ export default function TakeoffCanvas() {
     try { if (task) diagnosticsRenderCancel(task); task?.cancel(); } catch { /* already settled */ }
   }, []);
   const renderTasksRef = useRef(new Map());  // sheetKey → pdf.js RenderTask
-  const pdfDocsRef = useRef(new Map());      // file name → pdf.js loading task (doc cache)
+  const pdfDocsRef = useRef(new Map());      // file name → Promise<PDFDocumentProxy>
   const renderSeqRef = useRef(0);            // monotonic token — stale render chains bail out
   const scanBusyRef = useRef(false);         // a paid schedule OCR read is in flight — blocks re-fire from a rapid re-draw
   const panRef = useRef(null);
@@ -694,6 +820,14 @@ export default function TakeoffCanvas() {
   const toolRef = useRef(tool);
   const proposalRef = useRef(proposal);
   const hydrated = useRef(false);
+  // Condition name/color and display-unit changes are not shape commands, but
+  // linked automatic SOW rows/callouts still need to follow them. Shapes only
+  // change at commit boundaries (live pointer previews use separate refs/state),
+  // so including them also migrates older per-measurement rows immediately on
+  // project load without putting synchronization on the pointer-move path.
+  useEffect(() => {
+    if (hydrated.current) syncMeasurementDocumentation(shapes, conditions, units);
+  }, [shapes, conditions, units]); // eslint-disable-line react-hooks/exhaustive-deps
   // Autosave stays holstered until a user-originated edit. hydrate() flips every
   // autosave dep to a fresh identity, so the effect fires once on the post-load
   // render with no edit behind it; that lone run arms this and returns instead of
@@ -811,6 +945,10 @@ export default function TakeoffCanvas() {
   const bookmarkedKeys = new Set(sheetBookmarks);
   const bookmarkButton = (key) => <SheetBookmarkButton label={tabLabel(key)} bookmarked={bookmarkedKeys.has(key)}
     onToggle={() => setSheetBookmarks((current) => toggleSheetBookmark(current, key))} />;
+  const favoriteFiles = new Set(fileBookmarks);
+  const fileFavoriteButton = (name) => <SheetBookmarkButton label={name} bookmarked={favoriteFiles.has(name)} favorite
+    onToggle={() => setFileBookmarks((current) => toggleFileBookmark(current, name))} />;
+  const fileGroups = fileBookmarkGroups(sheets, fileBookmarks);
   const bookmarkGroups = sheetBookmarkGroups(openTabs, sheetBookmarks, sheets);
   const sheetJumpItem = (key) => ({ id: key, icon: "document", label: tabLabel(key),
     active: sheetGroup.length ? sheetGroup.includes(key) : key === sheetKey,
@@ -1029,24 +1167,145 @@ export default function TakeoffCanvas() {
     markZoomCompositing(); applyTf(); syncRasterRepresentation(next.scale); setTf({ ...next });
   }, [applyTf, markZoomCompositing, syncRasterRepresentation]);
 
+  const requestPdfPassword = useCallback(({ fileName, incorrect, attempt }) => new Promise((resolve) => {
+    // Validation runs sequentially, but defensively release an older waiter if
+    // a project switch/cancellation races a second protected document.
+    pdfPasswordResolverRef.current?.(null);
+    pdfPasswordResolverRef.current = resolve;
+    setPdfPasswordPrompt({ fileName, incorrect, attempt });
+  }), []);
+  const finishPdfPassword = useCallback((value) => {
+    const resolve = pdfPasswordResolverRef.current;
+    pdfPasswordResolverRef.current = null;
+    setPdfPasswordPrompt(null);
+    resolve?.(value);
+  }, []);
+
+  const requestFindOcr = useCallback(() => new Promise((resolve) => {
+    findOcrResolverRef.current?.(false);
+    findOcrResolverRef.current = resolve;
+    setFindOcrPrompt({ requestedAt: Date.now() });
+  }), []);
+  const finishFindOcrPrompt = useCallback((allowed) => {
+    const resolve = findOcrResolverRef.current;
+    findOcrResolverRef.current = null;
+    setFindOcrPrompt(null);
+    resolve?.(!!allowed);
+  }, []);
+
+  const rememberPdfCompatibility = useCallback((file, result) => {
+    if (!result?.ok || result.validationMode === PDF_VALIDATION_MODES.CACHED) return;
+    const record = pdfCompatibilityRecord(result);
+    if (!record) return;
+    pdfCompatibilityCacheRef.current.set(file, record);
+    store.savePdfCompatibility?.(file, record).catch(() => {
+      // Compatibility caching is a performance optimization. A failed metadata
+      // write must never prevent an otherwise usable plan from opening.
+    });
+  }, []);
+
+  const rememberCompatiblePdf = useCallback((file, result) => {
+    if (!result?.ok || !result.document) return;
+    if (result.password) pdfPasswordsRef.current.set(file, result.password);
+    pdfDocsRef.current.set(file, Promise.resolve(result.document));
+  }, []);
+
+  const discardPdfDocument = useCallback((file) => {
+    const pending = pdfDocsRef.current.get(file);
+    pdfDocsRef.current.delete(file);
+    pending?.then((document) => document?.destroy?.()).catch(() => {});
+    pdfPasswordsRef.current.delete(file);
+    for (const key of [...panelTextContentRef.current.keys()]) {
+      if (parseSheetKey(key).file === file) panelTextContentRef.current.delete(key);
+    }
+    for (const [key, task] of [...panelTextLayerTasksRef.current]) {
+      if (parseSheetKey(key).file !== file) continue;
+      try { task.cancel?.(); } catch { /* already settled */ }
+      panelTextLayerTasksRef.current.delete(key);
+    }
+  }, []);
+
+  const validateIncomingPdf = useCallback((file, bytes, signal) => validatePdfBytes(bytes, {
+    pdfjs: pdfjsLib,
+    fileName: file.name,
+    requestPassword: requestPdfPassword,
+    initialPassword: pdfPasswordsRef.current.get(file.name) || "",
+    keepDocument: true,
+    validationMode: pdfValidationModeForPreferences(pdfPreferencesRef.current),
+    signal,
+    onProgress: ({ fileName, pageNumber, pageCount }) => setCommitMsg(`Checking ${fileName} · page ${pageNumber} of ${pageCount}…`),
+  }), [requestPdfPassword, setCommitMsg]);
+
+  const compatibleDocumentForBytes = useCallback(async (file, data, options = {}) => {
+    const cached = pdfCompatibilityCacheRef.current.get(file);
+    const preferredValidationMode = pdfValidationModeForPreferences(pdfPreferencesRef.current);
+    const requireFull = preferredValidationMode === PDF_VALIDATION_MODES.FULL;
+    const validationMode = options.validationMode || (isCurrentPdfCompatibility(cached, { requireFull, bytes: data })
+      ? PDF_VALIDATION_MODES.CACHED
+      : preferredValidationMode);
+    const result = await validatePdfBytes(data, {
+      pdfjs: pdfjsLib,
+      fileName: file,
+      requestPassword: requestPdfPassword,
+      initialPassword: pdfPasswordsRef.current.get(file) || "",
+      keepDocument: true,
+      validationMode,
+      ...options,
+    });
+    if (!result.ok) {
+      const error = new Error(result.reason);
+      error.pdfCompatibility = result;
+      throw error;
+    }
+    rememberPdfCompatibility(file, result);
+    rememberCompatiblePdf(file, result);
+    return result.document;
+  }, [rememberCompatiblePdf, rememberPdfCompatibility, requestPdfPassword]);
+
   // One pdf.js document per file, shared by canvas rendering and text search.
   const docFor = useCallback((file) => {
-    let taskPromise = pdfDocsRef.current.get(file);
-    if (!taskPromise) {
-      taskPromise = store.loadPdfData(file).then((data) => pdfjsLib.getDocument({ data }));
-      pdfDocsRef.current.set(file, taskPromise);
+    let documentPromise = pdfDocsRef.current.get(file);
+    if (!documentPromise) {
+      documentPromise = store.loadPdfData(file).then((data) => compatibleDocumentForBytes(file, data));
+      pdfDocsRef.current.set(file, documentPromise);
+      documentPromise.catch(() => { if (pdfDocsRef.current.get(file) === documentPromise) pdfDocsRef.current.delete(file); });
     }
-    return taskPromise.then((task) => task.promise);
+    return documentPromise;
+  }, [compatibleDocumentForBytes]);
+
+  // PDF text extraction is shared by the selectable text layer, Find, scale
+  // detection, and title-block labels. Each visible page is extracted once per
+  // session; pan/zoom only transforms the already-built DOM layer.
+  const textContentForPage = useCallback((key, pageObject) => {
+    let content = panelTextContentRef.current.get(key);
+    if (!content) {
+      content = pageObject.getTextContent({ includeMarkedContent: true });
+      panelTextContentRef.current.set(key, content);
+      content.catch(() => {
+        if (panelTextContentRef.current.get(key) === content) panelTextContentRef.current.delete(key);
+      });
+    }
+    return content;
+  }, []);
+
+  useEffect(() => () => {
+    importAbortRef.current?.abort();
+    pdfPasswordResolverRef.current?.(null);
+    pdfPasswordResolverRef.current = null;
+    findOcrResolverRef.current?.(false);
+    findOcrResolverRef.current = null;
+    disposeFindOcr();
   }, []);
 
   const closeFind = useCallback(() => {
     findRequestRef.current++;
+    finishFindOcrPrompt(false);
     setFindOpen(false);
     setFindBusy(false);
     setFindBusyScope("");
     setFindMessage("");
     setPendingFind(null);
-  }, []);
+  }, [finishFindOcrPrompt]);
   const commitFindJobs = useCallback((update) => {
     const current = findJobsRef.current;
     const next = typeof update === "function" ? update(current) : update;
@@ -1093,6 +1352,13 @@ export default function TakeoffCanvas() {
     setFindBusyScope(scope);
     try {
       const matches = [];
+      const skippedFiles = new Set();
+      let skippedPages = 0;
+      let ocrPages = 0;
+      let ocrAttempted = false;
+      let ocrSkipped = false;
+      let ocrAllowed = pdfPreferencesRef.current.ocrMode === PDF_OCR_MODES.AUTO;
+      let ocrDecisionMade = pdfPreferencesRef.current.ocrMode !== PDF_OCR_MODES.ASK;
       for (let targetIndex = 0; targetIndex < targets.length; targetIndex++) {
         if (request !== findRequestRef.current) return;
         const target = targets[targetIndex];
@@ -1100,34 +1366,74 @@ export default function TakeoffCanvas() {
         setFindMessage(scope === "page"
           ? `Scanning current page: ${target.key}`
           : `Scanning plan ${targetIndex + 1} of ${targets.length}: ${file}`);
-        const pdf = await docFor(file);
+        let pdf;
+        try { pdf = await docFor(file); }
+        catch { skippedFiles.add(file); continue; }
         const pageNumbers = target.page == null
           ? Array.from({ length: pdf.numPages || 1 }, (_, index) => index + 1)
           : [target.page];
         for (const pageNum of pageNumbers) {
           if (request !== findRequestRef.current) return;
-          const pageObj = await pdf.getPage(pageNum);
           const key = pageNum > 1 ? `${file}#${pageNum}` : file;
-          const viewport = pageObj.getViewport({ scale: 1 });
-          const content = await pageObj.getTextContent();
-          for (const match of findTextItemMatches(content.items, terms)) {
-            const item = content.items[match.itemIndex];
-            const transform = pdfjsLib.Util.transform(viewport.transform, item.transform);
-            const runWidth = Math.max(1, item.width || item.str.length * 4);
-            const charWidth = runWidth / Math.max(1, item.str.length);
-            const height = Math.max(8, Math.hypot(transform[2], transform[3]));
-            // Store normalized page coordinates. This keeps highlights aligned
-            // with each panel's raster size, independent of zoom/render scale.
-            matches.push({ key, file, page: pageNum, term: match.term,
-              itemIndex: match.itemIndex, start: match.start, length: match.length,
-              x: (transform[4] + charWidth * match.start) / viewport.width,
-              y: (transform[5] - height) / viewport.height,
-              w: Math.max(charWidth * match.length, charWidth) / viewport.width,
-              h: height / viewport.height });
+          try {
+            const pageObj = await pdf.getPage(pageNum);
+            const viewport = pageObj.getViewport({ scale: 1 });
+            const content = await textContentForPage(key, pageObj);
+            const textItems = content.items || [];
+            const pageTextMatches = findTextItemMatches(textItems, terms);
+            for (const match of pageTextMatches) {
+              const item = content.items[match.itemIndex];
+              const transform = pdfjsLib.Util.transform(viewport.transform, item.transform);
+              const runWidth = Math.max(1, item.width || item.str.length * 4);
+              const charWidth = runWidth / Math.max(1, item.str.length);
+              const height = Math.max(8, Math.hypot(transform[2], transform[3]));
+              // Store normalized page coordinates. This keeps highlights aligned
+              // with each panel's raster size, independent of zoom/render scale.
+              matches.push({ key, file, page: pageNum, term: match.term,
+                itemIndex: match.itemIndex, start: match.start, length: match.length,
+                x: (transform[4] + charWidth * match.start) / viewport.width,
+                y: (transform[5] - height) / viewport.height,
+                w: Math.max(charWidth * match.length, charWidth) / viewport.width,
+                h: height / viewport.height });
+            }
+            const searchableChars = textItems.reduce((sum, item) => sum + (typeof item?.str === "string" ? item.str.trim().length : 0), 0);
+            if (!pageTextMatches.length && searchableChars < 200) {
+              if (pdfPreferencesRef.current.ocrMode === PDF_OCR_MODES.OFF) {
+                ocrSkipped = true;
+                continue;
+              }
+              if (pdfPreferencesRef.current.ocrMode === PDF_OCR_MODES.ASK && !ocrDecisionMade) {
+                ocrAllowed = await requestFindOcr();
+                ocrDecisionMade = true;
+                if (request !== findRequestRef.current) return;
+                if (!ocrAllowed) ocrSkipped = true;
+              }
+              if (!ocrAllowed) continue;
+              ocrAttempted = true;
+              const ocrMatches = await recognizePdfPageForFind(pageObj, terms, {
+                onProgress: ({ status, progress }) => {
+                  if (request !== findRequestRef.current || status !== "recognizing text") return;
+                  const percent = Math.max(0, Math.min(100, Math.round((Number(progress) || 0) * 100)));
+                  setFindMessage(`Reading scanned page ${pageNum} of ${pdf.numPages || pageNumbers.length} with OCR · ${percent}%`);
+                },
+              });
+              if (ocrMatches.length) ocrPages++;
+              for (const match of ocrMatches) matches.push({
+                ...match,
+                key,
+                file,
+                page: pageNum,
+              });
+            }
+          } catch {
+            skippedPages++;
           }
         }
       }
       if (request !== findRequestRef.current) return;
+      const skippedSuffix = skippedFiles.size || skippedPages
+        ? ` Skipped ${skippedFiles.size ? `${skippedFiles.size} incompatible plan${skippedFiles.size === 1 ? "" : "s"}` : ""}${skippedFiles.size && skippedPages ? " and " : ""}${skippedPages ? `${skippedPages} unreadable page${skippedPages === 1 ? "" : "s"}` : ""}.`
+        : "";
       if (matches.length) {
         const matchingPages = groupFindMatchesByPage(matches);
         const sequence = findJobSequenceRef.current++;
@@ -1147,17 +1453,21 @@ export default function TakeoffCanvas() {
         const addedCount = combined.length - previousResults.length;
         if (scope === "page") {
           setActiveFindPageKey(matchingPages[0].key);
-          setFindMessage(`${matches.length.toLocaleString()} match${matches.length === 1 ? "" : "es"} found on ${matchingPages[0].key}${addedCount ? ` · ${addedCount.toLocaleString()} new mark${addedCount === 1 ? "" : "s"}` : " · already marked"}. Existing highlighted pages remain marked.`);
+          setFindMessage(`${matches.length.toLocaleString()} match${matches.length === 1 ? "" : "es"} found on ${matchingPages[0].key}${addedCount ? ` · ${addedCount.toLocaleString()} new mark${addedCount === 1 ? "" : "s"}` : " · already marked"}. Existing highlighted pages remain marked.${skippedSuffix}`);
         } else {
           const pdfCount = new Set(matchingPages.map((resultPage) => resultPage.file)).size;
           setActiveFindPageKey(matchingPages[0].key);
-          setFindMessage(`${matches.length.toLocaleString()} matches on ${matchingPages.length.toLocaleString()} page${matchingPages.length === 1 ? "" : "s"} across ${pdfCount.toLocaleString()} PDF${pdfCount === 1 ? "" : "s"}${addedCount ? ` · ${addedCount.toLocaleString()} new mark${addedCount === 1 ? "" : "s"}` : " · already marked"}.`);
+          setFindMessage(`${matches.length.toLocaleString()} matches on ${matchingPages.length.toLocaleString()} page${matchingPages.length === 1 ? "" : "s"} across ${pdfCount.toLocaleString()} PDF${pdfCount === 1 ? "" : "s"}${ocrPages ? ` · OCR read ${ocrPages.toLocaleString()} scanned page${ocrPages === 1 ? "" : "s"}` : ""}${addedCount ? ` · ${addedCount.toLocaleString()} new mark${addedCount === 1 ? "" : "s"}` : " · already marked"}.${skippedSuffix}`);
           showFindPage(matchingPages[0]);
         }
       } else if (scope === "page") {
-        setFindMessage(`No matches on ${currentPage.key}. Existing highlighted pages remain marked.`);
+        const ocrSuffix = ocrSkipped && !ocrAttempted ? " OCR was skipped." : "";
+        setFindMessage(`${skippedFiles.size || skippedPages ? `This page could not be searched.${skippedSuffix}` : `No matches on ${currentPage.key}.`}${ocrSuffix} Existing highlighted pages remain marked.`);
       } else {
-        setFindMessage(`No matches in ${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"}. ${findJobsRef.current.length ? "Completed search highlights remain marked. " : ""}Scanned selectable PDF text; scanned drawings need OCR.`);
+        const ocrSummary = ocrAttempted
+          ? "Pages without selectable text were checked with OCR."
+          : ocrSkipped ? "Pages without selectable text were skipped because OCR is off or was declined." : "";
+        setFindMessage(`No matches in the loaded plans. ${findJobsRef.current.length ? "Completed search highlights remain marked. " : ""}${ocrSummary}${skippedSuffix}`);
       }
     } catch (error) {
       if (request === findRequestRef.current) setFindMessage(`Couldn't search this PDF: ${error?.message || error}`);
@@ -1167,7 +1477,7 @@ export default function TakeoffCanvas() {
         setFindBusyScope("");
       }
     }
-  }, [commitFindJobs, docFor, findQuery, focusPanel, sheets, showFindPage]);
+  }, [commitFindJobs, docFor, findQuery, focusPanel, requestFindOcr, sheets, showFindPage, textContentForPage]);
   const openFind = useCallback(() => {
     const initialQuery = findQuery.trim() ? findQuery : findSuggestions.join(", ");
     setFindPanelTab("find");
@@ -1405,14 +1715,55 @@ export default function TakeoffCanvas() {
   // ── local PDFs (dropped into this browser) ─────────────────────────────────
   const refreshSheets = useCallback(async () => {
     const list = await store.listSheets();
-    setSheets(list);
-    return list;
+    const compatible = list.filter((sheet) => !pdfExcludedNamesRef.current.has(sheet.name));
+    setSheets(compatible);
+    return compatible;
   }, []);
   // Stable props for the Drive picker so its folder-load effect doesn't re-fire
   // (and re-hit Drive) on every canvas re-render. `store` is a module binding
   // read at call time, so [] deps are correct.
   const pickerListFolder = useCallback((id) => store.listFolder(id), []);
-  const pickerAddSheets = useCallback((items) => store.addSheets(items), []);
+  const pickerAddSheets = useCallback(async (items) => {
+    if (typeof store.loadPdfCandidate !== "function") return store.addSheets(items);
+    const accepted = [], excluded = [];
+    const controller = new AbortController();
+    importAbortRef.current?.abort(); importAbortRef.current = controller;
+    setPlanImportBusy(true);
+    try {
+      for (let index = 0; index < items.length; index++) {
+        const item = items[index];
+        setCommitMsg(`Checking ${item.name} · plan ${index + 1} of ${items.length}…`);
+        try {
+          const bytes = await store.loadPdfCandidate(item);
+          const result = await validatePdfBytes(bytes, {
+            pdfjs: pdfjsLib, fileName: item.name, requestPassword: requestPdfPassword,
+            initialPassword: pdfPasswordsRef.current.get(item.name) || "", keepDocument: true,
+            validationMode: pdfValidationModeForPreferences(pdfPreferencesRef.current),
+            signal: controller.signal,
+            onProgress: ({ pageNumber, pageCount }) => setCommitMsg(`Checking ${item.name} · page ${pageNumber} of ${pageCount}…`),
+          });
+          if (result.ok) {
+            if (sheets.some((sheet) => sheet.name === item.name)) discardPdfDocument(item.name);
+            pdfExcludedNamesRef.current.delete(item.name);
+            const compatibility = pdfCompatibilityRecord(result);
+            accepted.push({ ...item, ...(compatibility ? { compatibility } : {}) });
+            if (compatibility) pdfCompatibilityCacheRef.current.set(item.name, compatibility);
+            rememberCompatiblePdf(item.name, result);
+          }
+          else excluded.push({ name: item.name, ...result, file: null });
+        } catch (error) {
+          excluded.push({ name: item.name, reason: "The PDF could not be downloaded", technical: String(error?.message || error), retryable: true });
+        }
+      }
+      if (accepted.length) await store.addSheets(accepted);
+      if (excluded.length) setPdfImportReport({ imported: accepted.length, excluded });
+      setCommitMsg(accepted.length ? `Added ${accepted.length} compatible plan${accepted.length === 1 ? "" : "s"}${excluded.length ? ` · ${excluded.length} excluded` : ""}.` : "No compatible plans were added.");
+      return accepted;
+    } finally {
+      if (importAbortRef.current === controller) importAbortRef.current = null;
+      setPlanImportBusy(false);
+    }
+  }, [discardPdfDocument, rememberCompatiblePdf, requestPdfPassword, setCommitMsg, sheets]);
   // Reconcile the canvas after a PDF leaves the working set. For a non-empty
   // result the [sheets] effect already prunes openTabs/sheetGroup, but it can't:
   //   • fix `active` when the CLOSED pdf was the one on screen (it never resets
@@ -1433,15 +1784,21 @@ export default function TakeoffCanvas() {
   // Shapes on the closed sheets persist in annotations and restore on re-add.
   const closePdf = useCallback(async (name) => {
     await store.removePdf(name);
+    pdfExcludedNamesRef.current.delete(name);
+    pdfCompatibilityCacheRef.current.delete(name);
+    discardPdfDocument(name);
     reconcileAfterRemoval(name, await refreshSheets());
-  }, [refreshSheets, reconcileAfterRemoval]);
+  }, [discardPdfDocument, refreshSheets, reconcileAfterRemoval]);
   // Remove-from-project (cloud only): the DESTRUCTIVE variant — delete the Drive
   // file, then drop it from the working set.
   const removeFromProject = useCallback(async (name) => {
     if (typeof store.removeFromProject !== "function") return;
     await store.removeFromProject(name);
+    pdfExcludedNamesRef.current.delete(name);
+    pdfCompatibilityCacheRef.current.delete(name);
+    discardPdfDocument(name);
     reconcileAfterRemoval(name, await refreshSheets());
-  }, [refreshSheets, reconcileAfterRemoval]);
+  }, [discardPdfDocument, refreshSheets, reconcileAfterRemoval]);
   // open dropped/picked files of any kind: PDFs, images, and .zip plan sets all
   // get turned into PDF sheets (in-browser) by ingestFiles, then stashed locally
   async function handleFiles(fileList) {
@@ -1452,22 +1809,51 @@ export default function TakeoffCanvas() {
       else setProjectFilePrompt(incoming[0]);
       return;
     }
+    const controller = new AbortController();
+    importAbortRef.current?.abort(); importAbortRef.current = controller;
     setPlanImportBusy(true);
     try {
       setCommitMsg("Reading files…");
       let pdfs = [], skipped = [];
       try { ({ pdfs, skipped } = await ingestFiles(incoming, { onProgress: setCommitMsg })); }
       catch (e) { setCommitMsg(`Couldn't read those files: ${e.message || e}`); return; }
-      if (!pdfs.length) {
-        setCommitMsg(skipped.length
-          ? `Nothing to open — ${skipped.length} file${skipped.length === 1 ? "" : "s"} skipped. ${APP_NAME} reads PDFs, images, and .zip plan sets.`
-          : "No supported files found. Drop a PDF, an image, or a .zip plan set.");
+      const excluded = skipped.map((item) => ({ ...item, technical: "", retryable: false }));
+      const accepted = [];
+      for (let index = 0; index < pdfs.length; index++) {
+        const file = pdfs[index];
+        if (controller.signal.aborted) break;
+        setCommitMsg(`Checking ${file.name} · plan ${index + 1} of ${pdfs.length}…`);
+        let bytes;
+        try { bytes = new Uint8Array(await file.arrayBuffer()); }
+        catch (error) {
+          excluded.push({ name: file.name, reason: "The PDF could not be read", technical: String(error?.message || error), file, retryable: true });
+          continue;
+        }
+        const result = await validateIncomingPdf(file, bytes, controller.signal);
+        if (!result.ok) { excluded.push({ name: file.name, ...result, file, retryable: result.retryable !== false }); continue; }
+        try {
+          if (sheets.some((sheet) => sheet.name === file.name)) discardPdfDocument(file.name);
+          const compatibility = pdfCompatibilityRecord(result);
+          await store.addPdf(file, compatibility, bytes);
+          pdfExcludedNamesRef.current.delete(file.name);
+          accepted.push(file);
+          if (compatibility) pdfCompatibilityCacheRef.current.set(file.name, compatibility);
+          rememberCompatiblePdf(file.name, result);
+        } catch (error) {
+          try { await result.document?.destroy(); } catch { /* best-effort worker cleanup */ }
+          excluded.push({ name: file.name, reason: "The compatible PDF could not be saved", technical: String(error?.message || error), file, retryable: true });
+        }
+      }
+      if (excluded.length) setPdfImportReport({ imported: accepted.length, excluded });
+      if (!accepted.length) {
+        setCommitMsg(excluded.length
+          ? `Nothing to open — ${excluded.length} file${excluded.length === 1 ? "" : "s"} excluded.`
+          : `No supported files found. Drop a PDF, an image, or a .zip plan set.`);
         return;
       }
-      for (const f of pdfs) { try { await store.addPdf(f); } catch (e) { setCommitMsg(`Couldn't open ${f.name}: ${e.message || e}`); } }
       await refreshSheets();
-      const names = pdfs.map((f) => f.name);
-      const tail = skipped.length ? ` · ${skipped.length} skipped` : "";
+      const names = accepted.map((f) => f.name);
+      const tail = excluded.length ? ` · ${excluded.length} excluded` : "";
       if (names.length === 1) {
         setOpenTabs((t) => (t.includes(names[0]) ? t : [...t, names[0]]));
         goToSheet(names[0]);
@@ -1477,6 +1863,7 @@ export default function TakeoffCanvas() {
       }
       setCommitMsg(`Opened ${names.length} sheet${names.length === 1 ? "" : "s"}${tail}.`);
     } finally {
+      if (importAbortRef.current === controller) importAbortRef.current = null;
       setPlanImportBusy(false);
     }
   }
@@ -1491,21 +1878,66 @@ export default function TakeoffCanvas() {
   useEffect(() => {
     let off = false;
     setStatus("loading");
+    const controller = new AbortController();
+    importAbortRef.current?.abort(); importAbortRef.current = controller;
+    setPlanImportBusy(true);
     store.listSheets()
-      .then((list) => {
+      .then(async (list) => {
         if (off) return;
-        hasSheetsRef.current = list.length > 0;
+        const listed = await Promise.all(list.map(async (sheet) => {
+          let compatibility = sheet.compatibility || null;
+          if (!compatibility && typeof store.loadPdfCompatibility === "function") {
+            try { compatibility = await store.loadPdfCompatibility(sheet.name); }
+            catch { compatibility = null; }
+          }
+          if (compatibility) pdfCompatibilityCacheRef.current.set(sheet.name, compatibility);
+          return sheet;
+        }));
+        const verifyEveryPage = pdfPreferencesRef.current.openMode === PDF_OPEN_MODES.VERIFY;
+        const compatible = [], excluded = [];
+        for (let index = 0; index < listed.length; index++) {
+          if (off || controller.signal.aborted) return;
+          const sheet = listed[index];
+          const cached = pdfCompatibilityCacheRef.current.get(sheet.name);
+          if (!verifyEveryPage || isCurrentPdfCompatibility(cached, { requireFull: true })) {
+            compatible.push(sheet);
+            continue;
+          }
+          setCommitMsg(`Checking saved plan ${index + 1} of ${listed.length}: ${sheet.name}…`);
+          try {
+            const bytes = await store.loadPdfData(sheet.name);
+            const result = await validatePdfBytes(bytes, {
+              pdfjs: pdfjsLib, fileName: sheet.name, requestPassword: requestPdfPassword,
+              initialPassword: pdfPasswordsRef.current.get(sheet.name) || "", keepDocument: true,
+              validationMode: PDF_VALIDATION_MODES.FULL,
+              signal: controller.signal,
+              onProgress: ({ pageNumber, pageCount }) => setCommitMsg(`Checking ${sheet.name} · page ${pageNumber} of ${pageCount}…`),
+            });
+            if (result.ok) { compatible.push(sheet); rememberPdfCompatibility(sheet.name, result); rememberCompatiblePdf(sheet.name, result); }
+            else excluded.push({ name: sheet.name, ...result, file: null });
+          } catch (error) {
+            excluded.push({ name: sheet.name, reason: "The saved PDF could not be read", technical: String(error?.message || error), retryable: true });
+          }
+        }
+        if (off) return;
+        pdfExcludedNamesRef.current = new Set(excluded.map((item) => item.name));
+        if (excluded.length) setPdfImportReport({ imported: compatible.length, excluded });
+        hasSheetsRef.current = compatible.length > 0;
         sheetsLoadedRef.current = true;
-        setSheets(list);
-        if (list.length) setActive(list[0].name);
+        setSheets(compatible);
+        if (compatible.length) { setActive(compatible[0].name); setCommitMsg(excluded.length ? `${compatible.length} saved plan${compatible.length === 1 ? "" : "s"} ready · ${excluded.length} excluded.` : ""); }
         else setStatus("empty");
         // decide the landing only once the annotations effect has also reported
         // no open tabs (see hydrate) — avoids a picker→gallery flash + wasted list
         if (noTabsRef.current) setView(cloudMode && !hasSheetsRef.current ? "picker" : "gallery");
       })
-      .catch((e) => !off && (setErr(String(e.message || e)), setStatus("error")));
-    return () => { off = true; };
-  }, [cloudMode]);
+      .catch((e) => !off && (setErr(String(e.message || e)), setStatus("error")))
+      .finally(() => {
+        if (!off) setPlanImportBusy(false);
+        if (importAbortRef.current === controller) importAbortRef.current = null;
+      });
+    return () => { off = true; controller.abort(); if (importAbortRef.current === controller) importAbortRef.current = null; };
+  }, [cloudMode, rememberCompatiblePdf, rememberPdfCompatibility, requestPdfPassword, setCommitMsg]);
   // Keep hasSheetsRef current so a later re-hydration (a revision Restore after the
   // working set changed) reads the LIVE sheet count, not the mount-time value.
   // The mount sheets effect above also sets it synchronously for the initial
@@ -1517,7 +1949,7 @@ export default function TakeoffCanvas() {
   // Restore in the Revisions panel, so a restored revision walks the same
   // defensive path as a page reload.
   const hydrate = (a) => {
-    setWhiteboard(sanitizeWhiteboardFileHeaderColors(a.whiteboard || emptyWhiteboard()));
+    setWhiteboard(sanitizeWhiteboardSow(sanitizeWhiteboardFileHeaderColors(a.whiteboard || emptyWhiteboard())));
     setFenceCalculatorProject(sanitizeFenceCalculatorProject(a.fence_calculator));
     setFenceCalculatorOpen(false);
     // Same cross-load-transient gap as the panel epoch bump below: a revision
@@ -1586,6 +2018,7 @@ export default function TakeoffCanvas() {
     // its own unit tests independent of the reducer.
     setSheetLevels(sanitizeSheetLevels(a.sheet_levels));
     setSheetBookmarks(sanitizeSheetBookmarks(a.sheet_bookmarks));
+    setFileBookmarks(sanitizeFileBookmarks(a.file_bookmarks));
     // else-clear matters at runtime (snapshot load): a payload without groups/
     // tabs must not inherit the pre-load ones — autosave would persist a hybrid.
     // In group mode sheetGroup + lastGroup share ONE instance so the lastGroup-sync
@@ -1816,6 +2249,9 @@ export default function TakeoffCanvas() {
     }
     for (const [, rt] of renderTasksRef.current) { try { diagnosticsRenderCancel(rt); rt.cancel(); } catch { /* done */ } }
     renderTasksRef.current.clear();
+    for (const [, task] of panelTextLayerTasksRef.current) { try { task.cancel?.(); } catch { /* done */ } }
+    panelTextLayerTasksRef.current.clear();
+    for (const [, layer] of panelTextLayerRefs.current) layer.replaceChildren();
     snapGridsRef.current.clear();
     vectorSegsRef.current.clear();
     segMetaRef.current.clear();
@@ -1875,6 +2311,27 @@ export default function TakeoffCanvas() {
         // becomes stale before the browser has idle time to make it.
         previewBaseGenerationsRef.current.set(m.key, seq);
         queuePreview(m.key, canvas, seq);
+        // Build a transparent, selectable PDF.js text layer once for this page.
+        // It lives in stage coordinates beside the bitmap, so pan and zoom are
+        // free CSS transforms rather than repeated text extraction/layout work.
+        const textLayer = panelTextLayerRefs.current.get(m.key);
+        if (textLayer) {
+          let layerTask = null;
+          try {
+            const content = await textContentForPage(m.key, m.pageObj);
+            if (stale()) return;
+            textLayer.replaceChildren();
+            textLayer.style.setProperty("--scale-factor", String(m.viewport.scale));
+            layerTask = new pdfjsLib.TextLayer({ textContentSource: content, container: textLayer, viewport: m.viewport });
+            panelTextLayerTasksRef.current.set(m.key, layerTask);
+            await layerTask.render();
+          } catch (error) {
+            if (stale()) return;
+            if (error?.name !== "AbortException") textLayer.replaceChildren();
+          } finally {
+            if (panelTextLayerTasksRef.current.get(m.key) === layerTask) panelTextLayerTasksRef.current.delete(m.key);
+          }
+        }
         // snap-to-vector index per panel (best-effort; off until the user enables it)
         m.pageObj.getOperatorList().then((ol) => {
           if (stale()) return;
@@ -1897,7 +2354,7 @@ export default function TakeoffCanvas() {
           sheetStatsRef.current.set(m.key, { segCount: 0, imageFrac: 1 });
         });
         // read the drawn scale note off this panel's page text (best-effort)
-        m.pageObj.getTextContent().then((tc) => {
+        textContentForPage(m.key, m.pageObj).then((tc) => {
           if (stale()) return;
           const det = detectScale(tc, m.viewport);
           if (det) setDetectedScales((d) => (d[m.key]?.label === det.label ? d : { ...d, [m.key]: det }));
@@ -1908,7 +2365,7 @@ export default function TakeoffCanvas() {
       // the pager + pinned tabs + provenance deep-jump can show real sheet numbers
       const lead = metas.find((m) => m.file === active);
       if (!lead) return;
-      lead.pageObj.getTextContent().then((tc) => {
+      textContentForPage(lead.key, lead.pageObj).then((tc) => {
         if (stale()) return;
         const lbl = extractSheetNumber(tc, lead.viewport);
         if (lbl) setPageLabels((m) => (m[lead.pageNum] === lbl ? m : { ...m, [lead.pageNum]: lbl }));
@@ -1924,13 +2381,13 @@ export default function TakeoffCanvas() {
             if (n === lead.pageNum) continue;
             try {
               const p2 = await pdf.getPage(n);
-              const tc = await p2.getTextContent();
+              const key = n > 1 ? `${active}#${n}` : active;
+              const tc = await textContentForPage(key, p2);
               const vp2 = p2.getViewport({ scale: RENDER_SCALE });
               const lbl = extractSheetNumber(tc, vp2);
               if (lbl) { found[n] = lbl; if (Object.keys(found).length % 8 === 0) setPageLabels((m) => ({ ...found, ...m })); }
               const det = detectScale(tc, vp2);
               if (det) {
-                const key = n > 1 ? `${active}#${n}` : active;
                 setDetectedScales((d) => (d[key]?.label === det.label ? d : { ...d, [key]: det }));
               }
             } catch { /* skip */ }
@@ -1943,8 +2400,15 @@ export default function TakeoffCanvas() {
     // renderSeqRef invalidates in-flight renders, and cancelling the current
     // renderTasksRef set is the whole point. Copying to a variable (the rule's
     // suggestion) would cancel the stale mount-time set and leak the live one.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    return () => { renderSeqRef.current++; cancelPreviewJobs(); for (const [, rt] of renderTasksRef.current) { try { diagnosticsRenderCancel(rt); rt.cancel(); } catch { /* done */ } } };
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      renderSeqRef.current++; cancelPreviewJobs();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      for (const [, rt] of renderTasksRef.current) { try { diagnosticsRenderCancel(rt); rt.cancel(); } catch { /* done */ } }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      for (const [, task] of panelTextLayerTasksRef.current) { try { task.cancel?.(); } catch { /* done */ } }
+      panelTextLayerTasksRef.current.clear();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupSig, hiResKeys.join(" ")]);
 
@@ -2130,7 +2594,7 @@ export default function TakeoffCanvas() {
     // the default — omits the key, so an old imperial project's payload is
     // byte-identical on round-trip; only a metric project carries the field.
     const metadata = touch ? withProjectEditor(touchProjectMetadata(projectMetadata), cloudAccount?.user, cloudAccount?.profileName) : projectMetadata;
-    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(whiteboardHasContent(whiteboard) ? { whiteboard } : {}), ...(fenceCalculatorProjectHasContent(fenceCalculatorProject) ? { fence_calculator: fenceCalculatorProject } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
+    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(whiteboardHasContent(whiteboard) ? { whiteboard } : {}), ...(fenceCalculatorProjectHasContent(fenceCalculatorProject) ? { fence_calculator: fenceCalculatorProject } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(fileBookmarks.length ? { file_bookmarks: fileBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
   };
 
   async function submitProjectMetadata(draft) {
@@ -2150,7 +2614,7 @@ export default function TakeoffCanvas() {
     const metadata = createProjectMetadata(draft);
     try {
       for (const sheet of await store.listSheets()) await store.removePdf(sheet.name);
-      const payload = { ...emptyAnnotations(), project_id: crypto.randomUUID(), project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)) };
+      const payload = { ...emptyAnnotations(), whiteboard: emptyWhiteboard(), project_id: crypto.randomUUID(), project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)) };
       await store.saveAnnotations(payload);
       // A new project must never inherit the previous project's local file
       // handle: ordinary Save should ask for a new destination, named for this
@@ -2234,9 +2698,31 @@ export default function TakeoffCanvas() {
     try {
       if (file.size > MAX_PROJECT_FILE_BYTES) throw new Error("Project file exceeds the 512 MB limit.");
       const project = await readProjectFile(new Uint8Array(await file.arrayBuffer()));
+      const compatiblePdfs = [];
+      const excluded = [];
+      const validationMode = pdfValidationModeForPreferences(pdfPreferencesRef.current);
+      for (let index = 0; index < project.pdfs.length; index++) {
+        const pdf = project.pdfs[index];
+        setProjectFileBusy(`Checking ${pdf.name} · plan ${index + 1} of ${project.pdfs.length}…`);
+        const result = await validatePdfBytes(pdf.bytes, {
+          pdfjs: pdfjsLib,
+          fileName: pdf.name,
+          requestPassword: requestPdfPassword,
+          keepDocument: false,
+          validationMode,
+          onProgress: ({ pageNumber, pageCount }) => setProjectFileBusy(`Checking ${pdf.name} · page ${pageNumber} of ${pageCount}…`),
+        });
+        if (result.ok) compatiblePdfs.push({ ...pdf, compatibility: pdfCompatibilityRecord(result) });
+        else excluded.push({ name: pdf.name, ...result, file: null });
+      }
+      project.pdfs = compatiblePdfs;
       // Never overwrite a failed-load workspace with its empty UI defaults.
       if (hydrated.current && !remotePendingRender.current) await store.saveAnnotations(buildPayload());
       const id = await importFileProject(project);
+      if (excluded.length) {
+        try { sessionStorage.setItem(PENDING_PDF_REPORT_KEY, JSON.stringify({ imported: compatiblePdfs.length, excluded })); }
+        catch { /* the new project still opens if session storage is unavailable */ }
+      }
       saveDataRef.current = null; saveStateRef.current = "saved";
       // A fresh document also discards old PDF caches and asynchronous callbacks.
       // Only the new page installs the new store; old callbacks cannot write to it.
@@ -2250,6 +2736,12 @@ export default function TakeoffCanvas() {
     onMenuDepth(true);
     return () => onMenuDepth(false);
   }, [projectFileBusy, projectFileError, projectFilePrompt, projectSavePrompt, onMenuDepth]);
+
+  useEffect(() => {
+    if (!pdfPasswordPrompt && !pdfImportReport && !pdfOpeningSettingsOpen && !findOcrPrompt) return;
+    onMenuDepth(true);
+    return () => onMenuDepth(false);
+  }, [findOcrPrompt, pdfOpeningSettingsOpen, pdfPasswordPrompt, pdfImportReport, onMenuDepth]);
 
   useEffect(() => {
     if (!whiteboardOpen) return;
@@ -2302,7 +2794,7 @@ export default function TakeoffCanvas() {
     // state it serializes, so listing buildPayload (a new identity each render)
     // would fire a save on every render instead of only on a real change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard, fenceCalculatorProject]);
+  }, [shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, fileBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard, fenceCalculatorProject]);
   useEffect(() => { saveStateRef.current = saveState; }, [saveState]);
 
   // Flush a pending debounced save on navigate-away (unmount), and warn before a
@@ -2519,6 +3011,27 @@ export default function TakeoffCanvas() {
     window.addEventListener("keydown", down); window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
   }, []);
+
+  // Match the Sheets toolbar's previous/next page buttons with the keyboard.
+  // Do not steal arrow keys from fields, focused controls, menus, dialogs, or
+  // an unfinished canvas interaction, and keep side-by-side navigation explicit.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.defaultPrevented || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const target = e.target;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || tag === "BUTTON" || target?.isContentEditable) return;
+      if (target?.closest?.("[contenteditable='true'], [role='slider'], [role='tab']")) return;
+      if (viewRef.current !== "canvas" || menuDepthRef.current > 0 || sheetGroup.length || pageCount <= 1) return;
+      if (whiteboardOpen || fenceCalculatorOpen || document.querySelector('[aria-modal="true"]')) return;
+      if (poly.length || calib.length || check.length || proposal || scaleGuide || prevScale != null || editingRef.current || dragRef.current || ocDragRef.current) return;
+      e.preventDefault();
+      setPage((current) => e.key === "ArrowLeft" ? Math.max(1, current - 1) : Math.min(pageCount, current + 1));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pageCount, sheetGroup.length, whiteboardOpen, fenceCalculatorOpen, poly.length, calib.length, check.length, proposal, scaleGuide, prevScale]);
 
   // Single-letter tool shortcuts (STACK-style) — suppressed while typing or
   // while a toolbar menu is open. ⌘-combos and 1–9 live in their own handlers.
@@ -3598,7 +4111,7 @@ export default function TakeoffCanvas() {
       computed: { area_sf: +(met.area * upp * upp).toFixed(2), perimeter_lf: +(met.perim * upp).toFixed(2) },
       ...(activeLabel ? { label: activeLabel } : {}),
       origin: { method: "manual" },
-    }] });
+    }] }, { documentMeasurement: true });
   }
   function commitLinear(points, curved = false) {
     if (points.length < 2) return;
@@ -3617,7 +4130,7 @@ export default function TakeoffCanvas() {
       computed: { perimeter_lf: +LF.toFixed(2), area_sf: tIn > 0 ? +((LF * tIn) / 12).toFixed(2) : 0 },
       ...(activeLabel ? { label: activeLabel } : {}),
       origin: { method: "manual" },
-    }] });
+    }] }, { documentMeasurement: true });
   }
   // Surface Area — trace the wall run in plan; SF = traced LF × the condition's
   // height. The wall-tile "stack" workflow: set tile height once, trace walls.
@@ -3636,7 +4149,7 @@ export default function TakeoffCanvas() {
       computed: { area_sf: +(LF * h).toFixed(2), perimeter_lf: +LF.toFixed(2) },
       ...(activeLabel ? { label: activeLabel } : {}),
       origin: { method: "manual" },
-    }] });
+    }] }, { documentMeasurement: true });
   }
   function commitCount(p) {
     if (!activeCond) { setCommitMsg("Pick or add a condition first."); return; }
@@ -3644,7 +4157,7 @@ export default function TakeoffCanvas() {
     dispatchShape({ type: "add", shapes: [{
       sheet_id: tp.key, condition_id: activeCond, measure_role: "count",
       verts_norm: [[(p[0] - tp.xOffset) / tp.img.w, p[1] / tp.img.h]], computed: { count: 1 }, ...(activeLabel ? { label: activeLabel } : {}), origin: { method: "manual" },
-    }] });
+    }] }, { documentMeasurement: true });
   }
 
   // ── One-Click Area — click inside a room; the linework bounds it ──────────
@@ -3928,7 +4441,7 @@ export default function TakeoffCanvas() {
       // pre-edit ring only when Create didn't already.
       origin: { method: "one_click_v1", seed_norm: [r.seed[0] / tp.img.w, r.seed[1] / tp.img.h], reviewed: true, ...(r.hf ? { hatch_filtered: true } : {}), ...(r.rt ? { raster_traced: true } : {}), ...(r.sens != null ? { fill_sensitivity: r.sens } : {}), ...(r.touched ? { edited_before_create: true, proposed_verts_norm: r.poly0.map(([x, y]) => [x / tp.img.w, y / tp.img.h]) } : {}) },
     }));
-    dispatchShape({ type: "add", shapes: made });   // the creation gate — id/created_at minted by the command
+    dispatchShape({ type: "add", shapes: made }, { documentMeasurement: true });   // the creation gate — id/created_at minted by the command
     const sf = prop.regions.reduce((n, r) => n + (r.kind === "neg" ? -r.area_sf : r.area_sf), 0);
     // condById is a render closure — a condition minted THIS utterance is only
     // in the live mirror, so fall through to it for the tag
@@ -4201,6 +4714,33 @@ export default function TakeoffCanvas() {
     } finally {
       pageExportLock.current = false;
       setPageExportBusy(false);
+    }
+  }
+
+  async function importCurrentFileToWhiteboard() {
+    const fileName = focusPanel?.file;
+    if (!fileName || whiteboardImportBusy || whiteboardBusy || loadError) return;
+    setWhiteboardImportBusy(true);
+    setCommitMsg(`Preparing ${fileName} for the whiteboard…`);
+    try {
+      const sheet = { key: focusPanel.key, file: focusPanel.file, page: focusPanel.page, label: tabLabel(focusPanel.key) };
+      const findHighlights = findHighlightsForPageExport(findResults, sheet.key, true, activeFindPage?.key);
+      const { bytes } = await buildMarkedSetPdf({
+        projectName, dark: false, units, singleSheet: true, includeShapeLabels: false, sheets: [sheet],
+        shapes: shapes.filter((shape) => shape.sheet_id === sheet.key),
+        markups: markups.filter((markup) => markup.sheet_id === sheet.key), findHighlights, rfis, conditions,
+        getPage: async (sourceFile, pageNumber) => (await docFor(sourceFile)).getPage(pageNumber),
+        loadPdfData: (sourceFile) => store.loadPdfData(sourceFile),
+      });
+      const markedName = `${tabLabel(sheet.key)} - marked page.pdf`;
+      const file = new File([bytes], markedName, { type: "application/pdf" });
+      setWhiteboardImportRequest({ id: crypto.randomUUID(), files: [file] });
+      setWhiteboardOpen(true);
+      setCommitMsg(`Importing ${markedName} to the whiteboard…`);
+    } catch (e) {
+      setCommitMsg(`Couldn't import ${fileName} to the whiteboard: ${e.message || e}`);
+    } finally {
+      setWhiteboardImportBusy(false);
     }
   }
 
@@ -4879,7 +5419,7 @@ export default function TakeoffCanvas() {
       });
       accepted.add(pr.id);
     }
-    if (made.length) dispatchShape({ type: "add", shapes: made });   // ONE command — one undo entry for the batch
+    if (made.length) dispatchShape({ type: "add", shapes: made }, { documentMeasurement: true });   // ONE command — one undo entry for the batch
     setAgentProposals((ps) => ps.filter((p) => !accepted.has(p.id)));
     if (made.length) setCommitMsg(`Accepted ${made.length} agent proposal${made.length === 1 ? "" : "s"}.${skippedClosed ? ` ${skippedClosed} skipped — open their sheet (with its scale set) to accept.` : ""}`);
     else if (skippedClosed) setCommitMsg("Open that proposal's sheet (with its scale set) to accept it.");
@@ -5341,18 +5881,22 @@ export default function TakeoffCanvas() {
   const selShape = selectedId ? visibleShapes.find((s) => s.id === selectedId) : null;
   const setShapeHeight = (raw) => {
     const v = Math.max(0, parseFloat(raw) || 0);
-    setShapes((ss) => ss.map((s) => {
+    const next = shapes.map((s) => {
       if (s.id !== selectedId) return s;
       const next = { ...s, height_ft: v, height_override: true };
       return { ...next, computed: recomputeShape(next) };
-    }));
+    });
+    setShapes(next);
+    syncMeasurementDocumentation(next);
   };
   const clearShapeHeight = () => {
-    setShapes((ss) => ss.map((s) => {
+    const next = shapes.map((s) => {
       if (s.id !== selectedId) return s;
       const next = { ...s, height_ft: Number(condById[s.condition_id]?.height_ft) || 0, height_override: false };
       return { ...next, computed: recomputeShape(next) };
-    }));
+    });
+    setShapes(next);
+    syncMeasurementDocumentation(next);
   };
   const measureActive = MEASURE_TOOLS.some((t) => t.id === tool);
   const faceTool = MEASURE_TOOLS.find((t) => t.id === (measureActive ? tool : lastMeasureRef.current)) || MEASURE_TOOLS[0];
@@ -5717,9 +6261,14 @@ export default function TakeoffCanvas() {
     sheetMenuItems.push({ section: "Sheets in this set" });
     for (let n = 1; n <= pageCount; n++) sheetMenuItems.push({ id: `pg-${n}`, label: `${levelOfPage(n) ? `${levelOfPage(n)} · ` : ""}${pageLabels[n] || `Sheet ${n}`}`, shortcut: `${n}/${pageCount}`, active: n === page, onSelect: () => setPage(n), accessory: bookmarkButton(n > 1 ? `${active}#${n}` : active) });
   }
-  if (!sheetGroup.length && sheets.length > 1) {
-    sheetMenuItems.push({ section: "Files" });
-    for (const s of sheets) sheetMenuItems.push({ id: `f-${s.name}`, label: s.name, active: s.name === active, onSelect: () => { setActive(s.name); setPage(1); } });
+  if (!sheetGroup.length && sheets.length) {
+    const fileItem = (name) => ({ id: `f-${name}`, label: name, active: name === active,
+      onSelect: () => { setActive(name); setPage(1); }, accessory: fileFavoriteButton(name) });
+    if (fileGroups.bookmarked.length) {
+      sheetMenuItems.push({ section: "Favorite files" }, ...fileGroups.bookmarked.map(fileItem));
+      if (fileGroups.other.length) sheetMenuItems.push("divider");
+    }
+    if (fileGroups.other.length) sheetMenuItems.push({ section: "Files" }, ...fileGroups.other.map(fileItem));
   }
   if (sheetMenuItems.length && (sheetGroup.length || lastGroup.length >= 2)) sheetMenuItems.push("divider");
   if (sheetGroup.length) sheetMenuItems.push({ id: "ungroup", label: "Ungroup — back to one sheet", title: "Back to one sheet — you land on the sheet you were last working; every sheet keeps its takeoffs and markups", onSelect: ungroup });
@@ -5840,6 +6389,8 @@ export default function TakeoffCanvas() {
         { id: "open-project", icon: "plus", label: "Open project...", onSelect: () => projectInputRef.current?.click() },
         { id: "open-recent", custom: <RecentProjectsMenu /> },
         { id: "browse-cloud", icon: "sheets", label: "Cloud projects...", onSelect: () => setCloudView("projects"), disabled: !hydrated.current || !!loadError },
+        { id: "pdf-opening-settings", icon: "sliders", label: "PDF opening & OCR...", onSelect: () => setPdfOpeningSettingsOpen(true),
+          title: `Saved plans: ${pdfPreferences.openMode === PDF_OPEN_MODES.FAST ? "fast auto-detect" : "verify every page"} · Find OCR: ${pdfPreferences.ocrMode}` },
         "divider",
         { id: "download-page", icon: "document", label: pageExportBusy ? "Downloading page..." : "Download this page",
           title: "Download the current sheet with takeoff lines, notes, and markups but no measurement labels", onSelect: downloadCurrentPage,
@@ -5853,7 +6404,9 @@ export default function TakeoffCanvas() {
   );
 
   const longTaskLabel = planImportBusy
-    ? "Loading plan files…"
+    ? "Checking plan compatibility…"
+    : whiteboardImportBusy
+      ? "Preparing plan for the whiteboard…"
     : markedSetExportBusy
       ? "Exporting marked-set PDF…"
       : pageExportBusy
@@ -5870,14 +6423,26 @@ export default function TakeoffCanvas() {
       <input ref={projectInputRef} type="file" accept=".otk" aria-label="Open project file" style={{ display: "none" }}
         onChange={(e) => { setProjectFilePrompt(e.target.files?.[0] || null); e.target.value = ""; }} />
       <LongTaskLoader active={!!longTaskLabel} label={longTaskLabel || "Working…"} variant="fixed" delay={350} />
+      <PdfPasswordDialog prompt={pdfPasswordPrompt} onSubmit={finishPdfPassword} onCancel={() => finishPdfPassword(null)} />
+      <FindOcrPermissionDialog prompt={findOcrPrompt} onAllow={() => finishFindOcrPrompt(true)} onSkip={() => finishFindOcrPrompt(false)} />
+      {pdfOpeningSettingsOpen && <PdfOpeningSettingsDialog preferences={pdfPreferences}
+        onChange={(next) => setPdfPreferences(savePdfPreferences(next))}
+        onClose={() => setPdfOpeningSettingsOpen(false)} />}
+      <PdfImportReportDialog report={pdfImportReport} onClose={() => setPdfImportReport(null)} onRetry={() => {
+        const files = (pdfImportReport?.excluded || []).map((item) => item.file).filter(Boolean);
+        setPdfImportReport(null);
+        if (files.length) handleFiles(files);
+      }} />
       {projectMetadataModal && <ProjectMetadataModal mode={projectMetadataModal} initial={projectMetadata}
         hasWorkspace={!!(sheets.length || shapes.length || markups.length || rfis.length || projectName || fenceCalculatorProjectHasContent(fenceCalculatorProject))} saveState={saveState}
         onSubmit={submitProjectMetadata} onClose={() => setProjectMetadataModal(null)} />}
       {cloudView && <CloudProjects initialView={cloudView} source={store} getPayload={buildPayload}
         onPersisted={(lastModifiedAt, savedMetadata) => { if (lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, ...savedMetadata, lastModifiedAt })); }}
         onClose={() => { setCloudView(null); cloudAccount.clearAuthReturn(); cloudAccount.clearDriveReturn(); }} onOpenChange={onMenuDepth} />}
-      {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard} onClose={() => setWhiteboardOpen(false)}
-        onSave={() => saveProjectFile(false)} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState} />}
+      {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard}
+        onClose={() => { setWhiteboardOpen(false); setWhiteboardImportRequest(null); }}
+        onSave={() => saveProjectFile(false)} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState}
+        initialFiles={whiteboardImportRequest?.files} onInitialFilesHandled={() => setWhiteboardImportRequest(null)} />}
       {fenceCalculatorOpen && <FenceCalculatorPanel
         projectState={fenceCalculatorProject}
         onProjectStateChange={setFenceCalculatorProject}
@@ -5966,7 +6531,7 @@ export default function TakeoffCanvas() {
         </button>
         {sheets.length > 0 && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={!!sheetGroup.length || page <= 1} title="Previous sheet"
+            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={!!sheetGroup.length || page <= 1} title="Previous sheet (Left Arrow)"
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page <= 1) ? 0.4 : 1 }}><Icon name="chevronLeft" size={12} /></button>
             <ToolMenu
               title="Sheet — the sheets in this set, files, grouping, and the gallery"
@@ -5976,10 +6541,16 @@ export default function TakeoffCanvas() {
               menuStyle={{ minWidth: 260, maxHeight: "min(480px, 60vh)", overflowY: "auto" }}
               items={sheetMenuItems}
             />
-            <button type="button" onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={!!sheetGroup.length || page >= pageCount} title="Next sheet"
+            <button type="button" onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={!!sheetGroup.length || page >= pageCount} title="Next sheet (Right Arrow)"
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page >= pageCount) ? 0.4 : 1 }}><Icon name="chevronRight" size={12} /></button>
           </span>
         )}
+        <button type="button" onClick={importCurrentFileToWhiteboard}
+          disabled={!focusPanel?.file || whiteboardImportBusy || whiteboardBusy || !!loadError}
+          title="Import the currently focused page with measurements and markups to the whiteboard"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: (!focusPanel?.file || whiteboardImportBusy || whiteboardBusy || loadError) ? "default" : "pointer", opacity: (!focusPanel?.file || whiteboardImportBusy || whiteboardBusy || loadError) ? .45 : 1, fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}>
+          <Icon name="rectTool" size={15} />{whiteboardImportBusy ? "Importing…" : "Import to Whiteboard"}
+        </button>
       {/* open-sheet tabs — what you opened from the gallery; click to view,  
           ⊞ to side-by-side, ✕ to close; the dropdown lists every open sheet */}
       {openTabs.length > 0 && (
@@ -6136,6 +6707,22 @@ export default function TakeoffCanvas() {
           </span>
         )}
         </div>
+        {tool === "calibrate" && (
+          <div className="calibration-toolbar-prompt" role="status" aria-live="polite">
+            {calib.length < 2 ? <span>Custom scale: click two points along a known dimension ({calib.length}/2). Tip: use the longest dimension.</span> : (
+              <span className="calibration-toolbar-entry">
+                <label htmlFor="calibration-length">Real length</label>
+                <input id="calibration-length" name="calibration-length" type="number" min="0" step="any" inputMode="decimal"
+                  value={pendingLen} onChange={(e) => setPendingLen(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && applyCalibration()}
+                  placeholder={units === "metric" ? "meters" : "feet"} autoFocus />
+                <span>{units === "metric" ? "m" : "ft"}</span>
+                <button type="button" className="is-primary" onClick={applyCalibration}>Apply</button>
+                <button type="button" onClick={() => setCalib([])}>Reset points</button>
+              </span>
+            )}
+          </div>
+        )}
       {/* quick-access condition palette — its own slim band under the toolbar
           (like the sheet-tabs / conditions-strip rows), not crammed into the
           already-wrapping top bar. A curated ≤9 pinned conditions for one-click
@@ -6340,7 +6927,7 @@ export default function TakeoffCanvas() {
                 <h3>Find help</h3>
                 <p>Find pages scans every loaded PDF. Find in this page scans only the focused sheet and adds a separate search.</p>
                 <p>Use Search marks to show, hide, recolor, or remove each completed search. Unmark all pages hides them together without deleting them.</p>
-                <p>Only selectable PDF text is searchable; scanned pages may need OCR.</p>
+                <p>Selectable PDF text is searched first. Scanned pages automatically use local OCR and may take longer.</p>
                 <p>Drag the title bar to move this panel, or drag either lower corner to resize it. It stays open while you pan, zoom, or use other tools; close it with × or the active Find button.</p>
               </div>}
               <button className="find-dialog-resize-handle is-left" type="button" aria-label="Resize find panel from lower-left corner" title="Drag or use arrow keys to resize"
@@ -6379,19 +6966,6 @@ export default function TakeoffCanvas() {
             );
           })}
           <button onClick={addCondition} style={{ padding: "4px 10px", borderRadius: 0, border: "1px dashed var(--ink-faint)", background: "transparent", cursor: "pointer", fontSize: 12.5, color: "var(--ink-muted)" }}>+ condition</button>
-        </div>
-      )}
-
-      {/* calibration prompt */}
-      {tool === "calibrate" && (
-        <div style={{ padding: "8px 14px", background: "var(--paper-bright)", borderBottom: "1px solid var(--hairline-warm)", fontSize: 14 }}>
-          {calib.length < 2 ? <span>Custom scale: click two points along a known dimension ({calib.length}/2). Tip: use the longest dimension. (Or just pick a standard scale above.)</span> : (
-            <span>Real length:{" "}
-              <input name="calibration-length" type="number" value={pendingLen} onChange={(e) => setPendingLen(e.target.value)} onKeyDown={(e) => e.key === "Enter" && applyCalibration()} placeholder={units === "metric" ? "meters" : "feet"} autoFocus style={{ width: 90, padding: 5, borderRadius: 0, border: "1px solid var(--ink-faint)" }} /> {units === "metric" ? "m" : "ft"}
-              <button onClick={applyCalibration} style={{ marginLeft: 8, padding: "5px 12px", borderRadius: 0, border: "none", background: "var(--ink)", color: "var(--paper-bright)", cursor: "pointer" }}>Apply</button>
-              <button onClick={() => setCalib([])} style={{ marginLeft: 6, padding: "5px 10px", borderRadius: 0, border: "1px solid var(--ink-faint)", background: "transparent", cursor: "pointer" }}>Reset</button>
-            </span>
-          )}
         </div>
       )}
 
@@ -6586,9 +7160,12 @@ export default function TakeoffCanvas() {
          </div>
        )}
        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-        <div ref={containerRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+        <div ref={containerRef} onPointerDown={(event) => {
+          if (tool === "select" && event.target?.closest?.(".takeoff-pdf-text-layer")) return;
+          onPointerDown(event);
+        }} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp} onPointerLeave={leaveCanvas} onContextMenu={(e) => e.preventDefault()}
-          onDoubleClick={(e) => { if (tool === "oneclick") { if (proposal?.regions.length) createProposal(); } else if (tool === "area" || tool === "deduct" || tool === "linear" || tool === "curve" || tool === "surface" || tool === "zone") finishShape(); else if (tool === "select") editMarkupAt(e); }}
+          onDoubleClick={(e) => { if (tool === "select" && e.target?.closest?.(".takeoff-pdf-text-layer")) return; if (tool === "oneclick") { if (proposal?.regions.length) createProposal(); } else if (tool === "area" || tool === "deduct" || tool === "linear" || tool === "curve" || tool === "surface" || tool === "zone") finishShape(); else if (tool === "select") editMarkupAt(e); }}
           style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--paper-cream)", "--canvas-tool-cursor": tool === "pan" ? "var(--cursor-grab, grab)" : tool === "select" ? "var(--cursor-default, default)" : tool === "text" ? "var(--cursor-text, text)" : "var(--cursor-crosshair, crosshair)", cursor: "var(--canvas-tool-cursor)", touchAction: "none" }}>
           {/* aim crosshair (draw modes): retain the precision overlay alongside the themed cursor. Two crisp full-page hairlines riding the
               EFFECTIVE point (angle-locked / endpoint-snapped), the SPLINE STAR at
@@ -6631,6 +7208,10 @@ export default function TakeoffCanvas() {
                   style={{ position: "absolute", left: p.xOffset, top: 0, boxShadow: "0 2px 20px rgba(0,0,0,.18)" }} />
                 <canvas data-diagnostics-id={`preview-${p.key}`} ref={(el) => { if (el) previewCanvasRefs.current.set(p.key, el); else previewCanvasRefs.current.delete(p.key); }}
                   aria-hidden="true" style={{ position: "absolute", left: p.xOffset, top: 0, width: p.img.w || undefined, height: p.img.h || undefined, display: "none", boxShadow: "0 2px 20px rgba(0,0,0,.18)", pointerEvents: "none" }} />
+                <div ref={(el) => { if (el) panelTextLayerRefs.current.set(p.key, el); else panelTextLayerRefs.current.delete(p.key); }}
+                  className={`takeoff-pdf-text-layer${tool === "select" ? " is-selectable" : ""}`}
+                  aria-label={`Selectable PDF text on ${labelFor(p)}`}
+                  style={{ left: p.xOffset, width: p.img.w || undefined, height: p.img.h || undefined, zIndex: 3, pointerEvents: "none" }} />
               </React.Fragment>
             ))}
             {/* high-res detail overlay — a crop of the visible region re-rendered at the current zoom (see the detail-view effect) */}

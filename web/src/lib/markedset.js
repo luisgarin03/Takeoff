@@ -8,12 +8,11 @@
 // breakdown. A PM or GC reads it with zero OpenTakeoff access.
 //
 // Coordinate law (the part that bites): shape verts are normalized to the
-// sheet's VISUAL (rotated) raster. Light pages are vector copies of the source
-// (crisp at any zoom), so every point maps through the INVERSE of the pdf.js
-// viewport transform into PDF user space — rotation and viewBox offsets come
-// along for free. Dark pages are built the way the canvas dark mode works: the
-// page rastered, pixel-inverted (difference-with-white), laid as an image on a
-// fresh unrotated page — visual coords map straight in, no derotation.
+// sheet's VISUAL (rotated) raster. Distribution pages are flattened through
+// PDF.js and JPEG-compressed before markups are added. That strips source OCR,
+// fonts, annotations and complex vector resources so the resulting PDF opens
+// quickly in field/estimating viewers. Visual coords map straight onto the
+// fresh unrotated image page, with no derotation.
 //
 // pdf-lib is lazy-loaded (like ingest's image→PDF wrap), so the export costs
 // nothing until used and the app stays zero-install.
@@ -29,7 +28,8 @@ import { layoutBoxedMarkupText, MARKUP_TEXT_FONT_SIZE_PT } from "./canvasText.js
 const COBALT = "#1f3fc7";
 const DEDUCT_RED = "#b03a26";
 const DARK_BG = [0.055, 0.07, 0.09];       // matches the canvas dark stage
-const RASTER_MAX = 2800;                    // dark-mode raster cap, long side px
+const RASTER_MAX = 2800;                    // distribution raster cap, long side px
+const RASTER_JPEG_QUALITY = 0.82;
 const LINE_CHIP_CLEARANCE_PT = 10;            // label box sits 4.5pt clear of a linear mark
 
 // hatch style → parallel-line families [angleDeg, pitch(image px)] that match
@@ -158,7 +158,28 @@ function invertPixels(cv) {
   ctx.restore();
 }
 
-export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, markups, findHighlights = /** @type {object[]} */ ([]), rfis = /** @type {object[]} */ ([]), conditions, getPage, loadPdfData, company, clientInfo, credit = null, coverTitle = "Marked Set", units = "imperial", singleSheet = false, includeShapeLabels = true }) {
+async function canvasJpegBytes(canvas) {
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", RASTER_JPEG_QUALITY));
+  if (!blob) throw new Error("Could not compress a plan page for export.");
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+async function rasterizeMarkedSetPage(page, dark) {
+  const viewportAtOne = page.getViewport({ scale: 1 });
+  const scale = Math.min(RASTER_MAX / Math.max(viewportAtOne.width, viewportAtOne.height), 4);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+  const context = canvas.getContext("2d", { alpha: false });
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: context, viewport, background: "white" }).promise;
+  if (dark) invertPixels(canvas);
+  try { return { bytes: await canvasJpegBytes(canvas), type: "image/jpeg" }; }
+  finally { canvas.width = canvas.height = 1; }
+}
+
+export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, markups, findHighlights = /** @type {object[]} */ ([]), rfis = /** @type {object[]} */ ([]), conditions, getPage, renderPage = rasterizeMarkedSetPage, company, clientInfo, credit = null, coverTitle = "Marked Set", units = "imperial", singleSheet = false, includeShapeLabels = true }) {
   if (singleSheet && sheets.length !== 1) throw new Error("Choose one current sheet to download.");
   // display-unit edge (lib/units contract): quantities arrive as internal feet;
   // metric converts at the drawn string only — legend rows, by-sheet rows, and
@@ -384,39 +405,22 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
   }
 
   // ── marked sheets ──────────────────────────────────────────────────────────
-  const srcDocs = new Map();   // file → PDFDocument (light-mode page copies)
   for (const sh of marked) {
     const page = await getPage(sh.file, sh.page);
     const vpR = page.getViewport({ scale: RENDER_SCALE });   // the space verts are normalized to
     const W = vpR.width, H = vpR.height;
     let pg, toPage, chipRot = degrees(0);
 
-    if (dark) {
-      // raster → invert → image page (unrotated by construction)
-      const vp1 = page.getViewport({ scale: 1 });
-      const s = Math.min(RASTER_MAX / Math.max(vp1.width, vp1.height), 4);
-      const vp = page.getViewport({ scale: s });
-      const cv = document.createElement("canvas");
-      cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
-      await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
-      invertPixels(cv);
-      const png = await doc.embedPng(cv.toDataURL("image/png"));
-      pg = doc.addPage([vp1.width, vp1.height]);
-      pg.drawImage(png, { x: 0, y: 0, width: vp1.width, height: vp1.height });
-      const k = vp1.width / W;   // image px (at RENDER_SCALE) → page points
-      toPage = (x, y) => [x * k, vp1.height - y * k];
-    } else {
-      // vector copy of the source page; image px → PDF user space through the
-      // inverse viewport transform (rotation + viewBox offsets included)
-      let src = srcDocs.get(sh.file);
-      if (!src) { src = await PDFDocument.load(await loadPdfData(sh.file), { ignoreEncryption: true }); srcDocs.set(sh.file, src); }
-      const [copied] = await doc.copyPages(src, [sh.page - 1]);
-      pg = doc.addPage(copied);
-      const [a, b, c, d, e, f] = vpR.transform;
-      const det = a * d - b * c;
-      toPage = (x, y) => [(d * (x - e) - c * (y - f)) / det, (-b * (x - e) + a * (y - f)) / det];
-      chipRot = degrees(page.rotate || 0);
-    }
+    // Rasterize both light and dark exports. The visible plan becomes one
+    // compact image instead of thousands of source text/vector operations.
+    const vp1 = page.getViewport({ scale: 1 });
+    const renderedPage = await renderPage(page, !!dark);
+    const raster = renderedPage instanceof Uint8Array ? { bytes: renderedPage, type: "image/jpeg" } : renderedPage;
+    const planImage = raster.type === "image/png" ? await doc.embedPng(raster.bytes) : await doc.embedJpg(raster.bytes);
+    pg = doc.addPage([vp1.width, vp1.height]);
+    pg.drawImage(planImage, { x: 0, y: 0, width: vp1.width, height: vp1.height });
+    const k = vp1.width / W;   // image px (at RENDER_SCALE) → page points
+    toPage = (x, y) => [x * k, vp1.height - y * k];
     const ptScale = Math.hypot(...(() => { const p0 = toPage(0, 0), p1 = toPage(1, 0); return [p1[0] - p0[0], p1[1] - p0[1]]; })());
     const svgPath = (pts) => pts.map(([x, y], i) => { const [px, py] = toPage(x, y); return `${i ? "L" : "M"}${px},${-py}`; }).join(" ") + " Z";
     const svgOpenPath = (pts) => pts.map(([x, y], i) => { const [px, py] = toPage(x, y); return `${i ? "L" : "M"}${px},${-py}`; }).join(" ");
