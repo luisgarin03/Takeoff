@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PDFArray, PDFDocument, PDFDict, PDFRawStream, PDFName, PDFNumber, decodePDFRawStream, degrees, rgb } from "pdf-lib";
 import { base64ToBytes, bytesToBase64 } from "../src/lib/whiteboard.js";
-import { boardArrowPaintBounds, boardContentRect, boardNoteCardRect, boardPdfBounds, boardPdfPlacement, boardRectanglePaintBounds, boardRectsIntersect, buildWhiteboardPdf, checkBoardRaster, whiteboardPdfFilename } from "../src/lib/whiteboardPdf.js";
+import { boardArrowPaintBounds, boardContentRect, boardNoteCardRect, boardPdfBounds, boardPdfPlacement, boardRectanglePaintBounds, boardRectsIntersect, buildWhiteboardPdf, checkBoardRaster, whiteboardExportPageLayout, whiteboardPdfFilename } from "../src/lib/whiteboardPdf.js";
 import type { BoardPdfRenderer } from "../src/lib/whiteboardPdf.js";
 
 const png = base64ToBytes("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j8ioAAAAASUVORK5CYII=");
@@ -168,6 +168,63 @@ test("selection crops arrows to the requested area and can export blank selected
   await assertPage(result, 150, 75);
   const blank = await buildWhiteboardPdf(board([note()]), { region: { x: 700, y: 800, w: 80, h: 60 }, renderer });
   await assertPage(blank, 60, 45);
+});
+
+test("four ordered and overlapping custom areas export as one valid four-page PDF", async () => {
+  const regions = [
+    { id: "a", name: "Site", x: 0, y: 0, w: 240, h: 160, order: 0, pageSize: "match", orientation: "auto", quality: "high", fit: "fit" },
+    { id: "b", name: "Overlap", x: 100, y: 60, w: 240, h: 160, order: 1, pageSize: "letter", orientation: "landscape", quality: "standard", fit: "fit" },
+    { id: "c", name: "SOW", x: -50, y: -30, w: 120, h: 300, order: 2, pageSize: "legal", orientation: "portrait", quality: "maximum", fit: "fit" },
+    { id: "d", name: "Detail", x: 500, y: 500, w: 100, h: 80, order: 3, pageSize: "tabloid", orientation: "auto", quality: "high", fit: "fit" },
+  ];
+  const progress: string[] = [];
+  const result = await buildWhiteboardPdf(board([note({ x: -100, y: -100, w: 800, h: 800 })]), { regions, renderer,
+    projectName: "Montana", boardName: "Whiteboard Export", onProgress: ({ name }) => progress.push(name) });
+  const doc = await PDFDocument.load(result.bytes);
+  assert.equal(doc.getPageCount(), 4);
+  assert.deepEqual(progress, ["Site", "Overlap", "SOW", "Detail"]);
+  assert.deepEqual((result as any).pages.map((entry: any) => entry.id), ["a", "b", "c", "d"]);
+  assert.deepEqual(doc.getPage(1).getSize(), { width: 792, height: 612 });
+  assert.deepEqual(doc.getPage(2).getSize(), { width: 612, height: 1008 });
+  assert.deepEqual(doc.getPage(3).getSize(), { width: 1224, height: 792 });
+  for (const page of doc.getPages()) assert.doesNotMatch(pageContent(doc, page), /Page [1-4]|PDF Export Pages|Area [1-4]/,
+    "editor outlines, labels and manager controls never enter page content");
+  assert.equal(result.filename, "Montana - Whiteboard Export.pdf");
+});
+
+test("custom page layout preserves aspect ratio and caps huge match pages instead of failing", async () => {
+  const region = { id: "huge", name: "Huge plan", x: -50000, y: 20000, w: 80000, h: 40000,
+    pageSize: "match", orientation: "auto", quality: "high", fit: "fit" };
+  const layout = whiteboardExportPageLayout(region);
+  assert.equal(layout.width, 14400);
+  assert.equal(layout.height, 7200);
+  assert.equal(layout.contentWidth / layout.contentHeight, 2);
+  const result = await buildWhiteboardPdf(board([]), { regions: [region], renderer });
+  const doc = await PDFDocument.load(result.bytes);
+  assert.equal(doc.getPageCount(), 1);
+  assert.deepEqual(doc.getPage(0).getSize(), { width: 14400, height: 7200 });
+});
+
+test("one custom page can exceed the legacy combined 64-megapixel accounting without one giant canvas", async () => {
+  const items = Array.from({ length: 8 }, (_, index) => note({ id: `note-${index}`, x: (index % 4) * 1050, y: Math.floor(index / 4) * 1050,
+    w: 1000, h: 1000 }));
+  const region = { id: "large", name: "Large marked plan", x: 0, y: 0, w: 4200, h: 2100,
+    pageSize: "arch-e", orientation: "landscape", quality: "high", fit: "fit" };
+  const result = await buildWhiteboardPdf(board(items), { regions: [region], renderer });
+  const doc = await PDFDocument.load(result.bytes);
+  assert.equal(doc.getPageCount(), 1);
+  assert.deepEqual(doc.getPage(0).getSize(), { width: 3456, height: 2592 });
+});
+
+test("custom area export rejects an empty list and honors cancellation between pages", async () => {
+  await assert.rejects(buildWhiteboardPdf(board(), { regions: [], renderer }), /at least one PDF export area/);
+  const controller = new AbortController();
+  let completed = 0;
+  const areas = [0, 1, 2].map((index) => ({ id: `${index}`, name: `Area ${index + 1}`, x: 0, y: 0, w: 200, h: 120,
+    pageSize: "match", orientation: "auto", quality: "high", fit: "fit" }));
+  await assert.rejects(buildWhiteboardPdf(board(), { regions: areas, renderer, signal: controller.signal,
+    onProgress: ({ completed: count }) => { completed = count; controller.abort(); } }), /abort/i);
+  assert.equal(completed, 1);
 });
 
 test("paged export uses fixed Letter pages and reports sparse tiles in row-major order", async () => {
@@ -386,6 +443,24 @@ test("selected PDF page is exported, and nonexistent pages fail clearly", async 
   assert.equal(renderedPage, 2);
   await assertPage(result, 300, 150);
   await assert.rejects(buildWhiteboardPdf(board([file({ page: 3 })], [a]), { renderer }), /Page 3 does not exist/);
+});
+
+test("whiteboard export passes the selected quality preset to its raster renderer", async () => {
+  const doc = await PDFDocument.create(); doc.addPage([600, 400]);
+  let receivedQuality: { id?: string } | undefined;
+  await buildWhiteboardPdf(board([file()], [asset(await doc.save())]), { quality: "hd", renderer: {
+    ...renderer,
+    renderPdfPage: async (_bytes, _page, _rect, _signal, quality) => { receivedQuality = quality; return png; },
+  } });
+  assert.equal(receivedQuality?.id, "hd");
+});
+
+test("PDF raster budget uses the renderer's safe output size, not the enlarged board card", async () => {
+  const doc = await PDFDocument.create(); doc.addPage([600, 400]);
+  await buildWhiteboardPdf(board([file({ w: 1402, h: 1013 })], [asset(await doc.save())]), { quality: "hd", renderer: {
+    ...renderer,
+    renderPdfPage: async () => ({ bytes: png, type: "image/png", width: 4800, height: 3200 }),
+  } });
 });
 
 test("PDF annotations use a complete page raster rather than disappearing during vector embedding", async () => {

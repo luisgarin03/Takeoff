@@ -1,5 +1,7 @@
 import { ANN_SCHEMA } from "./store.js";
 import { base64ToBytes, bytesToBase64, validateWhiteboard } from "./whiteboard.js";
+import { COMPACT_PROJECT_VERSION, compactPagesByFile, sanitizeCompactProject } from "./compactProject.js";
+import { sanitizeProjectAssistant } from "./projectAssistant.js";
 
 const FORMAT = "opentakeoff.project";
 const VERSION = 2;
@@ -11,13 +13,18 @@ const fail = (message) => { throw new Error(message); };
 
 export function validateAnnotations(a) {
   if (!object(a) || a.schema !== ANN_SCHEMA) fail("Unsupported project takeoff format.");
-  for (const key of ["conditions", "shapes", "sheets", "markups", "rfis"]) {
+  for (const key of ["conditions", "shapes", "sheets", "markups", "rfis", "chain_link_fences"]) {
     if (a[key] !== undefined && (!Array.isArray(a[key]) || !a[key].every(object))) fail(`Invalid project ${key}.`);
   }
   if (!Array.isArray(a.conditions) || !Array.isArray(a.shapes)) fail("Project takeoff data is missing.");
   if (a.project_name !== undefined && typeof a.project_name !== "string") fail("Invalid project name.");
   for (const key of ["sheet_tabs", "sheet_group", "last_group", "sheet_bookmarks", "file_bookmarks", "palette"]) {
     if (a[key] !== undefined && (!Array.isArray(a[key]) || !a[key].every((v) => typeof v === "string"))) fail(`Invalid project ${key}.`);
+  }
+  if (a.compact_project !== undefined && !sanitizeCompactProject(a.compact_project)) fail("Invalid compact-project recovery data.");
+  if (a.project_assistant !== undefined) {
+    const sanitized = sanitizeProjectAssistant(a.project_assistant);
+    if (a.project_assistant?.version !== sanitized.version || typeof a.project_assistant?.persist !== "boolean" || !Array.isArray(a.project_assistant?.messages)) fail("Invalid ChatGPT Project Assistant history.");
   }
 }
 
@@ -36,12 +43,42 @@ export function projectFilename(name) {
   return `${projectFolderName(name)}.otk`;
 }
 
+async function compactPdfPages(bytes, includedPages, name) {
+  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+  let source;
+  try { source = await PDFDocument.load(bytes); }
+  catch { fail(`Couldn't create a marked-pages-only copy of ${name}. The PDF may be protected or incompatible.`); }
+  const sourcePages = source.getPages();
+  const included = [...new Set(includedPages)].sort((a, b) => a - b);
+  if (included.some((page) => page > sourcePages.length)) fail(`A saved mark points past the end of ${name}.`);
+  const output = await PDFDocument.create();
+  const font = await output.embedFont(StandardFonts.Helvetica);
+  const copied = await output.copyPages(source, included.map((page) => page - 1));
+  const copiedByPage = new Map(included.map((page, index) => [page, copied[index]]));
+  for (let index = 0; index < sourcePages.length; index++) {
+    const pageNumber = index + 1;
+    if (copiedByPage.has(pageNumber)) {
+      output.addPage(copiedByPage.get(pageNumber));
+      continue;
+    }
+    const original = sourcePages[index];
+    const { width, height } = original.getSize();
+    const page = output.addPage([width, height]);
+    page.setRotation(original.getRotation());
+    const title = "Page not included in this compact project";
+    const help = "Use Project > Import missing files to restore the original PDF.";
+    page.drawText(title, { x: Math.max(24, (width - font.widthOfTextAtSize(title, 13)) / 2), y: height / 2 + 8, size: 13, font, color: rgb(.28, .3, .34) });
+    page.drawText(help, { x: Math.max(24, (width - font.widthOfTextAtSize(help, 9)) / 2), y: height / 2 - 12, size: 9, font, color: rgb(.42, .44, .48) });
+  }
+  return { bytes: await output.save({ useObjectStreams: true }), pageCount: sourcePages.length };
+}
+
 /** @returns {Promise<Uint8Array>} */
-export async function exportProjectFile(source, payload) {
+export async function exportProjectFile(source, payload, { compact = false } = {}) {
   const { zip, strToU8 } = await import("fflate");
   // Autosave omits default units. A portable file must not inherit the next
   // browser's units preference when reopening an imperial project.
-  const annotations = { ...payload, schema: ANN_SCHEMA, units: payload.units || "imperial" };
+  let annotations = { ...payload, schema: ANN_SCHEMA, units: payload.units || "imperial" };
   validateAnnotations(annotations);
   const files = {};
   const plans = [];
@@ -68,31 +105,64 @@ export async function exportProjectFile(source, payload) {
     }
     return { ...payload, whiteboard: { ...board, assets } };
   }
-  for (const { name } of await source.listSheets()) {
-    const bytes = await source.loadPdfData(name);
-    total += bytes.byteLength;
-    if (total > MAX_PROJECT_FILE_BYTES) fail("Project exceeds the 512 MB portable file limit.");
-    const path = `plans/${plans.length}.pdf`;
-    files[path] = [bytes, { level: 0 }]; // PDFs are already compressed.
-    plans.push({ name, path, size: bytes.length, sha256: await digest(bytes) });
-  }
-  const snapshots = [];
+  const snapshotRecords = [];
   for (const { id } of await source.listSnapshots()) {
     const record = await source.getSnapshot(id);
     if (!record) fail("A revision changed while saving. Please try again.");
     const savedPayload = { ...record.payload, schema: ANN_SCHEMA, units: record.payload.units || "imperial" };
     validateAnnotations(savedPayload);
-    snapshots.push({ id: record.id, ts: record.ts, label: record.label ?? null,
-      payload: await packWhiteboard(savedPayload) });
+    snapshotRecords.push({ id: record.id, ts: record.ts, label: record.label ?? null, payload: savedPayload });
+  }
+  const compactPages = compact ? compactPagesByFile([annotations, ...snapshotRecords.map((record) => record.payload)]) : null;
+  const compactFiles = [];
+  for (const { name } of await source.listSheets()) {
+    const originalBytes = await source.loadPdfData(name);
+    let bytes = originalBytes;
+    const originalHash = compact ? await digest(originalBytes) : "";
+    const includedPages = compactPages?.get(name) || [];
+    let pageCount = null;
+    if (compact) {
+      if (includedPages.length) {
+        const result = await compactPdfPages(originalBytes, includedPages, name);
+        bytes = result.bytes;
+        pageCount = result.pageCount;
+      }
+      compactFiles.push({ name, original_size: originalBytes.byteLength, sha256: originalHash, included_pages: includedPages, ...(pageCount ? { page_count: pageCount } : {}) });
+      if (!includedPages.length) continue;
+    }
+    total += bytes.byteLength;
+    if (total > MAX_PROJECT_FILE_BYTES) fail(compact
+      ? "The marked and bookmarked pages still exceed the 512 MB portable file limit. Remove unnecessary page marks/bookmarks or split the project."
+      : "Project exceeds the 512 MB portable file limit. Use “Save project with marked pages only…” instead.");
+    const path = `plans/${plans.length}.pdf`;
+    files[path] = [bytes, { level: 0 }]; // PDFs are already compressed.
+    plans.push({ name, path, size: bytes.length, sha256: await digest(bytes) });
+  }
+  const compactProject = compactFiles.length ? {
+    version: COMPACT_PROJECT_VERSION,
+    mode: "marked-pages-only",
+    created_at: new Date().toISOString(),
+    files: compactFiles,
+  } : null;
+  if (compactProject) annotations = { ...annotations, compact_project: compactProject };
+  const snapshots = [];
+  for (const record of snapshotRecords) {
+    const snapshotPayload = compactProject ? { ...record.payload, compact_project: compactProject } : record.payload;
+    snapshots.push({ id: record.id, ts: record.ts, label: record.label,
+      payload: await packWhiteboard(snapshotPayload) });
   }
   const packed = await packWhiteboard(annotations);
   const manifest = strToU8(JSON.stringify({ format: FORMAT, version: VERSION, annotations: packed, plans, snapshots, attachments: [...attachments.values()] }));
   if (manifest.length > MAX_MANIFEST_BYTES || total + manifest.length > MAX_PROJECT_FILE_BYTES || plans.length + attachments.size + 1 > MAX_ENTRIES) {
-    fail("Project exceeds the portable file size limit.");
+    fail(compact
+      ? "The marked-pages-only project still exceeds the portable file size limit."
+      : "Project exceeds the portable file size limit. Use “Save project with marked pages only…” instead.");
   }
   files["project.json"] = manifest;
   const bytes = await new Promise((resolve, reject) => zip(files, { level: 6 }, (err, data) => err ? reject(err) : resolve(data)));
-  if (bytes.length > MAX_PROJECT_FILE_BYTES) fail("Project exceeds the 512 MB portable file limit.");
+  if (bytes.length > MAX_PROJECT_FILE_BYTES) fail(compact
+    ? "The marked-pages-only project still exceeds the 512 MB portable file limit."
+    : "Project exceeds the 512 MB portable file limit. Use “Save project with marked pages only…” instead.");
   return bytes;
 }
 

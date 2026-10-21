@@ -221,8 +221,45 @@
 .wb .wb-sow-resize-handle.is-left::after { left: 4px; }
 .wb .wb-sow-resize-handle.is-right { right: -6px; }
 .wb .wb-sow-resize-handle.is-right::after { right: 4px; }
-.wb-export-area { position: absolute; z-index: 5; border: 2px solid #1f3fc7; background: #1f3fc71a; box-shadow: 0 0 0 99999px #00000012; pointer-events: none; }
-.wb-export-area.is-draft { border-style: dashed; }
+.wb-export-area { position: absolute; z-index: 35; border: 2px dashed #2563eb; background: #2563eb1f; pointer-events: auto; touch-action: none; cursor: var(--cursor-move, move); }
+.wb-export-area.is-selected { border-style: solid; box-shadow: 0 0 0 2px #ffffffb8, 0 0 0 4px #2563eb; }
+.wb-export-area.is-draft { z-index: 36; border-style: dashed; pointer-events: none; }
+.wb-export-area > span { position: absolute; left: -2px; top: -27px; min-width: 58px; padding: 4px 7px; border-radius: 4px 4px 0 0; background: #2563eb; color: #fff; font: 700 11px/1.4 var(--f-body); white-space: nowrap; pointer-events: none; }
+.wb .wb-export-area-handle { position: absolute; z-index: 2; width: 12px; height: 12px; min-width: 12px; min-height: 12px; padding: 0; border: 2px solid #2563eb; border-radius: 2px; background: #fff; touch-action: none; }
+.wb-export-area-handle[data-handle="n"] { left: 50%; top: 0; transform: translate(-50%, -50%); cursor: var(--cursor-ns-resize, ns-resize); }
+.wb-export-area-handle[data-handle="s"] { left: 50%; bottom: 0; transform: translate(-50%, 50%); cursor: var(--cursor-ns-resize, ns-resize); }
+.wb-export-area-handle[data-handle="e"] { right: 0; top: 50%; transform: translate(50%, -50%); cursor: var(--cursor-ew-resize, ew-resize); }
+.wb-export-area-handle[data-handle="w"] { left: 0; top: 50%; transform: translate(-50%, -50%); cursor: var(--cursor-ew-resize, ew-resize); }
+.wb-export-area-handle[data-handle="nw"] { left: 0; top: 0; transform: translate(-50%, -50%); cursor: var(--cursor-nwse-resize, nwse-resize); }
+.wb-export-area-handle[data-handle="ne"] { right: 0; top: 0; transform: translate(50%, -50%); cursor: var(--cursor-nesw-resize, nesw-resize); }
+.wb-export-area-handle[data-handle="se"] { right: 0; bottom: 0; transform: translate(50%, 50%); cursor: var(--cursor-nwse-resize, nwse-resize); }
+.wb-export-area-handle[data-handle="sw"] { left: 0; bottom: 0; transform: translate(-50%, 50%); cursor: var(--cursor-nesw-resize, nesw-resize); }
+.wb-export-panel { position: absolute; z-index: 80; top: 12px; right: 12px; width: min(380px, calc(100% - 24px)); max-height: calc(100% - 24px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--ink-faint); border-radius: 9px; background: var(--paper-bright); box-shadow: 0 14px 42px #0008; }
+.wb-export-panel > header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--ink-faint); }
+.wb-export-panel > header > div { flex: 1; min-width: 0; }
+.wb-export-panel > header span { display: block; color: var(--ink-muted); font: 600 9px var(--f-mono); text-transform: uppercase; letter-spacing: .08em; }
+.wb-export-panel h2 { margin: 2px 0 0; font-size: 15px; }
+.wb-export-panel > header button { min-width: 28px; min-height: 28px; padding: 3px; }
+.wb-export-page-list { min-height: 78px; overflow: auto; padding: 8px; }
+.wb-export-page-list > p { margin: 18px 8px; color: var(--ink-muted); line-height: 1.5; text-align: center; }
+.wb-export-page-list > section { display: grid; grid-template-columns: auto minmax(80px, 1fr) 94px; gap: 5px; align-items: center; margin-bottom: 6px; padding: 6px; border: 1px solid var(--ink-faint); border-radius: 6px; }
+.wb-export-page-list > section.is-selected { border-color: var(--cobalt); box-shadow: inset 0 0 0 1px var(--cobalt); }
+.wb .wb-export-locate { min-width: 58px; min-height: 30px; padding: 4px 7px; color: var(--cobalt); }
+.wb-export-page-list input, .wb-export-page-list select, .wb-export-settings select { width: 100%; min-width: 0; height: 30px; padding: 4px 6px; border: 1px solid var(--ink-faint); border-radius: 5px; background: var(--paper-cream); color: var(--ink); font: 11px var(--f-body); }
+.wb-export-page-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 3px; }
+.wb .wb-export-page-actions button { width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 3px; }
+.wb-export-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 10px 12px; border-top: 1px solid var(--ink-faint); }
+.wb-export-settings label { display: grid; gap: 4px; color: var(--ink-muted); font-size: 10px; }
+.wb-export-settings label:nth-child(3), .wb-export-settings small { grid-column: 1 / -1; }
+.wb-export-settings small { color: var(--ink-muted); line-height: 1.4; }
+.wb-export-panel > footer { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--ink-faint); }
+.wb-export-panel > footer button { min-height: 32px; }
+.wb-export-panel > footer .is-primary { border-color: var(--cobalt); background: var(--cobalt); color: #fff; }
+.wb-export-cancel { position: fixed; z-index: 3900; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); border-color: #ffffff70 !important; background: #20242b !important; color: #fff !important; box-shadow: 0 5px 20px #0008; }
+.wb-pdf-preview { position: fixed; z-index: 4000; inset: 28px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--ink-faint); border-radius: 9px; background: var(--paper-bright); box-shadow: 0 16px 60px #000b; }
+.wb-pdf-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 7px 12px; border-bottom: 1px solid var(--ink-faint); }
+.wb-pdf-preview > header button { min-width: 30px; min-height: 30px; padding: 3px; }
+.wb-pdf-preview iframe { flex: 1; width: 100%; border: 0; background: #54575d; }
 .wb-arrows { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .wb-drawing-hit { fill: none; stroke: transparent; stroke-width: 18px; pointer-events: stroke; cursor: var(--cursor-move, move); touch-action: none; }
 path.wb-drawing-hit { fill: transparent; pointer-events: all; }

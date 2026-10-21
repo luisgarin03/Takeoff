@@ -9,10 +9,9 @@
 //
 // Coordinate law (the part that bites): shape verts are normalized to the
 // sheet's VISUAL (rotated) raster. Distribution pages are flattened through
-// PDF.js and JPEG-compressed before markups are added. That strips source OCR,
-// fonts, annotations and complex vector resources so the resulting PDF opens
-// quickly in field/estimating viewers. Visual coords map straight onto the
-// fresh unrotated image page, with no derotation.
+// PDF.js and JPEG-compressed before markups are added. The Whiteboard import
+// path may instead copy the original current PDF page and map overlays through
+// the inverse PDF.js viewport transform, avoiding an early lossy raster pass.
 //
 // pdf-lib is lazy-loaded (like ingest's image→PDF wrap), so the export costs
 // nothing until used and the app stays zero-install.
@@ -24,12 +23,14 @@ import { rfiStatus } from "./rfi.js";
 import { RENDER_SCALE } from "./sheets";
 import { pdfDashFor, boostForDark, clampWeight } from "./lineStyles.js";
 import { layoutBoxedMarkupText, MARKUP_TEXT_FONT_SIZE_PT } from "./canvasText.js";
+import { flattenCurve } from "./curve.js";
+import { calculateChainLinkFence, pointAtPathT } from "./chainLinkFence.js";
+import { pdfExportQuality, safePdfRasterScale } from "./exportQuality.js";
+import { linearMarkerPoints, normalizeLineMarker } from "./linearMarkers.js";
 
 const COBALT = "#1f3fc7";
 const DEDUCT_RED = "#b03a26";
 const DARK_BG = [0.055, 0.07, 0.09];       // matches the canvas dark stage
-const RASTER_MAX = 2800;                    // distribution raster cap, long side px
-const RASTER_JPEG_QUALITY = 0.82;
 const LINE_CHIP_CLEARANCE_PT = 10;            // label box sits 4.5pt clear of a linear mark
 
 // hatch style → parallel-line families [angleDeg, pitch(image px)] that match
@@ -158,15 +159,17 @@ function invertPixels(cv) {
   ctx.restore();
 }
 
-async function canvasJpegBytes(canvas) {
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", RASTER_JPEG_QUALITY));
+async function canvasJpegBytes(canvas, quality) {
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
   if (!blob) throw new Error("Could not compress a plan page for export.");
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-async function rasterizeMarkedSetPage(page, dark) {
+async function rasterizeMarkedSetPage(page, dark, quality) {
+  const preset = pdfExportQuality(quality);
   const viewportAtOne = page.getViewport({ scale: 1 });
-  const scale = Math.min(RASTER_MAX / Math.max(viewportAtOne.width, viewportAtOne.height), 4);
+  const requestedScale = Math.min(preset.pageMaxDimension / Math.max(viewportAtOne.width, viewportAtOne.height), 6);
+  const scale = safePdfRasterScale(viewportAtOne.width, viewportAtOne.height, requestedScale, preset.imageMaxPixels);
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
   canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
@@ -175,11 +178,21 @@ async function rasterizeMarkedSetPage(page, dark) {
   context.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: context, viewport, background: "white" }).promise;
   if (dark) invertPixels(canvas);
-  try { return { bytes: await canvasJpegBytes(canvas), type: "image/jpeg" }; }
+  try { return { bytes: await canvasJpegBytes(canvas, preset.jpegQuality), type: "image/jpeg" }; }
   finally { canvas.width = canvas.height = 1; }
 }
 
-export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, markups, findHighlights = /** @type {object[]} */ ([]), rfis = /** @type {object[]} */ ([]), conditions, getPage, renderPage = rasterizeMarkedSetPage, company, clientInfo, credit = null, coverTitle = "Marked Set", units = "imperial", singleSheet = false, includeShapeLabels = true }) {
+function inverseViewportPoint(transform, x, y) {
+  const [a, b, c, d, e, f] = transform || [];
+  const determinant = a * d - b * c;
+  if (![a, b, c, d, e, f, determinant].every(Number.isFinite) || Math.abs(determinant) < 1e-12) {
+    throw new Error("Could not map the source PDF page coordinates.");
+  }
+  const tx = x - e, ty = y - f;
+  return [(d * tx - c * ty) / determinant, (-b * tx + a * ty) / determinant];
+}
+
+export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, markups, chainLinkFences = /** @type {object[]} */ ([]), findHighlights = /** @type {object[]} */ ([]), rfis = /** @type {object[]} */ ([]), conditions, getPage, loadPdfData = /** @type {null | ((file: string) => Promise<Uint8Array>)} */ (null), renderPage = rasterizeMarkedSetPage, company, clientInfo, credit = null, coverTitle = "Marked Set", units = "imperial", singleSheet = false, includeShapeLabels = true, quality = "balanced", preserveSourcePdf = false }) {
   if (singleSheet && sheets.length !== 1) throw new Error("Choose one current sheet to download.");
   // display-unit edge (lib/units contract): quantities arrive as internal feet;
   // metric converts at the drawn string only — legend rows, by-sheet rows, and
@@ -197,7 +210,7 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
     for (const s of arr) { const a = m.get(s.sheet_id) || []; a.push(s); m.set(s.sheet_id, a); }
     return m;
   };
-  const shapesBy = byKey(shapes), marksBy = byKey(markups);
+  const shapesBy = byKey(shapes), marksBy = byKey(markups), fencesBy = byKey(chainLinkFences);
   const findBy = new Map();
   for (const hit of findHighlights || []) {
     if (!hit || typeof hit !== "object" || !String(hit.key || "")) continue;
@@ -411,16 +424,42 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
     const W = vpR.width, H = vpR.height;
     let pg, toPage, chipRot = degrees(0);
 
-    // Rasterize both light and dark exports. The visible plan becomes one
-    // compact image instead of thousands of source text/vector operations.
     const vp1 = page.getViewport({ scale: 1 });
-    const renderedPage = await renderPage(page, !!dark);
-    const raster = renderedPage instanceof Uint8Array ? { bytes: renderedPage, type: "image/jpeg" } : renderedPage;
-    const planImage = raster.type === "image/png" ? await doc.embedPng(raster.bytes) : await doc.embedJpg(raster.bytes);
-    pg = doc.addPage([vp1.width, vp1.height]);
-    pg.drawImage(planImage, { x: 0, y: 0, width: vp1.width, height: vp1.height });
-    const k = vp1.width / W;   // image px (at RENDER_SCALE) → page points
-    toPage = (x, y) => [x * k, vp1.height - y * k];
+    let sourcePreserved = false;
+    // Whiteboard imports are working assets, not the lightweight distribution
+    // copy. Preserve the original page operators/text/images so later HD export
+    // performs the only rasterization instead of enlarging a Balanced JPEG.
+    if (preserveSourcePdf && !dark && typeof loadPdfData === "function") {
+      try {
+        const sourceBytes = await loadPdfData(sh.file);
+        const sourceDoc = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
+        if (sh.page < 1 || sh.page > sourceDoc.getPageCount()) throw new Error("Source page is unavailable.");
+        const [copiedPage] = await doc.copyPages(sourceDoc, [sh.page - 1]);
+        pg = doc.addPage(copiedPage);
+        toPage = (x, y) => inverseViewportPoint(vpR.transform, x, y);
+        // The copied page keeps its PDF /Rotate value. Geometry is mapped point
+        // by point through the inverse viewport, but PDF text also needs a local
+        // rotation so it remains horizontal in the viewer's visual page space.
+        // Raster exports are already visually flattened and therefore stay at 0°.
+        chipRot = degrees(((Number(vp1.rotation) || 0) % 360 + 360) % 360);
+        sourcePreserved = true;
+      } catch {
+        // Protected/unusual PDFs can be readable by PDF.js but not copyable by
+        // pdf-lib. Fall back to the safe HD raster path so import still works.
+        sourcePreserved = false;
+      }
+    }
+    if (!sourcePreserved) {
+      // Share/download exports intentionally flatten source OCR, fonts and
+      // complex resources into one compact image.
+      const renderedPage = await renderPage(page, !!dark, quality);
+      const raster = renderedPage instanceof Uint8Array ? { bytes: renderedPage, type: "image/jpeg" } : renderedPage;
+      const planImage = raster.type === "image/png" ? await doc.embedPng(raster.bytes) : await doc.embedJpg(raster.bytes);
+      pg = doc.addPage([vp1.width, vp1.height]);
+      pg.drawImage(planImage, { x: 0, y: 0, width: vp1.width, height: vp1.height });
+      const k = vp1.width / W;   // image px (at RENDER_SCALE) → page points
+      toPage = (x, y) => [x * k, vp1.height - y * k];
+    }
     const ptScale = Math.hypot(...(() => { const p0 = toPage(0, 0), p1 = toPage(1, 0); return [p1[0] - p0[0], p1[1] - p0[1]]; })());
     const svgPath = (pts) => pts.map(([x, y], i) => { const [px, py] = toPage(x, y); return `${i ? "L" : "M"}${px},${-py}`; }).join(" ") + " Z";
     const svgOpenPath = (pts) => pts.map(([x, y], i) => { const [px, py] = toPage(x, y); return `${i ? "L" : "M"}${px},${-py}`; }).join(" ");
@@ -520,15 +559,67 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
       } else if (s.measure_role === "linear" || s.measure_role === "surface_area") {
         // shared branch — dash only the linear role; surface_area stays solid
         const segDash = s.measure_role === "linear" ? pdfDashFor(cond?.line_style || "solid") : undefined;
-        for (let i = 1; i < pts.length; i++) line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], col, 1.4, 0.95, segDash);
-        const mid = pts[Math.floor((pts.length - 1) / 2)];
+        const linePts = s.measure_role === "linear" && s.curved ? flattenCurve(pts) : pts;
+        for (let i = 1; i < linePts.length; i++) line(linePts[i - 1][0], linePts[i - 1][1], linePts[i][0], linePts[i][1], col, 1.4, 0.95, segDash);
+        if (s.measure_role === "linear") {
+          const markerType = normalizeLineMarker(cond?.line_marker);
+          const markerRadiusPt = 3.2;
+          for (const [mx, my] of markerType === "none" ? [] : linearMarkerPoints(linePts, 28 / ptScale)) {
+            const [px, py] = toPage(mx, my);
+            if (markerType === "x") {
+              line(mx - markerRadiusPt / ptScale, my - markerRadiusPt / ptScale, mx + markerRadiusPt / ptScale, my + markerRadiusPt / ptScale, col, 1.1);
+              line(mx + markerRadiusPt / ptScale, my - markerRadiusPt / ptScale, mx - markerRadiusPt / ptScale, my + markerRadiusPt / ptScale, col, 1.1);
+            } else {
+              pg.drawEllipse({ x: px, y: py, xScale: markerRadiusPt, yScale: markerRadiusPt, color: dark ? rgb(...DARK_BG) : rgb(1, 1, 1), borderColor: col, borderWidth: 1.1 });
+            }
+          }
+        }
+        const mid = linePts[Math.floor((linePts.length - 1) / 2)];
         // Keep the quantity chip just above the measured line, with a small
         // physical gap after the chip's 12pt box. Scale through ptScale so the
         // spacing stays the same across PDF page sizes and rotations.
         if (includeShapeLabels) chip(shapeChip(s, cond, M), mid[0], mid[1] - LINE_CHIP_CLEARANCE_PT / ptScale, col);
       } else if (s.measure_role === "count") {
         const [px, py] = toPage(pts[0][0], pts[0][1]);
-        pg.drawEllipse({ x: px, y: py, xScale: 4.5, yScale: 4.5, borderColor: col, borderWidth: 1.2, color: col, opacity: 0.35 });
+        // Match the live Takeoff canvas: Count is a centered, condition-colored
+        // SQUARE with a white outline. It used to export through drawEllipse,
+        // which silently changed the estimator's symbol in every PDF path.
+        const half = 4.5;
+        pg.drawRectangle({ x: px - half, y: py - half, width: half * 2, height: half * 2,
+          borderColor: rgb(1, 1, 1), borderWidth: 1, color: col, opacity: 0.8 });
+      }
+    }
+    // Linked chain-link post overlays. These are deliberately not shapes: they
+    // add no measured quantity and cannot be counted by the normal totals.
+    for (const fence of fencesBy.get(sh.key) || []) {
+      const source = (shapesBy.get(sh.key) || []).find((shape) => shape.id === fence.shape_id && shape.measure_role === "linear");
+      if (!source) continue;
+      let points = (source.verts_norm || []).map(([nx, ny]) => [nx * W, ny * H]);
+      if (source.curved) points = flattenCurve(points);
+      let sourcePx = 0;
+      for (let i = 1; i < points.length; i++) sourcePx += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+      const unitsPerPx = sourcePx > 0 ? (Number(source.computed?.perimeter_lf) || 0) / sourcePx : 0;
+      const layout = calculateChainLinkFence(fence, points, unitsPerPx);
+      if (!layout.valid) continue;
+      const col = rgb(...hex(condById[source.condition_id]?.color || COBALT));
+      const markerPt = Math.max(3, Math.min(12, Number(fence.marker_size) || 7));
+      if (fence.show_line_posts !== false) for (const post of layout.linePosts) {
+        const [x, y] = toPage(post.point[0], post.point[1]);
+        pg.drawEllipse({ x, y, xScale: markerPt * .45, yScale: markerPt * .45, color: col, borderColor: rgb(1, 1, 1), borderWidth: .7 });
+      }
+      if (fence.show_corner_posts !== false) for (const marker of layout.corners) {
+        const [x, y] = toPage(marker.point[0], marker.point[1]);
+        pg.drawRectangle({ x: x - markerPt / 2, y: y - markerPt / 2, width: markerPt, height: markerPt,
+          color: marker.type === "terminal" ? col : rgb(1, 1, 1), borderColor: col, borderWidth: 1.1 });
+      }
+      if (fence.show_section_lengths || fence.show_post_counts) for (const section of layout.sections) {
+        let t = section.start.path_t + (section.wraps ? (1 - section.start.path_t + section.end.path_t) : section.end.path_t - section.start.path_t) / 2;
+        if (t >= 1) t -= 1;
+        const at = pointAtPathT(layout.metrics, t);
+        const parts = [];
+        if (fence.show_section_lengths) parts.push(`${num(M ? section.lengthFt * .3048 : section.lengthFt, 2)} ${M ? "M" : "FT"}`);
+        if (fence.show_post_counts) parts.push(`${section.intermediate} LINE`);
+        chip(parts.join(" · "), at[0], at[1] - 10 / ptScale, col);
       }
     }
     // highlights draw FIRST (behind) so their translucent fill never dims the

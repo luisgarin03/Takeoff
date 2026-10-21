@@ -19,6 +19,13 @@
   to     = "/.netlify/functions/parse-schedule"
   status = 200
 
+# Secure, Google-authenticated OpenAI Responses API gateway. It stays dark
+# unless both OPENAI_API_KEY and OPENAI_MODEL are configured server-side.
+[[redirects]]
+  from   = "/ai/project-assistant"
+  to     = "/.netlify/functions/project-assistant"
+  status = 200
+
 # Single-page app: serve index.html for any path.
 [[redirects]]
   from   = "/*"

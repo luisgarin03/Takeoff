@@ -7,6 +7,7 @@ import { listenForDriveReturn } from "./driveConnection.js";
 import { createDriveFiles } from "./driveFiles.js";
 import { accountProfile } from "./accountProfile.js";
 import { cloudStatusLabel } from "../projectMetadata.js";
+import { initializeRevenueCat } from "../revenueCatBilling.js";
 
 const Context = createContext(null);
 export function CloudProvider({ children }) {
@@ -15,6 +16,9 @@ export function CloudProvider({ children }) {
   const [driveState, setDriveState] = useState(null);
   const [profile, setProfile] = useState(null);
   const userId = session?.user?.id;
+  useEffect(() => {
+    if (userId) initializeRevenueCat(userId).catch(() => {});
+  }, [userId]);
   const [invitations, setInvitations] = useState(null);
   const refreshInvitations = useCallback(async () => {
     if (!SHARING_UI_ENABLED || !client || !userId) return;

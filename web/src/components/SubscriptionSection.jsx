@@ -1,30 +1,39 @@
-import React, { useEffect, useState } from "react";
-import { billingService, monthlyPrice, SUBSCRIPTION_PLANS } from "../lib/subscriptions.js";
+import React, { useEffect, useMemo, useState } from "react";
+import { createBillingService, billingService, monthlyPrice, SUBSCRIPTION_PLANS } from "../lib/subscriptions.js";
+import { createRevenueCatBillingAdapter } from "../lib/revenueCatBilling.js";
 
 function SubscriptionPlanCard({ plan, current, disabled, onChoose }) {
   return <article className="subscription-plan">
     <h4>{plan.name}</h4>
     {current && <span className="subscription-badge">Current plan</span>}
-    <p className="subscription-price">{monthlyPrice(plan.price)}<span> / {plan.interval}</span></p>
+    <p className="subscription-price">{plan.displayPrice || monthlyPrice(plan.price)}<span> / {plan.interval}</span></p>
     <button type="button" disabled={disabled || current} onClick={() => onChoose(plan.id)}>{current ? "Current plan" : `Choose ${plan.name}`}</button>
   </article>;
 }
 
-export default function SubscriptionSection({ user, offline, service = billingService }) {
+export default function SubscriptionSection({ user, offline, client, service: suppliedService }) {
+  const configuredService = useMemo(() => client ? createBillingService(createRevenueCatBillingAdapter(client)) : billingService, [client]);
+  const service = suppliedService || configuredService;
   const [open, setOpen] = useState(false);
-  const [state, setState] = useState({ loading: true, record: null, error: "" });
+  const [state, setState] = useState({ loading: true, record: null, plans: SUBSCRIPTION_PLANS, error: "" });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     let live = true;
-    setState({ loading: true, record: null, error: "" });
+    setState({ loading: true, record: null, plans: SUBSCRIPTION_PLANS, error: "" });
     setMessage("");
-    service.getSubscription(user).then((record) => {
-      if (live) setState({ loading: false, record, error: "" });
-    }).catch(() => { if (live) setState({ loading: false, record: null, error: "Subscription status could not be loaded." }); });
+    Promise.all([service.getSubscription(user), service.getPlans(user)]).then(([record, plans]) => {
+      if (live) setState({ loading: false, record, plans, error: "" });
+    }).catch(() => { if (live) setState({ loading: false, record: null, plans: SUBSCRIPTION_PLANS, error: "Subscription status could not be loaded." }); });
     return () => { live = false; };
   }, [service, user, retry]);
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) setRetry((value) => value + 1); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, []);
   const record = state.record;
   const current = record && ["active", "trialing"].includes(record.subscriptionStatus);
   const plan = SUBSCRIPTION_PLANS.find((item) => item.id === record?.subscriptionPlan);
@@ -34,6 +43,7 @@ export default function SubscriptionSection({ user, offline, service = billingSe
       // The adapter owns checkout/portal navigation; clicks never grant access.
       if (planId) await service.checkout(user, planId);
       else await service.manageSubscription(user);
+      setRetry((value) => value + 1);
     } catch (error) { setMessage(error.message || "Billing is unavailable. Please try again."); }
     finally { setBusy(false); }
   }
@@ -49,9 +59,15 @@ export default function SubscriptionSection({ user, offline, service = billingSe
         </> : <p>Current plan: <strong>Free</strong> <span className="profile-muted">/ No active subscription</span></p>}
     </div>
     {current && service.canManage && <button type="button" disabled={busy || offline} onClick={() => action()}>Manage Subscription</button>}
+    {service.canRestore && <button type="button" disabled={busy || offline} onClick={async () => {
+      setBusy(true); setMessage("");
+      try { await service.restorePurchases(user); setMessage("Purchases restored."); setRetry((value) => value + 1); }
+      catch (error) { setMessage(error.message || "Purchases could not be restored."); }
+      finally { setBusy(false); }
+    }}>Restore Purchases</button>}
     <div id="subscription-plans" hidden={!open}>
       {!service.configured && <p className="profile-muted">Paid plans are not available for purchase yet. Checkout requires a connected billing backend and payment provider.</p>}
-      <div className="subscription-plans">{SUBSCRIPTION_PLANS.map((item) => <SubscriptionPlanCard key={item.id} plan={item}
+      <div className="subscription-plans">{state.plans.map((item) => <SubscriptionPlanCard key={item.id} plan={item}
         current={!!current && item.id === record.subscriptionPlan} disabled={busy || offline || state.loading || !!state.error} onChoose={action} />)}</div>
     </div>
     {message && <p role="status">{message}</p>}

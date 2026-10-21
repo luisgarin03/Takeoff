@@ -24,7 +24,7 @@ export default function AgentPanel({
   width,
   configured, running, log, proposals, condById, sheetLabel, units,
   fmtArea, onRun, onStop, onAccept, onReject, onAcceptAll, onRejectAll,
-  onOpenSettings, onClose,
+  onOpenSettings, onOpenProjectAssistant, onClose,
 }) {
   const [goal, setGoal] = useState("");
   const logRef = useRef(null);
@@ -42,6 +42,15 @@ export default function AgentPanel({
         <Icon name="target" size={15} />
         <strong style={{ flex: 1, fontSize: 12.5 }}>Agent{proposals.length ? ` · ${proposals.length} pending` : ""}</strong>
         <button onClick={onClose} title="Close panel" style={{ border: "none", background: "transparent", color: "var(--accent-contrast)", fontSize: 16, cursor: "pointer", padding: "0 2px" }}>×</button>
+      </div>
+
+      <div className="agent-chat-launchers" aria-label="ChatGPT options">
+        <a className="project-chatgpt-web-launcher" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" title="Open the regular ChatGPT website in a new tab">
+          <Icon name="agentAI" size={16} />Open ChatGPT ↗
+        </a>
+        <button type="button" className="project-assistant-launcher" onClick={onOpenProjectAssistant} title="Open the API-powered ChatGPT Project Assistant">
+          <Icon name="agentAI" size={16} />Project Assistant
+        </button>
       </div>
 
       {!configured ? (

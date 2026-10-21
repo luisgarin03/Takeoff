@@ -69,7 +69,9 @@ function SOWEntry({ board, sowId, tabId, entry, index, entries, panelWidth, onCo
       </div>
     </details>}
     <textarea ref={(element) => { textarea.current = element; registerRef(entry.id, element); }} value={entry.text}
-      maxLength={WHITEBOARD_SOW_MAX_TEXT} rows={1} spellCheck aria-label={isTitle ? `Scope title ${index + 1}` : `Scope line item ${index + 1}`}
+      maxLength={WHITEBOARD_SOW_MAX_TEXT} rows={1} spellCheck={true} lang="en-US" autoCorrect="on" autoCapitalize="sentences"
+      title="Spelling and grammar checking is enabled. Right-click underlined text for suggestions."
+      aria-label={isTitle ? `Scope title ${index + 1}` : `Scope line item ${index + 1}`}
       placeholder={isTitle ? "Enter title…" : "Describe this scope line item…"}
       onFocus={() => onFocusEntry(entry.id)}
       onChange={(event) => onCommit(updateWhiteboardSowEntry(board, tabId, entry.id, { text: event.target.value }, sowId), `sow-entry:${entry.id}`)}
@@ -95,7 +97,7 @@ function SOWEntry({ board, sowId, tabId, entry, index, entries, panelWidth, onCo
   </article>;
 }
 
-const SOWPanel = memo(function SOWPanel({ board, sow, onCommit, onEditEnd, onError, position, onStartMove, onStartResize, onStartLogoResize }) {
+const SOWPanel = memo(function SOWPanel({ board, sow, readOnly = false, onCommit, onEditEnd, onError, position, onStartMove, onStartResize, onStartLogoResize }) {
   const activeTab = sow.tabs.find((tab) => tab.id === sow.activeTabId) || sow.tabs[0];
   const [renameDraft, setRenameDraft] = useState(activeTab.name);
   const [focusEntry, setFocusEntry] = useState(null);
@@ -144,7 +146,7 @@ const SOWPanel = memo(function SOWPanel({ board, sow, onCommit, onEditEnd, onErr
     } catch (error) { onError?.(error.message || "Could not use that logo image."); }
   };
 
-  return <aside className="wb-sow" aria-label="Scope of work" style={{ width: position.w,
+  return <aside className="wb-sow" aria-label="Scope of work" aria-disabled={readOnly || undefined} inert={readOnly ? "" : undefined} style={{ width: position.w,
     transform: `translate(${position.x}px, ${position.y}px) scale(${position.scale})` }}
     onPointerDown={(event) => event.stopPropagation()} onPointerMove={(event) => event.stopPropagation()}
     onPointerUp={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}

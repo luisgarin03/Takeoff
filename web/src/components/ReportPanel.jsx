@@ -7,6 +7,7 @@ import { Icon } from "../brand/icons.jsx";
 import ToolMenu from "./ToolMenu.jsx";
 import LongTaskLoader from "./LongTaskLoader.jsx";
 import { conditionTotals, grandTotals, sheetTotals, sheetGroupedRows, labelGroupedRows, round2, totalsToCsv, downloadText, materialsSummary, reportJson, hasMultipliers, BY_SHEET_BASE_NOTE } from "../lib/totals.js";
+import { calculateChainLinkFenceFromLength } from "../lib/chainLinkFence.js";
 import { TABLE_PROFILE, CSV_PROFILE, colGetter, customColProfile, specColProfile, laborColProfile, partitionRowsBy, forceIncludeGroupCol, loadColPrefs, saveColPrefs, loadGroupBy, saveGroupBy, visibleCols, floorPerimeterLf, applyUnits } from "../lib/reportColumns.js";
 import { areaVal, areaUnit, lenVal, lenUnit } from "../lib/units";
 import { columnLabel } from "../lib/conditionColumns.js";
@@ -45,7 +46,7 @@ const sheetNum = (v, d = 1) => {
   return num(r, d);
 };
 
-export default function ReportPanel({ projectName, onProjectName, conditions, shapes, sheetLabel, onMarkedSet, markedSetDark, onClose, markups = [], rfis = [], scaleInfo = [], provenanceCounters = null, clientInfo = {}, onClientInfo, conditionColumns = [], shapeLabels = [], units = "imperial" }) {
+export default function ReportPanel({ projectName, onProjectName, conditions, shapes, sheetLabel, onMarkedSet, markedSetDark, onClose, markups = [], rfis = [], chainLinkFences = [], scaleInfo = [], provenanceCounters = null, clientInfo = {}, onClientInfo, conditionColumns = [], shapeLabels = [], units = "imperial" }) {
   // memoized on the source arrays: project-name/client-info keystrokes re-render
   // the panel without touching conditions/shapes, so the totaling passes skip
   // imported report theme → { vars, name, warnings }. vars are spread onto this
@@ -79,6 +80,14 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
   const bySheet = useMemo(() => sheetTotals(conditions, shapes), [conditions, shapes]);
   const g = useMemo(() => grandTotals(rows), [rows]);
   const matSummary = useMemo(() => materialsSummary(rows), [rows]);
+  const chainRows = useMemo(() => chainLinkFences.map((fence) => {
+    const shape = shapes.find((item) => item.id === fence.shape_id);
+    if (!shape || shape.measure_role !== "linear") return null;
+    const result = calculateChainLinkFenceFromLength(fence, Number(shape.computed?.perimeter_lf) || 0);
+    if (!result.valid) return null;
+    const condition = conditions.find((item) => item.id === shape.condition_id);
+    return { fence, shape, result, condition };
+  }).filter(Boolean), [chainLinkFences, shapes, conditions]);
   const [showContribute, setShowContribute] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   // whether the Marked Set PDF carries the markups. Default on; ORTHOGONAL to the
@@ -811,6 +820,33 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                 <> {BY_SHEET_BASE_NOTE} — sheet subtotals × multiplier reconcile to the condition table.</>
               )}
             </p>
+          </div>
+        )}
+        {chainRows.length > 0 && (
+          <div style={{ maxWidth: 980, margin: "26px auto 0" }}>
+            <h3 style={{ fontFamily: "var(--f-display)", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink)", margin: "0 0 10px", paddingBottom: 5, borderBottom: "1.25px solid var(--ink)" }}>Chain-link fence posts</h3>
+            {chainRows.map(({ fence, shape, result, condition }) => (
+              <div key={fence.id} style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, fontSize: 12 }}>
+                  <span style={{ width: 12, height: 12, background: condition?.color || "#1f3fc7", border: "1px solid var(--ink-faint)" }} />
+                  <strong style={{ fontFamily: "var(--f-mono)" }}>{condition?.finish_tag || "Chain-link fence"}</strong>
+                  <span style={{ color: "var(--ink-muted)" }}>{sheetLabel ? sheetLabel(shape.sheet_id) : shape.sheet_id}</span>
+                </div>
+                <table className="report-data-table" style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+                  <thead><tr><th style={{ ...th, textAlign: "left" }}>Item</th><th style={th}>Quantity</th><th style={{ ...th, textAlign: "left" }}>Unit</th></tr></thead>
+                  <tbody>
+                    <tr><td style={{ ...td, textAlign: "left" }}>Chain-link fence</td><td style={td}>{num(units === "metric" ? result.totalLengthFt * 0.3048 : result.totalLengthFt)}</td><td style={{ ...td, textAlign: "left" }}>{units === "metric" ? "m" : "LF"}</td></tr>
+                    <tr><td style={{ ...td, textAlign: "left" }}>Sections</td><td style={td}>{result.sections.length}</td><td style={{ ...td, textAlign: "left" }}>EA</td></tr>
+                    <tr><td style={{ ...td, textAlign: "left" }}>Corner / terminal posts</td><td style={td}>{result.cornerPostCount}</td><td style={{ ...td, textAlign: "left" }}>EA</td></tr>
+                    <tr><td style={{ ...td, textAlign: "left" }}>Line posts</td><td style={td}>{result.linePostCount}</td><td style={{ ...td, textAlign: "left" }}>EA</td></tr>
+                    <tr><td style={{ ...td, textAlign: "left", fontWeight: 700 }}>Total posts</td><td style={{ ...td, fontWeight: 700 }}>{result.totalPostCount}</td><td style={{ ...td, textAlign: "left" }}>EA</td></tr>
+                  </tbody>
+                </table>
+                <div style={{ marginTop: 6, fontSize: 11, color: "var(--ink-muted)", lineHeight: 1.5 }}>
+                  Maximum spacing {num(units === "metric" ? fence.max_spacing_ft * 0.3048 : fence.max_spacing_ft, 2)} {units === "metric" ? "m" : "ft"}. {result.sections.map((section) => `Section ${section.index + 1}: ${num(units === "metric" ? section.lengthFt * 0.3048 : section.lengthFt, 2)} ${units === "metric" ? "m" : "ft"}, ${section.intermediate} line post${section.intermediate === 1 ? "" : "s"}`).join(" · ")}
+                </div>
+              </div>
+            ))}
           </div>
         )}
         {markups.some((m) => m.type !== "svg") && (

@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
 import { unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
-import { emptyWhiteboard, emptyWhiteboardSow, bytesToBase64, base64ToBytes, validateWhiteboard, appendWhiteboardArrow, appendWhiteboardRectangle, sanitizeWhiteboardArrows, sanitizeWhiteboardRectangles, sanitizeWhiteboardSow, removeBoardItem, removeWhiteboardDrawing, updateWhiteboardDrawing, setWhiteboardFileHeaderColor, setWhiteboardItemHeaderColor, sanitizeWhiteboardFileHeaderColors, setWhiteboardImageCrop, normalizeWhiteboardImageCrop, whiteboardImageCrop, whiteboardHasContent, whiteboardDrawingBounds, addWhiteboardSowPanel, duplicateWhiteboardSowPanel, removeWhiteboardSowPanel, renameWhiteboardSowTab, addWhiteboardSowEntry, addWhiteboardSowTitle, setWhiteboardSowBranding, updateWhiteboardSowEntry, updateWhiteboardSowSectionTitle, updateWhiteboardSowTakeoffTitle, duplicateWhiteboardSowEntry, removeWhiteboardSowEntry, moveWhiteboardSowEntry, updateWhiteboardSowLayout, whiteboardSowLogoWidth, wrapWhiteboardSowText, WHITEBOARD_FILE_HEADER_COLORS, WHITEBOARD_SOW_COLORS, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, zoomBoard, fitBoard, fitWhiteboard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
+import { emptyWhiteboard, emptyWhiteboardSow, bytesToBase64, base64ToBytes, validateWhiteboard, appendWhiteboardArrow, appendWhiteboardRectangle, appendWhiteboardExportArea, clearWhiteboardExportAreas, duplicateWhiteboardExportArea, moveWhiteboardExportArea, removeWhiteboardExportArea, updateWhiteboardExportArea, sanitizeWhiteboardArrows, sanitizeWhiteboardRectangles, sanitizeWhiteboardSow, removeBoardItem, removeWhiteboardDrawing, updateWhiteboardDrawing, setWhiteboardFileHeaderColor, setWhiteboardItemHeaderColor, sanitizeWhiteboardFileHeaderColors, setWhiteboardImageCrop, normalizeWhiteboardImageCrop, whiteboardImageCrop, whiteboardHasContent, whiteboardDrawingBounds, addWhiteboardSowPanel, duplicateWhiteboardSowPanel, removeWhiteboardSowPanel, renameWhiteboardSowTab, addWhiteboardSowEntry, addWhiteboardSowTitle, setWhiteboardSowBranding, updateWhiteboardSowEntry, updateWhiteboardSowSectionTitle, updateWhiteboardSowTakeoffTitle, duplicateWhiteboardSowEntry, removeWhiteboardSowEntry, moveWhiteboardSowEntry, updateWhiteboardSowLayout, whiteboardSowLogoWidth, wrapWhiteboardSowText, WHITEBOARD_FILE_HEADER_COLORS, WHITEBOARD_SOW_COLORS, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, zoomBoard, fitBoard, fitWhiteboard, whiteboardClipboardContent, whiteboardClipboardFileName, whiteboardFileType } from "../src/lib/whiteboard.js";
 import { localStore, createFileProjectStore, importFileProject, ANN_SCHEMA } from "../src/lib/store.js";
 import { exportProjectFile, readProjectFile } from "../src/lib/projectFile.js";
 import { WHITEBOARD_PDF_PREVIEW_MAX_PIXELS, whiteboardPdfLayoutSize, whiteboardPdfPreviewScale } from "../src/lib/whiteboardPdfPreview.js";
@@ -115,6 +115,41 @@ test("whiteboard validation rejects remote/active files, duplicate IDs and inval
     { ...board(), items: [{ ...board().items[1], page: 0 }] },
   ];
   for (const b of invalids) assert.throws(() => validateWhiteboard(b), /Invalid whiteboard/);
+});
+
+test("custom PDF export areas create, edit, reorder, duplicate, remove and persist with the project", async () => {
+  let whiteboard: any = emptyWhiteboard();
+  for (let index = 0; index < 4; index += 1) {
+    whiteboard = appendWhiteboardExportArea(whiteboard, { x: -200 + index * 350, y: 40 + index * 25, w: 320, h: 210 });
+  }
+  assert.equal(whiteboard.exportAreas.length, 4);
+  assert.deepEqual(whiteboard.exportAreas.map((area: any) => area.order), [0, 1, 2, 3]);
+  const firstId = whiteboard.exportAreas[0].id;
+  whiteboard = updateWhiteboardExportArea(whiteboard, firstId, { name: "Site plan", x: -250, w: 400,
+    pageSize: "arch-d", orientation: "landscape", quality: "maximum", fit: "fit" });
+  assert.deepEqual({ name: whiteboard.exportAreas[0].name, x: whiteboard.exportAreas[0].x, w: whiteboard.exportAreas[0].w,
+    pageSize: whiteboard.exportAreas[0].pageSize, orientation: whiteboard.exportAreas[0].orientation,
+    quality: whiteboard.exportAreas[0].quality, fit: whiteboard.exportAreas[0].fit },
+  { name: "Site plan", x: -250, w: 400, pageSize: "arch-d", orientation: "landscape", quality: "maximum", fit: "fit" });
+  whiteboard = moveWhiteboardExportArea(whiteboard, firstId, "down");
+  assert.equal(whiteboard.exportAreas[1].id, firstId);
+  whiteboard = duplicateWhiteboardExportArea(whiteboard, firstId);
+  assert.equal(whiteboard.exportAreas.length, 5);
+  assert.match(whiteboard.exportAreas[2].name, /copy$/);
+  whiteboard = removeWhiteboardExportArea(whiteboard, whiteboard.exportAreas[2].id);
+  assert.equal(whiteboard.exportAreas.length, 4);
+  const geometryBeforeCamera = structuredClone(whiteboard.exportAreas);
+  zoomBoard({ x: 50, y: -20, scale: 1 }, { x: 320, y: 240 }, 3.5);
+  fitBoard(whiteboard.exportAreas, 1200, 800, 4);
+  assert.deepEqual(whiteboard.exportAreas, geometryBeforeCamera, "zoom and pan calculations cannot change saved world rectangles");
+
+  const payloadWithAreas = { ...payload(), whiteboard: { ...board(), exportAreas: whiteboard.exportAreas } };
+  const reopened = await readProjectFile(await exportProjectFile(localStore, payloadWithAreas));
+  assert.deepEqual(reopened.annotations.whiteboard.exportAreas, whiteboard.exportAreas);
+  assert.deepEqual(validateWhiteboard({ ...board(), exportAreas: whiteboard.exportAreas }).exportAreas, whiteboard.exportAreas);
+  assert.deepEqual(clearWhiteboardExportAreas(whiteboard).exportAreas, []);
+  const legacy = board(); delete (legacy as any).exportAreas;
+  assert.equal(validateWhiteboard(legacy).exportAreas, undefined, "older projects remain valid without export areas");
 });
 
 test("file header colors use the supplied palette, remain per-file, and reset to the original default", () => {
@@ -391,6 +426,11 @@ test("board zoom preserves the pointed-to position, clamps scale and fits negati
     assert.ok(fit.x + (item.x + item.w) * fit.scale <= 1169);
     assert.ok(fit.y + (item.y + item.h) * fit.scale <= 769);
   }
+  const focused = fitBoard([{ x: 400, y: 300, w: 360, h: 240 }], 1200, 800, 4);
+  assert.ok(focused.scale > 1, "focused plan fitting may enlarge one item to the viewport");
+  assert.ok(focused.x + 400 * focused.scale >= 31);
+  assert.ok(focused.x + (400 + 360) * focused.scale <= 1169);
+  assert.equal(fitBoard([{ x: 0, y: 0, w: 1, h: 1 }], 10000, 10000, 99).scale, 4, "focused fitting shares the board zoom ceiling");
 });
 
 test("file type allowlist and base64 preserve original bytes", () => {

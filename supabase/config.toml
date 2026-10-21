@@ -1,2 +1,8 @@
 [functions.otk-drive]
 verify_jwt = false
+
+# RevenueCat webhooks do not carry a Supabase user JWT. The function validates
+# their HMAC signature (or its dedicated authorization value) itself. User
+# refresh requests are still authenticated inside the handler with getUser().
+[functions.otk-billing]
+verify_jwt = false

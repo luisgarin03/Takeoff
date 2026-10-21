@@ -3,6 +3,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
+import { PDFDocument } from "pdf-lib";
 import { ANN_SCHEMA, localStore, createFileProjectStore, importFileProject } from "../src/lib/store.js";
 import { digest, exportProjectFile, readProjectFile, projectFilename, projectFolderName } from "../src/lib/projectFile.js";
 
@@ -140,4 +141,42 @@ test("exports every available PDF, not just the open tabs", async () => {
   const opened = createFileProjectStore(await importFileProject(project));
   assert.equal((await opened.listSheets()).length, 120);
   assert.deepEqual((await opened.loadAnnotations()).sheet_tabs, ["Plan 1.pdf"]);
+});
+
+test("marked-pages-only projects preserve page numbering, revision marks and exact recovery metadata", async () => {
+  async function plan(name: string, pages: number) {
+    const doc = await PDFDocument.create();
+    for (let page = 1; page <= pages; page++) {
+      const out = doc.addPage([612, 792]);
+      out.drawText(`${name} source page ${page}`, { x: 48, y: 720, size: 14 });
+    }
+    return new Uint8Array(await doc.save());
+  }
+  const planBytes = await plan("Plan.pdf", 4);
+  const omittedBytes = await plan("Unmarked.pdf", 2);
+  const live = {
+    ...payload(),
+    shapes: [{ ...payload().shapes[0], sheet_id: "Plan.pdf#2" }],
+    markups: [{ ...payload().markups[0], sheet_id: "Plan.pdf#2" }],
+    sheet_bookmarks: ["Plan.pdf#3"],
+  };
+  const snapshotPayload = { ...live, shapes: [{ ...live.shapes[0], sheet_id: "Plan.pdf#4" }] };
+  const source = {
+    async listSheets() { return [{ name: "Plan.pdf" }, { name: "Unmarked.pdf" }]; },
+    async loadPdfData(name: string) { return name === "Plan.pdf" ? planBytes : omittedBytes; },
+    async listSnapshots() { return [{ id: "snap-1" }]; },
+    async getSnapshot() { return { id: "snap-1", ts: 1, label: "Earlier", payload: snapshotPayload }; },
+  };
+  const archive = await exportProjectFile(source, live, { compact: true });
+  const reopened = await readProjectFile(archive);
+  assert.deepEqual(reopened.pdfs.map((item) => item.name), ["Plan.pdf"], "a fully unmarked PDF is represented only by recovery metadata");
+  assert.deepEqual(reopened.annotations.compact_project.files.map((file: any) => ({ name: file.name, pages: file.included_pages })), [
+    { name: "Plan.pdf", pages: [2, 3, 4] },
+    { name: "Unmarked.pdf", pages: [] },
+  ]);
+  assert.equal(reopened.annotations.compact_project.files[0].original_size, planBytes.byteLength);
+  assert.equal(reopened.annotations.compact_project.files[1].original_size, omittedBytes.byteLength);
+  assert.match(reopened.annotations.compact_project.files[0].sha256, /^[a-f0-9]{64}$/);
+  assert.equal(reopened.snapshots[0].payload.compact_project.files.length, 2, "restoring a revision retains the missing-file warning");
+  assert.equal((await PDFDocument.load(reopened.pdfs[0].bytes)).getPageCount(), 4, "placeholder pages retain original page numbers");
 });

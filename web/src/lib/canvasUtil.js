@@ -66,6 +66,7 @@ export const instantiateTemplate = (t) => ({
   id: uid("cnd"), created_at: nowIso(), finish_tag: t.finish_tag || "?",
   color: t.color || PALETTE[0], fill: t.fill ?? t.color ?? PALETTE[0],
   hatch: t.hatch || "solid", multiplier: 1, waste_pct: Number(t.waste_pct) || 0,
+  line_marker: t.line_marker === "circle" || t.line_marker === "x" ? t.line_marker : "none",
   ...(t.height_ft != null ? { height_ft: t.height_ft } : {}),
   ...(t.thickness_in != null ? { thickness_in: t.thickness_in } : {}),
   ...(t.laborType != null ? { laborType: t.laborType } : {}),

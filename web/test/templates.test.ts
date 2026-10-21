@@ -79,6 +79,21 @@ test("color/fill/hatch: non-string values are removed so the canvas defaults; st
   assert.deepEqual(u, { finish_tag: "B", color: "#000", fill: "", hatch: "plank", materials: [] });
 });
 
+test("line marker keeps only the supported no-mark, circle and X choices", () => {
+  const [none, circle, x, invalid, malformed] = sanitizeTemplates([
+    { finish_tag: "N", line_marker: "none" },
+    { finish_tag: "A", line_marker: "circle" },
+    { finish_tag: "B", line_marker: "x" },
+    { finish_tag: "C", line_marker: "triangle" },
+    { finish_tag: "D", line_marker: 7 },
+  ]);
+  assert.equal(none.line_marker, "none");
+  assert.equal(circle.line_marker, "circle");
+  assert.equal(x.line_marker, "x");
+  assert.equal("line_marker" in invalid, false);
+  assert.equal("line_marker" in malformed, false);
+});
+
 test("unknown item fields survive the round-trip (scale_source precedent)", () => {
   const saved = [{ finish_tag: "A", waste_pct: 8, future_field: { v: 1 }, materials: [{ name: "X", future_mat: true }] }];
   assert.deepEqual(sanitizeTemplates(JSON.parse(JSON.stringify(saved))), saved);

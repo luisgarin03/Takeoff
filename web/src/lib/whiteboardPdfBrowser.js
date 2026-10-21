@@ -1,9 +1,7 @@
-import { BOARD_EXPORT_SCALE, checkBoardRaster } from "./whiteboardPdf.js";
+import { checkBoardRaster } from "./whiteboardPdf.js";
 import { NOTE_COLORS, WHITEBOARD_FILE_HEADER_COLORS, WHITEBOARD_SOW_DEFAULT_SECTION_TITLE, WHITEBOARD_SOW_DEFAULT_TAKEOFF_TITLE, normalizeWhiteboardImageCrop, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, whiteboardSowLogoWidth, wrapWhiteboardSowText } from "./whiteboard.js";
 import brandBanner from "../assets/beitzell-estimating-worksheet-stamp.png";
-
-const IMAGE_EXPORT_MAX_DIMENSION = 2400;
-const IMAGE_EXPORT_MAX_PIXELS = 6_000_000;
+import { pdfExportQuality, safePdfRasterScale } from "./exportQuality.js";
 
 function canvasFor(width, height) {
   const size = checkBoardRaster(width, height), canvas = document.createElement("canvas");
@@ -41,7 +39,7 @@ function loadBrandImage(asset = null) {
   return brandImagePromise;
 }
 
-export async function renderBoardSow(sow, brandingAsset = null, signal = null) {
+export async function renderBoardSow(sow, brandingAsset = null, signal = null, quality = "balanced") {
   if (!signal && brandingAsset?.throwIfAborted) { signal = brandingAsset; brandingAsset = null; }
   signal?.throwIfAborted();
   const active = sow.tabs.find((tab) => tab.id === sow.activeTabId) || sow.tabs[0];
@@ -64,7 +62,9 @@ export async function renderBoardSow(sow, brandingAsset = null, signal = null) {
   // Scope tabs and counts are editor controls. Export the branded worksheet,
   // its SOW heading and active entries—not the footer or Add Item control.
   const height = Math.ceil(brandHeight + titleHeight + listHeight);
-  const canvas = canvasFor(width * BOARD_EXPORT_SCALE, height * BOARD_EXPORT_SCALE);
+  const preset = pdfExportQuality(quality);
+  const scale = safePdfRasterScale(width, height, preset.boardScale, preset.imageMaxPixels);
+  const canvas = canvasFor(width * scale, height * scale);
   try {
     const ctx = canvas.getContext("2d");
     ctx.scale(canvas.width / width, canvas.height / height);
@@ -127,7 +127,7 @@ export async function renderBoardSow(sow, brandingAsset = null, signal = null) {
   } finally { canvas.width = canvas.height = 0; }
 }
 
-export async function readBoardImage(bytes, type, crop, signal) {
+export async function readBoardImage(bytes, type, crop, signal, quality = "balanced") {
   // Preserve the former direct-call signature readBoardImage(bytes, type,
   // signal) while the PDF pipeline now supplies crop as the third argument.
   if (!signal && crop?.throwIfAborted) { signal = crop; crop = null; }
@@ -143,8 +143,9 @@ export async function readBoardImage(bytes, type, crop, signal) {
       width: image.width * normalized.w,
       height: image.height * normalized.h,
     };
-    const scale = Math.min(1, IMAGE_EXPORT_MAX_DIMENSION / Math.max(source.width, source.height),
-      Math.sqrt(IMAGE_EXPORT_MAX_PIXELS / (source.width * source.height)));
+    const preset = pdfExportQuality(quality);
+    const scale = Math.min(1, preset.imageMaxDimension / Math.max(source.width, source.height),
+      Math.sqrt(preset.imageMaxPixels / (source.width * source.height)));
     const width = Math.max(1, Math.round(source.width * scale));
     const height = Math.max(1, Math.round(source.height * scale));
     canvas = canvasFor(width, height);
@@ -156,20 +157,21 @@ export async function readBoardImage(bytes, type, crop, signal) {
     // downsampling pixels that cannot be used at Whiteboard export scale.
     context.drawImage(image, source.x, source.y, source.width, source.height, 0, 0, width, height);
     signal?.throwIfAborted();
-    const [png, jpeg] = await Promise.all([pngBytes(canvas), jpegBytes(canvas)]);
+    const [png, jpeg] = await Promise.all([pngBytes(canvas), jpegBytes(canvas, preset.jpegQuality)]);
     const compact = jpeg.length < png.length ? { bytes: jpeg, type: "image/jpeg" } : { bytes: png, type: "image/png" };
     return { ...compact, width, height, layoutWidth: source.width, layoutHeight: source.height };
   } finally { image.close(); if (canvas) canvas.width = canvas.height = 0; }
 }
 
-export async function renderBoardNote(item, rect, signal) {
+export async function renderBoardNote(item, rect, signal, quality = "balanced") {
   signal?.throwIfAborted();
   const family = getComputedStyle(document.documentElement).getPropertyValue("--f-body").trim() || "system-ui, sans-serif";
   const font = `16px ${family}`;
   await document.fonts.load(font, item.text || "Note");
   await document.fonts.ready;
   signal?.throwIfAborted();
-  const canvas = canvasFor(rect.w * BOARD_EXPORT_SCALE, rect.h * BOARD_EXPORT_SCALE);
+  const preset = pdfExportQuality(quality);
+  const canvas = canvasFor(rect.w * preset.boardScale, rect.h * preset.boardScale);
   const mirror = document.createElement("div");
   try {
     // Let the browser do the same note body/title font layout as the board.
@@ -238,7 +240,7 @@ export function whiteboardPdfRenderer(pdfjsLib) {
     readImage: readBoardImage,
     renderNote: renderBoardNote,
     renderSow: renderBoardSow,
-    async renderPdfPage(bytes, pageNumber, rect, signal) {
+    async renderPdfPage(bytes, pageNumber, rect, signal, quality = "balanced") {
       signal?.throwIfAborted();
       const loading = pdfjsLib.getDocument({ data: bytes.slice(), isEvalSupported: false });
       let canvas, task;
@@ -247,8 +249,13 @@ export function whiteboardPdfRenderer(pdfjsLib) {
       try {
         const doc = await loading.promise, page = await doc.getPage(pageNumber);
         signal?.throwIfAborted();
+        const preset = pdfExportQuality(quality);
         const native = page.getViewport({ scale: 1 });
-        const viewport = page.getViewport({ scale: Math.max(rect.w / native.width, rect.h / native.height) * BOARD_EXPORT_SCALE });
+        const layoutScale = Math.max(rect.w / native.width, rect.h / native.height) * preset.boardScale;
+        const detailScale = preset.pageMaxDimension / Math.max(native.width, native.height);
+        const requestedScale = Math.min(Math.max(layoutScale, detailScale), 6);
+        const scale = safePdfRasterScale(native.width, native.height, requestedScale, preset.imageMaxPixels);
+        const viewport = page.getViewport({ scale });
         canvas = canvasFor(viewport.width, viewport.height);
         const context = canvas.getContext("2d", { alpha: false });
         context.fillStyle = "#ffffff";
@@ -259,8 +266,8 @@ export function whiteboardPdfRenderer(pdfjsLib) {
         // PDF pages are intentionally flattened and JPEG-compressed for
         // distribution. This drops source OCR/text layers, fonts, annotations,
         // and complex vector resources while keeping the visible sheet crisp
-        // at three times its Whiteboard layout size.
-        return { bytes: await jpegBytes(canvas), type: "image/jpeg" };
+        // at the user's Compact, Balanced, or HD export setting.
+        return { bytes: await jpegBytes(canvas, preset.jpegQuality), type: "image/jpeg", width: canvas.width, height: canvas.height };
       } finally {
         signal?.removeEventListener("abort", cancel);
         task?.cancel();

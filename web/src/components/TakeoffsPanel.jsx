@@ -32,6 +32,7 @@ import { num } from "../lib/num.js";
 import { areaVal, areaUnit, lenVal, lenUnit } from "../lib/units";
 import { HATCHES, PALETTE, NO_FILL, HatchSwatch } from "./hatches.jsx";
 import { LINE_STYLES, LINE_STYLE_IDS } from "../lib/lineStyles.js";
+import { LINE_MARKERS, LINE_MARKER_IDS, normalizeLineMarker } from "../lib/linearMarkers.js";
 import { materialKind, MATERIAL_PRESETS, GROUT_DEFAULTS, groutDerivedFields, showsGroutCalc, showsGroutDeriveAffordance } from "../lib/coverage.js";
 import { draftCommitValue, blurCommitValue, blurCommitNonNegative } from "../lib/draftInput.js";
 
@@ -359,6 +360,13 @@ export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondPara
           <select name="condition-line-style" value={c.line_style || "solid"} onChange={(e) => onUpdateCond({ line_style: e.target.value })}
             style={{ fontSize: 11, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", padding: "1px 3px" }}>
             {LINE_STYLE_IDS.map((id) => <option key={id} value={id}>{LINE_STYLES[id].label}</option>)}
+          </select>
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Linear marker — keep the default plain line, or repeat circles or X marks to distinguish same-color Linear takeoffs. This changes appearance only, never the measured length.">
+          <span style={{ color: "var(--ink-muted)" }}>Marker</span>
+          <select name="condition-line-marker" value={normalizeLineMarker(c.line_marker)} onChange={(e) => onUpdateCond({ line_marker: e.target.value })}
+            style={{ fontSize: 11, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", padding: "1px 3px" }}>
+            {LINE_MARKER_IDS.map((id) => <option key={id} value={id}>{LINE_MARKERS[id].glyph} {LINE_MARKERS[id].label}</option>)}
           </select>
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Height (ft) — the default for NEW wall traces (SF = LF × H) and the vertical-SF display on floor areas. Walls keep the height they were drawn at — select a wall to change just that one.">

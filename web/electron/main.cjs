@@ -1,6 +1,7 @@
 const { app, BrowserWindow, protocol, shell, session } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
+const { setupUpdater } = require("./updater.cjs");
 
 const APP_SCHEME = "opentakeoff";
 const APP_HOST = "app";
@@ -155,6 +156,7 @@ app.whenReady().then(async () => {
   protocol.handle(APP_SCHEME, appResponse);
   applySecurityHeaders();
   createWindow();
+  setupUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

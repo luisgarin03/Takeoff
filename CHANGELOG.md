@@ -2,14 +2,47 @@
 
 ## Unreleased — toolbar and Profile
 
+- Fixed Count PDF overlays so exported page PDFs, Marked Sets, and Whiteboard imports retain the same condition-colored square with a white outline shown on the Takeoff canvas instead of changing Count marks into circles.
+
+- Raised takeoff markups above the selectable PDF text layer visually and in hit-testing. In Select mode, an overlapping note, callout, cloud, arrow, or highlight now receives the click/double-click first, while unobstructed PDF text remains selectable and copyable.
+
+- Added a per-condition **No mark / Circle / X** marker selector for Linear takeoffs. **No mark** is the default, preserving existing plain-line conditions; optional screen-constant markers repeat along straight and curved runs, carry into flattened page/Marked Set/Whiteboard-import PDFs, and remain strictly visual so measurement geometry and LF totals are unchanged.
+
+- Added owner-controlled application updates. Signed Windows installers now use a fixed GitHub Release feed, check on launch and every four hours, expose manual check/download controls in Profile, show download progress, and install only after the user confirms a restart. A tag-gated GitHub Actions workflow requires matching versions and Windows signing secrets before publishing the NSIS installer, differential block map, and update metadata. iOS remains on Apple's approved App Store update path.
+
+- Added launch-ready Supabase/RevenueCat subscription infrastructure: server-owned per-user license records with read-own RLS, verified billing webhooks, authenticated entitlement refresh, Apple-native purchase/restore support, identified hosted checkout for Windows/web, and an opt-in sign-in/license gate that stays disabled until production configuration is complete. Production gating rejects sandbox transactions by default while preserving paid access through a recorded billing-grace period. Editing now additionally requires internet and a short server-owned one-computer lease; offline, unsubscribed, and second-computer sessions open read-only while retaining viewing and export. A persistence-level write guard backs up the disabled editing UI. Added the Capacitor iOS project, iOS sync/open scripts, Windows code-signing configuration, focused license tests, and a full release/setup checklist. No payment, Supabase, Apple, or signing secrets are committed.
+
+- Added a hidden floating **Experimental tools** panel for deployment-facing cleanup. Three quick clicks or taps on the visually unchanged Beitzell Estimating logo toggle the panel. Report, Zone, AI, Revisions, Render settings, and the Command line retain their existing behavior there, while their former Takeoff-toolbar and canvas-rail positions close up naturally on desktop and mobile.
+
 - Group estimating controls into Project, Sheets and Takeoff tabs, keeping logo/account outside.
 - Preserve mounted control state and use scroll-safe dropdowns on mobile.
 - Restyle Profile with account cards and configurable $40/$50/$60 subscription plans.
-- Add a billing adapter boundary; checkout remains unavailable until a provider/backend is connected.
+- Connect the billing adapter to RevenueCat and Supabase while retaining safe unconfigured behavior.
 
 All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## Unreleased
+
+- Added persistent custom multipage Whiteboard PDF export. **Select Export Areas** creates any number of numbered, overlapping world-coordinate rectangles with move/resize handles; the **PDF Export Pages** manager supports rename, locate, reorder, duplicate, delete, per-page orientation, paper size, Standard/High/Maximum quality, preview, confirmed Clear All, and one-file export. Area geometry and settings save with local/cloud/`.otk` projects and participate in undo/redo. Exports clip every page exactly, omit all selection UI, preserve aspect ratio, render regions sequentially with progress/cancellation, retain per-source raster safeguards, and avoid the legacy 64-megapixel combined-board limit by processing each selected page independently.
+
+- Made pages sent through **Import to Whiteboard** open at a full plan-scale board size and automatically fit the newly selected page to the Whiteboard viewport. Existing distant notes/SOW panels no longer shrink a new import into the whole-board overview, and the larger saved page footprint provides more usable detail before the 400% zoom ceiling.
+
+- Fixed **Import to Whiteboard** text-note orientation on rotated PDF pages. Preserved vector pages now compensate markup text for the source page's 90°, 180°, or 270° PDF rotation while retaining the correct note position and horizontal note box.
+
+- Moved the live condition/measurement summary from its floating top-right canvas overlay into the **Takeoff** toolbar tab. Scale prompts, drawing guidance, condition totals, shape count, zoom, One-Click status, and per-wall height editing remain available without covering the plan and now wrap with the toolbar on narrow screens.
+
+- Fixed PDF export quality for construction drawings: **Import to Whiteboard** now preserves the original current PDF page as vector content and adds measurements/markups over it, eliminating the former Balanced-JPEG pass before HD export. Protected or unusually large pages fall back to the maximum safe HD raster. Compact and Balanced retain substantially clearer small text, while HD automatically fits oversized sheets to the safe 16-megapixel raster ceiling instead of failing because of rounded pixels or an enlarged Whiteboard card. Whiteboard now budgets the renderer's actual flattened pixels rather than its editor display size.
+
+- Moved **Open ChatGPT ↗** and **Project Assistant** from the always-visible workspace overlay into the canvas **AI** Agent drawer. Opening Project Assistant closes that drawer before showing the resizable assistant, leaving the plan workspace unobstructed.
+- Added a shared PDF quality chooser to **Project > Download this page** and every Whiteboard PDF export. Compact, Balanced, and HD show estimated output-size ranges before rendering, remember the latest choice, and report the actual completed size. Balanced/HD raise the flattened-plan raster budget for small construction callouts while the distribution PDF still drops source OCR/text, fonts, forms, annotation data, metadata, and complex resources. OpenTakeoff vector annotations stay sharp and lightweight; Whiteboard notes and SOW panels re-render at the chosen quality.
+
+- Added separate ChatGPT choices without removing either workflow: **Open ChatGPT ↗** launches the regular `chatgpt.com` website in a new tab using the user's existing account, while **Project Assistant** retains the optional API-powered, resizable/dockable cross-workspace assistant. The direct ChatGPT link is also available from the assistant header. The project assistant's streamlined interface includes a normal message composer, prompt suggestions, New chat, collapsible Project context, compact conversation options, and assistant/user conversation styling. OpenAI credentials and model selection remain server-only; requests are size/rate/time limited, streamed, cancellable, and use `store: false`. Estimators explicitly choose page/project context and metadata sharing. A strict local tool registry grounds answers in bounded PDF text, existing Find/OCR keyword marks, authoritative takeoff/report totals, scales, SOW, whiteboard, calculators, RFIs, compact-project status, and revision summaries. Citations navigate back into OpenTakeoff. Supported bookmarks, metadata, SOW rows, and RFI drafts require approval, reject stale project state, and expose immediate Undo. Chat persistence is bounded, optional, additive, and key-free; unconfigured deployments continue normally.
+
+- Added **Save project with marked pages only** for projects that exceed the 512 MB portable limit. Compact `.otk` files retain full-quality measured, marked, page-bookmarked, and revision-referenced PDF pages; omitted content becomes lightweight page-number-preserving placeholders. Reopened compact projects explain the limitation and provide **Import missing files** for a folder, original PDFs, or ZIP. Restoration requires exact filename, byte-size, and SHA-256 matches, supports partial recovery, updates revision metadata, and never attaches measurements to a different plan revision.
+
+- Enabled explicit English spelling, grammar, and autocorrect assistance in Whiteboard SOW title and line-item editors, with browser correction suggestions available from underlined text.
+
+- Added an independent Chain-Link Fence Post Calculator linked to completed Linear takeoffs. Square terminal/corner markers snap and drag along cumulative polyline distance; circular line posts are derived per section using `ceil(length / maximum spacing) - 1`, with a 10 ft default, metric display, closed-loop handling, visibility/size controls, dedicated undo/redo, project and `.otk` persistence, Report quantities, and exported PDF overlays. Existing linear geometry and totals remain unchanged.
 
 - Added independent file favorites to the Sheets selector. Every loaded PDF now has its own star, favorite files group ahead of the remaining files without changing source order, and file favorites persist separately from page bookmarks through autosave, revisions, cloud/local storage, and portable `.otk` projects.
 
@@ -41,7 +74,7 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 - Added a shared white four-bar loading indicator for longer plan loads and renders, Find scans, exports, and project saves.
 
-- Reworked PDF Find into a persistent, movable, non-modal panel. Searches now start only after **Find pages** is pressed, results are grouped into a clickable page list with per-page keywords and counts, and the arrow controls move between matching pages while pan, zoom, and drawing tools remain usable. Added **Find in this page** for the focused sheet. Every completed run is an additive, deduplicated Search marks job with independent visibility, removal, and highlight-color controls, plus Unmark/Mark all pages and Remove all actions.
+- Reworked PDF Find into a persistent, movable, non-modal panel. Searches now start only after a scope button is pressed, results are grouped into a clickable page list with per-page keywords and counts, and the arrow controls move between matching pages while pan, zoom, and drawing tools remain usable. Added **Find in all plans**, **Find in this PDF set** for every page in the focused PDF, and **Find in this page** for the focused sheet. Every completed run is an additive, deduplicated Search marks job with independent visibility, removal, and highlight-color controls, plus Unmark/Mark all pages and Remove all actions.
 
 - Made the Find panel resizable, moved its long usage guidance into a dedicated **Help** tab, and removed the nested scrollbar from Search-mark color rows so completed searches display in full.
 

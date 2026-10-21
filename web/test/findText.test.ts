@@ -53,12 +53,16 @@ test("matching-page navigation wraps and handles an empty or unselected list", (
   assert.equal(stepFindPageIndex(0, 1, 0), -1);
 });
 
-test("find targets can cover every loaded PDF or only the focused current page", () => {
+test("find targets can cover all loaded PDFs, the focused PDF, or only the focused page", () => {
   const sheets = [{ name: "A.pdf" }, { name: "B.pdf" }, { name: "A.pdf" }];
   assert.deepEqual(findSearchTargets(sheets), [
     { file: "A.pdf", page: null, key: null },
     { file: "B.pdf", page: null, key: null },
   ]);
+  assert.deepEqual(findSearchTargets(sheets, "file", { key: "B.pdf#7", file: "B.pdf", page: 7 }), [
+    { file: "B.pdf", page: null, key: null },
+  ]);
+  assert.deepEqual(findSearchTargets(sheets, "file", { key: "missing.pdf#2", file: "missing.pdf", page: 2 }), []);
   assert.deepEqual(findSearchTargets(sheets, "page", { key: "B.pdf#7", file: "B.pdf", page: 7 }), [
     { file: "B.pdf", page: 7, key: "B.pdf#7" },
   ]);

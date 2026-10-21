@@ -104,7 +104,7 @@ export function stepFindPageIndex(current, direction, pageCount) {
 // it scans cannot silently redirect the job to a different page.
 /**
  * @param {Array<{ name?: string }>} sheets
- * @param {"all" | "page"} scope
+ * @param {"all" | "file" | "page"} scope
  * @param {{ key?: string, file?: string, page?: number } | null} currentPage
  */
 export function findSearchTargets(sheets, scope = "all", currentPage = null) {
@@ -116,9 +116,14 @@ export function findSearchTargets(sheets, scope = "all", currentPage = null) {
     seen.add(file);
     loadedFiles.push(file);
   }
-  if (scope !== "page") return loadedFiles.map((file) => ({ file, page: null, key: null }));
+  if (scope === "all") return loadedFiles.map((file) => ({ file, page: null, key: null }));
 
   const file = String(currentPage?.file || "").trim();
+  if (scope === "file") {
+    if (!file || !seen.has(file)) return [];
+    return [{ file, page: null, key: null }];
+  }
+
   const page = Math.trunc(Number(currentPage?.page));
   if (!file || !seen.has(file) || !Number.isInteger(page) || page < 1) return [];
   return [{ file, page, key: String(currentPage?.key || (page > 1 ? `${file}#${page}` : file)) }];

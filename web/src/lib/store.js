@@ -40,6 +40,39 @@ const STAMPLIB_KEY = "stamp_library";
 const pdfCompatibilityKey = (name) => `pdf_compatibility:${name}`;
 const ANN_SCHEMA = "opentakeoff.takeoff_canvas.v1";
 
+let projectWritesBlocked = false;
+const WRITE_METHODS = new Set([
+  "savePdfCompatibility", "addPdf", "addSheets", "removePdf", "removeFromProject",
+  "saveAnnotations", "saveTemplates", "saveMaterialLibrary", "saveStampLibrary",
+  "saveSnapshot", "putSnapshot", "deleteSnapshot",
+]);
+
+export class ReadOnlyLicenseError extends Error {
+  constructor() {
+    super("This workspace is read-only. Go online with an active subscription on the licensed computer to edit.");
+    this.name = "ReadOnlyLicenseError";
+    this.code = "OTK_READ_ONLY";
+  }
+}
+
+export function setProjectWritesBlocked(blocked) {
+  projectWritesBlocked = blocked === true;
+}
+
+export function projectWritesAreBlocked() {
+  return projectWritesBlocked;
+}
+
+function guardedStore(target) {
+  return new Proxy(target, {
+    get(source, property, receiver) {
+      const value = Reflect.get(source, property, receiver);
+      if (typeof value !== "function" || !WRITE_METHODS.has(String(property))) return value;
+      return (...args) => projectWritesBlocked ? Promise.reject(new ReadOnlyLicenseError()) : value.apply(source, args);
+    },
+  });
+}
+
 // The empty-project annotations shape. One definition so the local store and the
 // Drive-backed cloud store (cloudStore.js) hydrate a fresh project identically —
 // a new field added here reaches both, instead of silently drifting apart.
@@ -429,13 +462,13 @@ export async function metaDelete(key) {
 // canvas mounts is enough. The switch is driven from the app shell (main.jsx),
 // which alone pulls in the Google/Drive modules — the anonymous bundle never
 // loads them.
-export let store = localStore;
+export let store = guardedStore(localStore);
 
 // Point the shared `store` at a cloud (or any drop-in) adapter; pass nothing to
 // fall back to the local, browser-only store. Called from the app shell once a
 // deep-linked project is signed in and its Drive-backed store is built.
 export function setActiveStore(next) {
-  store = next || localStore;
+  store = guardedStore(next || localStore);
 }
 
 // The deep-link contract with Glide: `…/?project=<driveFolderId>` selects which

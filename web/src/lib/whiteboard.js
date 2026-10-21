@@ -25,16 +25,112 @@ export const WHITEBOARD_SOW_MAX_TAKEOFF_TITLE = 120;
 export const WHITEBOARD_SOW_DEFAULT_TAKEOFF_TITLE = "FENCE TAKEOFF";
 export const WHITEBOARD_SOW_MAX_SECTION_TITLE = 80;
 export const WHITEBOARD_SOW_DEFAULT_SECTION_TITLE = "SOW";
+export const WHITEBOARD_EXPORT_AREA_LIMIT = 200;
+export const WHITEBOARD_EXPORT_PAGE_SIZES = ["match", "letter", "legal", "tabloid", "arch-d", "arch-e"];
+export const WHITEBOARD_EXPORT_ORIENTATIONS = ["auto", "portrait", "landscape"];
+export const WHITEBOARD_EXPORT_QUALITIES = ["standard", "high", "maximum"];
+export const WHITEBOARD_EXPORT_FITS = ["fit", "actual"];
 const SOW_COLOR = /^#[0-9a-f]{6}$/i;
 const SOW_ENTRY_KINDS = new Set(["line", "title"]);
 
 export const emptyWhiteboardSow = (id = "sow-1", tabId = "scope-1") => ({ id, x: 40, y: 40, w: 280, logoWidth: 128, takeoffTitle: WHITEBOARD_SOW_DEFAULT_TAKEOFF_TITLE,
   sectionTitle: WHITEBOARD_SOW_DEFAULT_SECTION_TITLE,
   activeTabId: tabId, tabs: [{ id: tabId, name: "Scope 1", entries: [] }] });
-export const emptyWhiteboard = () => ({ version: 1, items: [], assets: [], arrows: [], rectangles: [], sows: [emptyWhiteboardSow()] });
+export const emptyWhiteboard = () => ({ version: 1, items: [], assets: [], arrows: [], rectangles: [], sows: [emptyWhiteboardSow()], exportAreas: [] });
 
 const uniqueId = (prefix) => `${prefix}-${crypto.randomUUID()}`;
 const sowColor = (value) => typeof value === "string" && SOW_COLOR.test(value) ? value.toUpperCase() : WHITEBOARD_SOW_DEFAULT_COLOR;
+
+function normalizeWhiteboardExportArea(area, index = 0) {
+  if (!area || typeof area !== "object" || Array.isArray(area) ||
+    typeof area.id !== "string" || !area.id || area.id.length > 128 ||
+    ![area.x, area.y, area.w, area.h].every(Number.isFinite) ||
+    Math.abs(area.x) > 1e7 || Math.abs(area.y) > 1e7 || area.w < 4 || area.h < 4 || area.w > 1e7 || area.h > 1e7) return null;
+  const pageSize = WHITEBOARD_EXPORT_PAGE_SIZES.includes(area.pageSize) ? area.pageSize : "match";
+  const orientation = WHITEBOARD_EXPORT_ORIENTATIONS.includes(area.orientation) ? area.orientation : "auto";
+  const quality = WHITEBOARD_EXPORT_QUALITIES.includes(area.quality) ? area.quality : "high";
+  // Whiteboard coordinates do not currently carry a dependable physical
+  // calibration. Preserve a future actual-scale choice when loading, but the
+  // editor enables it only when a reliable calibration is available.
+  const fit = WHITEBOARD_EXPORT_FITS.includes(area.fit) ? area.fit : "fit";
+  const suppliedName = typeof area.name === "string" ? area.name.trim().slice(0, 120) : "";
+  const order = Number.isInteger(area.order) && area.order >= 0 ? area.order : index;
+  return { id: area.id, name: suppliedName || `Area ${index + 1}`, x: area.x, y: area.y, w: area.w, h: area.h,
+    order, pageSize, orientation, quality, fit };
+}
+
+export function sanitizeWhiteboardExportAreas(board) {
+  if (!board || !Object.hasOwn(board, "exportAreas")) return board;
+  if (!Array.isArray(board.exportAreas)) return { ...board, exportAreas: [] };
+  const ids = new Set();
+  const exportAreas = board.exportAreas.slice(0, WHITEBOARD_EXPORT_AREA_LIMIT)
+    .map((area, index) => normalizeWhiteboardExportArea(area, index))
+    .filter((area) => area && !ids.has(area.id) && ids.add(area.id))
+    .sort((a, b) => a.order - b.order)
+    .map((area, order) => ({ ...area, order }));
+  return { ...board, exportAreas };
+}
+
+export function appendWhiteboardExportArea(board, rect, settings = {}) {
+  const safe = sanitizeWhiteboardExportAreas(Object.hasOwn(board || {}, "exportAreas") ? board : { ...board, exportAreas: [] });
+  if (safe.exportAreas.length >= WHITEBOARD_EXPORT_AREA_LIMIT || !rect ||
+    ![rect.x, rect.y, rect.w, rect.h].every(Number.isFinite) || rect.w < 4 || rect.h < 4) return safe;
+  const previous = safe.exportAreas.at(-1);
+  const raw = { id: uniqueId("export-area"), name: `Area ${safe.exportAreas.length + 1}`, ...rect,
+    pageSize: settings.pageSize ?? previous?.pageSize ?? "match",
+    orientation: settings.orientation ?? previous?.orientation ?? "auto",
+    quality: settings.quality ?? previous?.quality ?? "high",
+    fit: settings.fit ?? previous?.fit ?? "fit", order: safe.exportAreas.length };
+  const area = normalizeWhiteboardExportArea(raw, safe.exportAreas.length);
+  return area ? { ...safe, exportAreas: [...safe.exportAreas, area] } : safe;
+}
+
+export function updateWhiteboardExportArea(board, id, changes) {
+  if (typeof id !== "string" || !changes || typeof changes !== "object" || Array.isArray(changes)) return board;
+  const safe = sanitizeWhiteboardExportAreas(Object.hasOwn(board || {}, "exportAreas") ? board : { ...board, exportAreas: [] });
+  let changed = false;
+  const exportAreas = safe.exportAreas.map((area, index) => {
+    if (area.id !== id) return area;
+    const normalized = normalizeWhiteboardExportArea({ ...area, ...changes, id: area.id, order: area.order }, index);
+    if (!normalized) return area;
+    changed = Object.keys(normalized).some((key) => normalized[key] !== area[key]);
+    return normalized;
+  });
+  return changed ? { ...safe, exportAreas } : safe;
+}
+
+export function removeWhiteboardExportArea(board, id) {
+  const safe = sanitizeWhiteboardExportAreas(Object.hasOwn(board || {}, "exportAreas") ? board : { ...board, exportAreas: [] });
+  const exportAreas = safe.exportAreas.filter((area) => area.id !== id).map((area, order) => ({ ...area, order }));
+  return exportAreas.length === safe.exportAreas.length ? safe : { ...safe, exportAreas };
+}
+
+export function moveWhiteboardExportArea(board, id, direction) {
+  const safe = sanitizeWhiteboardExportAreas(Object.hasOwn(board || {}, "exportAreas") ? board : { ...board, exportAreas: [] });
+  const from = safe.exportAreas.findIndex((area) => area.id === id);
+  const to = direction === "up" ? from - 1 : direction === "down" ? from + 1 : Number(direction);
+  if (from < 0 || !Number.isInteger(to) || to < 0 || to >= safe.exportAreas.length || to === from) return safe;
+  const exportAreas = [...safe.exportAreas];
+  const [area] = exportAreas.splice(from, 1); exportAreas.splice(to, 0, area);
+  return { ...safe, exportAreas: exportAreas.map((entry, order) => ({ ...entry, order })) };
+}
+
+export function duplicateWhiteboardExportArea(board, id) {
+  const safe = sanitizeWhiteboardExportAreas(Object.hasOwn(board || {}, "exportAreas") ? board : { ...board, exportAreas: [] });
+  if (safe.exportAreas.length >= WHITEBOARD_EXPORT_AREA_LIMIT) return safe;
+  const from = safe.exportAreas.findIndex((area) => area.id === id);
+  if (from < 0) return safe;
+  const source = safe.exportAreas[from];
+  const duplicate = { ...source, id: uniqueId("export-area"), name: `${source.name} copy`.slice(0, 120),
+    x: source.x + 24, y: source.y + 24, order: from + 1 };
+  const exportAreas = [...safe.exportAreas]; exportAreas.splice(from + 1, 0, duplicate);
+  return { ...safe, exportAreas: exportAreas.map((area, order) => ({ ...area, order })) };
+}
+
+export function clearWhiteboardExportAreas(board) {
+  const safe = sanitizeWhiteboardExportAreas(Object.hasOwn(board || {}, "exportAreas") ? board : { ...board, exportAreas: [] });
+  return safe.exportAreas.length ? { ...safe, exportAreas: [] } : safe;
+}
 
 function normalizeWhiteboardSow(value, strict = false) {
   const fail = () => { if (strict) throw new Error("Invalid whiteboard data in project."); return emptyWhiteboardSow(); };
@@ -664,7 +760,7 @@ export function validateWhiteboard(board) {
       if (!branding || !branding.type.startsWith("image/")) invalid();
     }
   }
-  return sanitizeWhiteboardRectangles(sanitizeWhiteboardArrows(sanitizeWhiteboardFileHeaderColors(withValidatedSow)));
+  return sanitizeWhiteboardExportAreas(sanitizeWhiteboardRectangles(sanitizeWhiteboardArrows(sanitizeWhiteboardFileHeaderColors(withValidatedSow))));
 }
 
 export function removeBoardItem(board, id) {
@@ -679,13 +775,13 @@ export function zoomBoard(view, point, nextScale) {
   return { scale, x: point.x - (point.x - view.x) * scale / view.scale, y: point.y - (point.y - view.y) * scale / view.scale };
 }
 
-export function fitBoard(items, width, height) {
+export function fitBoard(items, width, height, maxScale = 1) {
   if (!items.length) return { x: 0, y: 0, scale: 1 };
   const x = Math.min(...items.map((item) => item.x));
   const y = Math.min(...items.map((item) => item.y));
   const w = Math.max(...items.map((item) => item.x + item.w)) - x;
   const h = Math.max(...items.map((item) => item.y + item.h)) - y;
-  const scale = Math.max(.15, Math.min(1, (width - 64) / w, (height - 64) / h));
+  const scale = Math.max(.15, Math.min(Math.max(.15, Math.min(4, maxScale)), (width - 64) / w, (height - 64) / h));
   return { scale, x: (width - w * scale) / 2 - x * scale, y: (height - h * scale) / 2 - y * scale };
 }
 

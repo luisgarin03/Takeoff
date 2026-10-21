@@ -55,44 +55,30 @@ notices, focus handling and logout. `ProfileAccountSection` presents the real
 Supabase identity, editable display name, read-only email, Subscription, and
 Account cards. No invented company, preferences, user, or plan features.
 
-## Billing: not connected
+## Billing: production adapter available
 
-Supabase auth, profiles, project data and Drive functions exist. There is no
-billing provider, billing table, checkout endpoint or billing webhook in this
-repository. No migration was added. The default service returns no subscription
-and the UI displays Free / No active subscription. Choosing a plan explains the
-missing integration; it never changes an entitlement or stores payment details.
+Supabase auth remains the account identity. RevenueCat can provide Apple In-App
+Purchase plus identified Windows/web checkout under one entitlement. The
+server-owned `otk_subscriptions` table is readable only by its account owner;
+client writes are revoked. The `otk-billing` Edge Function verifies RevenueCat
+webhooks or an authenticated refresh before updating that row. No checkout return,
+browser metadata, or local storage value grants access.
 
 `src/lib/subscriptions.js` is the single display catalog: Starter USD 40/month,
 Professional USD 50/month, Business USD 60/month. Names and prices are provisional.
-The `createBillingService(adapter)` contract separates account lookup, checkout
-and optional management. The production default is deliberately unconfigured.
+The `createBillingService(adapter)` contract separates account lookup, checkout,
+restore and management. An unconfigured build remains safe and local-first.
 
-To connect real billing:
+To launch real billing:
 
-1. Choose a provider and create recurring USD prices. Map catalog IDs to trusted
-   provider price IDs on the server; never trust a client-supplied amount.
-2. Add authenticated checkout and customer-portal endpoints. Verify the session
-   server-side and bind each customer to that account; do not trust a supplied
-   user ID alone. Keep provider secrets on the server. Collect cards only through
-   provider-hosted checkout.
-3. Store server-owned subscription records keyed by authenticated user ID. Suggested
-   fields: subscriptionStatus, subscriptionPlan, subscriptionPrice,
-   subscriptionInterval, subscriptionProvider, subscriptionCustomerId,
-   subscriptionId, subscriptionCurrentPeriodEnd. Restrict client reads to the owner
-   and deny client writes to entitlement fields. Do not use editable user metadata.
-4. Verify provider webhook signatures and process events idempotently. Update
-   records for activation, renewal, cancellation, failure and expiration. Checkout
-   redirects alone must never activate a plan.
-5. Implement the adapter's getSubscription(userId), checkout(userId, planId), and
-   optional manageSubscription(userId). Checkout and management perform safe
-   provider navigation; the read method returns the authoritative record or null
-   (errors must reject, not masquerade as Free). Wire the configured service into
-   SubscriptionSection and refresh status after returning from checkout.
-6. Test real sandbox checkout, rejected payments, webhook retries, cross-account
-   access, cancellation, portal return, offline/error handling and status refresh.
+1. Follow `docs/LAUNCH_AUTH_AND_BILLING.md` and apply the billing migration.
+2. Create the RevenueCat entitlement, offering, Apple products, and web purchase link.
+3. Deploy the billing Edge Function with server-only secrets and an HMAC webhook.
+4. Populate the public build identifiers, run sandbox acceptance, then enable the
+   production license gate. A redirect by itself never activates a plan.
 
-No production payment or database changes are included in this UI refactor.
+The code and migration are included, but production services, products, secrets,
+signing identities, and live acceptance still require the owner's accounts.
 
 ## Changed files
 

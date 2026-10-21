@@ -1,6 +1,7 @@
 import { base64ToBytes, validateWhiteboard, whiteboardDrawingBounds, whiteboardImageCrop } from "./whiteboard.js";
 import { projectFilename } from "./projectFile.js";
 import { whiteboardPdfLayoutSize } from "./whiteboardPdfPreview.js";
+import { pdfExportQuality } from "./exportQuality.js";
 
 // Whiteboard.jsx renders w/h directly as CSS lengths before its camera scale.
 // These are NOT the normalized coordinates used by the takeoff canvas.
@@ -20,14 +21,18 @@ const MAX_TOTAL_RASTER_PIXELS = 64_000_000;
 const BOARD_ARROW_STROKE = 2.5;
 const BOARD_ARROW_HEAD = 14;
 const BOARD_ARROW_HEAD_HALF = .42;
+const CUSTOM_PAGE_SIZES = Object.freeze({
+  letter: [612, 792], legal: [612, 1008], tabloid: [792, 1224],
+  "arch-d": [1728, 2592], "arch-e": [2592, 3456],
+});
 
 /** @typedef {{x: number, y: number, w: number, h: number}} BoardRect */
 /** @typedef {BoardRect & {id: string, kind: string, text: string, color: string}} BoardNote */
 /** @typedef {{
- * renderNote?: (item: BoardNote, rect: BoardRect, signal?: AbortSignal) => Promise<Uint8Array>,
- * renderSow?: (sow: object, brandingAsset?: object | null, signal?: AbortSignal) => Promise<{bytes: Uint8Array, width: number, height: number, layoutWidth: number, layoutHeight: number}>,
- * readImage?: (bytes: Uint8Array, type: string, crop?: {x:number,y:number,w:number,h:number} | null, signal?: AbortSignal) => Promise<{bytes: Uint8Array, type: string, width: number, height: number, layoutWidth?: number, layoutHeight?: number}>,
- * renderPdfPage?: (bytes: Uint8Array, page: number, rect: BoardRect, signal?: AbortSignal) => Promise<Uint8Array | {bytes: Uint8Array, type: "image/png" | "image/jpeg"}>
+ * renderNote?: (item: BoardNote, rect: BoardRect, signal?: AbortSignal, quality?: object) => Promise<Uint8Array>,
+ * renderSow?: (sow: object, brandingAsset?: object | null, signal?: AbortSignal, quality?: object) => Promise<{bytes: Uint8Array, width: number, height: number, layoutWidth: number, layoutHeight: number}>,
+ * readImage?: (bytes: Uint8Array, type: string, crop?: {x:number,y:number,w:number,h:number} | null, signal?: AbortSignal, quality?: object) => Promise<{bytes: Uint8Array, type: string, width: number, height: number, layoutWidth?: number, layoutHeight?: number}>,
+ * renderPdfPage?: (bytes: Uint8Array, page: number, rect: BoardRect, signal?: AbortSignal, quality?: object) => Promise<Uint8Array | {bytes: Uint8Array, type: "image/png" | "image/jpeg"}>
  * }} BoardPdfRenderer */
 
 export function checkBoardRaster(width, height) {
@@ -140,6 +145,35 @@ export function boardNoteCardRect(item) {
 export function boardPdfPlacement(rect, bounds) {
   return { x: (rect.x - bounds.minX) * BOARD_POINT_SCALE, y: (bounds.maxY - rect.y - rect.h) * BOARD_POINT_SCALE,
     width: rect.w * BOARD_POINT_SCALE, height: rect.h * BOARD_POINT_SCALE };
+}
+
+function boardPdfPlacementAtScale(rect, bounds, scale) {
+  return { x: (rect.x - bounds.minX) * scale, y: (bounds.maxY - rect.y - rect.h) * scale,
+    width: rect.w * scale, height: rect.h * scale };
+}
+
+/** Resolve a custom export area's physical PDF page without ever stretching
+ * its content. Match keeps the selected aspect ratio; named paper sizes center
+ * the selection inside the printable page. */
+export function whiteboardExportPageLayout(region, pageSize = "match", orientation = "auto") {
+  const bounds = boardPdfBoundsUnchecked([region]);
+  const landscape = region.w >= region.h;
+  let width, height, margin = 0;
+  if (pageSize === "match" || !CUSTOM_PAGE_SIZES[pageSize]) {
+    const cap = Math.min(1, MAX_BOARD_PDF_POINTS / Math.max(bounds.width, bounds.height));
+    width = bounds.width * cap; height = bounds.height * cap;
+    if ((orientation === "portrait" && width > height) || (orientation === "landscape" && height > width)) [width, height] = [height, width];
+  } else {
+    [width, height] = CUSTOM_PAGE_SIZES[pageSize];
+    const wantsLandscape = orientation === "landscape" || (orientation === "auto" && landscape);
+    if (wantsLandscape) [width, height] = [height, width];
+    margin = WHITEBOARD_PAGE_MARGIN;
+  }
+  const availableWidth = Math.max(1, width - margin * 2), availableHeight = Math.max(1, height - margin * 2);
+  const scale = Math.min(availableWidth / region.w, availableHeight / region.h);
+  const contentWidth = region.w * scale, contentHeight = region.h * scale;
+  return { width, height, scale, x: (width - contentWidth) / 2, y: (height - contentHeight) / 2,
+    contentWidth, contentHeight, bounds };
 }
 
 export function boardRectsIntersect(a, b) {
@@ -300,13 +334,51 @@ function exportSnapshot(board, allowEmpty = false) {
  * Browser-only decoding/text layout is injected so geometry and PDF boxes can
  * also be tested without a browser. No adapter receives the live board object.
  * @param {object} board
- * @param {{projectName?: string, boardName?: string, renderer?: BoardPdfRenderer, signal?: AbortSignal, region?: BoardRect, pageMode?: "single" | "pages"}} options
+ * @param {{projectName?: string, boardName?: string, renderer?: BoardPdfRenderer, signal?: AbortSignal, region?: BoardRect, regions?: Array<BoardRect & {name?:string,pageSize?:string,orientation?:string,quality?:string,fit?:string}>, pageMode?: "single" | "pages", quality?: "compact" | "balanced" | "hd", onProgress?: (value: {completed:number,total:number,name:string}) => void}} options
  */
-export async function buildWhiteboardPdf(board, { projectName, boardName = "Whiteboard", renderer, signal, region, pageMode = "single" } = {}) {
+export async function buildWhiteboardPdf(board, { projectName, boardName = "Whiteboard", renderer, signal, region, regions, pageMode = "single", quality = "balanced", onProgress,
+  _outputPage = null, _skipTotalBudget = false, _snapshot = null } = {}) {
+  if (regions !== undefined) {
+    if (!Array.isArray(regions) || !regions.length) throw new Error("Add at least one PDF export area before exporting.");
+    const { PDFDocument } = await import("pdf-lib");
+    const combined = await PDFDocument.create();
+    combined.setTitle(`${projectName || "Untitled project"} - ${boardName}`);
+    const qualityMap = { standard: "compact", high: "balanced", maximum: "hd" };
+    // Clone and validate the potentially large embedded-asset model once. Each
+    // page is still composed independently, but repeated areas do not duplicate
+    // every base64 PDF/image string before their sequential render begins.
+    const customSnapshot = exportSnapshot(board, true);
+    const pages = [];
+    for (const [index, area] of regions.entries()) {
+      signal?.throwIfAborted();
+      if (!area || ![area.x, area.y, area.w, area.h].every(Number.isFinite) || area.w < 4 || area.h < 4) {
+        throw new Error(`Page ${index + 1} has an invalid export area.`);
+      }
+      try {
+        const result = await buildWhiteboardPdf(board, { projectName, boardName: area.name || `Page ${index + 1}`, renderer, signal,
+          region: area, quality: qualityMap[area.quality] || quality, _outputPage: area, _skipTotalBudget: true, _snapshot: customSnapshot });
+        signal?.throwIfAborted();
+        const embedded = (await combined.embedPdf(result.bytes, [0]))[0];
+        const page = combined.addPage([embedded.width, embedded.height]);
+        for (const setBox of ["setMediaBox", "setCropBox", "setTrimBox", "setBleedBox", "setArtBox"]) page[setBox](0, 0, embedded.width, embedded.height);
+        page.drawPage(embedded, { x: 0, y: 0, width: embedded.width, height: embedded.height });
+        pages.push({ id: area.id, name: area.name || `Area ${index + 1}`, bounds: { x: area.x, y: area.y, w: area.w, h: area.h },
+          width: embedded.width, height: embedded.height });
+        onProgress?.({ completed: index + 1, total: regions.length, name: pages.at(-1).name });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      } catch (error) {
+        signal?.throwIfAborted();
+        throw new Error(`Page ${index + 1} (${area.name || `Area ${index + 1}`}): ${error.message || "Could not export this area."}`, { cause: error });
+      }
+    }
+    signal?.throwIfAborted();
+    return { bytes: await combined.save(), filename: whiteboardPdfFilename(projectName, boardName), pages };
+  }
   if (!["single", "pages"].includes(pageMode)) throw new Error("Unknown whiteboard PDF page mode.");
   if (pageMode === "pages" && region) throw new Error("Selected-area export uses the single-page PDF format.");
-  const snapshot = exportSnapshot(board, !!region);
-  const bounds = region ? boardPdfBounds([region]) : null;
+  const snapshot = _snapshot || exportSnapshot(board, !!region);
+  const exportQuality = pdfExportQuality(quality);
+  const bounds = region ? (_outputPage ? boardPdfBoundsUnchecked([region]) : boardPdfBounds([region])) : null;
   const checkCancelled = () => signal?.throwIfAborted();
   checkCancelled();
   const { PDFDocument, PDFName, PDFNumber, StandardFonts, rgb,
@@ -319,7 +391,7 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
   const budget = (w, h) => {
     const size = checkBoardRaster(w, h);
     rasterPixels += size.width * size.height;
-    if (rasterPixels > MAX_TOTAL_RASTER_PIXELS) throw new Error("Whiteboard export exceeds the 64-megapixel image budget. Use smaller attachments or notes and try again.");
+    if (!_skipTotalBudget && rasterPixels > MAX_TOTAL_RASTER_PIXELS) throw new Error("Whiteboard export exceeds the 64-megapixel image budget. Use smaller attachments or notes and try again.");
     return size;
   };
   for (const item of snapshot.items) {
@@ -330,7 +402,7 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     try {
       if (item.kind === "note") {
         const rect = boardNoteCardRect(item);
-        budget(rect.w * BOARD_EXPORT_SCALE, rect.h * BOARD_EXPORT_SCALE);
+        budget(rect.w * exportQuality.boardScale, rect.h * exportQuality.boardScale);
         prepared.push({ item, rect });
         continue;
       }
@@ -368,7 +440,7 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
           file = { kind: "pdf", bytes, page: item.page, rotation, width, height };
         } else {
           if (!renderer?.readImage) throw new Error("Image decoder is unavailable. Reload the app and try again.");
-          const image = await renderer.readImage(base64ToBytes(asset.data), asset.type, crop, signal);
+          const image = await renderer.readImage(base64ToBytes(asset.data), asset.type, crop, signal, exportQuality);
           budget(image.width, image.height);
           const embedded = image.type === "image/jpeg" ? await doc.embedJpg(image.bytes) : await doc.embedPng(image.bytes);
           file = { kind: "image", embedded,
@@ -377,7 +449,6 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
         files.set(key, file);
       }
       const rect = boardContentRect(item, file);
-      if (file.kind === "pdf") budget(rect.w * BOARD_EXPORT_SCALE, rect.h * BOARD_EXPORT_SCALE);
       prepared.push({ item, file, rect });
     } catch (error) {
       checkCancelled();
@@ -389,7 +460,7 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     if (!renderer?.renderSow) throw new Error("The SOW export renderer is unavailable. Reload the app and try again.");
     checkCancelled();
     const brandingAsset = sow.brandAssetId ? snapshot.assets.find((asset) => asset.id === sow.brandAssetId) : null;
-    const rendered = await renderer.renderSow(sow, brandingAsset, signal);
+    const rendered = await renderer.renderSow(sow, brandingAsset, signal, exportQuality);
     budget(rendered.width, rendered.height);
     const rect = { x: sow.x, y: sow.y, w: rendered.layoutWidth, h: rendered.layoutHeight };
     if (!region || boardRectsIntersect(rect, region)) {
@@ -417,10 +488,11 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     if (file?.kind === "image") continue;
     checkCancelled();
     try {
-      const rendered = !file ? await renderer?.renderNote(item, rect, signal) : await renderer?.renderPdfPage(file.bytes, file.page, rect, signal);
+      const rendered = !file ? await renderer?.renderNote(item, rect, signal, exportQuality) : await renderer?.renderPdfPage(file.bytes, file.page, rect, signal, exportQuality);
       if (!rendered) throw new Error("Export renderer is unavailable. Reload the app and try again.");
       checkCancelled();
       const raster = rendered instanceof Uint8Array ? { bytes: rendered, type: "image/png" } : rendered;
+      if (Number.isFinite(raster.width) && Number.isFinite(raster.height)) budget(raster.width, raster.height);
       entry.rasterEmbedded = raster.type === "image/jpeg" ? await doc.embedJpg(raster.bytes) : await doc.embedPng(raster.bytes);
     } catch (error) {
       checkCancelled();
@@ -436,13 +508,13 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     const colorHex = /^#[0-9a-f]{6}$/i.test(value || "") ? value : "#1f3fc7";
     return rgb(parseInt(colorHex.slice(1, 3), 16) / 255, parseInt(colorHex.slice(3, 5), 16) / 255, parseInt(colorHex.slice(5, 7), 16) / 255);
   };
-  const paintScenePage = async (page, pageBounds, offsetX = 0, offsetY = 0) => {
+  const paintScenePage = async (page, pageBounds, offsetX = 0, offsetY = 0, sceneScale = BOARD_POINT_SCALE) => {
     const worldRect = { x: pageBounds.minX, y: pageBounds.minY,
       w: pageBounds.maxX - pageBounds.minX, h: pageBounds.maxY - pageBounds.minY };
     for (const { item, file, rect, rasterEmbedded } of prepared) {
       if (!boardRectsIntersect(rect, worldRect)) continue;
       checkCancelled();
-      const place = addOffset(boardPdfPlacement(rect, pageBounds), offsetX, offsetY);
+      const place = addOffset(boardPdfPlacementAtScale(rect, pageBounds, sceneScale), offsetX, offsetY);
       try {
         if (!file || file.kind === "pdf") {
           page.drawImage(rasterEmbedded, place);
@@ -459,13 +531,13 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
     for (const { drawing: arrow } of arrowEntries) {
       if (!boardArrowIntersectsRect(arrow, worldRect)) continue;
       checkCancelled();
-      const point = ([x, y]) => ({ x: offsetX + (x - pageBounds.minX) * BOARD_POINT_SCALE,
-        y: offsetY + (pageBounds.maxY - y) * BOARD_POINT_SCALE });
+      const point = ([x, y]) => ({ x: offsetX + (x - pageBounds.minX) * sceneScale,
+        y: offsetY + (pageBounds.maxY - y) * sceneScale });
       const geometry = boardArrowGeometry(arrow);
       const from = point([geometry.start.x, geometry.start.y]), base = point([geometry.base.x, geometry.base.y]);
       const tip = point([geometry.tip.x, geometry.tip.y]), left = point([geometry.left.x, geometry.left.y]), right = point([geometry.right.x, geometry.right.y]);
       const color = parseColor(arrow.color);
-      page.drawLine({ start: from, end: base, thickness: BOARD_ARROW_STROKE * BOARD_POINT_SCALE, color, opacity: .95 });
+      page.drawLine({ start: from, end: base, thickness: BOARD_ARROW_STROKE * sceneScale, color, opacity: .95 });
       // pdf-lib's SVG path parser uses an SVG y-down coordinate system.
       const path = [tip, left, right].map((p, index) => `${index ? "L" : "M"}${p.x} ${-p.y}`).join(" ") + " Z";
       page.drawSvgPath(path, { x: 0, y: 0, color, opacity: .95 });
@@ -475,16 +547,16 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
       if (!boardRectangleIntersectsRect(rectangleDrawing, worldRect)) continue;
       checkCancelled();
       const rect = whiteboardDrawingBounds(rectangleDrawing, "rectangle");
-      const place = addOffset(boardPdfPlacement(rect, pageBounds), offsetX, offsetY);
+      const place = addOffset(boardPdfPlacementAtScale(rect, pageBounds, sceneScale), offsetX, offsetY);
       page.drawRectangle({ ...place, borderColor: parseColor(rectangleDrawing.color),
-        borderWidth: (Number.isFinite(rectangleDrawing.strokeWidth) ? rectangleDrawing.strokeWidth : 2.5) * BOARD_POINT_SCALE, borderOpacity: .95 });
+        borderWidth: (Number.isFinite(rectangleDrawing.strokeWidth) ? rectangleDrawing.strokeWidth : 2.5) * sceneScale, borderOpacity: .95 });
     }
     // Movable SOW worksheets are topmost in the live board. Editor-only panel
     // controls and add buttons are intentionally omitted by renderSow.
     for (const preparedSow of sowPrepared) {
       if (!boardRectsIntersect(preparedSow.rect, worldRect)) continue;
       checkCancelled();
-      page.drawImage(preparedSow.embedded, addOffset(boardPdfPlacement(preparedSow.rect, pageBounds), offsetX, offsetY));
+      page.drawImage(preparedSow.embedded, addOffset(boardPdfPlacementAtScale(preparedSow.rect, pageBounds, sceneScale), offsetX, offsetY));
     }
   };
 
@@ -517,10 +589,17 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
         bounds: { x: pageBounds.x, y: pageBounds.y, w: pageBounds.w, h: pageBounds.h } })) };
   }
 
-  const page = doc.addPage([outputBounds.width, outputBounds.height]);
-  setPageBoxes(page, outputBounds.width, outputBounds.height);
-  page.drawRectangle({ x: 0, y: 0, width: outputBounds.width, height: outputBounds.height, color: rgb(1, 1, 1) });
-  await paintScenePage(page, outputBounds);
+  const customLayout = _outputPage && region ? whiteboardExportPageLayout(region, _outputPage.pageSize, _outputPage.orientation) : null;
+  const pageWidth = customLayout?.width ?? outputBounds.width, pageHeight = customLayout?.height ?? outputBounds.height;
+  const page = doc.addPage([pageWidth, pageHeight]);
+  setPageBoxes(page, pageWidth, pageHeight);
+  page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: pageHeight, color: rgb(1, 1, 1) });
+  if (customLayout) {
+    page.pushOperators(pushGraphicsState(), rectangle(customLayout.x, customLayout.y, customLayout.contentWidth, customLayout.contentHeight), clip(), endPath());
+    await paintScenePage(page, outputBounds, customLayout.x, customLayout.y, customLayout.scale);
+    page.pushOperators(popGraphicsState());
+  } else await paintScenePage(page, outputBounds);
   checkCancelled();
-  return { bytes: await doc.save(), filename: whiteboardPdfFilename(projectName, boardName), bounds: outputBounds };
+  return { bytes: await doc.save(), filename: whiteboardPdfFilename(projectName, boardName), bounds: outputBounds,
+    ...(customLayout ? { pageSize: { width: pageWidth, height: pageHeight } } : {}) };
 }

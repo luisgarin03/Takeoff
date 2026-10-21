@@ -1,6 +1,7 @@
 import React from "react";
 import AccountAvatar from "./AccountAvatar.jsx";
 import SubscriptionSection from "./SubscriptionSection.jsx";
+import { UpdateSection } from "./AppUpdates.jsx";
 
 export default function ProfileAccountSection({ cloud, displayName, busy, onNameChange, onSave, onSignOut }) {
   return <div className="profile-sections">
@@ -12,7 +13,8 @@ export default function ProfileAccountSection({ cloud, displayName, busy, onName
         <div><button className="btn-primary" disabled={busy || cloud.offline}>Save profile</button></div>
       </form>
     </section>
-    <SubscriptionSection key={cloud.user.id} user={cloud.user} offline={cloud.offline} />
+    <SubscriptionSection key={cloud.user.id} user={cloud.user} offline={cloud.offline} client={cloud.client} />
+    <UpdateSection />
     <section className="profile-card" aria-labelledby="profile-account-heading">
       <h3 id="profile-account-heading">Account</h3><p className="profile-muted">Signed in as {cloud.identity.email}</p>
       <button type="button" disabled={busy} onClick={onSignOut}>Log out</button>

@@ -23,7 +23,7 @@ async function fixture(rotation = 0) {
   const pdf = await getDocument({ data: bytes.slice(), useSystemFonts: true }).promise;
   const calls: Array<[string, number]> = [];
   return {
-    pdf, calls,
+    pdf, calls, sourceBytes: bytes,
     options: {
       projectName: "Test project", dark: false, singleSheet: true,
       sheets: [sheet], shapes: [shape], markups: [markup],
@@ -163,6 +163,36 @@ test("page download can omit condition and quantity labels while retaining notes
   } finally { await f.pdf.destroy(); }
 });
 
+test("count marks export as the same square used on the Takeoff canvas", async () => {
+  const squarePathCount = async (bytes: Uint8Array) => {
+    const pdf = await getDocument({ data: bytes.slice(), useSystemFonts: true }).promise;
+    try {
+      const list = await (await pdf.getPage(1)).getOperatorList();
+      return list.fnArray.reduce((count, fn, index) => {
+        if (fn !== OPS.constructPath) return count;
+        const pathOps = list.argsArray[index]?.[0];
+        const square = Array.isArray(pathOps)
+          && pathOps.length === 5
+          && pathOps[0] === OPS.moveTo
+          && pathOps.slice(1, 4).every((op) => op === OPS.lineTo)
+          && pathOps[4] === OPS.closePath;
+        return count + (square ? 1 : 0);
+      }, 0);
+    } finally { await pdf.destroy(); }
+  };
+
+  const f = await fixture();
+  try {
+    const emptyOptions = { ...f.options, shapes: [], markups: [], rfis: [], includeShapeLabels: false };
+    const baseline = await buildMarkedSetPdf(emptyOptions);
+    const counted = await buildMarkedSetPdf({
+      ...emptyOptions,
+      shapes: [{ ...shape, id: "count-1", measure_role: "count", verts_norm: [[.45, .55]], computed: { count: 1 } }],
+    });
+    assert.equal(await squarePathCount(counted.bytes), await squarePathCount(baseline.bytes) + 1);
+  } finally { await f.pdf.destroy(); }
+});
+
 test("linear quantity chips sit closer to their line without touching it", async () => {
   const f = await fixture();
   try {
@@ -203,6 +233,53 @@ test("single-page export refuses zero or multiple requested sheets", async () =>
     await assert.rejects(buildMarkedSetPdf({ ...f.options, sheets: [sheet, sheet] }), /Choose one current sheet/);
     assert.deepEqual(f.calls, []);
   } finally { await f.pdf.destroy(); }
+});
+
+test("single-page export passes the selected raster quality to its page renderer", async () => {
+  const f = await fixture();
+  try {
+    let received;
+    await buildMarkedSetPdf({
+      ...f.options,
+      quality: "hd",
+      renderPage: async (_page, _dark, quality) => { received = quality; return { bytes: png, type: "image/png" }; },
+    });
+    assert.equal(received, "hd");
+  } finally { await f.pdf.destroy(); }
+});
+
+test("Whiteboard import preserves the original current PDF page before adding overlays", async () => {
+  for (const rotation of [0, 90, 180, 270]) {
+    const f = await fixture(rotation);
+    try {
+      const result = await buildMarkedSetPdf({
+        ...f.options,
+        preserveSourcePdf: true,
+        loadPdfData: async () => f.sourceBytes,
+        renderPage: async () => { throw new Error("the preserved import must not rasterize first"); },
+      });
+      const output = await inspect(result.bytes);
+      assert.equal(output.count, 1);
+      assert.match(output.text, /CURRENT PAGE/, `source vectors and text survive at ${rotation}°`);
+      assert.match(output.text, /RFI-007 VERIFY DOOR/, `markup survives at ${rotation}°`);
+      assert.doesNotMatch(output.text, /OTHER PAGE/, `only the open page is copied at ${rotation}°`);
+      const preserved = await PDFDocument.load(result.bytes);
+      assert.deepEqual(preserved.getPage(0).getCropBox(), { x: 40, y: 20, width: 520, height: 360 });
+      assert.equal(preserved.getPage(0).getRotation().angle, rotation);
+      const rendered = await getDocument({ data: result.bytes.slice(), useSystemFonts: true }).promise;
+      try {
+        const renderedPage = await rendered.getPage(1), viewport = renderedPage.getViewport({ scale: 1 });
+        const item = (await renderedPage.getTextContent()).items.find((entry) => "str" in entry && entry.str.includes("VERIFY DOOR"));
+        assert.ok(item && "str" in item);
+        const [a, b, c, d, e, g] = viewport.transform, x = item.transform[4], y = item.transform[5];
+        assert.ok(Math.abs((a * x + c * y + e) / viewport.width - .6) < .001, `markup x stays aligned at ${rotation}°`);
+        assert.ok(Math.abs((b * x + d * y + g) / viewport.height - .7) < .001, `markup y stays aligned at ${rotation}°`);
+        const visualDx = a * item.transform[0] + c * item.transform[1];
+        const visualDy = b * item.transform[0] + d * item.transform[1];
+        assert.ok(visualDx > 0 && Math.abs(visualDy) / Math.hypot(visualDx, visualDy) < .001, `markup text stays horizontal at ${rotation}°`);
+      } finally { await rendered.destroy(); }
+    } finally { await f.pdf.destroy(); }
+  }
 });
 
 test("existing full marked-set export retains its cover, RFI schedule and sheet stamp", async () => {
