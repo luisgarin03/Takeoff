@@ -306,7 +306,7 @@ select {
   min-width: min(360px, calc(100vw - 24px));
   min-height: min(260px, calc(100dvh - var(--find-dialog-top, 12px) - max(12px, env(safe-area-inset-bottom, 0px))));
   max-width: calc(100vw - 24px);
-  max-height: min(760px, calc(100dvh - var(--find-dialog-top, 12px) - max(12px, env(safe-area-inset-bottom, 0px))));
+  max-height: calc(100dvh - var(--find-dialog-top, 12px) - var(--find-dialog-y, 0px) - max(12px, env(safe-area-inset-bottom, 0px)));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -507,10 +507,10 @@ select {
 .find-job-copy strong { font-size: 11.5px; }
 .find-job-copy > span { color: var(--ink-muted); font-size: 10px; }
 .find-job-count { color: var(--ink-muted); font: 10px/1.25 var(--f-mono, monospace); text-align: right; white-space: nowrap; }
-.find-page-results { display: flex; min-height: 0; flex: 0 0 auto; flex-direction: column; gap: 6px; }
+.find-page-results { display: flex; min-height: 180px; flex: 1 0 180px; flex-direction: column; gap: 6px; }
 .find-page-results-heading { color: var(--ink-muted); font: 700 10px/1.3 var(--f-mono, monospace); letter-spacing: .08em; text-transform: uppercase; }
-.find-page-results ol { display: flex; max-height: min(270px, 36dvh); flex-direction: column; gap: 5px; margin: 0; padding: 1px; overflow: auto; overscroll-behavior: contain; list-style: none; scrollbar-width: thin; }
-.find-page-results li { margin: 0; padding: 0; }
+.find-page-results ol { display: flex; min-height: 0; flex: 1 1 0; flex-direction: column; gap: 5px; margin: 0; padding: 1px; overflow: auto; overscroll-behavior: contain; list-style: none; scrollbar-width: thin; }
+.find-page-results li { flex: 0 0 auto; margin: 0; padding: 0; }
 .find-page-results li > button { display: grid; width: 100%; min-height: 48px; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; align-items: center; border: 1px solid var(--ink-faint); border-radius: 7px; padding: 8px 10px; background: transparent; color: var(--ink); cursor: pointer; text-align: left; }
 .find-page-results li > button:hover { background: var(--paper-cream); }
 .find-page-results li > button:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 1px; }
@@ -524,6 +524,16 @@ select {
 .find-dialog-help-panel { color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
 .find-dialog-help-panel h3 { margin: 0; color: var(--ink); font-size: 14px; }
 .find-dialog-help-panel p { margin: 0; }
+.find-help-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; color: var(--ink); }
+.find-help-preview > span { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; box-sizing: border-box; padding: 5px 9px; border: 1px solid var(--ink-faint); border-radius: 6px; font: 12px var(--f-body, sans-serif); background: transparent; }
+.find-help-preview .is-primary { background: var(--cobalt); border-color: var(--cobalt); color: var(--accent-contrast, white); font-weight: 700; }
+.find-help-preview .is-outline { border-color: var(--cobalt); color: var(--cobalt); font-weight: 700; }
+.find-help-preview .is-selected { background: var(--tint-select); border-color: var(--cobalt); }
+.find-help-preview .is-chip { border-radius: 999px; }
+.find-help-preview .is-link { min-height: 0; padding: 0; border: 0; color: var(--c-danger, #b03a26); text-decoration: underline; }
+.find-help-preview .is-square { width: 30px; padding: 0; }
+.find-help-preview .is-color { width: 30px; background: var(--cobalt); box-shadow: inset 0 0 0 3px var(--paper); }
+.find-help-preview .is-result { flex-direction: column; align-items: flex-start; }
 .find-dialog-resize-handle {
   position: absolute;
   bottom: 0;
@@ -562,7 +572,7 @@ select {
   .find-all-dialog {
     width: calc(100vw - 16px);
     min-width: 0;
-    max-height: calc(100dvh - var(--find-dialog-top, 8px) - max(8px, env(safe-area-inset-bottom, 0px)));
+    max-height: calc(100dvh - var(--find-dialog-top, 8px) - var(--find-dialog-y, 0px) - max(8px, env(safe-area-inset-bottom, 0px)));
     border-radius: 9px;
   }
   .find-dialog-header { padding: 9px 11px; }
@@ -576,7 +586,6 @@ select {
   .find-job-results li { grid-template-columns: auto 30px minmax(0, 1fr) 30px; }
   .find-job-count { grid-column: 3 / 4; text-align: left; }
   .find-job-remove { grid-column: 4; grid-row: 1 / span 2; }
-  .find-page-results ol { max-height: 32dvh; }
   .find-dialog-resize-handle { display: none; }
 }
 
@@ -1981,3 +1990,6 @@ select {
   .pdf-quality-list > label > strong { white-space: normal; }
   .pdf-export-dialog > footer { display: grid; grid-template-columns: 1fr 1fr; }
 }
+
+/* Portaled hatch menus must clear the conditions drawer; the generic menu rule uses !important. */
+.tool-menu-popover.condition-hatch-popover { z-index: 1000 !important; }

@@ -766,7 +766,7 @@ export default function TakeoffCanvas() {
   const [missingImportError, setMissingImportError] = useState("");
   const [cloudView, setCloudView] = useState(() => SHARING_UI_ENABLED && new URLSearchParams(window.location.search).has("sharedProject") ? "projects" : null);
   const cloudAccount = useCloud();
-  useEffect(() => { if (cloudAccount.authReturn) setCloudView("projects"); }, [cloudAccount.authReturn]);
+  useEffect(() => { if (cloudAccount.authReturn) setCloudView(cloudAccount.authReturn.error ? "account" : "welcome"); }, [cloudAccount.authReturn]);
   useEffect(() => { if (cloudAccount.driveReturn) setCloudView("account"); }, [cloudAccount.driveReturn]);
   const portableProjectId = useRef(crypto.randomUUID());
   const projectFileLock = useRef(false);
@@ -1734,7 +1734,7 @@ export default function TakeoffCanvas() {
     const maxWidth = Math.max(minWidth, resize.edge === "left"
       ? resize.left + resize.width - margin
       : window.innerWidth - resize.left - margin);
-    const maxHeight = Math.max(minHeight, Math.min(760, availableHeight));
+    const maxHeight = availableHeight;
     const horizontalDelta = event.clientX - resize.startX;
     const width = Math.max(minWidth, Math.min(maxWidth, resize.width + (resize.edge === "left" ? -horizontalDelta : horizontalDelta)));
     const height = Math.max(minHeight, Math.min(maxHeight, resize.height + event.clientY - resize.startY));
@@ -1759,7 +1759,7 @@ export default function TakeoffCanvas() {
     const minWidth = Math.min(360, availableWidth);
     const minHeight = Math.min(260, availableHeight);
     const maxWidth = Math.max(minWidth, availableWidth);
-    const maxHeight = Math.max(minHeight, Math.min(760, availableHeight));
+    const maxHeight = availableHeight;
     const widthDelta = event.key === "ArrowLeft" ? (edge === "left" ? step : -step)
       : event.key === "ArrowRight" ? (edge === "right" ? step : -step) : 0;
     const heightDelta = event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
@@ -7111,10 +7111,8 @@ export default function TakeoffCanvas() {
       title={cloudAccount?.user ? `Account: ${cloudAccount.user.email}` : "Cloud account and projects"}
       style={{ display: "none", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5 }}>
       <img src={cloudLogo} alt="" width="20" height="16" style={{ objectFit: "contain", flexShrink: 0 }} />Cloud{SHARING_UI_ENABLED && cloudAccount?.invitationCount > 0 && <span className="cloud-invitation-badge" aria-label={`${cloudAccount.invitationCount} new project invitations`}>{cloudAccount.invitationCount}</span>}{cloudAccount?.displayStatus && <small>{cloudAccount.displayStatus}</small>}</button>
-    {view !== "canvas" && <button type="button" onClick={() => setWhiteboardOpen(true)} disabled={!hydrated.current || !!loadError}
-      title="Open whiteboard" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", fontSize: 12.5, cursor: "pointer" }}>
-      <Icon name="rectTool" size={15} />Whiteboard</button>}
-    <ToolMenu face={<><Icon name="document" size={15} />{projectName || "Project"}</>} title="Project files"
+
+    <ToolMenu face={<><Icon name="blueprint" size={15} />{projectName || "Project"}</>} title="Project files"
       onOpenChange={onMenuDepth} disabled={!!projectFileBusy}
       items={[
         { id: "new-project", icon: "plus", label: "New project…", onSelect: () => setProjectMetadataModal("new") },
@@ -7272,11 +7270,17 @@ export default function TakeoffCanvas() {
           logo={<strong onClick={handleDevLogoGesture} onMouseDown={(event) => { if (event.detail > 1) event.preventDefault(); }} onDoubleClick={(event) => event.preventDefault()}
             style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}><BrandText /></strong>}
           account={<>
+        <WorkspaceHelp metadata={projectMetadata} name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
         {cloudAccount?.user ? <button type="button" className="account-profile-button" ref={(el) => { if (el) el.parentElement.style.setProperty("--profile-button-width", `${el.getBoundingClientRect().width}px`); }} aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><AccountAvatar profile={cloudAccount.identity} /><span>{cloudAccount.identity.name}</span></button> : <button type="button" className="account-sign-in-button" onClick={() => setCloudView("projects")} disabled={!cloudAccount?.ready} aria-label="Sign in" title="Sign in to your account">Sign in</button>}
         <AccountChip note={cloudMode ? "Synced to Google Drive" : "Local workspace"} onOpenChange={onMenuDepth} />
           </>}
+          projectSelector={<>{projectControls}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>
+          <LongTaskLoader active={saveState === "saving"} label="Saving project…" compact delay={500} />
+          {saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}
+        </span>
+          </>}
           project={<>
-        {projectControls}
         {/* team cloud mode: always a way to leave this project, plus a way to
             browse the rest of the team's projects when the build names a root
             — fixed presence for the whole session (cloudMode is set before the
@@ -7296,10 +7300,7 @@ export default function TakeoffCanvas() {
         <input name="sheet-file" ref={fileInputRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
 
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>
-          <LongTaskLoader active={saveState === "saving"} label="Saving project…" compact delay={500} />
-          {saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}
-        </span>
+
         {/* Deliberately subtle, not a button: local-first app, cloud mode is an
             opt-in extra. Only when ALREADY signed in (never a sign-in entry
             point in the toolbar — that lives solely on the landing link), no
@@ -7309,13 +7310,12 @@ export default function TakeoffCanvas() {
             browse team projects
           </Link>
         )}
-        <WorkspaceHelp metadata={projectMetadata} name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
           </>}
           sheets={<>
         <button type="button" onClick={() => setView("gallery")}
           title={`Plan set — the visual gallery; open one or several sheets (G)${sheetGroup.length ? ` · ${sheetGroup.length} side-by-side now` : ""}`}
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: `1px solid ${sheetGroup.length ? "var(--cobalt)" : "var(--ink-faint)"}`, background: sheetGroup.length ? "var(--cobalt)" : "transparent", color: sheetGroup.length ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}>
-          <Icon name="sheets" size={15} />Sheets
+          <Icon name="sheets" size={15} />Loaded files
         </button>
         {sheets.length > 0 && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -7746,11 +7746,33 @@ export default function TakeoffCanvas() {
                   </ol>
                 </section>}
               </div> : <div id="find-help-panel" className="find-dialog-content find-dialog-help-panel" role="tabpanel" aria-labelledby="find-help-tab">
-                <h3>Find help</h3>
-                <p>Find in all plans scans every loaded PDF. Find in this PDF set scans every page of the currently focused PDF. Find in this page scans only the focused sheet. Each run is added as a separate search.</p>
-                <p>Use Search marks to show, hide, recolor, or remove each completed search. Unmark all pages hides them together without deleting them.</p>
+                <h3>Find help</h3><p>Button previews below are visual references; use the Find tab to operate them.</p>
+                <h4>Search words and suggestions</h4>
+                <p><span className="find-help-preview" aria-hidden="true"><span>fence, gate, dumpster</span></span><strong>Search words or phrases:</strong> enter the words you want to find, separated by commas. Press Enter to search all loaded plans.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-chip is-selected">fence</span><span className="is-chip">gate</span></span><strong>Suggestion names:</strong> click a name to add it to the search box; click it again to exclude it. This changes your keywords without starting a search.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-chip">fence <span>×</span></span></span><strong>× beside a suggestion:</strong> removes that suggestion and takes it out of the search box.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span>Add</span></span><strong>Add:</strong> type a new suggestion in the field below the chips, then click Add. Comma-separated suggestions are supported. They are added to both the suggestions and your search words. You can keep up to 40 suggestions.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-link">Restore defaults</span></span><strong>Restore defaults:</strong> restores the original suggestion list. It does not reset the words already in the search box.</p>
+                <h4>Choose where to search</h4>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-primary">Find in all plans</span></span><strong>Find in all plans:</strong> searches every loaded PDF.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-outline">Find in this PDF set</span></span><strong>Find in this PDF set:</strong> searches every page of the PDF currently focused on the canvas.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-outline">Find in this page</span></span><strong>Find in this page:</strong> searches only the currently focused sheet.</p>
+                <p>Each run adds a separate search and keeps previous searches. Search buttons are unavailable while scanning or when the search box is empty; the PDF-set and page buttons also require an open PDF.</p>
                 <p>Selectable PDF text is searched first. Scanned pages automatically use local OCR and may take longer.</p>
-                <p>Drag the title bar to move this panel, or drag either lower corner to resize it. It stays open while you pan, zoom, or use other tools; close it with × or the active Find button.</p>
+                <h4>Navigate matching pages</h4>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-square"><Icon name="chevronLeft" size={13} /></span><span className="is-square"><Icon name="chevronRight" size={13} /></span></span><strong>‹ / ›:</strong> go to the previous or next matching page. The page counter shows your position in the results. These buttons are unavailable while scanning or when there are no matching pages.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-result"><b>A1.01 · Example sheet</b><small>fence ×3 · 3 matches</small></span></span><strong>Matching page rows:</strong> click a row to open that sheet. Each row shows its PDF, page number, matched keywords, and match counts.</p>
+                <h4>Show, color, or remove search marks</h4>
+                <p><span className="find-help-preview" aria-hidden="true"><span>Mark all pages</span><span className="is-selected">Unmark all pages</span></span><strong>Mark all pages / Unmark all pages:</strong> show or hide highlights for all completed searches. Hiding preserves the searches so you can show them again. This button is unavailable until a search has completed.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-selected">✓ Marked</span><span>Show</span></span><strong>✓ Marked / Show:</strong> hide or show just that search's highlights.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-color" /></span><strong>Color swatch:</strong> choose the highlight color for that search.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-square">×</span></span><strong>× on a Search marks row:</strong> removes that completed search and its highlights. Run the search again to bring them back.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-link">Remove all</span></span><strong>Remove all:</strong> removes every completed search and its highlights.</p>
+                <h4>Panel controls</h4>
+                <p><span className="find-help-preview" aria-hidden="true"><span>Find</span><span className="is-selected">Help</span></span><strong>Find / Help:</strong> switch between the search controls and these instructions.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-square">×</span></span><strong>× in the header:</strong> closes the panel. You can also press Escape or click the active Find toolbar button.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span><b>Find in loaded plans</b></span></span><strong>Title bar:</strong> drag it to move the panel. The panel stays open while you pan, zoom, or use other tools.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-square">└</span><span className="is-square">┘</span></span><strong>Lower corner handles:</strong> drag either corner to resize the panel, including down to the bottom of the screen. When a handle has keyboard focus, use arrow keys to resize, or Shift + arrow keys for larger steps. Scroll inside the panel to read content that does not fit.</p>
               </div>}
               <button className="find-dialog-resize-handle is-left" type="button" aria-label="Resize find panel from lower-left corner" title="Drag or use arrow keys to resize"
                 onKeyDown={(event) => resizeFindDialogWithKeyboard(event, "left")}
@@ -8876,7 +8898,6 @@ export default function TakeoffCanvas() {
           thumbCacheRef={thumbCacheRef} busyRef={statusRef}
           openTabs={openTabs} onOpen={openSheets}
           onAddFiles={handleFiles}
-          projectControls={projectControls}
           levels={sheetLevels}
           onAssignLevel={(keys, label) => { if (denyReadOnlyEdit()) return; setSheetLevels((m) => {
             const next = { ...m };

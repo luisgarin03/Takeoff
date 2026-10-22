@@ -59,7 +59,7 @@ export default function PlanNavigator({
   sheets, getDoc, scales, detectedScales, shapes, labels, onLabel, onDetect,
   thumbCacheRef, busyRef, openTabs, onOpen,
   onAddFiles, onClosePdf, onRemoveFromProject,
-  onCloseProject, onBrowseProjects, projectControls,
+  onCloseProject, onBrowseProjects,
   levels = {}, onAssignLevel,
   // browse (Drive) data
   listFolder, addSheets, onAdded,
@@ -143,6 +143,9 @@ export default function PlanNavigator({
   const [driveErr, setDriveErr] = useState("");
   const [addMenu, setAddMenu] = useState(false);
   const [confirmClose, setConfirmClose] = useState(null);   // { file, shapeCount } | null
+  const [hoveredRemovalFile, setHoveredRemovalFile] = useState(null);
+  const [focusedRemovalFile, setFocusedRemovalFile] = useState(null);
+  const [collapsedPdfs, setCollapsedPdfs] = useState({});
   const [, bump] = useState(0);
   const seqRef = useRef(0);
   const queueRef = useRef([]);
@@ -303,7 +306,7 @@ export default function PlanNavigator({
   }, [mode, canClose, onExit]);
 
   // ── close / remove a PDF from the working set ───────────────────────────
-  const requestClose = (file) => setConfirmClose({ file, shapeCount: pdfShapeCount(file) });
+  const requestClose = (file) => setConfirmClose({ file, shapeCount: pdfShapeCount(file), pageCount: pages[file] });
   const doClose = async () => {
     const { file } = confirmClose;
     setConfirmClose(null);
@@ -324,10 +327,10 @@ export default function PlanNavigator({
   const header = (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--ink)", background: "var(--paper-bright)", flexWrap: "wrap" }}>
       {/* LEFT up-chain: back + title + (cloud) Projects crumb + (browse) breadcrumb */}
-      <button onClick={back} disabled={!canGoBack} title={mode === "browse" ? "Back" : "Back to the canvas (Esc)"}
+      {mode === "browse" && <button onClick={back} disabled={!canGoBack} title="Back"
         style={{ ...ctrlBtn, padding: "6px 8px", opacity: canGoBack ? 1 : 0.35, cursor: canGoBack ? "pointer" : "default" }}>
         <Icon name="chevronLeft" size={14} />
-      </button>
+      </button>}
       <Icon name="sheets" size={18} />
       <strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>{title}</strong>
       {onBrowseProjects && (
@@ -355,7 +358,6 @@ export default function PlanNavigator({
       <div style={{ flex: 1 }} />
 
       {/* RIGHT: source toggle · browse filters · add plans · account */}
-      {projectControls}
       {browseEnabled && (
         <div style={{ display: "inline-flex", border: "1px solid var(--ink-faint)", borderRadius: 2, overflow: "hidden" }}>
           <button onClick={() => setMode("plan")} style={{ ...ctrlBtn, border: "none", background: mode === "plan" ? "var(--ink)" : "transparent", color: mode === "plan" ? "var(--paper-bright)" : "var(--ink-muted)" }}>Plan set</button>
@@ -499,31 +501,53 @@ export default function PlanNavigator({
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(270px, 1fr))", gap: 14 }}>
-          {grp.keys.map((key) => {
+          {grp.keys.map((key, keyIndex) => {
             const idx = sel.indexOf(key);
             const isSel = idx >= 0;
             const thumb = thumbCacheRef.current.get(key);
             const cnt = shapeCount(key);
             const isOpenTab = openTabs.includes(key);
             const parsed = parseSheetKey(key);
-            const isFirstPageOfPdf = parsed.page === 1;   // per-PDF close lives on the first card only
+            const isFirstPageOfPdf = !grp.keys.slice(0, keyIndex).some((otherKey) => parseSheetKey(otherKey).file === parsed.file);
+            const collapsed = collapsedPdfs[parsed.file] ?? true;
             return (
-              <div key={key} data-sheetkey={key} ref={(el) => { if (el && !thumb) obsRef.current?.observe(el); }}
+              <React.Fragment key={key}>
+                {isFirstPageOfPdf && (
+                  <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <button type="button" aria-expanded={!collapsed} aria-label={`${collapsed ? "Expand" : "Collapse"} previews for ${parsed.file}`}
+                      title={`${collapsed ? "Expand" : "Collapse"} page previews`}
+                      onClick={() => setCollapsedPdfs((current) => ({ ...current, [parsed.file]: !(current[parsed.file] ?? true) }))}
+                      style={{ ...ctrlBtn, flexShrink: 0, minWidth: 36, minHeight: 36, justifyContent: "center" }}>
+                      <span aria-hidden="true" style={{ fontSize: 18 }}>{collapsed ? "▸" : "▾"}</span>
+                    </button>
+                  {onClosePdf ? (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); requestClose(parsed.file); }}
+                    onMouseEnter={() => setHoveredRemovalFile(parsed.file)} onMouseLeave={() => setHoveredRemovalFile(null)}
+                    onFocus={() => setFocusedRemovalFile(parsed.file)} onBlur={() => setFocusedRemovalFile(null)}
+                    title={`Remove all pages of ${parsed.file} from the plan set${cloudMode ? " (the PDF stays in Drive)" : ""}`}
+                    style={{ display: "block", gridColumn: "1 / -1", justifySelf: "start", maxWidth: "100%", margin: 0, padding: "7px 10px", border: "1px solid #b91c1c", borderRadius: 6, background: "#b91c1c", color: "#fff", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 600, whiteSpace: "normal", overflowWrap: "anywhere", textAlign: "left" }}>
+                    Remove {parsed.file}
+                    <small style={{ display: "block", marginTop: 3, fontWeight: 400 }}>Entire PDF · {pages[parsed.file]} {pages[parsed.file] === 1 ? "page" : "pages"} will be removed</small>
+                  </button>
+                  ) : <strong>{parsed.file}</strong>}
+                  </div>
+                )}
+              {!collapsed && <div data-sheetkey={key} ref={(el) => { if (el && !thumb) obsRef.current?.observe(el); }}
                 onClick={() => toggleSel(key)}
                 style={{ border: isSel ? "1.5px solid var(--cobalt)" : "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", position: "relative", boxShadow: isSel ? "var(--shadow-2)" : "var(--shadow-1)" }}>
                 <span style={{ position: "absolute", top: 8, left: 8, zIndex: 2, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", border: isSel ? "none" : "1.5px solid var(--ink-faint)", background: isSel ? "var(--cobalt)" : "var(--paper-bright)", color: "var(--paper-bright)", fontFamily: "var(--f-mono)", fontSize: 12, fontWeight: 700 }}>{isSel ? idx + 1 : ""}</span>
                 <div style={{ position: "absolute", top: 8, right: 8, zIndex: 2, display: "flex", gap: 6 }}>
-                  {isFirstPageOfPdf && onClosePdf && (
-                    <button onClick={(e) => { e.stopPropagation(); requestClose(parsed.file); }} title={cloudMode ? "Close this PDF — unload it from the plan set (it stays in Drive)" : "Close this PDF — remove it from the plan set (local plans aren't stored elsewhere)"}
-                      style={{ padding: "5px 8px", border: "none", background: "var(--paper-bright)", color: "var(--ink-muted)", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 11, boxShadow: "var(--shadow-1)" }}>✕</button>
-                  )}
                   <button onClick={(e) => { e.stopPropagation(); onOpen([key], false); }} title="Open just this sheet"
                     style={{ padding: "5px 12px", border: "none", background: "var(--ink)", color: "var(--paper-bright)", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase" }}>View</button>
                 </div>
-                <div style={{ height: 185, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--well)", borderBottom: "1px solid var(--ink-faint)", overflow: "hidden" }}>
+                <div style={{ position: "relative", height: 185, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--well)", borderBottom: "1px solid var(--ink-faint)", overflow: "hidden" }}>
                   {thumb
                     ? <img src={thumb} alt={labelOf(key)} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
                     : <div className="skeleton" style={{ width: "86%", height: "78%" }} />}
+                  {(hoveredRemovalFile || focusedRemovalFile) === parsed.file && <div className="pdf-removal-preview" aria-hidden="true"
+                    style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", background: "rgba(185, 28, 28, .18)", border: "2px solid #b91c1c", boxSizing: "border-box" }}>
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 58, height: 58, borderRadius: "50%", background: "#b91c1c", color: "white", boxShadow: "0 2px 8px #0006" }}><Icon name="close" size={38} /></span>
+                  </div>}
                 </div>
                 <div style={{ padding: "8px 10px", display: "flex", alignItems: "baseline", gap: 8 }}>
                   <strong style={{ fontFamily: "var(--f-mono)", fontSize: 12.5, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }} title={key}>{labelOf(key)}</strong>
@@ -534,7 +558,9 @@ export default function PlanNavigator({
                     {scales[key] ? "scale ✓" : detectedScales[key] ? `plan: ${detectedScales[key].label}` : "no scale"}
                   </span>
                 </div>
-              </div>
+
+              </div>}
+              </React.Fragment>
             );
           })}
         </div>
@@ -624,6 +650,9 @@ export default function PlanNavigator({
     <div onClick={() => setConfirmClose(null)} style={{ position: "absolute", inset: 0, zIndex: 5, background: "var(--scrim)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: 440, maxWidth: "100%", background: "var(--paper-bright)", boxShadow: "var(--shadow-2)", padding: "18px 20px" }}>
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)" }}>Close “{confirmClose.file}”?</strong>
+        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--c-danger)", margin: "10px 0" }}>
+          {confirmClose.pageCount} {confirmClose.pageCount === 1 ? "page will" : "pages will"} be removed from the plan set (entire PDF).
+        </p>
         <p style={{ fontSize: 12.5, color: "var(--ink-muted)", lineHeight: 1.6, margin: "10px 0 4px" }}>
           {cloudMode
             ? "Closing removes it from this plan set so it stops loading — the file stays in your Drive project and you can re-add it any time from Browse Drive."

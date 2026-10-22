@@ -2,6 +2,12 @@
 
 ## Unreleased — toolbar and Profile
 
+- Simplified the top toolbar with a blueprint project selector, User Guide beside the profile, and closed-by-default Sheets/Takeoff tabs. Renamed the gallery button to Loaded files.
+- Added collapsed-by-default PDF sets, explicit red removal buttons with page counts, and affected-page hover previews. Simplified gallery controls.
+- Made Find matching-page results grow with the panel and added illustrated control help.
+
+- Removed the Find panel's 760px height cap and expanded its Help tab with explanations for every control.
+
 - Fixed Count PDF overlays so exported page PDFs, Marked Sets, and Whiteboard imports retain the same condition-colored square with a white outline shown on the Takeoff canvas instead of changing Count marks into circles.
 
 - Raised takeoff markups above the selectable PDF text layer visually and in hit-testing. In Select mode, an overlapping note, callout, cloud, arrow, or highlight now receives the click/double-click first, while unobstructed PDF text remains selectable and copyable.
@@ -423,3 +429,12 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 - Add Create New Source Folder alongside Locate, with fixed Estimate save data/Projects initialization, existing-folder reuse, cancellation/error handling, and automatic persistent selection.
 
 - Add a clickable account avatar/name beside the logo and enrich Profile with the avatar, email, editable name and logout. Saved names immediately update the header.
+
+### Custom interface accent
+- Added an automatically saved color picker and Reset accent control to the Theme panel, with contrasting button text.
+
+The hatch pattern picker opens above the canvas and stays within the window, including when used in the toolbar or docked conditions panel.
+
+After sign-in, a welcome screen replaces the automatic Drive folder prompt. Free accounts see a view-only message and Get Premium opens subscription options; active subscribers see a welcome-back message.
+
+User Guide is now in the top bar, immediately left of the profile, and stays available across toolbar tabs.

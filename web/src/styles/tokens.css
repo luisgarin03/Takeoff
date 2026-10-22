@@ -230,3 +230,15 @@
 
 /* dot leader (between mono labels) */
 .dot-leader { flex: 1; border-bottom: 1px dotted var(--ink-faint); margin: 0 8px; align-self: end; height: .8em; }
+
+/* Custom accents affect screen chrome only; plan colors and print stay intact. */
+@media screen {
+  :root[data-custom-accent] {
+    --cobalt: var(--custom-accent);
+    --cobalt-deep: color-mix(in srgb, var(--custom-accent) 88%, var(--custom-accent-contrast));
+    --accent-contrast: var(--custom-accent-contrast);
+    --tint-select: color-mix(in srgb, var(--custom-accent) 15%, var(--paper-bright));
+    --ring: 0 0 0 3px color-mix(in srgb, var(--custom-accent) 32%, transparent);
+    accent-color: var(--custom-accent);
+  }
+}

@@ -4,6 +4,12 @@
 .estimating-toolbar-header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; min-width: 0; border-bottom: 1px solid var(--ink-faint); }
 .estimating-toolbar-logo { flex: 0 1 auto; min-width: 0; max-width: 28%; overflow-wrap: anywhere; }
 .estimating-toolbar-logo strong { display: block; }
+.estimating-toolbar-project { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 1 auto; }
+.estimating-toolbar-project button { min-height: 40px; border-radius: 6px !important; }
+@media (max-width: 900px) {
+  .estimating-toolbar-header { flex-wrap: wrap; }
+  .estimating-toolbar-project { max-width: 100%; }
+}
 .estimating-toolbar-tabs { display: flex; flex: 0 1 auto; min-width: 0; padding: 4px; gap: 3px; overflow-x: auto; background: var(--paper-shadow); border: 1px solid var(--ink-faint); border-radius: 9px; scrollbar-width: thin; }
 .estimating-toolbar-tabs button { flex: 0 0 auto; min-height: 40px; padding: 6px 12px; border: 1px solid transparent; border-radius: 6px !important; background: transparent; color: var(--ink-muted); font: 600 12px var(--f-body); }
 .estimating-toolbar-tabs button:hover { color: var(--ink); }

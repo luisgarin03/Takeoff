@@ -24,7 +24,8 @@
 // The panel stays MOUNTED while collapsed (open=false renders null), so all of
 // that transient state survives a collapse/expand round-trip.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "../brand/icons.jsx";
 import { attrValue, columnLabel } from "../lib/conditionColumns.js";
 import { SPEC_FIELDS } from "../lib/reportColumns.js";
@@ -289,16 +290,34 @@ function AddValueInput({ onAdd }) {
 export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondParam, onAssignAttr, conditionColumns = [], layout = "stack" }) {
   const [hatchOpen, setHatchOpen] = useState(false);
   const hatchRef = useRef(null);
+  const hatchMenuRef = useRef(null);
+  const [hatchPosition, setHatchPosition] = useState({ top: 0, left: 0 });
   const activeColor = c.color || "#c96442";
+  useLayoutEffect(() => {
+    if (!hatchOpen) return;
+    const anchor = hatchRef.current.getBoundingClientRect();
+    const menu = hatchMenuRef.current.getBoundingClientRect();
+    const below = anchor.bottom + 4;
+    const top = below + menu.height <= window.innerHeight - 8 ? below : anchor.top - menu.height - 4;
+    setHatchPosition({
+      top: Math.max(8, Math.min(top, window.innerHeight - menu.height - 8)),
+      left: Math.max(8, Math.min(anchor.left, window.innerWidth - menu.width - 8)),
+    });
+  }, [hatchOpen]);
   useEffect(() => {
     if (!hatchOpen) return;
-    const onDown = (e) => { if (hatchRef.current && !hatchRef.current.contains(e.target)) setHatchOpen(false); };
+    const onDown = (e) => { if (!hatchRef.current?.contains(e.target) && !hatchMenuRef.current?.contains(e.target)) setHatchOpen(false); };
     const onKey = (e) => { if (e.key === "Escape") setHatchOpen(false); };
-    document.addEventListener("pointerdown", onDown);
+    const onMove = (e) => { if (e.type === "resize" || !hatchMenuRef.current?.contains(e.target)) setHatchOpen(false); };
+    document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("keydown", onKey);
+    document.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
     return () => {
-      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("pointerdown", onDown, true);
       document.removeEventListener("keydown", onKey);
+      document.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
     };
   }, [hatchOpen]);
   // Two layouts, one editor. "stack" (docked panel, narrow) stacks the groups
@@ -341,18 +360,18 @@ export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondPara
       {isRow && rule()}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <span ref={hatchRef} style={{ display: "flex", alignItems: "center", gap: 4, position: "relative" }}>
-          <button onClick={() => setHatchOpen((v) => !v)} title="Choose a hatch pattern"
+          <button type="button" aria-expanded={hatchOpen} onClick={() => setHatchOpen((v) => !v)} title="Choose a hatch pattern"
             style={{ display: "flex", alignItems: "center", gap: 5, padding: "2px 7px 2px 2px", borderRadius: 0, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", lineHeight: 0 }}>
             <span style={{ borderRadius: 4, overflow: "hidden", lineHeight: 0 }}><HatchSwatch type={c.hatch || "solid"} line={c.color} fill={c.fill} /></span>
             <span style={{ fontSize: 10.5, color: "var(--ink-muted)", lineHeight: 1 }}>{(HATCHES.find((h) => h.id === (c.hatch || "solid")) || {}).label || "Solid"} ▾</span>
           </button>
-          {hatchOpen && (
-            <div className="tool-menu-popover" style={{ position: "absolute", top: 26, left: 0, zIndex: 90, display: "grid", gridTemplateColumns: "repeat(6, auto)", gap: 4, padding: 8, background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "var(--shadow-pop)" }}>
+          {hatchOpen && createPortal(
+            <div ref={hatchMenuRef} className="tool-menu-popover condition-hatch-popover" role="group" aria-label="Hatch patterns" style={{ position: "fixed", ...hatchPosition, zIndex: 1000, maxWidth: "calc(100vw - 16px)", maxHeight: "calc(100dvh - 16px)", overflow: "auto", boxSizing: "border-box", display: "grid", gridTemplateColumns: "repeat(6, auto)", gap: 4, padding: 8, background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "var(--shadow-pop)" }}>
               {HATCHES.map((h) => {
                 const hOn = (c.hatch || "solid") === h.id;
                 return <button key={h.id} title={h.label} onClick={() => { onUpdateCond({ hatch: h.id }); setHatchOpen(false); }} style={{ padding: 1, borderRadius: 0, border: hOn ? `2px solid ${activeColor}` : "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", lineHeight: 0 }}><HatchSwatch type={h.id} line={c.color} fill={c.fill} /></button>;
               })}
-            </div>
+            </div>, document.body
           )}
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Line style — the outline dash for this finish's floor-area and linear takeoffs (canvas + Marked Set PDF). Surface walls and deducts keep their own dashing.">
@@ -363,7 +382,7 @@ export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondPara
           </select>
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Linear marker — keep the default plain line, or repeat circles or X marks to distinguish same-color Linear takeoffs. This changes appearance only, never the measured length.">
-          <span style={{ color: "var(--ink-muted)" }}>Marker</span>
+          <span style={{ color: "var(--ink-muted)" }}>Shape</span>
           <select name="condition-line-marker" value={normalizeLineMarker(c.line_marker)} onChange={(e) => onUpdateCond({ line_marker: e.target.value })}
             style={{ fontSize: 11, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", padding: "1px 3px" }}>
             {LINE_MARKER_IDS.map((id) => <option key={id} value={id}>{LINE_MARKERS[id].glyph} {LINE_MARKERS[id].label}</option>)}
@@ -676,7 +695,7 @@ function TakeoffsPanel({
             ))}
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <button onClick={() => onPanelPrefs((p) => ({ ...p, strip: !p.strip }))}
+            <button hidden onClick={() => onPanelPrefs((p) => ({ ...p, strip: !p.strip }))}
               title="Compact strip — also show the conditions as a horizontal strip above the canvas (handy on small projects with the panel collapsed)"
               style={{ background: panelPrefs.strip ? "var(--paper-cream)" : "none", border: "1px solid var(--paper-cream)", color: panelPrefs.strip ? "var(--ink)" : "var(--paper-cream)", fontSize: 9.5, fontFamily: "var(--f-mono)", letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", padding: "2px 6px", lineHeight: 1.4 }}>strip</button>
             <button onClick={onToggleCollapse} title="Collapse the panel (the ☰ button on the canvas edge brings it back)"

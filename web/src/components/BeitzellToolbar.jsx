@@ -3,10 +3,10 @@ import "../styles/toolbarTabs.css";
 
 // Menus use a portal in scrollable toolbar panels and close when their tab hides.
 export const ToolbarPanelContext = createContext(null);
-const TABS = ["Project", "Sheets", "Takeoff"];
+const TABS = ["Sheets", "Takeoff"];
 
-export default function BeitzellToolbar({ logo, account, project, sheets, takeoff }) {
-  const [active, setActive] = useState("Takeoff");
+export default function BeitzellToolbar({ logo, projectSelector, account, project, sheets, takeoff }) {
+  const [active, setActive] = useState(null);
   const id = useId();
   const tabsRef = useRef(null);
   useEffect(() => {
@@ -23,7 +23,7 @@ export default function BeitzellToolbar({ logo, account, project, sheets, takeof
     observer.observe(tabs);
     return () => observer.disconnect();
   }, [active]);
-  const panels = { Project: project, Sheets: sheets, Takeoff: takeoff };
+  const panels = { Sheets: sheets, Takeoff: takeoff };
   function onKeyDown(event) {
     const index = Math.max(0, TABS.indexOf(event.target.textContent));
     const next = event.key === "Home" ? 0 : event.key === "End" ? TABS.length - 1
@@ -38,6 +38,7 @@ export default function BeitzellToolbar({ logo, account, project, sheets, takeof
   return <div className="estimating-toolbar">
     <div className="estimating-toolbar-header">
       <div className="estimating-toolbar-logo">{logo}</div>
+      <ToolbarPanelContext.Provider value={true}><div className="estimating-toolbar-project">{projectSelector}{project}</div></ToolbarPanelContext.Provider>
       <div ref={tabsRef} className="estimating-toolbar-tabs" role="tablist" aria-label="Estimating toolbar" onKeyDown={onKeyDown}>
         {TABS.map((tab) => <button key={tab} type="button" role="tab" id={`${id}-${tab}`}
           aria-selected={active === tab} aria-expanded={active === tab} aria-controls={`${id}-${tab}-panel`} tabIndex={active === tab || (active === null && tab === TABS[0]) ? 0 : -1}

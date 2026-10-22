@@ -11,10 +11,10 @@ function SubscriptionPlanCard({ plan, current, disabled, onChoose }) {
   </article>;
 }
 
-export default function SubscriptionSection({ user, offline, client, service: suppliedService }) {
+export default function SubscriptionSection({ user, offline, client, service: suppliedService, initiallyOpen = false }) {
   const configuredService = useMemo(() => client ? createBillingService(createRevenueCatBillingAdapter(client)) : billingService, [client]);
   const service = suppliedService || configuredService;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const [state, setState] = useState({ loading: true, record: null, plans: SUBSCRIPTION_PLANS, error: "" });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);

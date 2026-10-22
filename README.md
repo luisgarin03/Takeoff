@@ -130,3 +130,13 @@ App Store review/update channel.
 The **Takeoff** tab also contains the live condition summary. It shows the armed condition, scale/drawing guidance, current condition totals, visible shape count, and zoom without covering the plan canvas. The card wraps with the other Takeoff controls on narrower screens.
 
 Experimental Takeoff features stay in a hidden floating panel so the everyday toolbar and canvas rail remain balanced for deployment. Quickly click or tap the unchanged Beitzell Estimating logo three times to toggle **Experimental tools**. The panel contains the working Report, Zone, AI, Revisions, Render settings, and Command line controls; close it with × or Escape.
+
+Theme panel: choose any interface accent color with the Accent color picker. The choice previews immediately, saves in this browser, and applies to buttons, highlights, focus rings, and sliders in light and dark mode. Reset accent restores the default blue. Logo, cursor, and takeoff condition colors remain separate.
+
+The hatch pattern picker opens above the canvas and stays within the window, including when used in the toolbar or docked conditions panel.
+
+After sign-in, a welcome screen replaces the automatic Drive folder prompt. Free accounts see a view-only message and Get Premium opens subscription options; active subscribers see a welcome-back message.
+
+User Guide is now in the top bar, immediately left of the profile, and stays available across toolbar tabs.
+
+The Find panel's **Help** tab explains every search, suggestion, navigation, and highlight control. Drag either lower corner to resize the panel down to the screen's bottom edge; the panel keeps a small margin so its controls remain reachable.

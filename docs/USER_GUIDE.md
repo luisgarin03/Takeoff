@@ -16,32 +16,33 @@ OpenTakeoff is a takeoff canvas that runs in your browser. Open a plan, set the 
 
 On Android Chrome, you can use the browser menu's **Install app** or **Add to home screen** action when running the hosted app or a local server reachable from the phone. The install uses the app manifest and branded icon; it does not make PDFs or project data available offline, so the browser remains the source of truth.
 
-This manual takes you from a blank browser tab to a finished, exported takeoff, and covers every shipped feature along the way. Shortcuts appear inline as you meet each tool; the complete table is in [§16](#16-keyboard-reference).
+This manual takes you from a blank browser tab to a finished, exported takeoff, and covers every shipped feature along the way. Shortcuts appear inline as you meet each tool; the complete table is in [Keyboard reference](#keyboard-reference).
 
 **Contents**
 
-1. [Five minutes to a takeoff](#1-five-minutes-to-a-takeoff)
-2. [Google Drive Cloud Sync](#2-google-drive-cloud-sync)
-3. [Opening plans & moving around](#3-opening-plans--moving-around)
-4. [Scale — set it first](#4-scale--set-it-first)
-5. [Conditions — your finishes](#5-conditions--your-finishes)
-6. [The measuring tools](#6-the-measuring-tools)
-7. [One-Click Area](#7-one-click-area)
-8. [Selecting & editing shapes](#8-selecting--editing-shapes)
-9. [Undo & redo](#9-undo--redo)
-10. [Markups, stamps & RFIs](#10-markups-stamps--rfis)
-11. [The report & exports](#11-the-report--exports)
-12. [Revisions](#12-revisions)
-13. [Saving, your data & Contribute](#13-saving-your-data--contribute)
-14. [The Agent panel](#14-the-agent-panel)
-15. [AI settings & driving OpenTakeoff from an agent](#15-ai-settings--driving-opentakeoff-from-an-agent)
-15a. [ChatGPT Project Assistant](#15a-chatgpt-project-assistant)
-16. [Keyboard reference](#16-keyboard-reference)
-17. [Troubleshooting](#17-troubleshooting)
+- [Five minutes to a takeoff](#five-minutes-to-a-takeoff)
+- [Google Drive Cloud Sync](#google-drive-cloud-sync)
+- [Opening plans & moving around](#opening-plans--moving-around)
+- [Scale — set it first](#scale--set-it-first)
+- [Conditions — your finishes](#conditions--your-finishes)
+- [The measuring tools](#the-measuring-tools)
+- [Selecting & editing shapes](#selecting--editing-shapes)
+- [Undo & redo](#undo--redo)
+- [Markups, stamps & RFIs](#markups-stamps--rfis)
+- [The report & exports](#the-report--exports)
+- [Revisions](#revisions)
+- [Saving, your data & Contribute](#saving-your-data--contribute)
+- [The Agent panel](#the-agent-panel)
+- [AI settings & driving OpenTakeoff from an agent](#ai-settings--driving-opentakeoff-from-an-agent)
+- [ChatGPT Project Assistant](#chatgpt-project-assistant)
+- [Keyboard reference](#keyboard-reference)
+- [Troubleshooting](#troubleshooting)
+- [Toolbar, account, and appearance](#toolbar-account-and-appearance)
+- [Tool directory and estimating workflow](#tool-directory-and-estimating-workflow)
 
 ---
 
-## 1. Five minutes to a takeoff
+## Five minutes to a takeoff
 
 The fastest way to learn the canvas is to run one takeoff end to end on the bundled plan.
 
@@ -55,13 +56,17 @@ That's the whole loop: open → scale → condition → measure → report. Ever
 
 ---
 
-## 2. Google Drive Cloud Sync
+## Google Drive Cloud Sync
 
 Use **Cloud** to browse a Google Drive folder available on your device and open saved **.otk** projects. Google Drive for desktop synchronizes files in that folder; OpenTakeoff keeps your working edits in browser storage until you save a project file. Selecting a source folder does not automatically upload your edits.
 
 ### Install Google Drive
 
-On your PC, install Google Drive for desktop and sign in with the Google account that owns your project files. Wait for the folder and files to become available on the computer.
+1. Download **Google Drive for desktop** from the official link below. On Windows, run the downloaded installer and follow its setup prompts.
+2. Open Google Drive for desktop and sign in with the Google account that contains your project files. This is a separate sign-in from your estimating-app account.
+3. Open **File Explorer** and locate **Google Drive**, then **My Drive**, or the folder selected for mirrored files. Use your actual location; the drive letter is not always G:.
+4. Create or locate a project folder, for example **Estimate save data → Projects → Job name**. Put your existing `.otk` project there, or save a new project there from the estimating app.
+5. Wait for Drive to finish transferring the file before opening it. Keep Drive for desktop running when using streamed files.
 
 [Download Google Drive](https://www.google.com/drive/download/)
 
@@ -71,11 +76,31 @@ Already installed? You can view your files online:
 
 These official links open in a new tab or window. On phones and tablets, install the official Google Drive app through your device's app store. Folder access depends on the browser and device; installing Drive does not by itself enable OpenTakeoff's folder picker.
 
+### Stream or mirror your files
+
+In Drive for desktop, open **Settings → Preferences → Folders from Drive** and choose the My Drive syncing option. **Stream files** downloads files as needed and uses less local storage. **Mirror files** keeps a full local copy of My Drive and uses more disk space. With streaming, right-click a working project folder in File Explorer and choose **Offline access → Available offline** before you need its files without a connection. Let downloads finish first. Locally available files do not remove the app's online license requirements. See [Google's streaming and mirroring instructions](https://support.google.com/drive/answer/13401938?hl=en) and [Google's offline-file guidance](https://support.google.com/drive/answer/16631477?hl=en).
+
+### Open a synced .otk directly — the simplest workflow
+
+1. In the estimating app, open the **Project** toolbar tab, then its **Project** menu and choose **Open project...**.
+2. In the Windows file picker, browse to **Google Drive → My Drive → your project folder**, or your mirrored folder.
+3. Select one `.otk` file and click **Open**. Choose the actual project file, not a Drive website shortcut or an ordinary PDF.
+4. Wait for validation and import. The app opens a separate browser workspace containing the saved plans and estimating data.
+5. Check the project name, sheets, and recent measurements before continuing. When you finish editing, use **Save project...** and choose the intended synced `.otk` destination.
+
+You do not need to connect the app to Google's Drive API or select a source folder to use this direct file-opening workflow. A browser file picker reads the file exposed by Drive for desktop. Double-clicking an `.otk` in File Explorer depends on Windows file associations; **Project → Open project...** is the reliable in-app route. Opening the file imports a copy and does not automatically bind future saves to that original file.
+
+### What appears after sign-in
+
+Successful sign-in now opens a welcome screen instead of prompting you to connect Drive. After checking the subscription, free accounts see **You are in view-only mode** and **Get Premium to unlock all tools**. **Get Premium** opens the existing plan options; **Continue in view-only mode** dismisses the welcome screen. Active subscribers see **Welcome back**. If status cannot be checked, use **Subscription options** to review or retry it. This screen does not install Drive, grant Google file permissions, or synchronize project files.
+
 ### Sign in and select an existing folder
 
-1. Click **Cloud** in the app toolbar.
-2. If prompted, choose **Continue with Google**, or use the available email sign-in or **Create account** options.
-3. On **Select a source folder**, click **Locate Google Drive Folder**.
+This optional folder browser is useful for browsing several jobs. It is not required for opening a single synced `.otk`.
+
+1. Open **Project → Cloud projects...**.
+2. If prompted, sign in and dismiss the welcome screen; reopen **Project → Cloud projects...** when you want the folder browser.
+3. In the source-folder view, click **Locate Google Drive Folder**.
 4. In the device's folder picker, choose the synced folder you want to browse and allow access. You can select your existing source folder or a specific project folder. The app lists the folder you selected.
 5. The **Source Folder:** line shows the selected folder and the subfolders you enter. This is plain text, not a link. Browsers expose this relative folder path rather than the complete PC or phone filesystem path.
 
@@ -121,6 +146,23 @@ Opening an .otk imports it into a local browser workspace. It does not establish
 
 The selected source folder is a browsing location; it does not automatically become the save destination. Browser autosave and a **saved** indicator refer to the working browser data, not proof that the .otk in Google Drive has been updated. If the browser downloads the .otk instead of showing a save picker, move or upload that downloaded file into the intended Drive folder yourself.
 
+### Move between the office and laptop
+
+1. On the computer where you last edited, finish the trace and save the project to its synced `.otk` file. Confirm the destination and modification time in File Explorer.
+2. Check Drive for desktop and wait for synchronization to finish. Close the working project on that computer before editing on the other.
+3. On the second computer, use the correct Google account, let the updated file download, and open it through **Project → Open project...**.
+4. Do not rely on **Open Recent** to fetch that new file. Open Recent restores a browser workspace, which may still contain an older imported copy.
+5. Before handing work back, save the updated `.otk` to the shared location and wait for sync again.
+
+Use one editor at a time for a shared project file. Drive file sync is not live multi-user drawing collaboration and does not merge two `.otk` archives. If two people edit copies, preserve both with different filenames and review the differences before replacing either. A named app revision is useful inside the project, but still save the `.otk` so that revision reaches the other computer.
+
+| Saved item | Where it lives | What it does |
+|---|---|---|
+| Browser autosave | This browser profile and app address | Recovers local working edits; does not update Drive files. |
+| Saved `.otk` | The file location you choose | Portable project snapshot; update it after editing. |
+| Google Drive sync | Drive for desktop and your Google account | Transfers the saved file between devices; wait for completion. |
+| PDF, CSV, or Excel export | The export destination | Review or reporting output; not a substitute for the editable `.otk`. |
+
 ### Phones, tablets, and another computer
 
 If folder selection is unavailable, the Locate and Create buttons are disabled. Use **Project → Open project...** to choose an .otk made available by your device's file picker, or download it from the official Google Drive app or website first. After editing, save/export the .otk and place it back in Drive. Wait for sync before switching devices, and avoid editing separate copies at the same time.
@@ -129,7 +171,7 @@ If folder selection is unavailable, the Locate and Create buttons are disabled. 
 
 Click your avatar or name beside the app logo to open your profile. It shows your avatar, name, email, **Display name**, **Save profile**, and **Log out**. Editing the display name does not change the Google account email. Drive connection controls are not currently shown in this profile panel.
 
-**Project → Save to Cloud...** is a separate server-connected saving feature. It requires an existing Google Drive connection and configured cloud services; it does not use the folder chosen with Locate as its destination. Signing in to OpenTakeoff or selecting a local folder does not establish that separate Drive connection. If that feature asks you to connect Drive in Profile, the current profile has no connection control; use the project-file workflow above rather than assuming an upload occurred.
+Server-connected cloud storage is separate from the local Drive folder workflow and depends on the installation's enabled controls and services. Do not look for a Connect Google Drive button in Profile: the current profile does not expose it. Use **Save project...** to save the actual `.otk` into your synced folder. Signing into the app alone does not upload your plans.
 
 ### Troubleshooting
 
@@ -159,7 +201,7 @@ Automatic folder import requires a desktop browser with folder-write support, su
 
 **Sent invitations** shows incomplete, pending and imported invitations. Canceling an app invitation stops imports through the app; use **Share** in Google Drive to remove the person's Drive permissions. App invitations expire after 30 days, but Google Drive permissions do not expire automatically. A failed import can leave a clearly named partial import folder; no project opens until all selected files finish.
 
-## 3. Opening plans & moving around
+## Opening plans & moving around
 
 The open-sheet tabs and open-sheet dropdown sit in the **Sheets** toolbar and wrap when space is limited. **Schedule** is in the left pencil button’s **Measure** section; select it, then click two opposite corners around the schedule table.
 
@@ -236,7 +278,7 @@ The **☾** button in the zoom cluster inverts the sheet pixels themselves — a
 
 ---
 
-## 4. Scale — set it first
+## Scale — set it first
 
 Scale is the foundation. Every square foot on your report is pixels × scale², so a wrong scale is every number wrong at once. OpenTakeoff treats scale accordingly: it's **per sheet**, it's verified visually on every acceptance, and nothing prices without it.
 
@@ -284,7 +326,7 @@ The **`ft` / `m`** toggle beside the Scale chip switches the whole display layer
 
 ---
 
-## 5. Conditions — your finishes
+## Conditions — your finishes
 
 A **condition** is one finish or scope item — `perimeterWall`, `tile`, `ceiling` — and it's what every measurement commits into. A fresh workspace seeds a starter set (perimeterWall, wallPartition, exteriorWall, tile, ceiling) that you can rename, reorder, delete, or extend.
 
@@ -297,19 +339,19 @@ A **condition** is one finish or scope item — `perimeterWall`, `tile`, `ceilin
 - **Waste %** — the allowance the Report adds on top of the measured quantity. Per condition, matched to the install: ~8% straight-lay LVP, ~15% diagonal, ~20% herringbone.
 - **Line** color, **Fill** color (or **No fill**), and the **hatch pattern** — a picker grid of CAD hatches (plank, herringbone, tile, terrazzo…) that names the pattern under your cursor, so the canvas reads like the real drawing.
 - **Line style** — the outline dash for this finish's floor and linear takeoffs, on canvas and in the Marked Set.
-- **Marker** — **No mark** (the default plain line), repeating **circles**, or repeating **X marks** on Linear takeoffs, useful when two conditions share the same color. Markers are visual only: they do not create points, split the run, or change LF. They are preserved in page, Marked Set, and Whiteboard-import PDFs.
-- **H** (height, ft) — the default for **new** wall traces (Surface Area SF = LF × H) and the vertical-SF display. Existing walls keep the height they were drawn at — select a wall to change just that one (§6).
+- **Shape** — **No mark** (the default plain line), repeating **circles**, or repeating **X marks** on Linear takeoffs, useful when two conditions share the same color. Markers are visual only: they do not create points, split the run, or change LF. They are preserved in page, Marked Set, and Whiteboard-import PDFs.
+- **H** (height, ft) — the default for **new** wall traces (Surface Area SF = LF × H) and the vertical-SF display. Existing walls keep the height they were drawn at — select a wall to change just that one (The measuring tools).
 - **T** (thickness, in) — a Linear run with thickness also computes border/feature-strip SF = LF × T⁄12. Changing it re-flows existing runs.
 
 The finish-tag field in both the top toolbar and Takeoffs panel expands for longer names. Hovering a takeoff shows its condition and measurement in a wrapped card that stays inside the canvas. The **Text note** tool opens a multiline box: Enter (or Alt+Enter) inserts a line, and Ctrl+Enter places the note. Long note text wraps in its annotation box on the sheet.
 
-**Delete** (the row's ✕) asks first when the condition owns shapes — *"Delete 〈TAG〉 and its N takeoff(s)? This can't be undone."* — and means it: the cascade is deliberately outside the undo stack (§9).
+**Delete** (the row's ✕) asks first when the condition owns shapes — *"Delete 〈TAG〉 and its N takeoff(s)? This can't be undone."* — and means it: the cascade is deliberately outside the undo stack (Undo & redo).
 
 There's no per-condition duplicate; the Library fills that role — read on.
 
 ### The quick-access palette and `1`–`9`
 
-The band under the toolbar is your working set: **pin** a condition there (the pushpin on its panel row) or **drag** a row onto the band. Palette chips wear cobalt number badges — **that number is the hotkey**: `1`–`9` arm palette conditions in palette order (drag chips to reorder; the numbers follow). Up to 9 pin, mapping 1:1 onto the digits; with nothing pinned, the digits fall back to list order. Single-click a chip to arm it; double-click to open its row in the panel. A digit press only ever arms — it never reassigns a selected shape (§8).
+The band under the toolbar is your working set: **pin** a condition there (the pushpin on its panel row) or **drag** a row onto the band. Palette chips wear cobalt number badges — **that number is the hotkey**: `1`–`9` arm palette conditions in palette order (drag chips to reorder; the numbers follow). Up to 9 pin, mapping 1:1 onto the digits; with nothing pinned, the digits fall back to list order. Single-click a chip to arm it; double-click to open its row in the panel. A digit press only ever arms — it never reassigns a selected shape (Selecting & editing shapes).
 
 ### The Takeoffs panel
 
@@ -320,7 +362,7 @@ Four tabs:
 - **Takeoffs** — every condition with live totals for the open sheets (`SF · SF wall · LF · EA`), a shape count, a **⌖** that zooms the canvas to the condition's takeoffs (double-clicking the row does the same), the Supporting Materials button, the pin, and delete. Above the list: a filter box, **A→Z** natural sort and **≡ grp** tag-family grouping (views only — hotkey numbering never changes). **⌘-click / ⇧-click** rows to bulk-select conditions, then set waste or line color on all of them, or bulk-delete.
 - **Library** — reusable condition templates, shared across every plan in this browser. **+ save 〈tag〉 to the library** snapshots the active condition (appearance, waste, H/T, materials); **Apply** adds it to any project as a fresh condition. A fresh workspace seeds from this library — tune your house conditions once and every new job starts with them.
 - **Materials** — a browser-wide materials library. Attaching a library material to a condition copies its values and keeps a link (⛓); library edits reach linked lines only when you push them, and overridden fields show amber with a per-field ↺ revert.
-- **Columns** — project-wide **custom columns** (e.g. *CSI Division*) that classify conditions for report grouping and exports, and the **shape-label vocabulary** (§8).
+- **Columns** — project-wide **custom columns** (e.g. *CSI Division*) that classify conditions for report grouping and exports, and the **shape-label vocabulary** (Selecting & editing shapes).
 
 ### Supporting materials — the buy list's source
 
@@ -334,7 +376,7 @@ Below that, list what actually goes on the order: adhesive, sealer, polyurethane
 - for **grout** lines, an inline **calculator**: enter tile L × W × thickness, joint width (1/32″–1/2″), and bag weight, and the SF/bag rate derives itself, writing its work into the note (`12×24×3/8″ @ 1/8″ · 25 lb`);
 - a **note** field for coats, notch, anything the order needs to remember.
 
-Order quantity = measured basis ÷ coverage, **rounded up to whole units**. The Report sums every condition's lines into one combined buy list (§11).
+Order quantity = measured basis ÷ coverage, **rounded up to whole units**. The Report sums every condition's lines into one combined buy list (The report & exports).
 
 ### Fence Material Calculator
 
@@ -360,15 +402,15 @@ Linked post records autosave with local/cloud projects, revisions, and `.otk` fi
 
 <img src="img/verify-import-schedule-dialog.png" alt="The Import from schedule verify dialog — parsed finishes grouped by category, checked for approval" width="640"/>
 
-Why type conditions the architect already tabulated? Arm **Schedule** in the toolbar and click two corners around the finish schedule on the sheet. The table parses in the browser, and a verify dialog lists every finish it found — grouped Floor / Base / Wall / Transition / Ceiling / Other, each row with the code (click to fix it), description, and flags (**in use**, **duplicate**, **needs a code**). Ceiling and other rows arrive unchecked; you approve what becomes conditions. Each created condition gets category-appropriate color, hatch, and default waste (floor 5%, base and wall 10%), and the schedule's product data (manufacturer, style, color, size) rides along as read-only spec fields that surface as the Report's *Product spec (imported)* columns.
+Why type conditions the architect already tabulated? Arm **Schedule** in the toolbar and click two corners around the finish schedule on the sheet. The table parses in the browser, and a verify dialog lists every finish it found — grouped Floor / Base / Wall / Transition / Ceiling / Other, each row with the code (click to fix it), description, and flags (**in use**, **duplicate**, **needs a code**). Ceiling and other rows arrive unchecked; you approve what becomes conditions. Each created condition gets category-appropriate color, hatch, and default waste (floor 5%, base and wall 10%), and the schedule's product data (manufacturer, style, color, size) rides along as product-spec fields, editable in the docked condition editor, that surface as the Report's *Product spec (imported)* columns.
 
 On scanned pages there's no text to parse; team builds with the optional AI backend can read the schedule from pixels — the message tells you when that's what's needed.
 
 ---
 
-## 6. The measuring tools
+## The measuring tools
 
-Every measuring tool commits into the active condition and refuses politely without a scale (§4). Trace with click-release; press-drag pans. `⏎` or double-click finishes a shape; `⌫` pops the last point; `Esc` abandons the trace; `⌘Z` mid-trace also pops the last point.
+Every measuring tool commits into the active condition and refuses politely without a scale (Scale — set it first). Trace with click-release; press-drag pans. `⏎` or double-click finishes a shape; `⌫` pops the last point; `Esc` abandons the trace; `⌘Z` mid-trace also pops the last point.
 
 ### The aim cursor
 
@@ -420,61 +462,7 @@ The summary card inside the **Takeoff** toolbar tab tracks the armed tool withou
 
 ---
 
-## 7. One-Click Area
-
-<img src="img/one-click-area.gif" alt="One-Click Area tracing patient rooms wall to wall on the sample plan" width="820"/>
-
-One-Click Area (`O`) is the fastest way to measure a room: click inside it, and the linework bounds a flood fill, the boundary traces itself, and the vertices snap to true corners. What comes back is a **proposal** — dashed, editable, uncommitted — and nothing enters your takeoff until you create it. Review is the point: the engine does the tracing, you keep the judgment.
-
-### The flow
-
-1. Arm `O` and click inside a room. The traced region appears dashed with a star at your seed point.
-2. Keep clicking — each click adds a space to the selection (the readout totals them live). **`⌥`-click carves a cutout**: an enclosed area *inside* an already-selected space — a column, a shaft — that will commit as a deduct.
-3. **Create** with `⏎`, a double-click, or the **Create (N)** toolbar button. Every space commits as a shape on the active condition; cutouts commit as deducts. The toast confirms: *"Created N takeoff(s) — 〈SF〉 〈TAG〉. Click the next room."*
-
-`⌫` walks the selection back (last region drops), and `Esc` discards it all. The readout keeps the crib sheet on screen: *click adds a space · ⌥-click carves a cutout · ⏎ Create · ⌫ undo · Esc cancel*.
-
-### Review before Create
-
-Hover a proposed region and its grips reveal:
-
-- **Drag a corner** to move it (it snaps to true drawing endpoints as you drag).
-- **Click a corner** to select it — `⌫` then deletes just that point (a space keeps a 3-point floor).
-- **Drag an edge grip** to move the whole line — both endpoints together.
-- **`⇧`-click an edge** to insert a new anchor at its midpoint and drag it out in the same gesture.
-
-Edits you make before Create ride into the shape's provenance as *corrected before create*, with the machine's original ring frozen alongside — the takeoff remembers what the engine proposed and what you fixed.
-
-### Hatched rooms, and when it refuses
-
-Hatch and poché don't fool the fill: tile grids, plank lines, and section fills are classified as *pattern*, not wall, so a click inside a fully hatched room still traces to the real walls. The escalation is conservative — a strict pass runs first, the hatch-transparent retry only engages when the strict pass comes back trapped, and a retry that balloons past sanity is discarded for the strict result. **A misread can never make the result worse than the strict fill.**
-
-When One-Click refuses, it says why, and the answer is always actionable:
-
-- *"That space isn't enclosed on the plan linework — the fill spilled."* — there's a genuine gap (an open doorway, a break in the wall). Click a more enclosed spot, or trace it with Area (`A`). A hatched room with a real door gap **refuses rather than guessing** — that's deliberate.
-- *"Landed in dense linework (hatching/text)."* — the click hit a text block or hatching too dense to read as a room. Zoom in and click an open spot, or use Area.
-
-### Fill sensitivity
-
-The **Fill** slider lives in the **Render & fill settings** menu (sliders icon), with three notches:
-
-- **Strict** — stop at the linework, no hatch crossing (the original behavior).
-- **Balanced** (default) — recover hatch-lined rooms to the walls.
-- **Aggressive** — cross more pattern and tolerate more growth.
-
-Lower it if fills spill; raise it if hatched rooms come up short. The setting is per browser, and a non-default sensitivity is recorded on the shapes it produced.
-
-### Scanned plans
-
-A scanned sheet has no vector linework, so the engine reads the rendered pixels instead: adaptive thresholding (shaded rooms and uneven scans read correctly), polarity detection (blueprint negatives invert), and a gap-bridging pass for faded ink — then the same flood-and-trace machinery runs on the scan ink. Raster results skip corner snapping (a scan has no true endpoints) and the readout badges them plainly: ***Traced from scan pixels — verify edges before Create.*** Nudge the grips where the scan is soft, then create. The sensitivity slider doesn't apply on scans, and the refusal messages name the scan honestly (*"the fill escaped through a gap — faded line or open doorway"*).
-
-### The provenance receipt
-
-Every shape One-Click creates records how it was made: the method, the seed point you clicked, whether hatch filtering engaged, whether it was traced from scan pixels, any non-default fill sensitivity, and — if you adjusted the proposal — the machine's original ring frozen next to your final one. You'll never need to think about this while measuring; it's what makes the takeoff auditable later, and it's the backbone of the optional Contribute flow (§13).
-
----
-
-## 8. Selecting & editing shapes
+## Selecting & editing shapes
 
 Arm **Select** (`V`) and click a shape. Selection is one shape at a time on the canvas, and the same edit grammar as One-Click proposals applies:
 
@@ -504,11 +492,11 @@ Labels answer "which part of the job is this?" without more conditions: *Phase 1
 - Its caption shows the **active label** — every new trace you commit gets it. Set it to *Phase 1*, trace the phase, set it to *Phase 2*, keep going.
 - With Select armed and a shape selected, the same dropdown shows **that shape's** label and re-labels it.
 
-Labels drive the Report's *Group: Label* mode and its by-label export sections (§11). Label changes are undoable, and they never mark a shape as edited — classification is not correction.
+Labels drive the Report's *Group: Label* mode and its by-label export sections (The report & exports). Label changes are undoable, and they never mark a shape as edited — classification is not correction.
 
 ---
 
-## 9. Undo & redo
+## Undo & redo
 
 `⌘Z` undoes, `⇧⌘Z` redoes — real undo, over a stack of up to 100 steps.
 
@@ -520,7 +508,7 @@ Labels drive the Report's *Group: Label* mode and its by-label export sections (
 
 **What's deliberately outside the stack:**
 
-- **Deleting a condition.** The confirm says *"This can't be undone"* and means it: the cascade delete of its shapes doesn't record. A condition delete is a decision about the takeoff's structure, not a gesture (Revisions are your parachute — §12).
+- **Deleting a condition.** The confirm says *"This can't be undone"* and means it: the cascade delete of its shapes doesn't record. A condition delete is a decision about the takeoff's structure, not a gesture (Revisions are your parachute — Revisions).
 - **Rescaling a sheet** and **restoring a revision** both **reset the stack**. Every recorded step froze quantities at the old scale (or the old timeline); undoing across that boundary would resurrect stale numbers, so the boundary clears it. A restore always banks the live takeoff first, so nothing is lost — it's just not on the `⌘Z` stack.
 - **Markups and condition edits.** The undo stack is for measured shapes. Moving a cloud or changing a waste % is a plain edit — change it back by hand.
 
@@ -528,7 +516,7 @@ One more distinction: **Undo last shape** (Edit menu) and `⌫`-with-nothing-in-
 
 ---
 
-## 10. Markups, stamps & RFIs
+## Markups, stamps & RFIs
 
 The markup layer is communication, never quantity: clouds, callouts, notes, highlighter ink, and stamps live on a separate layer the totals never count. The left dock (rail buttons on the canvas's right edge) carries three tabs — **Markups**, **Stamps**, **RFIs**.
 
@@ -565,7 +553,7 @@ RFIs export as **RFI CSV** and **RFI JSON** from the Report, and they ride the M
 
 ---
 
-## 11. The report & exports
+## The report & exports
 
 <img src="img/report.png" alt="The takeoff report — per-condition breakdown and materials buy list" width="780"/>
 
@@ -602,23 +590,23 @@ On screens up to 768px wide, Report controls wrap and the project name uses its 
 
 Longer exports show the shared white four-bar loading indicator until the file is ready.
 
-**Contribute** also lives here — covered with the rest of your data in §13.
+**Contribute** also lives here — covered with the rest of your data in Saving, your data & Contribute.
 
 ---
 
-## 12. Revisions
+## Revisions
 
-Addenda happen. **Revisions** (the clock icon on the rail) makes them data instead of archaeology.
+Addenda happen. **Revisions** (where available in your workspace controls) makes them data instead of archaeology.
 
 - **Save** the current takeoff — conditions, shapes, markups — as a named revision (the name defaults to *Rev N — date*). Do it at every bid revision, and before anything risky.
 - **Compare** any revision against the live takeoff or against another revision. The diff reads as **quantity deltas**: per condition (measured and ordered), per sheet (base quantities), and on the buy list, with added / removed / changed / unchanged status chips and an **Export compare CSV**. The headline gives you the one number first: ordered SF A → B, and how many conditions moved.
-- **Restore** is never a one-way door: it banks the live takeoff as *Auto-backup before restore* first, then loads the revision. (It does reset the undo stack — §9.)
+- **Restore** is never a one-way door: it banks the live takeoff as *Auto-backup before restore* first, then loads the revision. (It does reset the undo stack — Undo & redo.)
 
 **Honest limits.** The compare is deliberately **quantity-level, not geometric**: it won't show you *which wall moved*, only which condition's numbers moved, on which sheet, by how much. Sub-display wobble (re-trace drift below 0.05 SF, or below half an EA) reads as unchanged, so a re-traced room that lands on the same number doesn't cry wolf. Conditions pair by identity first and finish tag second, so deleting and recreating `CPT-1` diffs as the same condition, not a remove-plus-add.
 
 ---
 
-## 13. Saving, your data & Contribute
+## Saving, your data & Contribute
 
 ### Project details
 
@@ -628,17 +616,16 @@ Project details, creation time, and last persisted modification time are stored 
 
 **Save project** suggests `<Project Name>.otk`. In browsers that support retained file handles, the first save asks for a location and later saves update that same file directly. The handle belongs only to the project that selected it: after **New project…** or opening another project, the next Save asks for a new destination and uses that project's name rather than reusing the previous project's file. Use **Save project as…** to choose another name or location; renaming the project changes the next Save As suggestion without silently creating another file.
 
-For the Google Drive folder workflow, see [§2: Google Drive Cloud Sync](#2-google-drive-cloud-sync). New source-folder creation makes **Estimate save data / Projects**. Selecting an existing source displays its actual contents; it does not reorganize your files or select the destination for future saves.
+For the Google Drive folder workflow, see [Google Drive Cloud Sync](#google-drive-cloud-sync). New source-folder creation makes **Estimate save data / Projects**. Selecting an existing source displays its actual contents; it does not reorganize your files or select the destination for future saves.
 
 ### Optional cloud projects
 
-The **Cloud** button opens sign-in and the source-folder browser. Local work and **Project → Save project...** continue working without signing in. Google sign-in identifies your OpenTakeoff account; it does not authorize the separate server-connected Drive storage feature.
+Use **Project → Cloud projects...** to request the optional folder browser. Successful sign-in first shows the welcome/subscription screen described in Google Drive Cloud Sync. Open a synced file directly with **Project → Open project...**. App sign-in and Google Drive for desktop sign-in serve different purposes; neither one automatically saves your browser edits into a project file.
 
 Use the avatar or name beside the app logo to edit your display name or log out. Signing out does not erase local browser work or previously downloaded project copies.
 
-**Project → Save to Cloud...** remains a separate manual upload workflow for installations with configured cloud services and an existing Drive connection. It does not write to the locally selected source folder. The current profile panel has no Connect Google Drive control, and the Cloud panel has no Browse projects tab. Use the source-folder and .otk saving instructions in §2 for the current visible workflow.
+The local synced-file workflow in Google Drive Cloud Sync is the primary way to carry a project between computers. Server-connected project storage and its conflict-handling controls are separate implementation paths and may not be exposed in your installation. They do not make the selected local source folder an automatic upload destination. Keep a complete `.otk` backup.
 
-For an existing server-connected project, subsequent cloud saves update its project ID; **Save As** creates a separate copy. If another device saved first, the app offers **Keep Local Version**, **Use Cloud Version**, or **Save Local as Copy**. There is no automatic drawing merge. Browser-global preferences, reusable libraries, and AI keys are not uploaded with the project. Keep a complete .otk backup before relying on another device.
 
 ### Download the current plan page
 
@@ -710,7 +697,7 @@ If a saved project fails to load, autosave **pauses itself** and a banner says s
 
 ### Google Drive folders and project files
 
-See [§2: Google Drive Cloud Sync](#2-google-drive-cloud-sync) for selecting or creating a source folder, opening .otk files, and saving changes back to a synced location. Browser autosave, a saved .otk file, and completed Google Drive synchronization are separate steps.
+See [Google Drive Cloud Sync](#google-drive-cloud-sync) for selecting or creating a source folder, opening .otk files, and saving changes back to a synced location. Browser autosave, a saved .otk file, and completed Google Drive synchronization are separate steps.
 
 ### Contribute — what's sent, what never is
 
@@ -738,7 +725,7 @@ The modal asks for an optional credit line and an attestation that you have the 
 
 ---
 
-## 14. The Agent panel
+## The Agent panel
 
 The Agent panel is the newest way to run the engine: describe a takeoff in a sentence, and an AI model — **yours**, on your key, from your browser — works the sheet with the app's own tools and stages **dashed proposals you accept or reject**. It is a proposer, never a committer.
 
@@ -765,14 +752,14 @@ Agent tools refuse an uncalibrated sheet with the same discipline as everything 
 Proposals land on the canvas as **dashed pencil outlines** with a seed star, and in the panel as rows with **evidence chips** — the schedule row it matched (`schedule CPT-1`), the text it matched, the seed it flooded from. Then it's your desk:
 
 - **Accept**: click a proposal on the canvas, use the row's ✓, or **Accept all** / `⏎` for everything on the visible sheets. Accepting commits through the same command layer as your own work — origin *agent*, reviewed by you, the proposed ring frozen, the evidence attached. **A whole accepted batch is one `⌘Z`.**
-- **Correct**: edit an accepted shape like any other (§8). Corrections grade in provenance exactly like One-Click corrections — machine ring frozen, your fix recorded.
+- **Correct**: edit an accepted shape like any other (Selecting & editing shapes). Corrections grade in provenance exactly like One-Click corrections — machine ring frozen, your fix recorded.
 - **Reject**: the row's ✕, or **Reject all**. Rejection is **local only** — dismissed geometry is discarded and never rides the contribution wire.
 
 A proposal whose sheet you've since closed (or unscaled) is skipped at accept with a message telling you to open the sheet; nothing commits blind.
 
 ### Setup — bring your own key
 
-The panel is honest when unconfigured: it explains itself and offers **AI settings…**. Configure an endpoint (OpenAI-style — most local runtimes speak it and need no key — or Anthropic-style), a vision-capable model id, and an optional key (§15). Unconfigured builds make zero AI network calls.
+The panel is honest when unconfigured: it explains itself and offers **AI settings…**. Configure an endpoint (OpenAI-style — most local runtimes speak it and need no key — or Anthropic-style), a vision-capable model id, and an optional key (AI settings & driving OpenTakeoff from an agent). Unconfigured builds make zero AI network calls.
 
 ### The keyless demo
 
@@ -786,7 +773,7 @@ Point AI settings at it — endpoint `http://localhost:8787`, API style **Anthro
 
 ---
 
-## 15. AI settings & driving OpenTakeoff from an agent
+## AI settings & driving OpenTakeoff from an agent
 
 ### AI settings (BYO everything)
 
@@ -805,17 +792,17 @@ The same engine speaks [MCP](https://modelcontextprotocol.io), one command away:
 
 ---
 
-## 15a. ChatGPT Project Assistant
+## ChatGPT Project Assistant
 
 Quickly click or tap the unchanged Beitzell Estimating logo three times to open **Experimental tools**, then choose **AI** to access both ChatGPT choices inside the Agent drawer. **Open ChatGPT ↗** opens the regular `chatgpt.com` website in a new browser tab using your existing ChatGPT account and does not use the OpenTakeoff API integration. **Project Assistant** closes the Agent drawer and opens the separate API-powered project-analysis assistant in a familiar browser-style chat. Type in **Message ChatGPT**, use the prompt suggestions when starting a chat, drag the panel edge to resize it, or use ⇆ to dock it left or right. The regular ChatGPT link is also available in the project-assistant header.
 
-This assistant is different from the canvas Agent in §14. The canvas Agent proposes drawing geometry using a browser-configured endpoint. ChatGPT Project Assistant reviews project information through a secure server endpoint and a centralized set of OpenTakeoff tools. Its OpenAI key is never delivered to the browser.
+This assistant is different from the canvas Agent in The Agent panel. The canvas Agent proposes drawing geometry using a browser-configured endpoint. ChatGPT Project Assistant reviews project information through a secure server endpoint and a centralized set of OpenTakeoff tools. Its OpenAI key is never delivered to the browser.
 
 ### Choose what may be used
 
 The default context is the current page. Expand **Project context** to choose **Selected elements**, **Current page**, **Current PDF set**, **Measured and bookmarked pages**, or **Entire project**. Chips show the selected scope, active page, metadata choice, and data type. **Include client metadata** is off by default. Whole source PDFs and page bitmaps are not silently sent; tool results contain bounded text and structured project facts. No vector store or project indexing is used.
 
-Selectable PDF text is read locally. The assistant can call **Find scope keywords**, which runs the same existing Find/OCR workflow described in §3 and creates a separate removable Search marks job. This is normally faster and more exact for literal terms than having an AI inspect plan images. OCR runs only when the selected Find preference permits it and remains slower than a normal text-layer search.
+Selectable PDF text is read locally. The assistant can call **Find scope keywords**, which runs the same existing Find/OCR workflow described in Opening plans & moving around and creates a separate removable Search marks job. This is normally faster and more exact for literal terms than having an AI inspect plan images. OCR runs only when the selected Find preference permits it and remains slower than a normal text-layer search.
 
 ### Grounding, quantities, and citations
 
@@ -839,7 +826,7 @@ If the panel says **AI assistant is not configured**, verify both server variabl
 
 ---
 
-## 16. Keyboard reference
+## Keyboard reference
 
 Every shortcut in the app, verified against the code. Letter keys are suppressed while you're typing in a field and while a toolbar menu is open. `Ctrl` stands in for `⌘` on Windows and Linux throughout.
 
@@ -919,7 +906,7 @@ Markup tools also support custom **Ctrl+key** shortcuts. Open **Draw > Markup**,
 
 ---
 
-## 17. Troubleshooting
+## Troubleshooting
 
 **A sheet renders blank or slow.** Big sheets rasterize on open — give it a beat. If linework goes soft mid-zoom, that's the detail view re-rendering; it sharpens when the gesture settles. For dense sheets, flip **Hi-Res render (this sheet)** in the Render & fill settings menu — display only, quantities unaffected. Side-by-side groups multiply the render load; work single-sheet on a struggling machine.
 
@@ -945,25 +932,11 @@ Markup tools also support custom **Ctrl+key** shortcuts. Open **Draw > Markup**,
 
 Use **Trackpad** in the bottom-right canvas controls to open **Trackpad Settings**. The first opening shows the pad; its Show Trackpad checkbox can hide it without losing the selected settings. Width (50–100% of the viewport), height (40–150px), and opacity (35–100%) update live, defaulting to 75vw × 60px at 90% opacity. The pad remains bottom-centered, 5px above the viewport edge. Drag on it to move the existing plan crosshair; lift and swipe again to keep moving. A short tap places a point with the active tool, including its normal snapping and angle guides. Use Finish to complete a trace. Drags beyond 5px and holds longer than 350ms do not click. The pointer stays within visible sheet bounds. Normal canvas pan, zoom, and touch remain available; the pad itself does not pan or draw. Freehand dragging and double-click actions use the canvas directly. Settings last only while this canvas is mounted.
 
-### Startup artwork and app icons
+## Toolbar, account, and appearance
 
-The startup view uses SelfMadeSystem's Uiverse `warm-lion-64` background and the Blueprint icon (Flaticon 1373067, Magnific). The same icon is supplied for web/PWA, Android and Windows Electron. Android's pre-WebView splash uses a static frame; Android 12's system splash uses the Blueprint icon on a dark background. Plan imports and the sample-plan action keep their existing entry points; longer loads and renders now show the shared white four-bar loading indicator. The startup **Artwork credits** link opens the attribution and license information.
+Use **User Guide** in the top bar immediately to the left of your profile; it stays available across toolbar tabs.
 
-Selecting **Locate Google Drive Folder** now immediately displays that selected local folder’s actual files and subfolders. Use breadcrumbs, Up, Refresh folder, and search to navigate within the selected folder. Double-click a folder or `.otk`, or select it and choose Open folder/Open project. Other file types are listed without launching them. **Cloud Projects** returns to the cloud library. Local listings work offline and do not require Drive folder-list API deployment; they show file modification times and saved project editor metadata. Opening a selected `.otk` uses the normal local importer and does not automatically bind it to a cloud version.
-
-Cloud Projects starts with Sign in/Create account when signed out. After sign-in, an accessible previously selected source folder reopens; otherwise choose a source folder. The cloud project list is loaded only after choosing **Browse cloud library instead** or **Cloud Projects** in the local browser.
-
-Each `.otk` row in the selected local folder has an **Open project** button to open that file directly.
-
-The selected-folder browser puts `.otk` files first, then folders ordered newest first. **Last modified** shows the filesystem timestamp for a file; a folder shows its **Latest file change**, the newest timestamp found recursively inside it (the browser cannot read the folder’s own Windows timestamp). Empty/inaccessible folders show Unknown. **Modified by** uses `project_metadata.lastModifiedByName/lastModifiedByEmail` recorded on new authenticated saves, independently of the original author. Older files and files edited outside the app may not identify an editor; no identity is guessed. Scanning reads file metadata and only inflates project manifests, not PDF/image assets, with depth/entry limits; reading synced archives may trigger Google Drive hydration.
-
-**Create New Source Folder:** in the source-folder screen, choose a parent location in your Google Drive for desktop mount. Confirm creation of the fixed `Estimate save data/Projects` structure. If the source already exists, choose **Use Existing Folder**, **Choose Another Location**, or **Cancel**. Successful creation/reuse automatically remembers the source and opens Projects; no second Locate action is needed. Cancellation before confirmation creates nothing. Creation and remembered-source setup access only the chosen parent and immediate Projects listing, without a recursive drive scan. The browser remembers a directory handle rather than a hard-coded drive letter. It cannot reliably verify that the selected location is synced by Google Drive.
-
-When signed in, your account avatar and display name appear beside the Beitzell Estimating logo. Select either to open Profile, view your email, edit your display name, or log out. The default name/photo come from Google account metadata; a saved display name takes precedence. Missing or unavailable photos use initials.
-
-## Toolbar tabs and Profile
-
-Use **Project** for project files, save status, Whiteboard and User Guide;
+Use **Project** for project files, save status, and Whiteboard;
 **Sheets** for gallery, page navigation, open sheets, page bookmarks, and favorite files; and
 **Takeoff** for Report, aids, scale, labels, commands and conditions. Tab selection
 preserves the current estimate and drawing tool. Click the selected tab again to
@@ -979,7 +952,7 @@ on iOS and secure hosted checkout on Windows/web. Subscription status comes from
 server-owned license record; browser profile data cannot activate a plan. Native builds
 also provide **Restore Purchases**. During setup, checkout remains unavailable until the
 store identifiers are configured. Production requires sign-in to identify the license.
-Editing is available only while online, with an active subscription, and while this
+In installations with license enforcement enabled, editing is available only while online, with an active subscription, and while this
 computer owns the account's editing session. If the internet is unavailable, the
 subscription is inactive, or another computer is editing, the workspace opens in
 read-only mode so plans can still be viewed and exported. A short server lease releases
@@ -998,3 +971,136 @@ check immediately.
 Only signed releases from the fixed OpenTakeoff GitHub release channel are accepted.
 Development builds do not self-update. iPhone and iPad releases are installed through
 Apple's App Store after the owner submits and Apple approves the update.
+
+### Theme, accent, cursor, and logo
+
+Open the **Theme settings** palette button on the canvas rail. Use **App theme** to switch between light and dark. Under **Accent color**, click the color swatch and select any color in the system picker. The change previews immediately on interface highlights, buttons, focus rings, and sliders. **Reset accent** restores the default blue for the selected light/dark theme. Text on accent-colored buttons switches between black and white for readability.
+
+**Cursor theme** changes the drawing cursor separately. **Logo effect** offers Shimmer, Solid color, Pulse, Morph, and Rainbow. Primary color applies to custom-color effects; Second color is used by Morph. Rainbow uses the full spectrum, so its custom-color controls are disabled. Brightness and Animation speed adjust the logo; reduced-motion settings pause animation. **Reset logo** resets logo options separately from the interface accent. Choices save in this browser and are not transferred in the `.otk` file.
+
+Interface accent, condition Line/Fill colors, cursor style, report theme, and the sheet's moon-button inversion are independent controls. To change measured linework, use the condition appearance editor, not Theme settings.
+
+### Hatch pattern selection
+
+Click the condition's current hatch preview, such as **Horizontal**, to open all 16 patterns: Solid, Diagonal, Diagonal reverse, Crosshatch, Diagonal dense, Horizontal, Vertical, Square / tile, Brick / running bond, Plank / wood, Herringbone, Basketweave, Checker, Wave / scallop, Sand / dots, and Terrazzo / speckle. Hover for the pattern name and click to apply it. The menu floats over the canvas instead of being clipped by the toolbar. Click outside or press Escape to dismiss; scrolling the surrounding workspace or resizing the window also closes it. Hatch selection changes appearance, not measured quantities.
+
+### Account access and Premium
+
+The post-sign-in welcome screen checks subscription status before displaying its message. Free accounts see **You are in view-only mode** and **Get Premium to unlock all tools**; active subscribers see **Welcome back**. **Get Premium** opens subscription choices, not a Drive connection prompt. A status-check failure shows a retry route through Subscription options instead of treating the account as confirmed free.
+
+The welcome message and license enforcement are separate features. In a license-enforced installation, the actual license/session check controls editing. An expired subscription, offline state, unavailable license service, or another computer holding the editing session can leave a paid account read-only. Follow the reason shown in the workspace banner; purchasing again is not the solution to every read-only state. Development or locally configured builds may have enforcement disabled. No welcome-screen button grants a license by itself.
+
+
+## Tool directory and estimating workflow
+
+Use this directory to choose the right tool, then consult the detailed chapter named in the last column. Controls depend on the active sheet, selection, account access, and installation. A disabled control often means you need a loaded plan, a calibrated sheet, a selected object, or editing access. Features described as optional require their configured service; the manual does not enable them.
+
+### Project and sheet tools
+
+| Control | Use it for | Important behavior / details |
+|---|---|---|
+| New project / Edit project details | Job name, dates, status, and client/project information | Save the current job before starting another. Saving, your data & Contribute. |
+| Open / drag-and-drop | Bring PDFs, supported images, ZIP plan sets, or one `.otk` into the workspace | An `.otk` restores estimating data; a PDF supplies plan pages. Open project files separately from plan imports. Opening plans & moving around and Saving, your data & Contribute. |
+| Save project / Save project as | Preserve an editable portable project | Save into your synced Drive folder to transfer it; browser autosave is separate. Google Drive Cloud Sync and Saving, your data & Contribute. |
+| Save project with marked pages only | Make a separate compact project | Unneeded source pages become placeholders. Keep originals for recovery; do not treat this as a complete source-plan archive. Saving, your data & Contribute. |
+| Import missing files | Restore source pages omitted by compact saving | Requires matching original files, not a similarly named newer revision. Saving, your data & Contribute. |
+| Cloud projects | Browse an explicitly selected local source folder or available cloud library | Optional browsing; not required to open a local synced `.otk`. Google Drive Cloud Sync. |
+| Open Recent | Return to a remembered browser workspace | Does not refresh an imported copy from Drive. Google Drive Cloud Sync. |
+| Sheet gallery / Sheets | Find, open, and navigate PDF pages | Use page labels and levels to keep large sets organized. Opening plans & moving around. |
+| Page bookmarks / file favorites | Keep important pages and source PDFs easy to find | A page bookmark also helps retain that page in a compact project. Opening plans & moving around and Saving, your data & Contribute. |
+| Group / Ungroup / Regroup | Compare sheets side by side | Each sheet keeps its own scale and takeoffs. Opening plans & moving around. |
+| Import to Whiteboard | Add the focused plan page to the presentation board | Copies that page and supported overlays into a board asset; automatic quantity-label boxes are omitted. Saving, your data & Contribute. |
+| Download this page | Share the focused sheet with its takeoff linework and markups | Opens PDF quality choices and omits measurement labels. It is not a project backup. Saving, your data & Contribute. |
+
+### Measuring and editing tools
+
+| Tool | Typical use | Before committing |
+|---|---|---|
+| Set scale / Calibrate two points | Convert drawing distances into real units | Calibrate against a known printed dimension on each sheet. Scale — set it first. |
+| Check a dimension (`K`) | Verify the calibration against another known length | Inspect the error before accepting recalibration. Scale — set it first. |
+| Area (`A`) | Irregular floor or paved areas | Trace the perimeter; finish with Enter or double-click. The measuring tools. |
+| Rectangle (`R`) | Rectangular areas | Choose opposite corners and confirm the intended condition. The measuring tools. |
+| Linear (`L`) | Fence runs, base, trim, or other lengths | Follow bends; thickness can also generate border area. The measuring tools. |
+| Curved Line (`Q`) | Curved runs | Place points along the curve and inspect the resulting path. The measuring tools. |
+| Surface Area (`S`) | Wall area from length and height | Enter/check height; existing walls retain their stored height. The measuring tools. |
+| Count (`C`) | Posts, gates, fixtures, or repeated items | Each placement adds an item to the active condition. The measuring tools. |
+| Deduct shape / Deduct rectangle | Remove openings or excluded portions | Use the intended condition and review net report quantities. The measuring tools. |
+| One-Click Area (`O`) | Trace enclosed rooms from plan boundaries | Dashed results are proposals: review edges and cutouts, then Create. See The measuring tools. |
+| Zone check | Review coverage in a selected region | A checking aid, not a replacement for inspecting measurements. The measuring tools. |
+| Snap / 45° aids | Place points accurately | Snap targets extracted plan geometry; angle lock guides segment direction. Verify the target rather than assuming every snap is the desired corner. The measuring tools. |
+| Select (`V`) | Pick shapes, move vertices, and edit properties | Shift-click an edge to add a vertex; Delete prioritizes a picked vertex before the whole shape. Selecting & editing shapes and Keyboard reference. |
+| Copy / Paste / Duplicate | Repeat an existing measurement | Check the destination sheet and position before relying on quantities. Selecting & editing shapes. |
+| Flip Horizontal / Flip Vertical | Mirror selected geometry | Mirrors about the shape's center without changing its measured area or length. Selecting & editing shapes. |
+| Undo / Redo / Undo last point | Correct drawing actions | Undo scope is contextual; condition deletion and revision restoration have different recovery behavior. Undo & redo. |
+| Pan (`P`), zoom, fit, fullscreen | Navigate the drawing | Display changes do not recalibrate the plan. Opening plans & moving around. |
+
+### Conditions, materials, and fencing
+
+| Tool | What it adds | Practical check |
+|---|---|---|
+| Conditions and pinned palette | A named scope for measurements, appearance, waste, and multipliers | Arm the correct condition before drawing; number keys choose palette conditions. Conditions — your finishes. |
+| Line / Fill / Hatch / Style / Shape | Distinguishable drawing appearance | Visual patterns and repeated line markers do not add measured quantities. Conditions — your finishes and Toolbar, account, and appearance. |
+| Library | Reusable condition setups | Applying a template adds a fresh condition; browser libraries do not travel automatically in `.otk` files. Conditions — your finishes. |
+| Materials and Supporting Materials | Coverage-based order quantities, labor/subfloor notes, and linked material defaults | Verify coverage units, rounding, and product-specific rules. Conditions — your finishes. |
+| Columns and shape labels | Classification by trade, phase, area, or another grouping | Condition columns describe conditions; labels can distinguish individual shapes. Conditions — your finishes and Selecting & editing shapes. |
+| Schedule | Extract condition information from a selected schedule region | Review proposed codes, categories, duplicates, and descriptions before importing. Conditions — your finishes. |
+| Fence Material Calculator | Material requirements from length/count inputs and saved rules | Choose the fence system, inspect dimensions and gate assumptions, then select result rows for Add to Estimate. Repeating Add to Estimate appends lines; review for duplicates. Conditions — your finishes. |
+| Chain-Link Fence Post Calculator | Terminal/corner and line-post layout attached to a Linear takeoff | Add corners at real changes of direction; check maximum spacing and closed-loop status. The original line remains the LF source. Conditions — your finishes. |
+
+### Finding text, annotations, and review
+
+Use **Find** (`Ctrl+F`) for literal terms across loaded plans. Selectable PDF text is faster than OCR. Choose OCR behavior under **Project → PDF opening & OCR...** when scanned pages require recognition. Inspect page matches and context: a word appearing on a sheet is evidence to review, not a measured quantity. Search marks can be managed separately from hand-drawn annotations; see Opening plans & moving around.
+
+**Highlighter**, **Highlight box**, **Revision cloud**, **Callout**, **Arrow**, and **Text note** are markup tools, not measuring tools. Choose the markup in Draw, set its appearance, and place it on the page. Use Markups to review annotations and Stamps for reusable annotations. The RFI register tracks questions and their project references; exporting an RFI is not the same as sending it to someone. Details and shortcuts are in Markups, stamps & RFIs and Keyboard reference.
+
+**Revisions** save named checkpoints and compare quantity changes, not a visual pixel-by-pixel drawing difference. Restoring a revision banks the current state first, but a portable backup is still important. Export the updated `.otk` after saving revisions if another device needs them. See Revisions.
+
+### Whiteboard and Scope of Work
+
+Use Whiteboard to arrange reference pages, attachments, notes, drawings, and Scope of Work panels for presentation. It is separate from the calibrated takeoff canvas; moving or resizing a board item does not change takeoff quantities.
+
+1. Add files or use **Sheets → Import to Whiteboard** for the focused plan page.
+2. Add a note or **SOW panel**. Enter headings and scope line items; use the row controls to reorder, duplicate, color, or remove entries.
+3. Set the SOW title and logo, resize the panel, and confirm that all text fits. Multiple SOW panels can be arranged independently.
+4. Place arrows and rectangles to explain the scope. Crop images non-destructively when you need a detail.
+5. Choose a whole-board export, paginated export, or **Select Export Areas** for specific regions. Name and order selected regions, preview the PDF, and export.
+6. Save the `.otk` to preserve editable board objects and attachments in addition to the final presentation PDF.
+
+**Compact**, **Balanced**, and **HD** are PDF output quality choices, not different estimating precision levels. Balanced is the everyday default; Compact reduces file size, while HD preserves more small-detail clarity within safe limits. File sizes are estimates until export finishes. Flattened visual PDFs intentionally remove source searchable text and other hidden PDF resources. Keep the `.otk` and source PDFs when you need an editable or searchable original. See Saving, your data & Contribute for attachment limits, page areas, preview detail, and export behavior.
+
+### Reports and final deliverables
+
+The Report separates measured quantities from waste-adjusted ordering quantities. Use its columns and grouping to review Floor/Wall/Border area, LF, EA, supporting materials, and relevant fence-post data. **Labor view** is useful when labor should use measured quantities instead of material waste. Changing report presentation does not change the underlying geometry.
+
+Choose **CSV** for the visible condition table, **Excel** for a workbook with summary and audit sheets, **JSON** for structured data, **Print** for the report layout, and **Marked set** for annotated plan distribution. Shape exports provide a measurement audit without condition multipliers or waste. Report themes and templates are separate from the app's Theme panel. See The report & exports.
+
+Before issuing a bid or handing work to another estimator:
+
+1. Verify each relevant sheet's scale against a known dimension, especially after changing source drawings.
+2. Review active conditions, height, thickness, multiplier, waste, and supporting-material coverage units.
+3. Inspect deducts, duplicate geometry, line endpoints, count items, and proposed One-Click regions.
+4. Confirm that the report includes the intended sheets and grouping, and distinguish actual quantities from order quantities.
+5. Preview exported PDFs for readable small text, complete SOW text, and the expected pages.
+6. Save a named revision and the editable `.otk`, then let Google Drive finish syncing before the next person opens it.
+
+### AI, commands, and optional services
+
+**Agent panel** stages measurement proposals using a configured AI endpoint. It does not silently accept its own tracing. Calibrate the sheet and review proposals before accepting them (The Agent panel).
+
+**ChatGPT Project Assistant** answers questions using the selected project context and supported tools. Choose the narrowest useful scope, inspect citations, and review any Approval required change. It requires its configured server and authentication; ordinary local development hosting may not provide the service. It is different from the measurement Agent panel (ChatGPT Project Assistant).
+
+**AI settings** configures supported external/local endpoints for AI functions. An endpoint must be reachable and support the required protocol. Credentials and browser-wide preferences are not exported with projects. The optional MCP interface is for connected agent clients, not a prerequisite for normal estimating (AI settings & driving OpenTakeoff from an agent).
+
+Where the **Command** input is exposed, supported phrases include `waste 12`, `label Phase 2`, `clear label`, and `note ...`. These are specific commands, not an unrestricted chat interface. Check the active condition, selected geometry, and command feedback before continuing. Do not assume a microphone or voice-capture feature is present just because typed commands are supported.
+
+### Appearance, navigation aids, and diagnostics
+
+Theme settings controls the app's light/dark appearance, custom accent, cursor, and animated logo (Toolbar, account, and appearance). The moon button in the zoom controls instead inverts the plan view; inspect exported appearance when using it. Report themes are a third, separate presentation setting.
+
+The virtual trackpad moves the existing drawing crosshair and supports tap-to-place and Finish. Use the canvas itself for freehand strokes and double-click gestures. Its settings are session controls; see Troubleshooting for size, opacity, and limitations.
+
+Rendering diagnostics displays performance information to help identify slow drawing or rendering. It does not certify measurement accuracy. Hi-Res rendering and PDF preview detail improve display at a memory/performance cost; neither fixes an incorrect calibration. Start with a single open sheet, fit the page, and allow rendering to complete before troubleshooting more complex views.
+
+Sharing and some cloud/AI controls are implemented but hidden or service-dependent in this build. Do not assume that a hidden invitation workflow, a configured server, or a subscription purchase is available merely because it is described in a technical document. For routine project transfer, use the local synced `.otk` workflow in Google Drive Cloud Sync.
+
+The Find panel's **Help** tab explains every search, suggestion, navigation, and highlight control. Drag either lower corner to resize the panel down to the screen's bottom edge; the panel keeps a small margin so its controls remain reachable.

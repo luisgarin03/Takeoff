@@ -3,9 +3,11 @@ import { createPortal } from "react-dom";
 import { LOGO_DEFAULTS, useLogoSettings, setLogoSettings } from "../brand/logoSettings.js";
 import "./themeSettings.css";
 import { CURSOR_THEMES } from "../brand/cursorThemes.js";
+import { setAccent, useAccent } from "../lib/accent.js";
 
 export default function ThemeSettings({ theme, toggleTheme, onClose, onMenuDepth }) {
   const settings = useLogoSettings();
+  const accent = useAccent();
   const dialog = useRef(null);
   const update = (patch) => setLogoSettings({ ...settings, ...patch });
   useEffect(() => {
@@ -18,6 +20,11 @@ export default function ThemeSettings({ theme, toggleTheme, onClose, onMenuDepth
     <header><div><small>APPEARANCE</small><h2 id="theme-settings-title">Theme</h2></div><button autoFocus onClick={onClose} aria-label="Close theme settings">×</button></header>
     <div className="theme-settings-body">
       <label className="theme-row">App theme<button onClick={toggleTheme}>{theme === "dark" ? "Dark" : "Light"} · Switch to {theme === "dark" ? "light" : "dark"}</button></label>
+      <fieldset className="theme-accent"><legend>Accent color</legend>
+        <label>Choose any color<input aria-label="App accent color" type="color" value={accent || (theme === "dark" ? "#7aa7ff" : "#3578ff")} onChange={(e) => setAccent(e.target.value)} /></label>
+        <div className="theme-row"><output>{(accent || (theme === "dark" ? "#7aa7ff" : "#3578ff")).toUpperCase()}</output><button type="button" disabled={!accent} onClick={() => setAccent(null)}>Reset accent</button></div>
+        <p>Changes buttons, highlights, and sliders. Saves automatically.</p>
+      </fieldset>
       <fieldset><legend>Cursor theme</legend><div className="theme-cursors">{CURSOR_THEMES.map((cursorTheme) => <button key={cursorTheme} type="button" aria-pressed={settings.cursorTheme === cursorTheme} onClick={() => update({ cursorTheme })}>{cursorTheme[0].toUpperCase() + cursorTheme.slice(1)}</button>)}</div></fieldset>
       <label>Logo effect<select value={settings.effect} onChange={(e) => update({ effect: e.target.value })}><option value="shimmer">Shimmer — moving highlight</option><option value="solid">Solid color — no animation</option><option value="pulse">Pulse — soft fade</option><option value="morph">Morph — blend two colors</option><option value="rainbow">Rainbow — moving spectrum</option></select></label>
       <div className="theme-colors"><label>Primary color<input aria-label="Primary logo color" type="color" value={settings.color} disabled={settings.effect === "rainbow"} onChange={(e) => update({ color: e.target.value })} /><span>{settings.color.toUpperCase()}</span></label><label>Second color<input aria-label="Second logo color" type="color" value={settings.second} disabled={settings.effect !== "morph"} onChange={(e) => update({ second: e.target.value })} /><span>{settings.second.toUpperCase()}</span></label></div>

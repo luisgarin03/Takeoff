@@ -26,6 +26,7 @@ import AccountAvatar from "./AccountAvatar.jsx";
 import LocalFolderBrowser from "./LocalFolderBrowser.jsx";
 import ProjectInvitations from "./ProjectInvitations.jsx";
 import LongTaskLoader from "./LongTaskLoader.jsx";
+import SignInWelcome from "./SignInWelcome.jsx";
 
 import "../styles/cloud.css";
 
@@ -55,6 +56,11 @@ export default function CloudProjects({ initialView = "projects", source, getPay
   const [copyProvider, setCopyProvider] = useState("supabase"), [currentCloud, setCurrentCloud] = useState(null);
   const transfer = useRef(null);
   const userId = cloud.user?.id;
+  const previousUserId = useRef(userId);
+  useEffect(() => {
+    if (userId && !previousUserId.current) setView("welcome");
+    previousUserId.current = userId;
+  }, [userId]);
   const profileDraft = useRef({ userId, edited: false });
   useEffect(() => {
     if (profileDraft.current.userId !== userId) profileDraft.current = { userId, edited: false };
@@ -73,6 +79,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
   const googleUnavailable = googleSignInUnavailable();
   useEffect(() => {
     if (cloud.authReturn) {
+      if (!cloud.authReturn.error) setView("welcome");
       setError(cloud.authReturn.error);
       setNotice(cloud.authReturn.error ? "" : "Signed in with Google.");
     }
@@ -119,7 +126,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
   useEffect(() => {
     setDrive(null); setCurrentCloud(null); setLocalRoot(null); setLocalBrowser(null); setShareEntry(null); setShowCloudLibrary(false); setCreateSource(null); setDefaultProvider("google_drive");
     setRestoringSource(!!services);
-    if (!services) return;
+    if (!services || view === "welcome") { setRestoringSource(false); return; }
     let live = true;
     metaGet(`drive-local-folder:${userId}`).then(async (saved) => {
       const handle = saved?.handle || saved;
@@ -134,7 +141,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     services.drive.status().then((s) => { if (live) setDrive(s); }).catch((e) => { if (live) setError(cloudError(e).message); });
     metaGet(services.preferenceKey).then((p) => { if (live && ["supabase", "google_drive"].includes(p)) setDefaultProvider(p); });
     return () => { live = false; transfer.current?.abort(); };
-  }, [services, userId]);
+  }, [services, userId, view]);
   useEffect(() => {
     if (!services || !cloud.driveReturn) return;
     let live = true;
@@ -339,8 +346,8 @@ export default function CloudProjects({ initialView = "projects", source, getPay
   const longTaskLabel = busy || (restoringSource ? "Loading saved source folder…" : cloud.configuration.configured && (!cloud.ready || !auth) ? "Restoring cloud account…" : "");
   return createPortal(<div className="cloud-shade" onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); }}>
     <LongTaskLoader active={!!longTaskLabel} label={longTaskLabel} variant="fixed" />
-    <section ref={root} className="cloud-dialog" role="dialog" aria-modal="true" aria-label={view === "account" ? "Profile" : "Cloud projects"} tabIndex={-1}>
-      <header><h2>{view === "account" ? "Profile" : "Cloud projects"}</h2>{cloud.user && view !== "account" && <div className="cloud-header-account"><AccountAvatar profile={cloud.identity} size={28} /><span title={cloud.user.email}>{cloud.user.email}</span></div>}<span className="cloud-status">{cloud.displayStatus}</span>
+    <section ref={root} className="cloud-dialog" role="dialog" aria-modal="true" aria-label={view === "welcome" ? "Welcome" : view === "account" ? "Profile" : "Cloud projects"} tabIndex={-1}>
+      <header><h2>{view === "welcome" ? "Welcome" : view === "account" ? "Profile" : "Cloud projects"}</h2>{cloud.user && view !== "account" && view !== "welcome" && <div className="cloud-header-account"><AccountAvatar profile={cloud.identity} size={28} /><span title={cloud.user.email}>{cloud.user.email}</span></div>}{view !== "welcome" && <span className="cloud-status">{cloud.displayStatus}</span>}
         <button type="button" title={view === "account" ? "Close profile" : "Close cloud projects"} aria-label={view === "account" ? "Close profile" : "Close cloud projects"} disabled={!!busy} onClick={onClose}><Icon name="close" size={18} /></button></header>
       <div className="cloud-content">
         {!cloud.configuration.configured ? <p role="status">{cloud.configuration.error || "Cloud is not configured. Local saving remains available."}</p> : !cloud.ready || !auth ? <p>Restoring account...</p> : <>
@@ -357,6 +364,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
             <button className="btn-primary" disabled={!!busy || cloud.offline} type="submit">{authMode === "signin" ? "Sign in" : "Continue"}</button>
             <div className="cloud-actions">{["signin", "signup", "forgot"].filter((m) => m !== authMode).map((m) => <button key={m} type="button" disabled={!!busy} onClick={() => { setAuthMode(m); setError(""); setPassword(""); }}>{m === "signup" ? "Create account" : m === "forgot" ? "Forgot password" : "Sign in"}</button>)}</div>
           </form> : <>
+            {view === "welcome" && <SignInWelcome key={userId} cloud={cloud} onClose={onClose} />}
             {view === "account" && <ProfileAccountSection cloud={cloud} displayName={displayName} busy={!!busy}
               onNameChange={(value) => { profileDraft.current.edited = true; setDisplayName(value); }}
               onSave={(e) => { e.preventDefault(); run(async () => { await auth.saveProfile(cloud.user.id, displayName); profileDraft.current.edited = false; await cloud.refreshProfile(); setDisplayName(displayName.trim()); setNotice("Profile saved."); }); }}
