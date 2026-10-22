@@ -508,9 +508,14 @@ select {
 .find-job-copy > span { color: var(--ink-muted); font-size: 10px; }
 .find-job-count { color: var(--ink-muted); font: 10px/1.25 var(--f-mono, monospace); text-align: right; white-space: nowrap; }
 .find-page-results { display: flex; min-height: 180px; flex: 1 0 180px; flex-direction: column; gap: 6px; }
-.find-page-results-heading { color: var(--ink-muted); font: 700 10px/1.3 var(--f-mono, monospace); letter-spacing: .08em; text-transform: uppercase; }
+.find-page-results-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; color: var(--ink-muted); font: 700 10px/1.3 var(--f-mono, monospace); letter-spacing: .08em; text-transform: uppercase; }
+.find-page-results-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.find-page-heading-action { display: inline-flex; min-height: 28px; align-items: center; gap: 5px; border: 1px solid transparent; border-radius: 5px; padding: 4px 7px; background: transparent; color: var(--ink-muted); cursor: pointer; font: 700 10px/1 var(--f-mono, monospace); letter-spacing: .02em; text-transform: none; }
+.find-page-heading-action:hover { border-color: var(--ink-faint); color: var(--ink); }
+.find-page-heading-action[aria-pressed="true"] { border-color: var(--cobalt); background: var(--tint-select); color: var(--cobalt); }
 .find-page-results ol { display: flex; min-height: 0; flex: 1 1 0; flex-direction: column; gap: 5px; margin: 0; padding: 1px; overflow: auto; overscroll-behavior: contain; list-style: none; scrollbar-width: thin; }
 .find-page-results li { flex: 0 0 auto; margin: 0; padding: 0; }
+.find-page-results li.find-page-results-empty { border: 1px dashed var(--ink-faint); border-radius: 7px; padding: 10px; color: var(--ink-muted); font-size: 11px; line-height: 1.4; }
 .find-page-results li > button { display: grid; width: 100%; min-height: 48px; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; align-items: center; border: 1px solid var(--ink-faint); border-radius: 7px; padding: 8px 10px; background: transparent; color: var(--ink); cursor: pointer; text-align: left; }
 .find-page-results li > button:hover { background: var(--paper-cream); }
 .find-page-results li > button:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 1px; }
@@ -756,6 +761,9 @@ select {
 .sheet-bookmark svg { color: var(--ink-muted); }
 .sheet-bookmark[aria-pressed="true"] svg,
 .sheet-bookmark:hover svg { color: var(--c-warning); }
+.sheet-markup-indicator { cursor: default; }
+.sheet-markup-indicator svg,
+.sheet-markup-indicator:hover svg { color: var(--cobalt) !important; }
 
 .glass-drawer {
   position: relative;

@@ -9,6 +9,22 @@ export const FIND_HIGHLIGHT_COLORS = Object.freeze([
   "#8b5cf6", "#ef4444", "#3b82f6", "#84cc16",
 ]);
 
+const FIND_WORD_CHARACTER = /[\p{L}\p{N}_]/u;
+
+function edgeCharacter(value, edge) {
+  const characters = Array.from(value || "");
+  return edge === "start" ? (characters[0] || "") : (characters.at(-1) || "");
+}
+
+function isWholeFindTerm(text, start, length, foldedTerm) {
+  const before = edgeCharacter(text.slice(0, start), "end");
+  const after = edgeCharacter(text.slice(start + length), "start");
+  const beginsWithWordCharacter = FIND_WORD_CHARACTER.test(edgeCharacter(foldedTerm, "start"));
+  const endsWithWordCharacter = FIND_WORD_CHARACTER.test(edgeCharacter(foldedTerm, "end"));
+  return (!beginsWithWordCharacter || !FIND_WORD_CHARACTER.test(before))
+    && (!endsWithWordCharacter || !FIND_WORD_CHARACTER.test(after));
+}
+
 export function parseFindTerms(value) {
   const source = Array.isArray(value) ? value : String(value || "").split(/[,;\n]+/);
   const seen = new Set();
@@ -45,7 +61,9 @@ export function findTextItemMatches(items, terms) {
     for (const { term, folded } of needles) {
       let from = 0;
       while ((from = text.indexOf(folded, from)) !== -1) {
-        matches.push({ itemIndex, term, start: from, length: folded.length });
+        if (isWholeFindTerm(text, from, folded.length, folded)) {
+          matches.push({ itemIndex, term, start: from, length: folded.length });
+        }
         from += Math.max(1, folded.length);
       }
     }
@@ -89,6 +107,18 @@ export function groupFindMatchesByPage(matches) {
     matchCount: group.hits.length,
     terms: [...termCounts.values()],
   }));
+}
+
+// Keep the original scan order for ties so Rank changes only what the match
+// totals justify and remains predictable when several pages have equal counts.
+export function rankFindPages(pages) {
+  return (pages || []).map((page, index) => ({ page, index }))
+    .sort((a, b) => (Number(b.page?.matchCount) || 0) - (Number(a.page?.matchCount) || 0) || a.index - b.index)
+    .map(({ page }) => page);
+}
+
+export function hideSingleMatchFindPages(pages, hidden = true) {
+  return hidden ? (pages || []).filter((page) => (Number(page?.matchCount) || 0) > 1) : [...(pages || [])];
 }
 
 export function stepFindPageIndex(current, direction, pageCount) {

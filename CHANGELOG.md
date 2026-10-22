@@ -2,7 +2,10 @@
 
 ## Unreleased — toolbar and Profile
 
-- Simplified the top toolbar with a blueprint project selector, User Guide beside the profile, and closed-by-default Sheets/Takeoff tabs. Renamed the gallery button to Loaded files.
+- Simplified the top toolbar with a blueprint project selector, User Guide beside the profile, and closed-by-default Sheets/Takeoff tabs. The live zoom percentage now sits immediately left of User Guide instead of inside the Takeoff summary. Renamed the gallery button to Loaded files.
+- Added a **Rank** control beside Find's Matching pages heading. It toggles the result list between normal plan order and highest-to-lowest per-page match count, with stable ordering when pages have equal totals.
+- Added **Hide 1 match pages** to filter low-signal one-match pages out of Find's list and navigation without deleting their highlights. Find now requires whole-word boundaries, preventing terms such as **gate** from being counted inside **aggregate** or **gated**.
+- Pages containing saved markups now receive an automatic blue pencil bookmark in sheet tabs and page menus. These pages join the Bookmarked group without changing manual star data; deleting the final markup removes the pencil and reveals any underlying manual star.
 - Added collapsed-by-default PDF sets, explicit red removal buttons with page counts, and affected-page hover previews. Simplified gallery controls.
 - Made Find matching-page results grow with the panel and added illustrated control help.
 

@@ -27,3 +27,14 @@ test("toolbar summary has responsive wrapping styles instead of absolute positio
   assert.doesNotMatch(rule, /position:\s*absolute/);
   assert.match(toolbarCss, /@media \(max-width: 600px\)[\s\S]*\.takeoff-toolbar-readout/);
 });
+
+test("current zoom is shown in the header immediately before User Guide", () => {
+  const zoom = canvasSource.indexOf('className="takeoff-header-zoom"');
+  const guide = canvasSource.indexOf("<WorkspaceHelp", zoom);
+  const summaryMeta = canvasSource.match(/className="takeoff-toolbar-readout-meta">([^<]*)<\/div>/)?.[1] || "";
+
+  assert.ok(zoom >= 0, "header zoom widget exists");
+  assert.ok(guide > zoom, "zoom widget is placed before User Guide");
+  assert.match(toolbarCss, /\.takeoff-header-zoom\s*\{/);
+  assert.doesNotMatch(summaryMeta, /zoom/i, "zoom is no longer duplicated in the Takeoff summary");
+});

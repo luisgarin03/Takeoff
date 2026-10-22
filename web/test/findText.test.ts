@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addFindSuggestions, DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, findHighlightsForPageExport, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, mergeFindMatches, normalizeFindSuggestions, parseFindTerms, removeFindSuggestion, stepFindPageIndex } from "../src/lib/findText.js";
+import { addFindSuggestions, DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, findHighlightsForPageExport, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, hideSingleMatchFindPages, mergeFindMatches, normalizeFindSuggestions, parseFindTerms, rankFindPages, removeFindSuggestion, stepFindPageIndex } from "../src/lib/findText.js";
 
 test("scope suggestions include the requested estimating terms", () => {
   assert.deepEqual(DEFAULT_SCOPE_TERMS, [
@@ -29,6 +29,14 @@ test("matches every requested term case-insensitively and records each occurrenc
   ]);
 });
 
+test("find keywords match whole words instead of substrings inside other words", () => {
+  const items = [{ str: "aggregate" }, { str: "GATE" }, { str: "gated" }, { str: "gate-house" }];
+  assert.deepEqual(findTextItemMatches(items, ["gate"]), [
+    { itemIndex: 1, term: "gate", start: 0, length: 4 },
+    { itemIndex: 3, term: "gate", start: 0, length: 4 },
+  ]);
+});
+
 test("find matches group into pages with unique keyword counts in scan order", () => {
   const hits = [
     { key: "A.pdf", file: "A.pdf", page: 1, term: "Fence", x: .1 },
@@ -43,6 +51,25 @@ test("find matches group into pages with unique keyword counts in scan order", (
   assert.deepEqual(pages[0].terms, [{ term: "Fence", count: 2 }, { term: "Gate", count: 1 }]);
   assert.equal(pages[0].firstMatch, hits[0]);
   assert.deepEqual(pages[0].hits, hits.slice(0, 3));
+});
+
+test("matching pages rank from most matches to fewest with stable ties", () => {
+  const pages = [
+    { key: "A", matchCount: 2 },
+    { key: "B", matchCount: 7 },
+    { key: "C", matchCount: 2 },
+    { key: "D", matchCount: 1 },
+  ];
+
+  assert.deepEqual(rankFindPages(pages).map((page: { key: string }) => page.key), ["B", "A", "C", "D"]);
+  assert.deepEqual(pages.map((page) => page.key), ["A", "B", "C", "D"], "ranking does not mutate normal plan order");
+});
+
+test("single-match pages can be hidden without changing or deleting the source list", () => {
+  const pages = [{ key: "A", matchCount: 1 }, { key: "B", matchCount: 4 }, { key: "C", matchCount: 1 }];
+  assert.deepEqual(hideSingleMatchFindPages(pages).map((page: { key: string }) => page.key), ["B"]);
+  assert.deepEqual(hideSingleMatchFindPages(pages, false).map((page: { key: string }) => page.key), ["A", "B", "C"]);
+  assert.equal(pages.length, 3);
 });
 
 test("matching-page navigation wraps and handles an empty or unselected list", () => {

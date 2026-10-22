@@ -14,6 +14,13 @@ export function toggleSheetBookmark(bookmarks, key) {
   return bookmarks.includes(key) ? bookmarks.filter((k) => k !== key) : [...bookmarks, key];
 }
 
+// Markup bookmarks are derived from the saved annotations, not persisted as a
+// second bookmark field. Removing the final markup therefore removes the
+// pencil automatically without disturbing a user's manual star bookmark.
+export function markupSheetBookmarkKeys(markups) {
+  return sanitizeSheetBookmarks((markups || []).map((markup) => markup?.sheet_id));
+}
+
 // File favorites deliberately use their own persisted field. A page-1 sheet
 // key is the bare PDF filename, so sharing `sheet_bookmarks` would make a file
 // favorite indistinguishable from bookmarking the first page.

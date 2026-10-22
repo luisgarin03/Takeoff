@@ -67,6 +67,7 @@ export const icons = {
   rfi: (s) => <I size={s}><path d="M12 3 L 19 7 V 15 L 12 19 L 5 15 V 7 Z" /><path d="M10 10 a2 2 0 1 1 2.6 1.9 C 12 12.2 12 12.6 12 13.2" /><circle cx="12" cy="15.6" r="0.9" fill="currentColor" /></I>,
   takeoffs: (s) => <I size={s}><rect x="4" y="5" width="3" height="3" fill="currentColor" stroke="none" /><line x1="10" y1="6.5" x2="20" y2="6.5" /><rect x="4" y="10.5" width="3" height="3" fill="currentColor" stroke="none" /><line x1="10" y1="12" x2="20" y2="12" /><rect x="4" y="16" width="3" height="3" fill="currentColor" stroke="none" /><line x1="10" y1="17.5" x2="20" y2="17.5" /></I>,
   revisions: (s) => <I size={s}><circle cx="12" cy="12" r="8" /><path d="M12 7.5 V 12 L 15.4 14" /><circle cx="12" cy="12" r="0.9" fill="currentColor" /></I>,
+  rank: (s) => <I size={s}><path d="M5 5 H19 M5 10 H15 M5 15 H11" /><path d="M17 9 V19 M14.5 16.5 L17 19 L19.5 16.5" /></I>,
   zone: (s) => <I size={s}><path d="M4 4 H 8 M11 4 H 15 M18 4 H 20 V 6 M20 9 H 20 V 13 M20 16 V 20 H 17 M14 20 H 10 M7 20 H 4 V 16 M4 13 V 9 M4 6 V 4" /><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" /></I>,
   target: (s) => <I size={s}><circle cx="12" cy="12" r="6" /><path d="M12 3 V 7 M12 17 V 21 M3 12 H 7 M17 12 H 21" /><circle cx="12" cy="12" r="1" fill="currentColor" /></I>,
   agentAI: (s) => <I size={s}><path d="M5 5 H19 V17 H11 L7 21 V17 H5 Z" /><path d="M12 7 L13 10 L16 11 L13 12 L12 15 L11 12 L8 11 L11 10 Z" /></I>,

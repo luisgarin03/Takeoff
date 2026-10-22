@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fileBookmarkGroups, sanitizeFileBookmarks, sanitizeSheetBookmarks, toggleFileBookmark, toggleSheetBookmark, sheetBookmarkGroups } from "../src/lib/sheetBookmarks.js";
+import { fileBookmarkGroups, markupSheetBookmarkKeys, sanitizeFileBookmarks, sanitizeSheetBookmarks, toggleFileBookmark, toggleSheetBookmark, sheetBookmarkGroups } from "../src/lib/sheetBookmarks.js";
 
 test("older or malformed projects reset bookmarks; valid keys deduplicate without renaming", () => {
   for (const input of [undefined, null, {}, "Plan.pdf", 1]) assert.deepEqual(sanitizeSheetBookmarks(input), []);
@@ -16,6 +16,17 @@ test("toggling a bookmark is immutable and reversible", () => {
   assert.deepEqual(toggleSheetBookmark(starred, "Plan.pdf#2"), old);
   assert.deepEqual(toggleSheetBookmark(old, "Plan.pdf"), []);
   assert.equal(toggleSheetBookmark(old, ""), old);
+});
+
+test("markup pages derive automatic bookmark keys and remove them with the final markup", () => {
+  const markups = [
+    { id: "m1", sheet_id: "Plan.pdf#2" },
+    { id: "m2", sheet_id: "Plan.pdf#2" },
+    { id: "m3", sheet_id: "Other.pdf" },
+    { id: "bad" },
+  ];
+  assert.deepEqual(markupSheetBookmarkKeys(markups), ["Plan.pdf#2", "Other.pdf"]);
+  assert.deepEqual(markupSheetBookmarkKeys(markups.filter((markup) => markup.sheet_id !== "Plan.pdf#2")), ["Other.pdf"]);
 });
 
 test("bookmarks group first in document order without changing tab order or duplicating pages", () => {

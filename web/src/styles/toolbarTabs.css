@@ -17,6 +17,20 @@
 .estimating-toolbar :focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
 .estimating-toolbar-account { margin-left: auto; display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 0; }
 .estimating-toolbar-account button { min-height: 44px; max-width: 160px; }
+.takeoff-header-zoom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 0 8px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font: 600 11px var(--f-mono);
+  line-height: 1;
+  white-space: nowrap;
+}
 .estimating-toolbar-account .account-sign-in-button { border: 1px solid var(--ink-faint); background: transparent; color: var(--ink); padding: 6px 10px; }
 .estimating-toolbar-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; min-width: 0; max-height: 34dvh; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .estimating-toolbar-panel[hidden] { display: none; }

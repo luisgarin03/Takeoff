@@ -45,7 +45,7 @@ import ToolMenu from "../components/ToolMenu.jsx";
 import ThemeSettings from "../components/ThemeSettings.jsx";
 import WorkspaceHelp, { RecentProjectsMenu } from "../components/WorkspaceHelp.jsx";
 import SheetBookmarkButton from "../components/SheetBookmarkButton.jsx";
-import { fileBookmarkGroups, sanitizeFileBookmarks, sanitizeSheetBookmarks, toggleFileBookmark, toggleSheetBookmark, sheetBookmarkGroups } from "../lib/sheetBookmarks.js";
+import { fileBookmarkGroups, markupSheetBookmarkKeys, sanitizeFileBookmarks, sanitizeSheetBookmarks, toggleFileBookmark, toggleSheetBookmark, sheetBookmarkGroups } from "../lib/sheetBookmarks.js";
 import VirtualTrackpad from "../components/VirtualTrackpad.jsx";
 import TrackpadSettings from "../components/TrackpadSettings.jsx";
 import DiagnosticsMonitor from "../components/DiagnosticsMonitor.jsx";
@@ -68,7 +68,7 @@ import { normalizeLoadedGroups } from "../lib/sheetGroups";
 import { isCanvasBusy } from "../lib/canvasBusy";
 import { parseSchedule, rowToSeed } from "../lib/scheduleParse";
 import { normalizeScanRows, postScanWithRetry, SCAN_ENDPOINT, scanRasterScale } from "../lib/scheduleScan";
-import { DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, addFindSuggestions, findHighlightsForPageExport, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, normalizeFindSuggestions, parseFindTerms, removeFindSuggestion, stepFindPageIndex } from "../lib/findText.js";
+import { DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, addFindSuggestions, findHighlightsForPageExport, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, hideSingleMatchFindPages, normalizeFindSuggestions, parseFindTerms, rankFindPages, removeFindSuggestion, stepFindPageIndex } from "../lib/findText.js";
 import { disposeFindOcr, recognizePdfPageForFind } from "../lib/findOcr.js";
 import { MARKUP_SHORTCUTS_KEY, assignMarkupShortcut, clearMarkupShortcut, normalizeMarkupShortcutMap } from "../lib/markupShortcuts.js";
 import { normalizeTag } from "../lib/scheduleEdit";
@@ -259,8 +259,14 @@ export default function TakeoffCanvas() {
   const findRequestRef = useRef(0);
   const findJobSequenceRef = useRef(0);
   const findJobsRef = useRef([]);
+  const [findRanked, setFindRanked] = useState(false);
+  const [findHideSingleMatchPages, setFindHideSingleMatchPages] = useState(false);
   const findResults = useMemo(() => findVisibleMatches(findJobs), [findJobs]);
-  const findPages = useMemo(() => groupFindMatchesByPage(findResults), [findResults]);
+  const allFindPages = useMemo(() => groupFindMatchesByPage(findResults), [findResults]);
+  const findPages = useMemo(() => {
+    const pages = hideSingleMatchFindPages(allFindPages, findHideSingleMatchPages);
+    return findRanked ? rankFindPages(pages) : pages;
+  }, [allFindPages, findHideSingleMatchPages, findRanked]);
   const matchedFindPageIndex = findPages.findIndex((resultPage) => resultPage.key === activeFindPageKey);
   const findPageIndex = matchedFindPageIndex >= 0 ? matchedFindPageIndex : (findPages.length ? 0 : -1);
   const activeFindPage = findPages[findPageIndex] || null;
@@ -1023,13 +1029,14 @@ export default function TakeoffCanvas() {
     return lvl + (t.page > 1 ? `${base} · ${t.page}` : base);
   };
   const bookmarkedKeys = new Set(sheetBookmarks);
-  const bookmarkButton = (key) => <SheetBookmarkButton label={tabLabel(key)} bookmarked={bookmarkedKeys.has(key)}
+  const markedUpKeys = new Set(markupSheetBookmarkKeys(markups));
+  const bookmarkButton = (key) => <SheetBookmarkButton label={tabLabel(key)} bookmarked={bookmarkedKeys.has(key)} markedUp={markedUpKeys.has(key)}
     onToggle={() => { if (!denyReadOnlyEdit()) setSheetBookmarks((current) => toggleSheetBookmark(current, key)); }} />;
   const favoriteFiles = new Set(fileBookmarks);
   const fileFavoriteButton = (name) => <SheetBookmarkButton label={name} bookmarked={favoriteFiles.has(name)} favorite
     onToggle={() => { if (!denyReadOnlyEdit()) setFileBookmarks((current) => toggleFileBookmark(current, name)); }} />;
   const fileGroups = fileBookmarkGroups(sheets, fileBookmarks);
-  const bookmarkGroups = sheetBookmarkGroups(openTabs, sheetBookmarks, sheets);
+  const bookmarkGroups = sheetBookmarkGroups(openTabs, [...bookmarkedKeys, ...markedUpKeys], sheets);
   const sheetJumpItem = (key) => ({ id: key, icon: "document", label: tabLabel(key),
     active: sheetGroup.length ? sheetGroup.includes(key) : key === sheetKey,
     onSelect: () => openSheets([key], false), accessory: bookmarkButton(key) });
@@ -7270,6 +7277,7 @@ export default function TakeoffCanvas() {
           logo={<strong onClick={handleDevLogoGesture} onMouseDown={(event) => { if (event.detail > 1) event.preventDefault(); }} onDoubleClick={(event) => event.preventDefault()}
             style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}><BrandText /></strong>}
           account={<>
+        <output className="takeoff-header-zoom" aria-label={`Canvas zoom ${(tf.scale * 100).toFixed(0)} percent`} title="Current canvas zoom">ZOOM {(tf.scale * 100).toFixed(0)}%</output>
         <WorkspaceHelp metadata={projectMetadata} name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
         {cloudAccount?.user ? <button type="button" className="account-profile-button" ref={(el) => { if (el) el.parentElement.style.setProperty("--profile-button-width", `${el.getBoundingClientRect().width}px`); }} aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><AccountAvatar profile={cloudAccount.identity} /><span>{cloudAccount.identity.name}</span></button> : <button type="button" className="account-sign-in-button" onClick={() => setCloudView("projects")} disabled={!cloudAccount?.ready} aria-label="Sign in" title="Sign in to your account">Sign in</button>}
         <AccountChip note={cloudMode ? "Synced to Google Drive" : "Local workspace"} onOpenChange={onMenuDepth} />
@@ -7507,7 +7515,7 @@ export default function TakeoffCanvas() {
             </strong>
             {vertTotal > 0 && <small title="Display only — floor-area perimeters × this condition's height (not committed)">{fa(vertTotal)} vert (perim × H)</small>}
           </div>
-          <div className="takeoff-toolbar-readout-meta">{visibleShapes.length} shapes on {groupKeys.length > 1 ? `${groupKeys.length} sheets` : "sheet"} · zoom {(tf.scale * 100).toFixed(0)}%</div>
+          <div className="takeoff-toolbar-readout-meta">{visibleShapes.length} shapes on {groupKeys.length > 1 ? `${groupKeys.length} sheets` : "sheet"}</div>
         </div>
         {(finishOk || proposal?.regions.length > 0 || (markupDraft && ["cloud", "callout", "highlight"].includes(tool))) && cluster("",
           <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 6, minWidth: 150 }}>
@@ -7725,9 +7733,22 @@ export default function TakeoffCanvas() {
                     })}
                   </ol>
                 </section>}
-                {findPages.length > 0 && !findBusy && <section className="find-page-results" aria-label="Pages containing search keywords">
-                  <div className="find-page-results-heading">Matching pages</div>
+                {allFindPages.length > 0 && !findBusy && <section className="find-page-results" aria-label="Pages containing search keywords">
+                  <div className="find-page-results-heading">
+                    <span>Matching pages</span>
+                    <span className="find-page-results-actions">
+                      <button type="button" className="find-page-heading-action" onClick={() => setFindHideSingleMatchPages((hidden) => !hidden)} aria-pressed={findHideSingleMatchPages}
+                        title={findHideSingleMatchPages ? "Show pages with exactly one match" : "Hide pages with exactly one match from this list and its navigation"}>
+                        {findHideSingleMatchPages ? "Show 1 match pages" : "Hide 1 match pages"}
+                      </button>
+                      <button type="button" className="find-page-heading-action" onClick={() => setFindRanked((ranked) => !ranked)} aria-pressed={findRanked}
+                        title={findRanked ? "Restore matching pages to plan order" : "Rank matching pages from most matches to fewest"}>
+                        <span>Rank</span><Icon name="rank" size={13} />
+                      </button>
+                    </span>
+                  </div>
                   <ol>
+                    {!findPages.length && <li className="find-page-results-empty">All matching pages have exactly one match. Choose Show 1 match pages to restore them.</li>}
                     {findPages.map((resultPage, index) => {
                       const current = index === findPageIndex;
                       return <li key={resultPage.key}>
@@ -7761,6 +7782,8 @@ export default function TakeoffCanvas() {
                 <p>Selectable PDF text is searched first. Scanned pages automatically use local OCR and may take longer.</p>
                 <h4>Navigate matching pages</h4>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-square"><Icon name="chevronLeft" size={13} /></span><span className="is-square"><Icon name="chevronRight" size={13} /></span></span><strong>‹ / ›:</strong> go to the previous or next matching page. The page counter shows your position in the results. These buttons are unavailable while scanning or when there are no matching pages.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span>Hide 1 match pages</span></span><strong>Hide 1 match pages:</strong> removes pages with exactly one match from this result list and the previous/next navigation. It does not delete their search marks. Click Show 1 match pages to restore them.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span>Rank <Icon name="rank" size={13} /></span></span><strong>Rank:</strong> sorts matching pages from the highest number of matches to the lowest. Click it again to restore the original plan order. Pages with equal totals keep their original order.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-result"><b>A1.01 · Example sheet</b><small>fence ×3 · 3 matches</small></span></span><strong>Matching page rows:</strong> click a row to open that sheet. Each row shows its PDF, page number, matched keywords, and match counts.</p>
                 <h4>Show, color, or remove search marks</h4>
                 <p><span className="find-help-preview" aria-hidden="true"><span>Mark all pages</span><span className="is-selected">Unmark all pages</span></span><strong>Mark all pages / Unmark all pages:</strong> show or hide highlights for all completed searches. Hiding preserves the searches so you can show them again. This button is unavailable until a search has completed.</p>
