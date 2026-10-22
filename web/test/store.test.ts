@@ -326,7 +326,7 @@ test("database newer than this build surfaces as a stale-tab VersionError", asyn
   await assert.rejects(store.listSheets(), (e: any) => {
     assert.equal(e.name, "VersionError");
     assert.equal(isStaleTabError(e), true);
-    assert.match(e.message, /older OpenTakeoff/);
+    assert.match(e.message, /older Beitzell Estimating/);
     return true;
   });
   // sanity: garden-variety errors are NOT stale-tab errors
@@ -361,7 +361,7 @@ test("friendlyStoreError maps quota to actionable copy; other errors pass throug
   assert.equal(friendlyStoreError(new Error("boom")), "boom");
   // TakeoffCanvas routes its message tint on EXACT equality with this string —
   // pin the copy so an edit there can't silently turn the warning green
-  assert.equal(STALE_TAB_MESSAGE, "OpenTakeoff was updated in another tab — reload this tab to continue.");
+  assert.equal(STALE_TAB_MESSAGE, "Beitzell Estimating was updated in another tab — reload this tab to continue.");
 });
 
 test("two cloudStores over one IndexedDB scope snapshots by folderId (end-to-end)", async () => {

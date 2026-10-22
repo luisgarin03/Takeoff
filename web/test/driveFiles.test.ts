@@ -14,7 +14,8 @@ import { driveReturnResult, isDriveDeepLink } from "../src/lib/supabase/driveCon
 beforeEach(() => { globalThis.indexedDB = new IDBFactory(); });
 const id = "20000000-0000-0000-0000-000000000001";
 async function fixture(size = 7) {
-  const data = new Uint8Array(size).fill(42), hash = await digest(data), path = `${id}/${hash}`;
+  let data = new Uint8Array(size).fill(42), hash = await digest(data), type = "application/pdf";
+  const path = `${id}/${hash}`;
   const record = { project_id: id, sha256: hash, size, mime_type: "application/pdf", storage_provider: "google_drive", uploaded: true };
   const calls: string[] = [], offsets: number[] = []; let offset = 0, infoCalls = 0, interrupted = false, corrupt = false, denied = false, offline = false;
   const fetcher: any = async (url: string, options: any) => {
@@ -23,7 +24,7 @@ async function fixture(size = 7) {
     assert.equal(options.headers.apikey, "publishable");
     if (offline) throw new TypeError("offline");
     if (denied) return Response.json({ code: "OTK_ACCESS" }, { status: 403 });
-    if (action === "info") { infoCalls++; return Response.json({ sha256: hash, size, type: "application/pdf" }); }
+    if (action === "info") { infoCalls++; return Response.json({ sha256: hash, size, type }); }
     if (action === "download") {
       const start = Number(u.searchParams.get("offset")); offsets.push(start);
       if (interrupted && start >= DRIVE_CHUNK) return Response.json({ code: "OTK_DRIVE_TRANSFER" }, { status: 502 });
@@ -31,6 +32,7 @@ async function fixture(size = 7) {
     }
     if (action === "begin") return Response.json({ offset, done: offset === size });
     if (action === "chunk") {
+      data.set(options.body, offset);
       offset += options.body.length;
       if (interrupted) { interrupted = false; throw new TypeError("lost response"); }
       return Response.json({ offset, done: offset === size });
@@ -41,6 +43,10 @@ async function fixture(size = 7) {
   const cache = createDriveCache("supabase/user");
   const files = createDriveFiles({ client, url: "https://test.supabase.co", key: "publishable", userId: "user", assertUser: async () => {}, fetcher, cache, wait: async () => {} });
   return { files, data, record, path, calls, offsets, cache,
+    prepareUpload(ref: { sha256: string; size: number; type: string }) {
+      hash = ref.sha256; size = ref.size; type = ref.type; offset = 0;
+      data = new Uint8Array(size);
+    },
     get infoCalls() { return infoCalls; }, set interrupted(v: boolean) { interrupted = v; }, set corrupt(v: boolean) { corrupt = v; },
     set denied(v: boolean) { denied = v; }, set offline(v: boolean) { offline = v; } };
 }
@@ -105,16 +111,31 @@ test("second device restores Drive PDFs, marks, calibration, bookmarks, whiteboa
       items: [{ id: "note", kind: "file", assetId: "asset", page: 1, x: 11, y: 22, w: 300, h: 200 }] } };
   const source: any = { listSheets: async () => [{ name: "Plan.pdf" }], loadPdfData: async () => h.data,
     listSnapshots: async () => [{ id: "rev" }], getSnapshot: async () => ({ id: "rev", ts: 123, payload }), saveAnnotations: async () => {}, loadAnnotations: async () => payload };
-  let project: any, row: any, uploads = 0, providerChanges = 0;
+  let project: any, uploads = 0, providerChanges = 0;
+  const rows = new Map<string, any>(), transports = new Map<string, Awaited<ReturnType<typeof fixture>>>();
   const bindings = new Map(), meta = { get: async (k: any) => bindings.get(k), put: async (k: any, v: any) => { bindings.set(k, v); } };
   const repository: any = { saveProject: async (_id: string, expected: number, state: any) => project = { ...project, id, version: expected + 1, project_state: state },
     setFileProvider: async (_id: string, value: string) => { providerChanges++; project.file_provider = value; return project; },
-    loadProject: async () => project, listFiles: async () => row ? [row] : [],
-    registerFile: async () => { row = { ...h.record, uploaded: false }; }, finishFile: async () => { throw new Error("Drive must not use Supabase finish"); } };
-  const files: any = createProjectFiles({} as any, { ...h.files, upload: async (...args: any[]) => { uploads++; await (h.files.upload as any)(...args); row.uploaded = true; } });
+    loadProject: async () => project, listFiles: async () => [...rows.values()],
+    registerFile: async (_id: string, ref: any) => {
+      const remote = await fixture();
+      remote.prepareUpload(ref);
+      transports.set(`${id}/${ref.sha256}`, remote);
+      rows.set(ref.sha256, { project_id: id, sha256: ref.sha256, size: ref.size, mime_type: ref.type, storage_provider: "google_drive", uploaded: false });
+    }, finishFile: async () => { throw new Error("Drive must not use Supabase finish"); } };
+  const files: any = createProjectFiles({} as any, {
+    upload: async (path: string, file: any, progress: any, options: any) => {
+      uploads++; await transports.get(path)!.files.upload(path, file, progress, options);
+      rows.get(file.sha256).uploaded = true;
+    },
+    download: async (path: string, options: any) => transports.get(path)!.files.download(path, options),
+  });
   const sync = createCloudSync({ repository, files, local: source, meta, key: "owner" });
   assert.deepEqual((await sync.save(payload, { newProjectProvider: "google_drive" })).warnings, []);
-  await sync.save(payload, { newProjectProvider: "supabase" }); assert.equal(uploads, 1); assert.equal(providerChanges, 1);
+  assert.equal(uploads, 2); // One shared PDF asset plus the complete portable .otk archive.
+  assert.equal(rows.get(project.project_state.archive.sha256).mime_type, "application/octet-stream");
+  assert.deepEqual((await sync.save(payload, { newProjectProvider: "supabase" })).warnings, []);
+  assert.equal(uploads, 2); assert.equal(providerChanges, 1);
   const empty = createFileProjectStore(crypto.randomUUID());
   const second = createCloudSync({ repository, files, local: empty, meta, key: "viewer/device2" });
   const result = await second.load(id);
