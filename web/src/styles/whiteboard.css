@@ -11,6 +11,20 @@
   font: 13px var(--f-body);
   letter-spacing: 0;
   outline: none;
+  animation: wb-enter 280ms cubic-bezier(.22, 1, .36, 1);
+}
+@keyframes wb-enter {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.wb.is-closing { animation: wb-exit 220ms ease-in both; }
+.wb.is-closing > * { pointer-events: none; }
+@keyframes wb-exit {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(18px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb, .wb.is-closing { animation: none; }
 }
 .wb *, .wb *::before, .wb *::after { box-sizing: border-box; letter-spacing: 0; }
 .wb button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 34px; min-height: 34px; padding: 6px 10px; border: 1px solid var(--ink-faint); border-radius: 6px; background: var(--paper-bright); color: var(--ink); font: 600 12px var(--f-body); cursor: pointer; }

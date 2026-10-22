@@ -218,9 +218,22 @@ const FileCard = memo(function FileCard({ asset, item, onPage, visible, resoluti
   </>;
 });
 
-export default function Whiteboard({ board, onChange, onClose, onSave, onBusyChange, projectName, saveState,
+export default function Whiteboard({ board, onChange, onClose: onClosed, onSave, onBusyChange, projectName, saveState,
   initialFiles = null, onInitialFilesHandled, readOnly = false, readOnlyMessage = "" }) {
   const root = useRef(null), viewport = useRef(null), input = useRef(null);
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef(null), closeCallback = useRef(onClosed);
+  closeCallback.current = onClosed;
+  const onClose = useCallback(() => {
+    if (closeTimer.current !== null) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      closeCallback.current();
+      return;
+    }
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => closeCallback.current(), 220);
+  }, []);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
   const boardRef = useRef(board), callbacks = useRef({ onChange, onClose, onBusyChange, onSave, onInitialFilesHandled });
   boardRef.current = board; callbacks.current = { onChange, onClose, onBusyChange, onSave, onInitialFilesHandled };
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
@@ -673,7 +686,7 @@ export default function Whiteboard({ board, onChange, onClose, onSave, onBusyCha
     : exportMode === "selection" ? "Exporting selected whiteboard area…"
       : exportMode === "single" ? "Exporting whiteboard PDF…" : "";
   const longTaskLabel = exportTaskLabel || (busy ? "Adding files to the whiteboard…" : saveState === "saving" ? "Saving whiteboard…" : "");
-  return createPortal(<section className="wb" role="dialog" aria-modal="true" aria-label="Whiteboard" tabIndex={-1} ref={root}
+  return createPortal(<section className={`wb${closing ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-label="Whiteboard" tabIndex={-1} ref={root}
     onPaste={paste}
     onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
     onDrop={(e) => { e.preventDefault(); e.stopPropagation(); }}>
