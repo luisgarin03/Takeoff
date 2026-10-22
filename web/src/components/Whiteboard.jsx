@@ -710,7 +710,6 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
         <button type="button" onClick={() => commit(addWhiteboardSowPanel(boardRef.current))} disabled={busy || readOnly}><Icon name="plus" size={16} />SOW panel</button>
         <button type="button" onClick={onSave} disabled={busy || readOnly}><Icon name="document" size={16} />Save project</button>
         <Button icon="document" label="Export whiteboard as PDF" onClick={() => setExportRequest({ title: "Export whiteboard as PDF", scopeLabel: "Entire whiteboard · one flattened visual PDF page", region: null, pageMode: null })} disabled={busy || exporting} aria-busy={exportMode === "single"}>{exportMode === "single" ? "Exporting…" : "Export whiteboard as PDF"}</Button>
-        <Button icon="sheets" label="Export whiteboard as pages" onClick={() => setExportRequest({ title: "Export whiteboard as pages", scopeLabel: "Entire whiteboard · flattened Letter landscape pages", region: null, pageMode: "pages" })} disabled={busy || exporting} aria-busy={exportMode === "pages"}>{exportMode === "pages" ? "Exporting pages…" : "Export whiteboard as pages"}</Button>
         <Button icon="fullscreen" label="Select Export Areas" onClick={() => { setShowExportPages(true); setMode(mode === "export-area" ? "select" : "export-area"); }}
           disabled={busy || exporting || readOnly} aria-pressed={mode === "export-area"}>Select Export Areas</Button>
       </div>

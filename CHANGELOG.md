@@ -2,6 +2,8 @@
 
 ## Unreleased — toolbar and Profile
 
+- Removed the **Export whiteboard as pages** toolbar button; use **Select Export Areas** for custom multipage PDFs.
+
 - Simplified the top toolbar with a blueprint project selector, User Guide beside the profile, and closed-by-default Sheets/Takeoff tabs. The live zoom percentage now sits immediately left of User Guide instead of inside the Takeoff summary. Renamed the gallery button to Loaded files.
 - Added a **Rank** control beside Find's Matching pages heading. It toggles the result list between normal plan order and highest-to-lowest per-page match count, with stable ordering when pages have equal totals.
 - Added **Hide 1 match pages** to filter low-signal one-match pages out of Find's list and navigation without deleting their highlights. Find now requires whole-word boundaries, preventing terms such as **gate** from being counted inside **aggregate** or **gated**.
