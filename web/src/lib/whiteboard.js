@@ -55,8 +55,11 @@ function normalizeWhiteboardExportArea(area, index = 0) {
   const fit = WHITEBOARD_EXPORT_FITS.includes(area.fit) ? area.fit : "fit";
   const suppliedName = typeof area.name === "string" ? area.name.trim().slice(0, 120) : "";
   const order = Number.isInteger(area.order) && area.order >= 0 ? area.order : index;
+  const sourceItemId = typeof area.sourceItemId === "string" && area.sourceItemId && area.sourceItemId.length <= 128 ? area.sourceItemId : null;
+  const sourcePage = Number.isInteger(area.sourcePage) && area.sourcePage >= 1 && area.sourcePage <= 100000 ? area.sourcePage : null;
   return { id: area.id, name: suppliedName || `Area ${index + 1}`, x: area.x, y: area.y, w: area.w, h: area.h,
-    order, pageSize, orientation, quality, fit };
+    order, pageSize, orientation, quality, fit,
+    ...(sourceItemId && sourcePage ? { sourceItemId, sourcePage } : {}) };
 }
 
 export function sanitizeWhiteboardExportAreas(board) {
@@ -80,7 +83,10 @@ export function appendWhiteboardExportArea(board, rect, settings = {}) {
     pageSize: settings.pageSize ?? previous?.pageSize ?? "match",
     orientation: settings.orientation ?? previous?.orientation ?? "auto",
     quality: settings.quality ?? previous?.quality ?? "high",
-    fit: settings.fit ?? previous?.fit ?? "fit", order: safe.exportAreas.length };
+    fit: settings.fit ?? previous?.fit ?? "fit", order: safe.exportAreas.length,
+    ...(typeof settings.name === "string" ? { name: settings.name } : {}),
+    ...(typeof settings.sourceItemId === "string" ? { sourceItemId: settings.sourceItemId } : {}),
+    ...(Number.isInteger(settings.sourcePage) ? { sourcePage: settings.sourcePage } : {}) };
   const area = normalizeWhiteboardExportArea(raw, safe.exportAreas.length);
   return area ? { ...safe, exportAreas: [...safe.exportAreas, area] } : safe;
 }
@@ -767,7 +773,9 @@ export function removeBoardItem(board, id) {
   const items = board.items.filter((item) => item.id !== id);
   const used = new Set(items.map((item) => item.assetId));
   for (const sow of board.sows || (board.sow ? [board.sow] : [])) if (sow.brandAssetId) used.add(sow.brandAssetId);
-  return { ...board, items, assets: board.assets.filter((asset) => used.has(asset.id)) };
+  const exportAreas = Array.isArray(board.exportAreas) ? board.exportAreas.filter((area) => area.sourceItemId !== id)
+    .map((area, order) => ({ ...area, order })) : board.exportAreas;
+  return { ...board, items, assets: board.assets.filter((asset) => used.has(asset.id)), ...(exportAreas ? { exportAreas } : {}) };
 }
 
 export function zoomBoard(view, point, nextScale) {

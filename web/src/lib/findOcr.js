@@ -1,4 +1,4 @@
-import { findTextItemMatches } from "./findText.js";
+import { findMatchContext, findTextItemMatches } from "./findText.js";
 
 const OCR_MAX_SIDE = 3200;
 const OCR_MAX_PIXELS = 9_000_000;
@@ -65,6 +65,7 @@ export function findOcrLineMatches(lines, terms, imageWidth, imageHeight) {
     const charWidth = (line.x1 - line.x0) / Math.max(1, line.str.length);
     matches.push({
       ...match,
+      ...findMatchContext(line.str, match.start, match.length),
       source: "ocr",
       x: (line.x0 + charWidth * match.start) / width,
       y: line.y0 / height,

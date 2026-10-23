@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addFindSuggestions, DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, findHighlightsForPageExport, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, hideSingleMatchFindPages, mergeFindMatches, normalizeFindSuggestions, parseFindTerms, rankFindPages, removeFindSuggestion, stepFindPageIndex } from "../src/lib/findText.js";
+import { addFindSuggestions, DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, findHighlightsForPageExport, findMatchContext, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, hideSingleMatchFindPages, mergeFindMatches, normalizeFindSuggestions, parseFindTerms, rankFindPages, removeFindSuggestion, stepFindPageIndex } from "../src/lib/findText.js";
 
 test("scope suggestions include the requested estimating terms", () => {
   assert.deepEqual(DEFAULT_SCOPE_TERMS, [
@@ -35,6 +35,14 @@ test("find keywords match whole words instead of substrings inside other words",
     { itemIndex: 1, term: "gate", start: 0, length: 4 },
     { itemIndex: 3, term: "gate", start: 0, length: 4 },
   ]);
+});
+
+test("find context preserves exact casing and bounds surrounding text to 150 characters", () => {
+  const source = `${"a".repeat(200)}FENCE${"b".repeat(200)}`;
+  const context = findMatchContext(source, 200, 5);
+  assert.equal(context.exactMatchedText, "FENCE");
+  assert.equal(context.contextBefore, "a".repeat(150));
+  assert.equal(context.contextAfter, "b".repeat(150));
 });
 
 test("find matches group into pages with unique keyword counts in scan order", () => {

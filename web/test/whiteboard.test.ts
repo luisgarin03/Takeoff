@@ -120,11 +120,14 @@ test("whiteboard validation rejects remote/active files, duplicate IDs and inval
 test("custom PDF export areas create, edit, reorder, duplicate, remove and persist with the project", async () => {
   let whiteboard: any = emptyWhiteboard();
   for (let index = 0; index < 4; index += 1) {
-    whiteboard = appendWhiteboardExportArea(whiteboard, { x: -200 + index * 350, y: 40 + index * 25, w: 320, h: 210 });
+    whiteboard = appendWhiteboardExportArea(whiteboard, { x: -200 + index * 350, y: 40 + index * 25, w: 320, h: 210 },
+      index === 0 ? { name: "Reference · page 3", sourceItemId: "p", sourcePage: 3 } : {});
   }
   assert.equal(whiteboard.exportAreas.length, 4);
   assert.deepEqual(whiteboard.exportAreas.map((area: any) => area.order), [0, 1, 2, 3]);
   const firstId = whiteboard.exportAreas[0].id;
+  assert.deepEqual({ name: whiteboard.exportAreas[0].name, sourceItemId: whiteboard.exportAreas[0].sourceItemId,
+    sourcePage: whiteboard.exportAreas[0].sourcePage }, { name: "Reference · page 3", sourceItemId: "p", sourcePage: 3 });
   whiteboard = updateWhiteboardExportArea(whiteboard, firstId, { name: "Site plan", x: -250, w: 400,
     pageSize: "arch-d", orientation: "landscape", quality: "maximum", fit: "fit" });
   assert.deepEqual({ name: whiteboard.exportAreas[0].name, x: whiteboard.exportAreas[0].x, w: whiteboard.exportAreas[0].w,
@@ -147,6 +150,8 @@ test("custom PDF export areas create, edit, reorder, duplicate, remove and persi
   const reopened = await readProjectFile(await exportProjectFile(localStore, payloadWithAreas));
   assert.deepEqual(reopened.annotations.whiteboard.exportAreas, whiteboard.exportAreas);
   assert.deepEqual(validateWhiteboard({ ...board(), exportAreas: whiteboard.exportAreas }).exportAreas, whiteboard.exportAreas);
+  assert.equal(removeBoardItem({ ...board(), exportAreas: whiteboard.exportAreas }, "p").exportAreas.some((area: any) => area.sourceItemId === "p"), false,
+    "removing a Whiteboard file also removes exact-page exports linked to it");
   assert.deepEqual(clearWhiteboardExportAreas(whiteboard).exportAreas, []);
   const legacy = board(); delete (legacy as any).exportAreas;
   assert.equal(validateWhiteboard(legacy).exportAreas, undefined, "older projects remain valid without export areas");

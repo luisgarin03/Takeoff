@@ -330,7 +330,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
       if (e.key === "Escape" && !importLock.current) {
         e.preventDefault();
         if (imageCropRef.current) clearImageCrop();
-        else if (gesture.current?.kind?.startsWith("export-area") || mode === "export-area") {
+        else if (gesture.current?.kind?.startsWith("export-area") || mode === "export-area" || mode === "export-page") {
           gesture.current = null; pointers.current.clear(); setAreaDraft(null); setExportAreaPreview(null); setMode("select");
         } else callbacks.current.onClose();
       }
@@ -377,11 +377,45 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
     return () => { element.removeEventListener("wheel", wheel); observer.disconnect(); };
   }, []);
 
+  function resolvedExportArea(area, currentBoard = boardRef.current) {
+    if (!area?.sourceItemId) return area;
+    const item = currentBoard.items.find((candidate) => candidate.id === area.sourceItemId && candidate.kind === "file");
+    return item ? { ...area, ...boardContentRect(item) } : area;
+  }
+
+  function addExactExportPage(item) {
+    if (denyReadOnlyEdit() || item?.kind !== "file") return;
+    const current = boardRef.current;
+    const existing = (current.exportAreas || []).find((area) => area.sourceItemId === item.id && area.sourcePage === item.page);
+    if (existing) {
+      setSelected(existing.id); setShowExportPages(true); setError("");
+      return;
+    }
+    const asset = current.assets.find((candidate) => candidate.id === item.assetId);
+    if (!asset || asset.missing) {
+      setError("This page's original file is unavailable on this device and cannot be selected for export.");
+      return;
+    }
+    const baseName = (asset.name || "Whiteboard page").replace(/\.[^.]+$/, "").trim() || "Whiteboard page";
+    const name = (asset.type === "application/pdf" ? `${baseName} · page ${item.page}` : baseName).slice(0, 120);
+    const next = appendWhiteboardExportArea(current, boardContentRect(item), {
+      name, sourceItemId: item.id, sourcePage: item.page,
+    });
+    if (next !== current) {
+      commit(next); setSelected(next.exportAreas.at(-1)?.id || null); setShowExportPages(true); setError("");
+    }
+  }
+
   function start(e, target = null, handle = null) {
     if (busy || (e.button !== 0 && e.button !== 1)) return;
     if (readOnly && e.button === 0) target = null;
     if (imageCropRef.current && e.button === 0) return;
     e.preventDefault(); e.stopPropagation(); root.current.focus();
+    if (mode === "export-page" && e.button === 0) {
+      if (target?.type === "item" && target.value.kind === "file") addExactExportPage(target.value);
+      else setError("Select Pages is active. Click a PDF or image page on the Whiteboard.");
+      return;
+    }
     viewport.current.setPointerCapture(e.pointerId);
     const p = point(e);
     pointers.current.set(e.pointerId, p);
@@ -392,7 +426,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
     }
     if (pointers.current.size > 2) return;
     const drawingMode = mode === "arrow" || mode === "rectangle";
-    const kind = target?.type === "export-area" && e.button === 0 ? (handle ? "export-area-resize" : "export-area-move") :
+    const kind = target?.type === "export-area" && target.value.sourceItemId && e.button === 0 ? "export-area-select" :
+      target?.type === "export-area" && e.button === 0 ? (handle ? "export-area-resize" : "export-area-move") :
       mode === "export-area" && e.button === 0 ? "export-area-create" :
       target?.type === "sow-logo" && e.button === 0 ? "sow-logo-resize" :
       target?.type === "sow" && handle && e.button === 0 ? "sow-resize" :
@@ -670,7 +705,12 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
   }
   function locateExportArea(area) {
     setSelected(area.id); setShowExportPages(true);
-    setCamera(fitBoard([area], viewport.current.clientWidth, viewport.current.clientHeight, 4));
+    setCamera(fitBoard([resolvedExportArea(area)], viewport.current.clientWidth, viewport.current.clientHeight, 4));
+  }
+  function closeExportPages() {
+    setShowExportPages(false);
+    if (mode === "export-area" || mode === "export-page") setMode("select");
+    if ((boardRef.current.exportAreas || []).some((area) => area.id === selectedRef.current)) setSelected(null);
   }
   const activeItem = board.items.find((item) => item.id === selected);
   const activeArrow = (board.arrows || []).find((arrow) => arrow.id === selected);
@@ -711,8 +751,9 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
         <button type="button" onClick={onSave} disabled={busy || readOnly}><Icon name="document" size={16} />Save project</button>
         <Button icon="document" label="Export whiteboard as PDF" onClick={() => setExportRequest({ title: "Export whiteboard as PDF", scopeLabel: "Entire whiteboard · one flattened visual PDF page", region: null, pageMode: null })} disabled={busy || exporting} aria-busy={exportMode === "single"}>{exportMode === "single" ? "Exporting…" : "Export whiteboard as PDF"}</Button>
         <Button icon="sheets" label="Export whiteboard as pages" onClick={() => setExportRequest({ title: "Export whiteboard as pages", scopeLabel: "Entire whiteboard · flattened Letter landscape pages", region: null, pageMode: "pages" })} disabled={busy || exporting} aria-busy={exportMode === "pages"}>{exportMode === "pages" ? "Exporting pages…" : "Export whiteboard as pages"}</Button>
-        <Button icon="fullscreen" label="Select Export Areas" onClick={() => { setShowExportPages(true); setMode(mode === "export-area" ? "select" : "export-area"); }}
-          disabled={busy || exporting || readOnly} aria-pressed={mode === "export-area"}>Select Export Areas</Button>
+        <Button icon="fullscreen" label="Select Content to Export" onClick={() => {
+          if (showExportPages) closeExportPages(); else { setShowExportPages(true); setMode("export-area"); }
+        }} disabled={busy || exporting || readOnly} aria-pressed={showExportPages}>Select Content to Export</Button>
       </div>
       <input ref={input} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp" aria-label="Whiteboard files" hidden
         onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
@@ -753,7 +794,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
       <span className="wb-status" role="status" aria-hidden={longTaskLabel ? "true" : undefined}>{exportMode === "custom" ? exportTaskLabel : exportMode === "pages" ? "Exporting pages..." : exportMode === "selection" ? "Exporting selection..." : exportMode === "single" ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : lastExportSize ? `Last export ${formatFileSize(lastExportSize)}` : saveState === "saved" ? "Saved locally" : ""}</span>
     </div>
     {error && <div className="wb-error" role="alert"><span>{error}</span><Button icon="close" label="Dismiss whiteboard error" onClick={() => setError("")} /></div>}
-    <div ref={viewport} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}${mode === "arrow" ? " is-arrow" : ""}${mode === "rectangle" ? " is-rectangle" : ""}${mode === "export-area" ? " is-crop" : ""}${imageCrop ? " is-image-crop" : ""}`} aria-label="Whiteboard canvas"
+    <div ref={viewport} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}${mode === "arrow" ? " is-arrow" : ""}${mode === "rectangle" ? " is-rectangle" : ""}${mode === "export-area" ? " is-crop" : ""}${mode === "export-page" ? " is-export-page" : ""}${imageCrop ? " is-image-crop" : ""}`} aria-label="Whiteboard canvas"
       style={{ backgroundSize: `${24 * view.scale}px ${24 * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
       onPointerDown={(e) => { pastePoint.current = point(e); start(e); }} onPointerMove={(e) => { pastePoint.current = point(e); move(e); }} onPointerUp={(e) => end(e)} onPointerCancel={(e) => end(e, true)}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); addFiles(e.dataTransfer.files, point(e)); }}>
@@ -765,7 +806,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
         const itemHeaderStyle = itemHeaderColor ? { backgroundColor: itemHeaderColor, color: whiteboardFileHeaderTextColor(itemHeaderColor) } : undefined;
         const x = view.x + item.x * view.scale, y = view.y + item.y * view.scale;
         const visible = x < viewportSize.width + 200 && y < viewportSize.height + 200 && x + item.w * view.scale > -200 && y + item.h * view.scale > -200;
-        return <article key={item.id} className={`wb-item${item.id === selected ? " is-selected" : ""}${item.kind === "note" ? " wb-note" : ""}`}
+        const pagePicked = item.kind === "file" && (board.exportAreas || []).some((area) => area.sourceItemId === item.id && area.sourcePage === item.page);
+        return <article key={item.id} className={`wb-item${item.id === selected ? " is-selected" : ""}${item.kind === "note" ? " wb-note" : ""}${mode === "export-page" && item.kind === "file" ? " is-export-page-target" : ""}${mode === "export-page" && pagePicked ? " is-export-page-picked" : ""}`}
           aria-label={item.kind === "note" ? "Text note" : asset?.name} onPointerDown={(e) => start(e, { type: "item", value: item })}
           style={{ width: item.w, height: item.h, transform: `translate(${view.x + item.x * view.scale}px, ${view.y + item.y * view.scale}px) scale(${view.scale})`, ...(item.kind === "note" ? { background: NOTE_COLORS[item.color] } : {}) }}>
           <div className="wb-item-title wb-color-title" title={asset?.name || item.title || "Note"}
@@ -786,6 +828,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
             onChange={(e) => patch(item.id, { text: e.target.value }, item.id)} onBlur={() => { editGroup.current = null; }} /> :
             asset && <FileCard asset={asset} item={item} onPage={pageChange} visible={visible}
               resolution={asset.type === "application/pdf" ? pdfResolution : 1} refreshKey={asset.type === "application/pdf" ? pdfRefreshKey : 0} />}
+          {mode === "export-page" && item.kind === "file" && <span className="wb-export-page-target-label" aria-hidden="true">{pagePicked ? "Added to PDF" : "Select this page"}</span>}
           <button type="button" className="wb-resize" aria-label={`Resize ${asset?.name || "note"}`} title="Resize" disabled={readOnly} onPointerDown={(e) => start(e, { type: "item", value: item }, "se")}><Icon name="fullscreen" size={13} /></button>
         </article>;
       })}
@@ -820,14 +863,14 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
             aria-label={`Crop ${handle} handle`} onPointerDown={(event) => startImageCropResize(event, handle)} />)}
         </div>
       </div>}
-      {(board.exportAreas || []).map((saved, index) => {
-        const area = exportAreaPreview?.id === saved.id ? exportAreaPreview : saved;
+      {showExportPages && (board.exportAreas || []).map((saved, index) => {
+        const area = saved.sourceItemId ? resolvedExportArea(saved) : exportAreaPreview?.id === saved.id ? exportAreaPreview : saved;
         const x = view.x + area.x * view.scale, y = view.y + area.y * view.scale;
         return <div key={saved.id} className={`wb-export-area${selected === saved.id ? " is-selected" : ""}`}
           aria-label={`PDF export Page ${index + 1}, ${saved.name}`} onPointerDown={(event) => start(event, { type: "export-area", value: area })}
           style={{ left: x, top: y, width: area.w * view.scale, height: area.h * view.scale }}>
           <span>Page {index + 1}</span>
-          {selected === saved.id && RECTANGLE_HANDLES.map((handle) => <button key={handle} type="button" className="wb-export-area-handle"
+          {selected === saved.id && !saved.sourceItemId && RECTANGLE_HANDLES.map((handle) => <button key={handle} type="button" className="wb-export-area-handle"
             data-handle={handle} aria-label={`Resize Page ${index + 1} ${handle}`} onPointerDown={(event) => start(event, { type: "export-area", value: area }, handle)} />)}
         </div>;
       })}
@@ -842,9 +885,14 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
           onStartResize={(event, handle) => start(event, { type: "sow", value: sow }, handle)} />;
       })}
       {showExportPages && <aside className="wb-export-panel" aria-label="PDF Export Pages" onPointerDown={(event) => event.stopPropagation()}>
-        <header><div><span>Whiteboard PDF</span><h2>PDF Export Pages</h2></div><button type="button" aria-label="Close PDF Export Pages" onClick={() => setShowExportPages(false)}>×</button></header>
+        <header><div><h2>PDF Export Pages</h2></div><button type="button" aria-label="Close PDF Export Pages" onClick={closeExportPages}>×</button></header>
+        <div className={`wb-export-mode-hint${mode === "export-area" || mode === "export-page" ? " is-active" : ""}`} role="status">
+          {mode === "export-page" ? "Select Pages is on — click any PDF or image page to add its exact bounds."
+            : mode === "export-area" ? "Add Area is on — drag a rectangle anywhere on the Whiteboard."
+              : "Choose Add Area for a custom crop or Select Pages for exact page bounds."}
+        </div>
         <div className="wb-export-page-list">
-          {!(board.exportAreas || []).length && <p>Draw a rectangle around each page you want in the PDF.</p>}
+          {!(board.exportAreas || []).length && <p>Add a custom area, or select a PDF/image page for an exact page-sized export.</p>}
           {(board.exportAreas || []).map((area, index) => <section key={area.id} className={selected === area.id ? "is-selected" : ""}>
             <button type="button" className="wb-export-locate" onClick={() => locateExportArea(area)} title={`Locate Page ${index + 1}`}><b>Page {index + 1}</b></button>
             <input value={area.name} maxLength={120} aria-label={`Name for PDF Page ${index + 1}`} readOnly={readOnly}
@@ -871,14 +919,15 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
             <label>Fit<select value={activeArea.fit} onChange={(event) => update({ fit: event.target.value })}>
               <option value="fit">Fit to page</option><option value="actual" disabled>Actual scale — calibration unavailable</option>
             </select></label>
-            <small>Settings apply to the selected page. Content is always kept proportional.</small>
+            <small>{activeArea.sourceItemId ? "This exact page stays linked to its Whiteboard card and selected PDF page. " : ""}Settings apply to the selected page. Content is always kept proportional.</small>
           </div>;
         })()}
         <footer>
-          <button type="button" onClick={() => { setMode("export-area"); setShowExportPages(true); }} disabled={exporting}><Icon name="plus" size={14} />Add Area</button>
-          <button type="button" onClick={() => { if (window.confirm("Clear all PDF export areas?")) { commit(clearWhiteboardExportAreas(boardRef.current)); setSelected(null); } }} disabled={exporting || !(board.exportAreas || []).length}>Clear All</button>
-          <button type="button" onClick={() => exportCustomPages(true)} disabled={exporting || !(board.exportAreas || []).length}>Preview PDF</button>
-          <button type="button" className="is-primary" onClick={() => exportCustomPages(false)} disabled={exporting || !(board.exportAreas || []).length}>Export All to One PDF</button>
+          <button type="button" className="wb-export-method" aria-pressed={mode === "export-area"} onClick={() => { setMode(mode === "export-area" ? "select" : "export-area"); setShowExportPages(true); }} disabled={exporting}><Icon name="plus" size={14} />Add Area</button>
+          <button type="button" className="wb-export-method" aria-pressed={mode === "export-page"} onClick={() => { setMode(mode === "export-page" ? "select" : "export-page"); setShowExportPages(true); }} disabled={exporting}><Icon name="document" size={14} />Select Pages</button>
+          <button type="button" className="wb-export-clear" onClick={() => { if (window.confirm("Clear all PDF export areas?")) { commit(clearWhiteboardExportAreas(boardRef.current)); setSelected(null); } }} disabled={exporting || !(board.exportAreas || []).length}>Clear All</button>
+          <button type="button" className="wb-export-preview" onClick={() => exportCustomPages(true)} disabled={exporting || !(board.exportAreas || []).length}>Preview PDF</button>
+          <button type="button" className="is-primary wb-export-download" onClick={() => exportCustomPages(false)} disabled={exporting || !(board.exportAreas || []).length}>Export All to One PDF</button>
         </footer>
       </aside>}
     </div>

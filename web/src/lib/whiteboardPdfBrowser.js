@@ -1,6 +1,6 @@
 import { checkBoardRaster } from "./whiteboardPdf.js";
 import { NOTE_COLORS, WHITEBOARD_FILE_HEADER_COLORS, WHITEBOARD_SOW_DEFAULT_SECTION_TITLE, WHITEBOARD_SOW_DEFAULT_TAKEOFF_TITLE, normalizeWhiteboardImageCrop, whiteboardFileHeaderColor, whiteboardFileHeaderTextColor, whiteboardSowLogoWidth, wrapWhiteboardSowText } from "./whiteboard.js";
-import brandBanner from "../assets/beitzell-estimating-worksheet-stamp.png";
+import brandLogo from "../assets/beitzell-fence-company-logo.png";
 import { pdfExportQuality, safePdfRasterScale } from "./exportQuality.js";
 
 function canvasFor(width, height) {
@@ -34,7 +34,7 @@ function loadBrandImage(asset = null) {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("Could not load the SOW branding image."));
-    image.src = brandBanner;
+    image.src = brandLogo;
   });
   return brandImagePromise;
 }
@@ -56,7 +56,8 @@ export async function renderBoardSow(sow, brandingAsset = null, signal = null, q
   const brand = await loadBrandImage(brandingAsset);
   signal?.throwIfAborted();
   const brandHeight = 62;
-  const logoRect = { x: 7, y: 7, w: whiteboardSowLogoWidth(sow), h: brandHeight - 14 };
+  const logoColumnWidth = whiteboardSowLogoWidth(sow);
+  const logoRect = { x: 13, y: 7, w: Math.max(1, logoColumnWidth - 12), h: brandHeight - 14 };
   const titleHeight = 20;
   const listHeight = active.entries.length ? 4 + entryLayouts.reduce((sum, item) => sum + item.height + 3, 0) : 38;
   // Scope tabs and counts are editor controls. Export the branded worksheet,
@@ -70,27 +71,20 @@ export async function renderBoardSow(sow, brandingAsset = null, signal = null, q
     ctx.scale(canvas.width / width, canvas.height / height);
     ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height);
     ctx.strokeStyle = "#4b5563"; ctx.lineWidth = 1; ctx.strokeRect(4.5, 4.5, width - 9, brandHeight - 9);
-    if (brandingAsset) {
-      const scale = Math.min((logoRect.w - 2) / brand.naturalWidth, (logoRect.h - 2) / brand.naturalHeight);
-      const imageWidth = brand.naturalWidth * scale, imageHeight = brand.naturalHeight * scale;
-      ctx.drawImage(brand, logoRect.x + (logoRect.w - imageWidth) / 2, logoRect.y + (logoRect.h - imageHeight) / 2, imageWidth, imageHeight);
-    } else {
-      // The bundled legacy artwork contains the logo plus fixed title copy.
-      // Crop only its left logo region; the adjacent title is now real editable data.
-      const sourceWidth = Math.min(brand.naturalWidth, brand.naturalHeight * logoRect.w / logoRect.h);
-      ctx.drawImage(brand, 0, 0, sourceWidth, brand.naturalHeight, logoRect.x, logoRect.y, logoRect.w, logoRect.h);
-    }
+    const logoScale = Math.min(logoRect.w / brand.naturalWidth, logoRect.h / brand.naturalHeight);
+    const imageWidth = brand.naturalWidth * logoScale, imageHeight = brand.naturalHeight * logoScale;
+    ctx.drawImage(brand, logoRect.x + (logoRect.w - imageWidth) / 2, logoRect.y + (logoRect.h - imageHeight) / 2, imageWidth, imageHeight);
     const takeoffTitle = typeof sow.takeoffTitle === "string" ? sow.takeoffTitle : WHITEBOARD_SOW_DEFAULT_TAKEOFF_TITLE;
-    const takeoffX = logoRect.x + logoRect.w + 3, takeoffWidth = width - takeoffX - 7;
+    const takeoffX = 7 + logoColumnWidth + 3, takeoffWidth = width - takeoffX - 7;
     let takeoffFontSize = 11;
     while (takeoffFontSize > 7) {
       ctx.font = `800 ${takeoffFontSize}px ${family}`;
-      if (ctx.measureText(takeoffTitle).width <= takeoffWidth - 8) break;
+      if (ctx.measureText(takeoffTitle).width <= takeoffWidth - 12) break;
       takeoffFontSize -= 1;
     }
     ctx.save(); ctx.beginPath(); ctx.rect(takeoffX, 7, takeoffWidth, brandHeight - 14); ctx.clip();
     ctx.fillStyle = "#111827"; ctx.font = `800 ${takeoffFontSize}px ${family}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(takeoffTitle, takeoffX + takeoffWidth / 2, brandHeight / 2, Math.max(1, takeoffWidth - 8));
+    ctx.fillText(takeoffTitle, takeoffX + takeoffWidth / 2, brandHeight / 2, Math.max(1, takeoffWidth - 12));
     ctx.restore(); ctx.textAlign = "left";
     const titleY = brandHeight;
     ctx.fillStyle = "#ffffff"; ctx.fillRect(0, titleY, width, titleHeight);

@@ -74,6 +74,12 @@ test("project revision changes when measured project entities change", () => {
   assert.notEqual(before, after);
   const edited = assistantProjectRevision({ ...snapshot(), shapes: snapshot().shapes.map((shape) => ({ ...shape, computed: { perimeter_lf: 13 } })) });
   assert.notEqual(before, edited);
+  const withText = { ...snapshot(), markups: [{ id: "note-1", sheet_id: "Plans.pdf", type: "text", at: [.2, .2], text: "Verify" }] };
+  assert.notEqual(
+    assistantProjectRevision(withText),
+    assistantProjectRevision({ ...withText, markups: [{ ...withText.markups[0], target: [.7, .6] }] }),
+    "adding or repointing a text leader changes the project revision",
+  );
 });
 
 test("conversation history is optional, bounded, and backward-compatible", () => {

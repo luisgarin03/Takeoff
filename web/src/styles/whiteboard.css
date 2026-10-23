@@ -55,6 +55,7 @@
 .wb-viewport.is-arrow { cursor: var(--cursor-crosshair, crosshair); }
 .wb-viewport.is-rectangle { cursor: var(--cursor-crosshair, crosshair); }
 .wb-viewport.is-crop { cursor: var(--cursor-crosshair, crosshair); }
+.wb-viewport.is-export-page { cursor: pointer; }
 .wb-viewport.is-image-crop { cursor: default; }
 .wb-sow {
   position: absolute;
@@ -63,7 +64,7 @@
   top: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--ink-faint);
   border-radius: 9px;
   background: var(--paper-bright);
@@ -72,18 +73,17 @@
   touch-action: pan-y;
   cursor: default;
 }
-.wb-sow-brand { position: relative; container-type: inline-size; display: flex; align-items: stretch; gap: 3px; min-height: 62px; flex: 0 0 auto; padding: 7px; background: #fff; border-bottom: 1px solid var(--ink-faint); cursor: var(--cursor-move, move); touch-action: none; }
+.wb-sow-brand { position: relative; container-type: inline-size; display: flex; align-items: stretch; gap: 3px; min-height: 62px; flex: 0 0 auto; padding: 7px; border-radius: 8px 8px 0 0; background: #fff; border-bottom: 1px solid var(--ink-faint); cursor: var(--cursor-move, move); touch-action: none; }
 .wb-sow-brand::before { content: ""; position: absolute; inset: 4px; z-index: 0; border: 1px solid #4b5563; pointer-events: none; }
-.wb-sow-logo { position: relative; z-index: 1; flex: 0 0 var(--sow-logo-width, 128px); min-width: 0; overflow: hidden; background: #fff; }
-.wb-sow-logo img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; -webkit-user-drag: none; }
-.wb-sow-logo.is-default img { width: auto; max-width: none; object-fit: fill; }
+.wb-sow-logo { position: relative; z-index: 1; flex: 0 0 var(--sow-logo-width, 128px); min-width: 0; overflow: hidden; padding: 0 6px; background: #fff; }
+.wb-sow-logo img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; pointer-events: none; user-select: none; -webkit-user-drag: none; }
 .wb-sow-brand-actions { position: absolute; left: 5px; bottom: 5px; display: flex; gap: 4px; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
 .wb-sow-logo:hover .wb-sow-brand-actions, .wb-sow-logo:focus-within .wb-sow-brand-actions { opacity: 1; pointer-events: auto; }
 .wb .wb-sow-brand-actions button { min-height: 28px; padding: 4px 7px; border-color: #b8bec7; background: #fff; color: #111827; box-shadow: 0 2px 8px #0003; font-size: 10px; }
 .wb .wb-sow-logo-resize { position: relative; z-index: 2; align-self: stretch; flex: 0 0 6px; width: 6px; min-width: 6px; min-height: 0; margin: 0 -6px 0 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: var(--cursor-ew-resize, ew-resize); touch-action: none; }
 .wb .wb-sow-logo-resize::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 2px; width: 2px; border-radius: 2px; background: #6b7280; opacity: .35; }
 .wb .wb-sow-logo-resize:hover::after, .wb .wb-sow-logo-resize:focus-visible::after { opacity: .9; }
-.wb-sow-takeoff-title-label { position: relative; z-index: 1; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; cursor: text; }
+.wb-sow-takeoff-title-label { position: relative; z-index: 1; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; padding: 0 6px; cursor: text; }
 .wb-sow-takeoff-title-label > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .wb .wb-sow-takeoff-title { width: 100%; min-width: 0; padding: 2px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: #111827; text-align: center; font: 800 clamp(7px, 2.8cqw, 11px)/1.12 var(--f-display); }
 .wb .wb-sow-takeoff-title:hover { border-color: #c7cbd1; }
@@ -238,6 +238,7 @@
 .wb-export-area { position: absolute; z-index: 35; border: 2px dashed #2563eb; background: #2563eb1f; pointer-events: auto; touch-action: none; cursor: var(--cursor-move, move); }
 .wb-export-area.is-selected { border-style: solid; box-shadow: 0 0 0 2px #ffffffb8, 0 0 0 4px #2563eb; }
 .wb-export-area.is-draft { z-index: 36; border-style: dashed; pointer-events: none; }
+.wb-viewport.is-export-page .wb-export-area { pointer-events: none; }
 .wb-export-area > span { position: absolute; left: -2px; top: -27px; min-width: 58px; padding: 4px 7px; border-radius: 4px 4px 0 0; background: #2563eb; color: #fff; font: 700 11px/1.4 var(--f-body); white-space: nowrap; pointer-events: none; }
 .wb .wb-export-area-handle { position: absolute; z-index: 2; width: 12px; height: 12px; min-width: 12px; min-height: 12px; padding: 0; border: 2px solid #2563eb; border-radius: 2px; background: #fff; touch-action: none; }
 .wb-export-area-handle[data-handle="n"] { left: 50%; top: 0; transform: translate(-50%, -50%); cursor: var(--cursor-ns-resize, ns-resize); }
@@ -251,9 +252,10 @@
 .wb-export-panel { position: absolute; z-index: 80; top: 12px; right: 12px; width: min(380px, calc(100% - 24px)); max-height: calc(100% - 24px); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--ink-faint); border-radius: 9px; background: var(--paper-bright); box-shadow: 0 14px 42px #0008; }
 .wb-export-panel > header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--ink-faint); }
 .wb-export-panel > header > div { flex: 1; min-width: 0; }
-.wb-export-panel > header span { display: block; color: var(--ink-muted); font: 600 9px var(--f-mono); text-transform: uppercase; letter-spacing: .08em; }
-.wb-export-panel h2 { margin: 2px 0 0; font-size: 15px; }
+.wb-export-panel h2 { margin: 0; font-size: 15px; }
 .wb-export-panel > header button { min-width: 28px; min-height: 28px; padding: 3px; }
+.wb-export-mode-hint { padding: 8px 12px; border-bottom: 1px solid var(--ink-faint); color: var(--ink-muted); font-size: 11px; line-height: 1.4; }
+.wb-export-mode-hint.is-active { background: color-mix(in srgb, var(--cobalt) 9%, var(--paper-bright)); color: var(--ink); }
 .wb-export-page-list { min-height: 78px; overflow: auto; padding: 8px; }
 .wb-export-page-list > p { margin: 18px 8px; color: var(--ink-muted); line-height: 1.5; text-align: center; }
 .wb-export-page-list > section { display: grid; grid-template-columns: auto minmax(80px, 1fr) 94px; gap: 5px; align-items: center; margin-bottom: 6px; padding: 6px; border: 1px solid var(--ink-faint); border-radius: 6px; }
@@ -266,9 +268,16 @@
 .wb-export-settings label { display: grid; gap: 4px; color: var(--ink-muted); font-size: 10px; }
 .wb-export-settings label:nth-child(3), .wb-export-settings small { grid-column: 1 / -1; }
 .wb-export-settings small { color: var(--ink-muted); line-height: 1.4; }
-.wb-export-panel > footer { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--ink-faint); }
+.wb-export-panel > footer { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; padding: 10px 12px; border-top: 1px solid var(--ink-faint); }
 .wb-export-panel > footer button { min-height: 32px; }
+.wb-export-panel > footer .wb-export-method, .wb-export-panel > footer .wb-export-clear { grid-column: span 2; }
+.wb-export-panel > footer .wb-export-preview, .wb-export-panel > footer .wb-export-download { grid-column: span 3; }
 .wb-export-panel > footer .is-primary { border-color: var(--cobalt); background: var(--cobalt); color: #fff; }
+.wb-item.is-export-page-target { cursor: pointer; box-shadow: 0 0 0 3px #2563eb, 0 12px 36px #00000030; }
+.wb-item.is-export-page-target::after { content: ""; position: absolute; z-index: 15; inset: 39px 1px 40px; border: 3px solid #2563eb; background: #2563eb12; pointer-events: none; }
+.wb-item.is-export-page-picked::after { border-color: #1f6b4a; background: #1f6b4a18; }
+.wb-export-page-target-label { position: absolute; z-index: 16; left: 50%; top: 50%; padding: 7px 10px; border-radius: 5px; background: #2563eb; color: #fff; font: 700 12px var(--f-body); white-space: nowrap; pointer-events: none; transform: translate(-50%, -50%); box-shadow: 0 3px 10px #0006; }
+.wb-item.is-export-page-picked .wb-export-page-target-label { background: #1f6b4a; }
 .wb-export-cancel { position: fixed; z-index: 3900; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); border-color: #ffffff70 !important; background: #20242b !important; color: #fff !important; box-shadow: 0 5px 20px #0008; }
 .wb-pdf-preview { position: fixed; z-index: 4000; inset: 28px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--ink-faint); border-radius: 9px; background: var(--paper-bright); box-shadow: 0 16px 60px #000b; }
 .wb-pdf-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 7px 12px; border-bottom: 1px solid var(--ink-faint); }

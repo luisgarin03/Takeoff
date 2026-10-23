@@ -769,7 +769,7 @@ function TakeoffsPanel({
         {panelTab === "library" && (
           <div style={{ flex: 1, overflow: "auto" }}>
             <div style={{ padding: "8px 12px 4px", color: "var(--ink-muted)", fontSize: 11 }}>
-              Reusable condition templates, shared across every plan in this browser. A fresh workspace seeds from this library (built-in flooring defaults when it's empty).
+              Reusable condition templates, shared across every plan in this browser. A fresh workspace seeds from this library (built-in fence defaults when it's empty).
             </div>
             <div style={{ padding: "6px 12px 10px" }}>
               <button onClick={onSaveTemplate} disabled={!aCond}

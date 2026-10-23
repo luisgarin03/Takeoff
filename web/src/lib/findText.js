@@ -71,6 +71,21 @@ export function findTextItemMatches(items, terms) {
   return matches;
 }
 
+// Preserve the source casing and a small, bounded amount of nearby text while
+// the page text is already in memory. Find-result JSON can then be downloaded
+// without reopening or rescanning the PDF.
+export function findMatchContext(value, start, length, contextLimit = 150) {
+  if (typeof value !== "string") return { exactMatchedText: null, contextBefore: null, contextAfter: null };
+  const from = Math.max(0, Math.trunc(Number(start) || 0));
+  const size = Math.max(0, Math.trunc(Number(length) || 0));
+  const limit = Math.max(0, Math.min(150, Math.trunc(Number(contextLimit) || 0)));
+  return {
+    exactMatchedText: value.slice(from, from + size) || null,
+    contextBefore: value.slice(Math.max(0, from - limit), from),
+    contextAfter: value.slice(from + size, from + size + limit),
+  };
+}
+
 // The canvas keeps one normalized rectangle per text occurrence so every hit
 // can still be highlighted. Navigation is page-oriented, though: estimators
 // want to review each matching sheet once instead of stepping through every

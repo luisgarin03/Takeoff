@@ -197,7 +197,7 @@ export function assistantProjectRevision(snapshot) {
     project_id: snapshot.project_id || "local",
     conditions: (snapshot.conditions || []).map((item) => [item.id, item.finish_tag, item.color, item.waste_pct, item.multiplier]),
     shapes: (snapshot.shapes || []).map((item) => [item.id, item.sheet_id, item.condition_id, item.measure_role, item.verts_norm, item.computed, item.updated_at]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
-    markups: (snapshot.markups || []).map((item) => [item.id, item.sheet_id, item.type, item.text, item.at, item.rect, item.from, item.to, item.rfi_id]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    markups: (snapshot.markups || []).map((item) => [item.id, item.sheet_id, item.type, item.text, item.at, item.target, item.rect, item.from, item.to, item.rfi_id]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
     rfis: (snapshot.rfis || []).map((item) => [item.id, item.status, item.subject, item.question, item.response, item.sheet_id]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
   });
   let hash = 2166136261;

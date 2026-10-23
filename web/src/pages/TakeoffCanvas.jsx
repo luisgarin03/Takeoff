@@ -21,10 +21,11 @@ import { createPortal, flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { store, emptyAnnotations, isStaleTabError, STALE_TAB_MESSAGE, projectIdFromUrl, importFileProject } from "../lib/store.js";
+import { store, emptyAnnotations, isStaleTabError, STALE_TAB_MESSAGE, projectIdFromUrl, importFileProject, metaGet, metaPut } from "../lib/store.js";
 import { digest, exportProjectFile, readProjectFile, projectFilename, MAX_PROJECT_FILE_BYTES } from "../lib/projectFile.js";
 import { removeRestoredCompactFiles, sanitizeCompactProject } from "../lib/compactProject.js";
 import { projectFileHandleFor, saveProjectArchive } from "../lib/saveProjectFile.js";
+import { canAutosaveProjectFile, projectFileAutosaveDelay, projectFileHandleStorageKey } from "../lib/projectFileAutosave.js";
 import SaveProjectDialog from "../components/SaveProjectDialog.jsx";
 import PdfExportDialog from "../components/PdfExportDialog.jsx";
 import LongTaskLoader from "../components/LongTaskLoader.jsx";
@@ -68,7 +69,8 @@ import { normalizeLoadedGroups } from "../lib/sheetGroups";
 import { isCanvasBusy } from "../lib/canvasBusy";
 import { parseSchedule, rowToSeed } from "../lib/scheduleParse";
 import { normalizeScanRows, postScanWithRetry, SCAN_ENDPOINT, scanRasterScale } from "../lib/scheduleScan";
-import { DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, addFindSuggestions, findHighlightsForPageExport, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, hideSingleMatchFindPages, normalizeFindSuggestions, parseFindTerms, rankFindPages, removeFindSuggestion, stepFindPageIndex } from "../lib/findText.js";
+import { DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, addFindSuggestions, findHighlightsForPageExport, findMatchContext, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, hideSingleMatchFindPages, normalizeFindSuggestions, parseFindTerms, rankFindPages, removeFindSuggestion, stepFindPageIndex } from "../lib/findText.js";
+import { buildFindResultsExport, findResultsFilename } from "../lib/findResultsExport.js";
 import { disposeFindOcr, recognizePdfPageForFind } from "../lib/findOcr.js";
 import { MARKUP_SHORTCUTS_KEY, assignMarkupShortcut, clearMarkupShortcut, normalizeMarkupShortcutMap } from "../lib/markupShortcuts.js";
 import { normalizeTag } from "../lib/scheduleEdit";
@@ -140,6 +142,7 @@ import { diagnosticsEvent, diagnosticsRenderCancel, diagnosticsRenderComplete, d
 // nowIso stays imported for the non-shape records (markups, RFIs, conditions).
 import { nowIso, mintUuid } from "../lib/provenance.js";
 import { applyShapeCommand, geomSnapshot, vertsEqual, recordCommand } from "../lib/shapeCommands.js";
+import { applyMarkupCommand } from "../lib/markupCommands.js";
 import { fmtCheckLen, parseLenInput, checkVerdict, M_PER_FT, areaVal, areaUnit, lenVal, lenUnit, calInputToFeet } from "../lib/units";
 import * as panelGeom from "../lib/panelGeometry.js";
 
@@ -231,6 +234,12 @@ export default function TakeoffCanvas() {
   const [active, setActive] = useState("");      // active source PDF file name
   const [page, setPage] = useState(1);           // 1-based page within the active PDF
   const [pageCount, setPageCount] = useState(1); // pages in the active PDF
+  // The compact sheet selector is a PDF-first tree. Only expanded files mint
+  // page rows, which keeps a 1,000+ page project responsive instead of mounting
+  // one giant flat menu. Counts are learned lazily from the already-shared
+  // pdf.js document cache when a file becomes active or is expanded.
+  const [sheetPickerExpandedFiles, setSheetPickerExpandedFiles] = useState(() => new Set());
+  const [sheetPickerPageCounts, setSheetPickerPageCounts] = useState({});
   const [findOpen, setFindOpen] = useState(false);
   const [findPanelTab, setFindPanelTab] = useState("find");
   const [findQuery, setFindQuery] = useState("");
@@ -248,6 +257,8 @@ export default function TakeoffCanvas() {
   const [findBusy, setFindBusy] = useState(false);
   const [findBusyScope, setFindBusyScope] = useState("");
   const [findMessage, setFindMessage] = useState("");
+  const [findExportJob, setFindExportJob] = useState(null);
+  const [findJsonBusy, setFindJsonBusy] = useState(false);
   const [pendingFind, setPendingFind] = useState(null);
   const [findDialogOffset, setFindDialogOffset] = useState({ x: 0, y: 0 });
   const [findDialogTop, setFindDialogTop] = useState(12);
@@ -311,7 +322,10 @@ export default function TakeoffCanvas() {
   // matching `poly` (pending zone trace) reset, which has its own rule.
   const resetZone = () => { setZoneCheck(null); setZoneExpand(null); };
   const [markups, setMarkups] = useState([]);                // cloud/callout/text annotations (separate from measurement shapes)
+  const markupsRef = useRef(markups);                         // synchronous source for command dispatch + drag previews
+  markupsRef.current = markups;
   const [markupDraft, setMarkupDraft] = useState(null);      // in-progress markup first point (cloud/callout/highlight)
+  const [textLeaderMarkupId, setTextLeaderMarkupId] = useState(null); // text box armed for its next-click leader target
   // Docked LEFT panel — one at a time, never overlapping: null | "markup" | "stamp" | "rfi".
   // The right-rail buttons switch tabs; the dock reflows the canvas (mirrors the
   // docked Takeoffs panel on the right).
@@ -496,6 +510,14 @@ export default function TakeoffCanvas() {
   const [selectedId, setSelectedId] = useState(null);   // selected shape (Select tool)
   const [selVert, setSelVert] = useState(null);         // selected vertex index of the selected shape — Delete removes just that point
   const [selectedMarkupId, setSelectedMarkupId] = useState(null); // selected markup — mutually exclusive with selectedId
+  const markupPanelRowRefs = useRef(new Map());
+  useEffect(() => {
+    if (leftTab !== "markup" || !selectedMarkupId) return;
+    const frame = requestAnimationFrame(() => {
+      markupPanelRowRefs.current.get(selectedMarkupId)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [leftTab, selectedMarkupId]);
   const [rfis, setRfis] = useState([]);                 // RFI register (Request For Information); linked to markups via markup.rfi_id === rfi.id
   // Deletion provenance: shapes leave no record once filtered out of `shapes`,
   // so every delete COMMAND yields a per-origin-method tally (`counted`, keyed
@@ -599,6 +621,39 @@ export default function TakeoffCanvas() {
     } else if (cmd.type !== "add") syncMeasurementDocumentation(res.shapes);
     return res;
   }
+  function setMarkupsNow(next) {
+    markupsRef.current = next;
+    setMarkups(next);
+  }
+  function recordMarkupCommand(cmd, inverse) {
+    if (!inverse) return;
+    const st = recordCommand(undoStackRef.current, { kind: "markup", cmd, inverse });
+    undoStackRef.current = st.undo;
+    redoStackRef.current = st.redo;
+  }
+  function dispatchMarkup(cmd, { record = true } = {}) {
+    if (readOnly) { denyReadOnlyEdit(); return { markups: markupsRef.current, inverse: null }; }
+    const res = applyMarkupCommand(markupsRef.current, cmd);
+    if (res.markups !== markupsRef.current) setMarkupsNow(res.markups);
+    if (record && res.inverse) recordMarkupCommand(cmd, res.inverse);
+    return res;
+  }
+  function recordAppliedMarkupReplace(before, after) {
+    if (!before || !after || before.id !== after.id || JSON.stringify(before) === JSON.stringify(after)) return;
+    recordMarkupCommand(
+      { type: "replace", markup: after },
+      { type: "replace", markup: before },
+    );
+  }
+  function applyMarkupHistoryCommand(cmd) {
+    const res = applyMarkupCommand(markupsRef.current, cmd);
+    if (res.markups === markupsRef.current) return res;
+    setMarkupsNow(res.markups);
+    const restoredId = cmd.type === "restore" ? cmd.items?.[0]?.markup?.id
+      : cmd.type === "add" || cmd.type === "replace" ? cmd.markup?.id : null;
+    setSelectedMarkupId((current) => res.markups.some((markup) => markup.id === current) ? current : (restoredId || null));
+    return res;
+  }
 
   // A completed takeoff documents itself in both places the estimator needs:
   // a persistent plan callout (boxed condition name + arrow to the measured
@@ -629,7 +684,10 @@ export default function TakeoffCanvas() {
       return syncMeasurementSowBoard(next, allShapes, liveConditions.length ? liveConditions : conditions, units);
     });
   }
-  // ⌘Z / ⇧⌘Z — apply the recorded inverse (undo) or the exact-restore command
+  // ⌘Z / ⇧⌘Z — apply the latest shape OR markup inverse in chronological
+  // order. Markup commands replace complete records, so deleting, moving,
+  // recoloring, editing text, and adding/repointing leaders all round-trip.
+  // Shape entries retain their exact-restore semantics below.
   // (redo). Undoing swaps the entry's cmd for the inverse-of-the-undo before
   // it lands on the redo stack: that command restores the undone state
   // VERBATIM (same ids, same created_at, same stamped updated_at, same array
@@ -643,6 +701,12 @@ export default function TakeoffCanvas() {
     const entry = undoStackRef.current[undoStackRef.current.length - 1];
     if (!entry) return;
     undoStackRef.current = undoStackRef.current.slice(0, -1);
+    if (entry.kind === "markup") {
+      const res = applyMarkupHistoryCommand(entry.inverse);
+      if (res.inverse) redoStackRef.current = [...redoStackRef.current, { kind: "markup", cmd: res.inverse, inverse: entry.inverse }];
+      setTextLeaderMarkupId(null);
+      return;
+    }
     const measurementDocs = entry.inverse.type === "delete" ? collectMeasurementDocumentation(entry.inverse.ids) : entry.measurementDocs;
     const res = applyShapeCommand(shapes, entry.inverse);
     setShapes(res.shapes);
@@ -656,6 +720,12 @@ export default function TakeoffCanvas() {
     const entry = redoStackRef.current[redoStackRef.current.length - 1];
     if (!entry) return;
     redoStackRef.current = redoStackRef.current.slice(0, -1);
+    if (entry.kind === "markup") {
+      const res = applyMarkupHistoryCommand(entry.cmd);
+      if (res.inverse) undoStackRef.current = [...undoStackRef.current, { kind: "markup", cmd: entry.cmd, inverse: res.inverse }];
+      setTextLeaderMarkupId(null);
+      return;
+    }
     const measurementDocs = entry.cmd.type === "delete" ? collectMeasurementDocumentation(entry.cmd.ids) : entry.measurementDocs;
     const res = applyShapeCommand(shapes, entry.cmd);
     setShapes(res.shapes);
@@ -699,7 +769,7 @@ export default function TakeoffCanvas() {
   }, [readOnly, licenseAccess.message, setCommitMsg]);
   useEffect(() => {
     if (!readOnly) return undefined;
-    setTool("pan"); setPoly([]); setMarkupDraft(null); setEditor(null); setProposal(null); setArmedStamp(null);
+    setTool("pan"); setPoly([]); setMarkupDraft(null); setTextLeaderMarkupId(null); setEditor(null); setProposal(null); setArmedStamp(null);
     const guard = (event) => {
       const tag = event.target?.tagName;
       if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
@@ -763,6 +833,7 @@ export default function TakeoffCanvas() {
   const [projectFileError, setProjectFileError] = useState("");
   const [projectFilePrompt, setProjectFilePrompt] = useState(null);
   const [projectSavePrompt, setProjectSavePrompt] = useState(null);
+  const [projectSaveRequired, setProjectSaveRequired] = useState(false);
   const [projectSaveAs, setProjectSaveAs] = useState(false);
   const [projectSaveCompact, setProjectSaveCompact] = useState(false);
   const [compactProject, setCompactProject] = useState(null);
@@ -778,7 +849,14 @@ export default function TakeoffCanvas() {
   const projectFileLock = useRef(false);
   const projectFileHandleRef = useRef(null);
   const projectFileHandleProjectIdRef = useRef(null);
+  const [, setProjectFileHandleEpoch] = useState(0);
   const pendingProjectSaveRef = useRef(null);
+  const projectFileAutosaveTimerRef = useRef(0);
+  const projectFileAutosaveIdleRef = useRef(0);
+  const projectFileAutosavePayloadRef = useRef(null);
+  const projectFileAutosaveFirstDirtyRef = useRef(0);
+  const projectFileAutosaveRunningRef = useRef(false);
+  const projectFileAutosaveBusyRef = useRef(false);
   const [pageExportBusy, setPageExportBusy] = useState(false);
   const [pageExportDialogOpen, setPageExportDialogOpen] = useState(false);
   const [pageExportQuality, setPageExportQuality] = useState(loadPdfExportQuality);
@@ -799,6 +877,25 @@ export default function TakeoffCanvas() {
   const importAbortRef = useRef(null);
   const [markedSetExportBusy, setMarkedSetExportBusy] = useState(false);
   const markedSetExportLock = useRef(false);
+
+  // A FileSystemFileHandle is structured-cloneable in supporting browsers, so
+  // keep it in the app's existing IndexedDB metadata. Restore only a handle
+  // whose write permission is already granted; reopening the app must never
+  // produce an unsolicited permission prompt.
+  useEffect(() => {
+    if (!hydrated.current || new URLSearchParams(window.location.search).has("project")) return undefined;
+    const projectId = portableProjectId.current;
+    const key = projectFileHandleStorageKey(projectId);
+    if (!key || projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, projectId)) return undefined;
+    let live = true;
+    metaGet(key).then(async (handle) => {
+      if (!live || portableProjectId.current !== projectId || !await canAutosaveProjectFile(handle)) return;
+      projectFileHandleRef.current = handle;
+      projectFileHandleProjectIdRef.current = projectId;
+      setProjectFileHandleEpoch((epoch) => epoch + 1);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [projectMetadata.name, projectMetadata.createdAt]);
 
   const containerRef = useRef(null);
   const stageRef = useRef(null);
@@ -1360,6 +1457,38 @@ export default function TakeoffCanvas() {
     return documentPromise;
   }, [compatibleDocumentForBytes]);
 
+  const loadSheetPickerPageCount = useCallback((file) => {
+    if (!file) return;
+    docFor(file).then((pdf) => {
+      const count = Math.max(1, Number(pdf?.numPages) || 1);
+      setSheetPickerPageCounts((current) => current[file] === count ? current : { ...current, [file]: count });
+    }).catch(() => {
+      // Normal PDF loading UI owns the actionable error. The picker simply
+      // leaves the file collapsed/empty until the document can be opened.
+    });
+  }, [docFor]);
+
+  useEffect(() => {
+    if (!active) return;
+    setSheetPickerExpandedFiles((current) => {
+      if (current.has(active)) return current;
+      const next = new Set(current); next.add(active); return next;
+    });
+    loadSheetPickerPageCount(active);
+  }, [active, loadSheetPickerPageCount]);
+
+  useEffect(() => {
+    const loaded = new Set(sheets.map((sheet) => sheet.name));
+    setSheetPickerExpandedFiles((current) => {
+      const next = new Set([...current].filter((file) => loaded.has(file)));
+      return next.size === current.size ? current : next;
+    });
+    setSheetPickerPageCounts((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([file]) => loaded.has(file)));
+      return Object.keys(next).length === Object.keys(current).length ? current : next;
+    });
+  }, [sheets]);
+
   // PDF text extraction is shared by the selectable text layer, Find, scale
   // detection, and title-block labels. Each visible page is extracted once per
   // session; pan/zoom only transforms the already-built DOM layer.
@@ -1442,6 +1571,7 @@ export default function TakeoffCanvas() {
     setFindBusyScope(scope);
     try {
       const matches = [];
+      const searchedDocuments = [];
       const skippedFiles = new Set();
       let skippedPages = 0;
       let ocrPages = 0;
@@ -1453,6 +1583,14 @@ export default function TakeoffCanvas() {
         if (request !== findRequestRef.current) return;
         const target = targets[targetIndex];
         const file = target.file;
+        const searchedDocument = {
+          documentKey: `search-document-${targetIndex}`,
+          fileName: file,
+          documentId: null,
+          totalPagesSearched: 0,
+          searchStatus: "unreadable",
+        };
+        searchedDocuments.push(searchedDocument);
         setFindMessage(scope === "page"
           ? `Scanning current page: ${target.key}`
           : scope === "file"
@@ -1461,6 +1599,12 @@ export default function TakeoffCanvas() {
         let pdf;
         try { pdf = await docFor(file); }
         catch { skippedFiles.add(file); continue; }
+        const documentId = Array.isArray(pdf.fingerprints)
+          ? (pdf.fingerprints.find((fingerprint) => typeof fingerprint === "string" && fingerprint.trim()) || null)
+          : null;
+        searchedDocument.documentId = documentId;
+        searchedDocument.documentKey = documentId || searchedDocument.documentKey;
+        searchedDocument.searchStatus = "searched";
         const pageNumbers = target.page == null
           ? Array.from({ length: pdf.numPages || 1 }, (_, index) => index + 1)
           : [target.page];
@@ -1471,6 +1615,7 @@ export default function TakeoffCanvas() {
             const pageObj = await pdf.getPage(pageNum);
             const viewport = pageObj.getViewport({ scale: 1 });
             const content = await textContentForPage(key, pageObj);
+            searchedDocument.totalPagesSearched += 1;
             const textItems = content.items || [];
             const pageTextMatches = findTextItemMatches(textItems, terms);
             for (const match of pageTextMatches) {
@@ -1479,10 +1624,15 @@ export default function TakeoffCanvas() {
               const runWidth = Math.max(1, item.width || item.str.length * 4);
               const charWidth = runWidth / Math.max(1, item.str.length);
               const height = Math.max(8, Math.hypot(transform[2], transform[3]));
+              const context = findMatchContext(item.str, match.start, match.length);
               // Store normalized page coordinates. This keeps highlights aligned
               // with each panel's raster size, independent of zoom/render scale.
               matches.push({ key, file, page: pageNum, term: match.term,
                 itemIndex: match.itemIndex, start: match.start, length: match.length,
+                ...context,
+                documentId,
+                documentKey: searchedDocument.documentKey,
+                pageDimensions: { width: viewport.width, height: viewport.height, unit: "pdf_points" },
                 source: "selectable_pdf_text",
                 x: (transform[4] + charWidth * match.start) / viewport.width,
                 y: (transform[5] - height) / viewport.height,
@@ -1516,6 +1666,9 @@ export default function TakeoffCanvas() {
                 key,
                 file,
                 page: pageNum,
+                documentId,
+                documentKey: searchedDocument.documentKey,
+                pageDimensions: { width: viewport.width, height: viewport.height, unit: "pdf_points" },
                 source: "local_ocr",
               });
             }
@@ -1528,18 +1681,25 @@ export default function TakeoffCanvas() {
       const skippedSuffix = skippedFiles.size || skippedPages
         ? ` Skipped ${skippedFiles.size ? `${skippedFiles.size} incompatible plan${skippedFiles.size === 1 ? "" : "s"}` : ""}${skippedFiles.size && skippedPages ? " and " : ""}${skippedPages ? `${skippedPages} unreadable page${skippedPages === 1 ? "" : "s"}` : ""}.`
         : "";
+      const sequence = findJobSequenceRef.current++;
+      const completedSearch = {
+        id: `find-${Date.now()}-${sequence}`,
+        scope,
+        query,
+        searchTerms: terms,
+        targetKey: currentPage?.key || "",
+        targetFile: currentPage?.file || "",
+        completedAt: new Date().toISOString(),
+        documents: searchedDocuments,
+        matches,
+      };
+      setFindExportJob(completedSearch);
       if (matches.length) {
         const matchingPages = groupFindMatchesByPage(matches);
-        const sequence = findJobSequenceRef.current++;
         const job = {
-          id: `find-${Date.now()}-${sequence}`,
-          scope,
-          query,
-          targetKey: currentPage?.key || "",
-          targetFile: currentPage?.file || "",
+          ...completedSearch,
           color: FIND_HIGHLIGHT_COLORS[sequence % FIND_HIGHLIGHT_COLORS.length],
           visible: true,
-          matches,
         };
         const currentJobs = findJobsRef.current;
         const previousResults = findVisibleMatches(currentJobs);
@@ -1577,6 +1737,27 @@ export default function TakeoffCanvas() {
       }
     }
   }, [commitFindJobs, docFor, findQuery, focusPanel, requestFindOcr, sheets, showFindPage, textContentForPage]);
+  const downloadLatestFindResults = useCallback(async () => {
+    if (!findExportJob?.matches?.length || findBusy || findJsonBusy) return;
+    setFindJsonBusy(true);
+    try {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const exportedAt = new Date().toISOString();
+      const payload = buildFindResultsExport({
+        job: findExportJob,
+        projectName,
+        sheetLabels: galleryLabels,
+        exportedAt,
+      });
+      const bytes = new TextEncoder().encode(`${JSON.stringify(payload, null, 2)}\n`);
+      downloadBytes(findResultsFilename(projectName, exportedAt), bytes, "application/json");
+      setFindMessage(`Downloaded ${payload.summary.totalMatches.toLocaleString()} matches from the latest completed search as JSON.`);
+    } catch (error) {
+      setFindMessage(`Couldn't download Find results: ${error?.message || error}`);
+    } finally {
+      setFindJsonBusy(false);
+    }
+  }, [findBusy, findExportJob, findJsonBusy, galleryLabels, projectName]);
   const openFind = useCallback(() => {
     const initialQuery = findQuery.trim() ? findQuery : findSuggestions.join(", ");
     setFindPanelTab("find");
@@ -1605,7 +1786,8 @@ export default function TakeoffCanvas() {
     setFindMessage("Search highlight color updated.");
   }, [commitFindJobs]);
   const removeFindJob = useCallback((jobId) => {
-    commitFindJobs((jobs) => jobs.filter((job) => job.id !== jobId));
+    const remaining = commitFindJobs((jobs) => jobs.filter((job) => job.id !== jobId));
+    setFindExportJob((job) => job?.id === jobId ? (remaining.at(-1) || null) : job);
     setFindMessage("Search and its marks removed.");
   }, [commitFindJobs]);
   const toggleAllFindJobs = useCallback(() => {
@@ -1615,6 +1797,7 @@ export default function TakeoffCanvas() {
   }, [commitFindJobs]);
   const clearFindJobs = useCallback(() => {
     commitFindJobs([]);
+    setFindExportJob(null);
     setActiveFindPageKey("");
     setPendingFind(null);
     setFindMessage("All completed searches and marks removed.");
@@ -1962,6 +2145,20 @@ export default function TakeoffCanvas() {
         setView("gallery");   // a plan set → land in the gallery to pick sheets
       }
       setCommitMsg(`Opened ${names.length} sheet${names.length === 1 ? "" : "s"}${tail}.`);
+      const cloudWorkspace = new URLSearchParams(window.location.search).has("project");
+      const destination = projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current);
+      if (!cloudWorkspace && projectName.trim() && !destination) {
+        setProjectSaveAs(false);
+        setProjectSaveCompact(false);
+        setProjectSaveRequired(true);
+        setProjectSavePrompt(projectFilename(projectName));
+        setCommitMsg(`Plans imported. Choose where to save “${projectName}”; OpenTakeoff will save it immediately and keep it updated.`);
+      } else if (!cloudWorkspace && destination) {
+        // Importing PDFs mutates the plan store directly and a multi-file import
+        // may not change an annotations dependency. Explicitly queue the chosen
+        // .otk destination so the newly added source plans are backed up too.
+        scheduleProjectFileAutosave(buildPayload({ touch: true }));
+      }
     } finally {
       if (importAbortRef.current === controller) importAbortRef.current = null;
       setPlanImportBusy(false);
@@ -2270,6 +2467,12 @@ export default function TakeoffCanvas() {
   // leaving the stamp tool disarms the pending stamp — a stray click under a
   // measure/select tool must never drop a stamp
   useEffect(() => { if (tool !== "stamp") setArmedStamp(null); }, [tool]);
+  // A text-box leader is a one-click targeting mode layered on Select. Switching
+  // tools or removing/reloading its source markup must never leave a stale target.
+  useEffect(() => { if (textLeaderMarkupId && tool !== "select") setTextLeaderMarkupId(null); }, [tool, textLeaderMarkupId]);
+  useEffect(() => {
+    if (textLeaderMarkupId && !markups.some((markup) => markup.id === textLeaderMarkupId && markup.type === "text")) setTextLeaderMarkupId(null);
+  }, [markups, textLeaderMarkupId]);
   // A One-Click proposal is only actionable while One-Click is armed (Enter
   // already requires it) — discard it on tool switch, like the stamp above.
   // Also keeps Create out of the ACTION slot while Finish occupies it, so the
@@ -2713,6 +2916,74 @@ export default function TakeoffCanvas() {
     return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(compactProject ? { compact_project: compactProject } : {}), ...(projectAssistant.persist && projectAssistant.messages.length ? { project_assistant: projectAssistant } : {}), ...(whiteboardHasContent(whiteboard) ? { whiteboard } : {}), ...(fenceCalculatorProjectHasContent(fenceCalculatorProject) ? { fence_calculator: fenceCalculatorProject } : {}), ...(chainLinkFences.length ? { chain_link_fences: chainLinkFences } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(fileBookmarks.length ? { file_bookmarks: fileBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
   };
 
+  function clearProjectFileAutosaveWakeup() {
+    clearTimeout(projectFileAutosaveTimerRef.current);
+    projectFileAutosaveTimerRef.current = 0;
+    if (projectFileAutosaveIdleRef.current && typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(projectFileAutosaveIdleRef.current);
+    }
+    projectFileAutosaveIdleRef.current = 0;
+  }
+
+  function armProjectFileAutosaveWakeup(delay) {
+    clearProjectFileAutosaveWakeup();
+    projectFileAutosaveTimerRef.current = window.setTimeout(() => {
+      projectFileAutosaveTimerRef.current = 0;
+      const run = () => { projectFileAutosaveIdleRef.current = 0; void flushProjectFileAutosave(); };
+      if (typeof window.requestIdleCallback === "function") {
+        projectFileAutosaveIdleRef.current = window.requestIdleCallback(run, { timeout: 15_000 });
+      } else {
+        projectFileAutosaveTimerRef.current = window.setTimeout(run, 0);
+      }
+    }, Math.max(0, delay));
+  }
+
+  function scheduleProjectFileAutosave(payload) {
+    const handle = projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current);
+    if (!handle || readOnly || compactProject) return;
+    projectFileAutosavePayloadRef.current = payload;
+    const now = Date.now();
+    if (!projectFileAutosaveFirstDirtyRef.current) projectFileAutosaveFirstDirtyRef.current = now;
+    armProjectFileAutosaveWakeup(projectFileAutosaveDelay(now, projectFileAutosaveFirstDirtyRef.current));
+  }
+
+  async function flushProjectFileAutosave() {
+    if (projectFileAutosaveRunningRef.current || !projectFileAutosavePayloadRef.current) return;
+    const handle = projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current);
+    if (!handle) return;
+    if (projectFileLock.current || projectFileAutosaveBusyRef.current) {
+      armProjectFileAutosaveWakeup(5_000);
+      return;
+    }
+    if (!await canAutosaveProjectFile(handle)) return;
+    const payload = projectFileAutosavePayloadRef.current;
+    projectFileAutosavePayloadRef.current = null;
+    projectFileAutosaveFirstDirtyRef.current = 0;
+    projectFileAutosaveRunningRef.current = true;
+    projectFileLock.current = true;
+    try {
+      await saveProjectArchive({
+        name: projectFilename(payload.project_name || projectName),
+        existingHandle: handle,
+        buildArchive: () => exportProjectFile(store, payload),
+        download: downloadBytes,
+      });
+    } catch (error) {
+      // Keep the newest pending snapshot (if another edit arrived during the
+      // write); otherwise retain the failed one for the next scheduled attempt.
+      if (!projectFileAutosavePayloadRef.current) projectFileAutosavePayloadRef.current = payload;
+      if (!projectFileAutosaveFirstDirtyRef.current) projectFileAutosaveFirstDirtyRef.current = Date.now();
+      setCommitMsg(`Couldn't auto-save the project file: ${error?.message || error}`);
+    } finally {
+      projectFileLock.current = false;
+      projectFileAutosaveRunningRef.current = false;
+      if (projectFileAutosavePayloadRef.current) {
+        const now = Date.now();
+        armProjectFileAutosaveWakeup(projectFileAutosaveDelay(now, projectFileAutosaveFirstDirtyRef.current));
+      }
+    }
+  }
+
   async function submitProjectMetadata(draft) {
     if (denyReadOnlyEdit()) return;
     if (projectMetadataModal === "edit") {
@@ -2740,6 +3011,10 @@ export default function TakeoffCanvas() {
       // project, rather than overwrite the file the prior project selected.
       projectFileHandleRef.current = null;
       projectFileHandleProjectIdRef.current = null;
+      clearProjectFileAutosaveWakeup();
+      projectFileAutosavePayloadRef.current = null;
+      projectFileAutosaveFirstDirtyRef.current = 0;
+      setProjectSaveRequired(false);
       portableProjectId.current = payload.project_id;
       suppressNextSave.current = true;
       hydrate(payload);
@@ -2787,6 +3062,7 @@ export default function TakeoffCanvas() {
 
   async function confirmSaveProjectFile(name, saveAs = projectSaveAs, compact = projectSaveCompact) {
     if (projectFileLock.current || !hydrated.current || whiteboardBusy) return;
+    clearProjectFileAutosaveWakeup();
     projectFileLock.current = true;
     setProjectFileBusy("Saving project file..."); setProjectFileError("");
     try {
@@ -2804,9 +3080,17 @@ export default function TakeoffCanvas() {
         if (!compact) {
           projectFileHandleRef.current = result.handle || null;
           projectFileHandleProjectIdRef.current = result.handle ? portableProjectId.current : null;
+          if (result.handle) {
+            const handleKey = projectFileHandleStorageKey(portableProjectId.current);
+            if (handleKey) metaPut(handleKey, result.handle).catch(() => {});
+            setProjectFileHandleEpoch((epoch) => epoch + 1);
+          }
+          projectFileAutosavePayloadRef.current = null;
+          projectFileAutosaveFirstDirtyRef.current = 0;
         }
         if (persistedPayload?.project_metadata?.lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, ...persistedPayload.project_metadata }));
         setProjectSavePrompt(null);
+        setProjectSaveRequired(false);
         setProjectSaveCompact(false);
         setCommitMsg(`${compact ? "Marked-pages-only project" : "Project"} ${result.status === "saved" ? "saved" : "download started"}: ${result.filename}`);
       }
@@ -2982,6 +3266,7 @@ export default function TakeoffCanvas() {
 
   // markups MUST be in the deps (a cloud/callout/text or an RFI link is real work);
   // omitting it dropped markup saves and could persist a stale markups array.
+  projectFileAutosaveBusyRef.current = !!(planImportBusy || whiteboardBusy || pageExportBusy || markedSetExportBusy || projectFileBusy || saveState === "saving" || poly.length || calib.length || check.length || proposal || editorRef.current);
   useEffect(() => {
     if (!hydrated.current) return;
     if (readOnly) { setSaveState("idle"); return; }
@@ -3010,7 +3295,11 @@ export default function TakeoffCanvas() {
       // pre-adopt payload) → don't push stale over the winner; go idle so the canvas
       // can drain and re-hydrate. Closes the last pre-scheduled-save loss window.
       if (remotePendingRender.current) { setSaveState("idle"); return; }
-      store.saveAnnotations(payload).then(() => { setProjectMetadata((meta) => ({ ...meta, ...payload.project_metadata })); setSaveState("saved"); }).catch((e) => {
+      store.saveAnnotations(payload).then(() => {
+        setProjectMetadata((meta) => ({ ...meta, ...payload.project_metadata }));
+        setSaveState("saved");
+        scheduleProjectFileAutosave(payload);
+      }).catch((e) => {
         if (isStaleTabError(e)) setCommitMsg(STALE_TAB_MESSAGE);
         setSaveState("idle");
       });
@@ -3036,6 +3325,8 @@ export default function TakeoffCanvas() {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
+      clearTimeout(projectFileAutosaveTimerRef.current);
+      if (projectFileAutosaveIdleRef.current && typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(projectFileAutosaveIdleRef.current);
       if (hydrated.current && saveStateRef.current === "saving" && saveDataRef.current) {
         mountStore.saveAnnotations(saveDataRef.current).catch(() => {});   // best-effort flush
       }
@@ -3388,7 +3679,7 @@ export default function TakeoffCanvas() {
         // tool's points, on-screen or hidden
         else if (tool === "calibrate") { setCalib((c) => c.slice(0, -1)); }
         else if (tool === "check") { setCheck((c) => c.slice(0, -1)); }
-      } else if (e.key === "Escape") { if (chainPostAddMode) { setChainPostAddMode(false); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
+      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (chainPostAddMode) { setChainPostAddMode(false); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
       // ⌘Z: the drawing context wins — mid-trace it still pops the last placed
       // point (with or without ⇧, matching the old behavior byte-for-byte);
       // only with no trace in progress does the command stack engage
@@ -3406,7 +3697,7 @@ export default function TakeoffCanvas() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tool, selectedId, selVert, selectedMarkupId, selectedChainMarkerId, chainPostAddMode, chainLinkOpen, chainHistoryEpoch, chainLinkFences, showMarkups, poly, proposal, ocSel, shapes, sheetKey, groupSig, scales, focusKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tool, selectedId, selVert, selectedMarkupId, selectedChainMarkerId, textLeaderMarkupId, chainPostAddMode, chainLinkOpen, chainHistoryEpoch, chainLinkFences, showMarkups, poly, proposal, ocSel, shapes, sheetKey, groupSig, scales, focusKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The typed "drawing says" value belongs to ONE completed two-point check.
   // The moment the measurement is no longer complete — third-click restart,
@@ -3527,6 +3818,11 @@ export default function TakeoffCanvas() {
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
+    if (textLeaderMarkupId) {
+      pendingClickRef.current = { p, cx: e.clientX, cy: e.clientY };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
     if (tool === "select") { selectAt(p, e); return; }
     // One-Click proposal handles: a press on a corner/edge grip starts an EDIT drag
     // (select+move a vertex, move a whole edge, or Shift-click to insert a point) —
@@ -3540,7 +3836,8 @@ export default function TakeoffCanvas() {
   // the deferred click — runs on pointer-up when the press didn't become a pan
   function performClick(p, ev) {
     if (scaleGuide) setScaleGuide(null);
-    if (tool === "chain-post") addChainMarkerAt(p);
+    if (textLeaderMarkupId) placeTextLeader(p);
+    else if (tool === "chain-post") addChainMarkerAt(p);
     else if (tool === "calibrate") setCalib((c) => (c.length >= 2 ? [p] : [...c, p]));
     else if (tool === "check") setCheck((c) => (c.length >= 2 ? [p] : [...c, p]));
     else if (tool === "oneclick") oneClickAt(p, !!(ev && ev.altKey));
@@ -3609,7 +3906,13 @@ export default function TakeoffCanvas() {
       const ax = m.at[0] * W + ox, ay = m.at[1] * H;
       const layout = canvasMarkupTextLayout(m.text || " ", pixelsPerPoint);
       const boxX = ax - layout.padX, boxY = ay - layout.baselines[0];
-      return X >= boxX - thr && X <= boxX + layout.width + thr && Y >= boxY - thr && Y <= boxY + layout.height + thr;
+      if (X >= boxX - thr && X <= boxX + layout.width + thr && Y >= boxY - thr && Y <= boxY + layout.height + thr) return true;
+      if (m.target) {
+        const tx = m.target[0] * W + ox, ty = m.target[1] * H;
+        if (Math.hypot(X - tx, Y - ty) < thr * 2) return true;
+        return distToSeg(X, Y, ax, ay, tx, ty) < thr;
+      }
+      return false;
     }
     if (m.type === "highlight" && Array.isArray(m.pts)) {
       // a freehand highlighter stroke — hit the ink band itself (reach = half the
@@ -3671,6 +3974,29 @@ export default function TakeoffCanvas() {
     const sel = selectedId ? shapes.find((s) => s.id === selectedId) : null;
     const selSp = sel && panelKeySet.has(sel.sheet_id) ? panelByKey(sel.sheet_id) : null;
     setSelVert(null);   // default: this press clears the vertex pick (overridden below on a corner/insert hit)
+    // A text leader's arrowhead is its edit handle. It wins before measurement
+    // handles so an endpoint sitting on plan geometry remains draggable. The
+    // shaft itself still selects through hitMarkup; the arrowhead drag moves
+    // only `target`, leaving the text box anchored in place.
+    if (showMarkups) {
+      const leaderHit = [...visibleMarkups].reverse().find((markup) => {
+        if (markup.type !== "text" || !markup.target) return false;
+        const sp = panelByKey(markup.sheet_id);
+        if (!sp?.img.w) return false;
+        const tx = markup.target[0] * sp.img.w + sp.xOffset;
+        const ty = markup.target[1] * sp.img.h;
+        return Math.hypot(p[0] - tx, p[1] - ty) < thr * 1.8;
+      });
+      if (leaderHit) {
+        selectMarkup(leaderHit.id);
+        dragRef.current = {
+          kind: "markupLeader", markupId: leaderHit.id, sheetId: leaderHit.sheet_id,
+          start: toImage(e.clientX, e.clientY), beforeMarkup: leaderHit, moved: false,
+        };
+        e.currentTarget.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     // 1. Handles of the ALREADY-selected shape win first, so a shape (or vertex)
     //    enclosed by a markup — e.g. a revision cloud drawn around a room — stays
     //    editable rather than being shielded by the markup's hit area. Same edit
@@ -3741,7 +4067,7 @@ export default function TakeoffCanvas() {
               : { at: mHit.at };   // text + bubble
         // raw start (markups don't snap/angle-lock; matches the raw tracking point in
         // onPointerMove so the delta can't be contaminated by a stale snap/angle ref)
-        dragRef.current = { kind: "markupMove", markupId: mHit.id, sheetId: mHit.sheet_id, start: toImage(e.clientX, e.clientY), orig, moved: false };
+        dragRef.current = { kind: "markupMove", markupId: mHit.id, sheetId: mHit.sheet_id, start: toImage(e.clientX, e.clientY), orig, beforeMarkup: mHit, moved: false };
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
@@ -3819,7 +4145,7 @@ export default function TakeoffCanvas() {
   function moveCrosshair(e) {
     if (editingRef.current) return;   // inline editor open — no aim crosshair (ref check, never per-mousemove state)
     if (status !== "ready" || !containerRef.current) return;
-    if (tool === "pan" || tool === "select") {
+    if (tool === "pan" || (tool === "select" && !textLeaderMarkupId)) {
       if (trackpadVisible && aimMarkRef.current) {
         const r = containerRef.current.getBoundingClientRect();
         aimMarkRef.current.style.transform = `translate3d(${e.clientX - r.left}px, ${e.clientY - r.top}px, 0)`;
@@ -3832,7 +4158,7 @@ export default function TakeoffCanvas() {
     let cur = toImage(e.clientX, e.clientY);
     snapRef.current = null;
     if (snapMarkRef.current) snapMarkRef.current.style.display = "none";
-    if (snapOn && !panRef.current && snapGridsRef.current.size) {
+    if (!textLeaderMarkupId && snapOn && !panRef.current && snapGridsRef.current.size) {
       const sc = tfRef.current.scale;
       const sp = panelAt(cur[0]);
       const grid = snapGridsRef.current.get(sp.key);
@@ -4114,7 +4440,7 @@ export default function TakeoffCanvas() {
         setShapes((ss) => ss.map((s) => (s.id !== d.shapeId ? s
           : d.kind === "move" ? { ...s, verts_norm: vn }
             : { ...s, verts_norm: vn, computed: d.lastComputed })));
-      } else if (d.kind === "markupMove") {
+      } else if (d.kind === "markupMove" || d.kind === "markupLeader") {
         // raw cursor point — markups aren't snapped/angle-locked, and this matches the
         // raw d.start so the delta can't jump from a stale snap/angle ref.
         const mp = toImage(e.clientX, e.clientY);
@@ -4125,19 +4451,36 @@ export default function TakeoffCanvas() {
         d.moved = true;
         const sp = panelByKey(d.sheetId);
         if (!sp || !sp.img.w) return;
+        if (d.kind === "markupLeader") {
+          const current = markupsRef.current.find((markup) => markup.id === d.markupId);
+          if (!current) return;
+          const target = [
+            Math.max(0, Math.min(1, (mp[0] - sp.xOffset) / sp.img.w)),
+            Math.max(0, Math.min(1, mp[1] / sp.img.h)),
+          ];
+          const nextMarkup = { ...current, target };
+          d.afterMarkup = nextMarkup;
+          const next = markupsRef.current.map((markup) => markup.id === d.markupId ? nextMarkup : markup);
+          setMarkupsNow(next);
+          return;
+        }
         // start and mp are both stage px, so xOffset cancels in the delta; normalize
         // by the markup's OWN panel dims. Live setMarkups each move (mirrors the shape
         // `move` pattern; NOT commit-on-release). Persistence is automatic.
         const dx = (mp[0] - d.start[0]) / sp.img.w, dy = (mp[1] - d.start[1]) / sp.img.h;
         const o = d.orig;
-        setMarkups((ms) => ms.map((m) => {
+        let afterMarkup = null;
+        const next = markupsRef.current.map((m) => {
           if (m.id !== d.markupId) return m;
-          if (o.pts) return { ...m, pts: o.pts.map(([nx, ny]) => [nx + dx, ny + dy]) };   // highlighter stroke
-          if (o.rect) return { ...m, rect: [[o.rect[0][0] + dx, o.rect[0][1] + dy], [o.rect[1][0] + dx, o.rect[1][1] + dy]] };
-          if (o.target) return { ...m, at: [o.at[0] + dx, o.at[1] + dy], target: [o.target[0] + dx, o.target[1] + dy] };
-          if (o.from) return { ...m, from: [o.from[0] + dx, o.from[1] + dy], to: [o.to[0] + dx, o.to[1] + dy] };
-          return { ...m, at: [o.at[0] + dx, o.at[1] + dy] };   // text + bubble
-        }));
+          if (o.pts) afterMarkup = { ...m, pts: o.pts.map(([nx, ny]) => [nx + dx, ny + dy]) };   // highlighter stroke
+          else if (o.rect) afterMarkup = { ...m, rect: [[o.rect[0][0] + dx, o.rect[0][1] + dy], [o.rect[1][0] + dx, o.rect[1][1] + dy]] };
+          else if (o.target) afterMarkup = { ...m, at: [o.at[0] + dx, o.at[1] + dy], target: [o.target[0] + dx, o.target[1] + dy] };
+          else if (o.from) afterMarkup = { ...m, from: [o.from[0] + dx, o.from[1] + dy], to: [o.to[0] + dx, o.to[1] + dy] };
+          else afterMarkup = { ...m, at: [o.at[0] + dx, o.at[1] + dy] };   // text + bubble
+          return afterMarkup;
+        });
+        d.afterMarkup = afterMarkup;
+        setMarkupsNow(next);
       }
       return;
     }
@@ -4198,6 +4541,9 @@ export default function TakeoffCanvas() {
           ...(d.lastComputed !== undefined ? { computed: d.lastComputed } : {}),
           prev: d.prev,
         });
+      }
+      if ((d.kind === "markupMove" || d.kind === "markupLeader") && d.moved && d.afterMarkup) {
+        recordAppliedMarkupReplace(d.beforeMarkup, d.afterMarkup);
       }
       try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* gone */ }
       return;
@@ -4922,13 +5268,15 @@ export default function TakeoffCanvas() {
     if (denyReadOnlyEdit()) return;
     // created_at rides the defaults so every markup path (hand-drawn, cloud's
     // pre-minted id, stamp instances) is stamped at this single creation gate
-    setMarkups((ms) => [...ms, { id: uid("mk"), created_at: nowIso(), sheet_id: key, rfi_id: "", ...m }]);
+    const markup = { id: uid("mk"), created_at: nowIso(), sheet_id: key, rfi_id: "", ...m };
+    dispatchMarkup({ type: "add", markup });
     // Drawing a markup by hand surfaces the Markups tab. But a STAMP places several
     // markups via addMarkup — don't yank the user off the Stamps tab mid-placement
     // (keep the current tab, or open Markups only if nothing's open). Highlighter
     // ink flows stroke after stroke — never pop the dock per stroke.
-    if (m.type === "highlight" && m.pts) return;
+    if (m.type === "highlight" && m.pts) return markup.id;
     setLeftTab((t) => (tool === "stamp" ? (t ?? "markup") : "markup"));
+    return markup.id;
   }
   async function downloadCurrentPage(quality = pageExportQuality) {
     if (pageExportLock.current || !focusPanel.file || !hydrated.current || loadError) return;
@@ -5051,13 +5399,30 @@ export default function TakeoffCanvas() {
     else return null;
     return [nx * sp.img.w + sp.xOffset, ny * sp.img.h];
   }
-  function openTextEditor({ anchorStage, value = "", multiline = false, commit }) {
+  function markupTextBoxStage(m) {
+    if (m.type !== "text" || !m.at) return null;
+    const sp = panelByKey(m.sheet_id);
+    if (!sp || !sp.img.w) return null;
+    const pixelsPerPoint = renderScalesRef.current.get(m.sheet_id) || RENDER_SCALE;
+    const layout = canvasMarkupTextLayout(m.text || " ", pixelsPerPoint);
+    const baselineX = m.at[0] * sp.img.w + sp.xOffset;
+    const baselineY = m.at[1] * sp.img.h;
+    return [baselineX - layout.padX, baselineY - layout.baselines[0]];
+  }
+  function openTextEditor({ anchorStage, value = "", multiline = false, markupId = null, markupColor = "", commit }) {
     const el = containerRef.current;
     if (!el) return;
     const t = tfRef.current;
     hideCrosshair();                 // the OS cursor / aim crosshair steps aside while you type
     editingRef.current = true;
-    const ed = { left: anchorStage[0] * t.scale + t.x, top: anchorStage[1] * t.scale + t.y, value, multiline, commit };
+    const inset = 16;
+    const width = multiline ? Math.max(160, Math.min(520, el.clientWidth - inset * 2)) : 240;
+    const height = multiline ? Math.max(120, Math.min(180, el.clientHeight - inset * 2)) : 34;
+    const anchorLeft = anchorStage[0] * t.scale + t.x;
+    const anchorTop = anchorStage[1] * t.scale + t.y;
+    const left = Math.max(inset, Math.min(anchorLeft, el.clientWidth - width - inset));
+    const top = Math.max(inset, Math.min(anchorTop, el.clientHeight - height - inset));
+    const ed = { left, top, width, height, value, multiline, markupId, markupColor, commit };
     editorRef.current = ed;
     setEditor(ed);
   }
@@ -5094,7 +5459,15 @@ export default function TakeoffCanvas() {
     const anchor = markupAnchorStage(m);
     if (!anchor) return;
     selectMarkup(m.id);
-    openTextEditor({ anchorStage: anchor, value: m.text || "", multiline: m.type === "text", commit: (t) => updateMarkup(m.id, { text: (t || "").trim() }) });
+    const textBoxAnchor = markupTextBoxStage(m);
+    openTextEditor({
+      anchorStage: textBoxAnchor || anchor,
+      value: m.text || "",
+      multiline: m.type === "text",
+      markupId: textBoxAnchor ? m.id : null,
+      markupColor: m.color || (m.rfi_id ? "#1f3fc7" : "#c47a10"),
+      commit: (t) => updateMarkup(m.id, { text: (t || "").trim() }),
+    });
   }
 
   function placeMarkup(p) {
@@ -5144,8 +5517,66 @@ export default function TakeoffCanvas() {
       }
     }
   }
-  function updateMarkup(mid, patch) { if (!denyReadOnlyEdit()) setMarkups((ms) => ms.map((m) => (m.id === mid ? { ...m, ...patch } : m))); }
-  function deleteMarkup(mid) { if (!denyReadOnlyEdit()) setMarkups((ms) => ms.filter((m) => m.id !== mid)); }
+  function armTextLeader(mid) {
+    if (denyReadOnlyEdit()) return;
+    if (textLeaderMarkupId === mid) {
+      setTextLeaderMarkupId(null);
+      setCommitMsg("Leader arrow cancelled.");
+      return;
+    }
+    const markup = markups.find((item) => item.id === mid);
+    if (!markup || markup.type !== "text" || !markup.at) return;
+    setTool("select");
+    setMarkupDraft(null);
+    setPoly([]);
+    selectMarkup(mid);
+    setTextLeaderMarkupId(mid);
+    setCommitMsg("Leader arrow armed — click the plan where this text box should point. Esc cancels.");
+  }
+  function placeTextLeader(p) {
+    const markup = markups.find((item) => item.id === textLeaderMarkupId);
+    if (!markup || markup.type !== "text" || !markup.at) { setTextLeaderMarkupId(null); return; }
+    const sourcePanel = panelByKey(markup.sheet_id);
+    const targetPanel = panelAt(p[0]);
+    if (!sourcePanel?.img.w || targetPanel.key !== markup.sheet_id) {
+      setCommitMsg("Choose a point on the same sheet as the text box.");
+      return;
+    }
+    const target = [
+      Math.max(0, Math.min(1, (p[0] - sourcePanel.xOffset) / sourcePanel.img.w)),
+      Math.max(0, Math.min(1, p[1] / sourcePanel.img.h)),
+    ];
+    updateMarkup(markup.id, { target });
+    setTextLeaderMarkupId(null);
+    selectMarkup(markup.id);
+    setCommitMsg("Leader arrow added.");
+  }
+  function updateMarkup(mid, patch) {
+    if (denyReadOnlyEdit()) return;
+    const current = markupsRef.current.find((markup) => markup.id === mid);
+    if (!current) return;
+    const next = { ...current, ...patch };
+    if (JSON.stringify(current) === JSON.stringify(next)) return;
+    dispatchMarkup({ type: "replace", markup: next });
+  }
+  function removeTextLeader(mid) {
+    if (denyReadOnlyEdit()) return;
+    const current = markupsRef.current.find((markup) => markup.id === mid);
+    if (!current || current.type !== "text" || !current.target) return;
+    const next = { ...current };
+    delete next.target;
+    dispatchMarkup({ type: "replace", markup: next });
+    setTextLeaderMarkupId((id) => (id === mid ? null : id));
+    selectMarkup(mid);
+    setCommitMsg("Leader arrow removed.");
+  }
+  function deleteMarkup(mid) {
+    if (denyReadOnlyEdit()) return;
+    dispatchMarkup({ type: "delete", ids: [mid] });
+    setSelectedMarkupId((id) => (id === mid ? null : id));
+    setPanelEditId((id) => (id === mid ? null : id));
+    setTextLeaderMarkupId((id) => (id === mid ? null : id));
+  }
 
   // ── stamps — reusable annotations dropped click-to-place (#40). The library
   // is browser-global (persists across projects); placed instances are NORMAL
@@ -6626,7 +7057,7 @@ export default function TakeoffCanvas() {
   // Toolbar and canvas rail share the exact action objects and availability gates.
   const measureMenuItems = MEASURE_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, onSelect: () => setTool(t.id) }));
   const cutMenuItems = CUT_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, tint: "var(--c-danger)", onSelect: () => setTool(t.id) }));
-  const activateMarkupTool = (id) => { setTool(id); setMarkupDraft(null); setPoly([]); };
+  const activateMarkupTool = (id) => { setTool(id); setMarkupDraft(null); setTextLeaderMarkupId(null); setPoly([]); };
   const markupMenuItems = [
     ...MARKUP_TOOLS.map((t) => {
       const mappedKey = markupShortcuts[t.id];
@@ -6660,11 +7091,11 @@ export default function TakeoffCanvas() {
     { id: "flipV", label: "Flip Vertical", disabled: !selectedId, onSelect: () => flipSelected("v") },
     "divider",
     { id: "finish", icon: "check", label: `Finish shape${poly.length ? ` (${poly.length} pts)` : ""}`, shortcut: "↵", disabled: !finishOk, onSelect: finishShape },
-    { id: "undopt", icon: "undo", label: "Undo last point", shortcut: "⌘Z", disabled: !poly.length, onSelect: () => setPoly((q) => q.slice(0, -1)) },
+    { id: "undopt", icon: "undo", label: poly.length ? "Undo last point" : "Undo", shortcut: "⌘Z", disabled: !poly.length && !undoStackRef.current.length, onSelect: () => poly.length ? setPoly((q) => q.slice(0, -1)) : undoShapeCommand() },
     { id: "undoshape", icon: "undo", label: "Undo last shape", disabled: !visibleShapes.length, onSelect: undoLast },
-    { id: "redo", label: "Redo", shortcut: "⇧⌘Z", onSelect: redoShapeCommand },
+    { id: "redo", label: "Redo", shortcut: "⇧⌘Z", disabled: !redoStackRef.current.length, onSelect: redoShapeCommand },
     "divider",
-    { id: "del", icon: "close", label: "Delete selected", shortcut: "⌫", disabled: !selectedId, tint: "var(--c-danger)", onSelect: deleteSelected },
+    { id: "del", icon: "close", label: "Delete selected", shortcut: "⌫", disabled: !selectedId && !selectedMarkupId, tint: "var(--c-danger)", onSelect: () => selectedMarkupId ? deleteMarkup(selectedMarkupId) : deleteSelected() },
   ];
 
   // Shared highlighter settings stay reachable after hiding the original Draw group.
@@ -6991,28 +7422,55 @@ export default function TakeoffCanvas() {
     </button>
   );
 
-  // deck-1 sheet-nav chip — ONE home for "which sheet am I on": pages, files,
-  // group/ungroup and the gallery all live in its dropdown. Ungroup/Regroup
-  // are sheet-set operations, so they move in here instead of appearing
-  // mid-row and shifting everything after them.
-  // assigned floor/level rides the sheet chip + page entries (sheet key: page 1 is the bare file name)
+  // deck-1 sheet-nav chip — ONE home for "which sheet am I on": each PDF is a
+  // collapsible parent with its own nested pages. This avoids the old 1,000-row
+  // flat page list + separate Files section, and makes file/page ownership
+  // visible at a glance. Ungroup/Regroup and the gallery remain here too.
+  // Assigned floor/level rides the sheet chip + page entries (sheet key: page 1 is the bare file name).
   const levelOfPage = (n) => sheetLevels[n > 1 ? `${active}#${n}` : active] || "";
   const sheetChipLabel = sheetGroup.length
     ? `${sheetGroup.length} sheets side-by-side`
     : `${levelOfPage(page) ? `${levelOfPage(page)} · ` : ""}${pageLabels[page] || (pageCount > 1 ? `Sheet ${page}` : active)}${pageCount > 1 ? ` · ${page}/${pageCount}` : ""}`;
   const sheetMenuItems = [];
-  if (!sheetGroup.length && pageCount > 1) {
-    sheetMenuItems.push({ section: "Sheets in this set" });
-    for (let n = 1; n <= pageCount; n++) sheetMenuItems.push({ id: `pg-${n}`, label: `${levelOfPage(n) ? `${levelOfPage(n)} · ` : ""}${pageLabels[n] || `Sheet ${n}`}`, shortcut: `${n}/${pageCount}`, active: n === page, onSelect: () => setPage(n), accessory: bookmarkButton(n > 1 ? `${active}#${n}` : active) });
-  }
   if (!sheetGroup.length && sheets.length) {
-    const fileItem = (name) => ({ id: `f-${name}`, label: name, active: name === active,
-      onSelect: () => { setActive(name); setPage(1); }, accessory: fileFavoriteButton(name) });
-    if (fileGroups.bookmarked.length) {
-      sheetMenuItems.push({ section: "Favorite files" }, ...fileGroups.bookmarked.map(fileItem));
-      if (fileGroups.other.length) sheetMenuItems.push("divider");
+    sheetMenuItems.push({ section: "PDF sets" });
+    const orderedFiles = [...fileGroups.bookmarked, ...fileGroups.other];
+    for (const sheet of orderedFiles) {
+      const name = typeof sheet === "string" ? sheet : sheet.name;
+      const expanded = sheetPickerExpandedFiles.has(name);
+      const count = sheetPickerPageCounts[name] || (name === active ? pageCount : 0);
+      sheetMenuItems.push({
+        id: `f-${name}`, label: name, header: true, active: name === active,
+        disclosure: expanded ? "expanded" : "collapsed", stayOpen: true,
+        shortcut: count ? `${count} page${count === 1 ? "" : "s"}` : "",
+        title: `${expanded ? "Collapse" : "Expand"} ${name}`,
+        onSelect: () => {
+          setSheetPickerExpandedFiles((current) => {
+            const next = new Set(current);
+            if (next.has(name)) next.delete(name); else next.add(name);
+            return next;
+          });
+          if (!expanded) loadSheetPickerPageCount(name);
+        },
+        accessory: fileFavoriteButton(name),
+      });
+      if (!expanded) continue;
+      if (!count) {
+        sheetMenuItems.push({ id: `loading-${name}`, label: "Loading pages…", depth: 1, disabled: true });
+        continue;
+      }
+      for (let n = 1; n <= count; n++) {
+        const key = n > 1 ? `${name}#${n}` : name;
+        const level = sheetLevels[key] ? `${sheetLevels[key]} · ` : "";
+        const knownLabel = name === active ? pageLabels[n] : galleryLabels[key];
+        sheetMenuItems.push({
+          id: `pg-${name}-${n}`, label: `${level}${knownLabel || `Sheet ${n}`}`,
+          shortcut: `${n}/${count}`, depth: 1,
+          active: name === active && n === page,
+          onSelect: () => goToSheet(key), accessory: bookmarkButton(key),
+        });
+      }
     }
-    if (fileGroups.other.length) sheetMenuItems.push({ section: "Files" }, ...fileGroups.other.map(fileItem));
   }
   if (sheetMenuItems.length && (sheetGroup.length || lastGroup.length >= 2)) sheetMenuItems.push("divider");
   if (sheetGroup.length) sheetMenuItems.push({ id: "ungroup", label: "Ungroup — back to one sheet", title: "Back to one sheet — you land on the sheet you were last working; every sheet keeps its takeoffs and markups", onSelect: ungroup });
@@ -7246,7 +7704,8 @@ export default function TakeoffCanvas() {
         onClose={() => setFenceCalculatorOpen(false)} />}
       {projectSavePrompt !== null && <SaveProjectDialog filename={projectSavePrompt}
         canChooseLocation={typeof window.showSaveFilePicker === "function"} busy={!!projectFileBusy} error={projectFileError}
-        onSave={(name) => confirmSaveProjectFile(name, projectSaveAs, projectSaveCompact)} onClose={() => { if (!projectFileLock.current) { setProjectSavePrompt(null); setProjectFileError(""); setProjectSaveCompact(false); } }} />}
+        required={projectSaveRequired}
+        onSave={(name) => confirmSaveProjectFile(name, projectSaveAs, projectSaveCompact)} onClose={() => { if (!projectSaveRequired && !projectFileLock.current) { setProjectSavePrompt(null); setProjectFileError(""); setProjectSaveCompact(false); } }} />}
       {projectSavePrompt === null && (projectFileBusy || projectFileError || projectFilePrompt) && (
         <div role="dialog" aria-modal="true" aria-label="Project file" onDrop={(e) => e.stopPropagation()}
           style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", padding: 16 }}>
@@ -7330,7 +7789,7 @@ export default function TakeoffCanvas() {
             <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={!!sheetGroup.length || page <= 1} title="Previous sheet (Left Arrow)"
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page <= 1) ? 0.4 : 1 }}><Icon name="chevronLeft" size={12} /></button>
             <ToolMenu
-              title="Sheet — the sheets in this set, files, grouping, and the gallery"
+              title="Sheet — expand PDF sets to choose a page, or open the gallery"
               onOpenChange={onMenuDepth}
               face={<span style={{ display: "inline-block", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sheetChipLabel}</span>}
               faceStyle={{ fontFamily: "var(--f-mono)", fontSize: 12, fontWeight: 400, padding: "6px 8px" }}
@@ -7449,7 +7908,10 @@ export default function TakeoffCanvas() {
           </select>
         )}
         <div style={{ display: "inline-flex", borderLeft: "1px solid var(--ink-faint)", paddingLeft: 12 }}>{scaleControls}</div>
-        <div className="takeoff-toolbar-readout" aria-label="Live takeoff summary">
+        <div
+          className="takeoff-toolbar-readout"
+          aria-label="Live takeoff summary"
+          style={{ "--takeoff-readout-accent": activeColor }}>
           <div className="takeoff-toolbar-readout-heading">{tool === "zone" ? "Zone check" : (aCond?.finish_tag || "No condition")}</div>
           <div className="takeoff-toolbar-readout-live">
             {tool === "oneclick" && proposal?.regions.length ? (() => {
@@ -7517,8 +7979,9 @@ export default function TakeoffCanvas() {
           </div>
           <div className="takeoff-toolbar-readout-meta">{visibleShapes.length} shapes on {groupKeys.length > 1 ? `${groupKeys.length} sheets` : "sheet"}</div>
         </div>
-        {(finishOk || proposal?.regions.length > 0 || (markupDraft && ["cloud", "callout", "highlight"].includes(tool))) && cluster("",
+        {(finishOk || proposal?.regions.length > 0 || textLeaderMarkupId || (markupDraft && ["cloud", "callout", "highlight"].includes(tool))) && cluster("",
           <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 6, minWidth: 150 }}>
+            {textLeaderMarkupId && <span style={{ fontSize: 11, color: "var(--cobalt)" }}>click the arrow target · Esc cancels</span>}
             {markupDraft && (tool === "cloud" || tool === "callout" || tool === "highlight") && <span style={{ fontSize: 11, color: "var(--cobalt)" }}>click the {tool === "callout" ? "label spot" : "opposite corner"}…</span>}
             {finishOk && (
               <button onClick={finishShape} title="Finish shape (↵ or double-click)" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", border: "none", background: "var(--c-positive)", color: "var(--paper-bright)", cursor: "pointer", fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}><Icon name="check" size={14} />Finish ({poly.length})</button>
@@ -7702,6 +8165,12 @@ export default function TakeoffCanvas() {
                 <div className="find-dialog-status" aria-live={findBusy ? "off" : "polite"}>
                   {findMessage || (findResults.length && !findBusy ? `${findResults.length.toLocaleString()} matches on ${findPages.length.toLocaleString()} page${findPages.length === 1 ? "" : "s"} across ${new Set(findPages.map((resultPage) => resultPage.file)).size.toLocaleString()} PDF${new Set(findPages.map((resultPage) => resultPage.file)).size === 1 ? "" : "s"}.` : `${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"} will be searched.`)}
                 </div>
+                <button className="find-json-download" type="button" onClick={downloadLatestFindResults}
+                  disabled={findBusy || findJsonBusy || !findExportJob?.matches?.length}
+                  title={findExportJob?.matches?.length ? "Download every match from the latest completed search as structured JSON" : "Complete a search with at least one match to download JSON"}>
+                  <Icon name="document" size={14} />
+                  {findJsonBusy ? "Preparing JSON…" : "Download JSON File"}
+                </button>
                 {findJobs.length > 0 && <section className="find-job-results" aria-label="Completed searches and highlight controls">
                   <div className="find-job-results-heading">
                     <span>Search marks</span>
@@ -7780,6 +8249,7 @@ export default function TakeoffCanvas() {
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-outline">Find in this page</span></span><strong>Find in this page:</strong> searches only the currently focused sheet.</p>
                 <p>Each run adds a separate search and keeps previous searches. Search buttons are unavailable while scanning or when the search box is empty; the PDF-set and page buttons also require an open PDF.</p>
                 <p>Selectable PDF text is searched first. Scanned pages automatically use local OCR and may take longer.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-outline">Download JSON File</span></span><strong>Download JSON File:</strong> saves every match from the latest completed search, including pages hidden by Rank, Hide 1 match pages, or Search marks visibility. The local file includes page and PDF rankings, keyword totals, source text context, and coordinates when available.</p>
                 <h4>Navigate matching pages</h4>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-square"><Icon name="chevronLeft" size={13} /></span><span className="is-square"><Icon name="chevronRight" size={13} /></span></span><strong>‹ / ›:</strong> go to the previous or next matching page. The page counter shows your position in the results. These buttons are unavailable while scanning or when there are no matching pages.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span>Hide 1 match pages</span></span><strong>Hide 1 match pages:</strong> removes pages with exactly one match from this result list and the previous/next navigation. It does not delete their search marks. Click Show 1 match pages to restore them.</p>
@@ -8004,10 +8474,25 @@ export default function TakeoffCanvas() {
                  {markups.filter((m) => panelKeySet.has(m.sheet_id)).length === 0 && (
                    <div style={{ padding: "4px 12px 14px", color: "var(--ink-muted)" }}>No markups {groupKeys.length > 1 ? "on these sheets" : "on this sheet"} yet.</div>
                  )}
-                 {markups.filter((m) => panelKeySet.has(m.sheet_id)).map((m) => (
-                   <div key={m.id} style={{ padding: "10px 12px", borderTop: "1px solid var(--ink-faint)" }}>
+                 {markups.filter((m) => panelKeySet.has(m.sheet_id)).map((m) => {
+                   const markupSelected = m.id === selectedMarkupId;
+                   return (
+                   <div
+                     key={m.id}
+                     ref={(node) => { if (node) markupPanelRowRefs.current.set(m.id, node); else markupPanelRowRefs.current.delete(m.id); }}
+                     className={`markup-panel-row${markupSelected ? " is-selected" : ""}`}
+                     data-markup-id={m.id}
+                     aria-current={markupSelected ? "true" : undefined}
+                     onClick={() => selectMarkup(m.id)}
+                     onKeyDown={(e) => {
+                       if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                         e.preventDefault(); selectMarkup(m.id);
+                       }
+                     }}
+                     tabIndex={0}>
                      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--cobalt)", textTransform: "uppercase" }}>{m.type}</span>
+                       {markupSelected && <span className="markup-panel-selected-label">Selected</span>}
                        {/* inline edit — the panel's fallback for the canvas overlay, since a
                            markup here may be off-screen or on another sheet (no click point).
                            Enter/blur commit, Esc cancels; INPUT is guarded from the global keys. */}
@@ -8023,6 +8508,21 @@ export default function TakeoffCanvas() {
                        ) : (
                          <span style={{ flex: 1, color: "var(--ink)", whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{m.type === "svg" ? <em style={{ color: "var(--ink-muted)" }}>(vector symbol)</em> : (m.text || <em style={{ color: "var(--ink-muted)" }}>(no text)</em>)}</span>
                        )}
+                       {m.type === "text" && <button
+                         onClick={(e) => { e.stopPropagation(); armTextLeader(m.id); }}
+                         title={m.target ? "Repoint leader arrow" : "Add leader arrow"}
+                         aria-label={m.target ? "Repoint leader arrow" : "Add leader arrow"}
+                         aria-pressed={textLeaderMarkupId === m.id}
+                         style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, border: textLeaderMarkupId === m.id ? "1px solid var(--cobalt)" : "1px solid transparent", borderRadius: 3, background: textLeaderMarkupId === m.id ? "var(--paper-blue)" : "none", cursor: "crosshair", color: textLeaderMarkupId === m.id ? "var(--cobalt)" : "var(--ink-muted)" }}>
+                         <Icon name="arrow" size={13} />
+                       </button>}
+                       {m.type === "text" && m.target && <button
+                         onClick={(e) => { e.stopPropagation(); removeTextLeader(m.id); }}
+                         title="Remove leader arrow"
+                         aria-label="Remove leader arrow"
+                         style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, border: "1px solid transparent", borderRadius: 3, background: "none", cursor: "pointer", color: "var(--c-danger)" }}>
+                         <Icon name="close" size={12} />
+                       </button>}
                        {m.type !== "svg" && <button onClick={() => setPanelEditId((id) => (id === m.id ? null : m.id))} title="Edit text" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-muted)" }}>✎</button>}
                        <button onClick={() => deleteMarkup(m.id)} title="Delete markup" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--c-danger)" }}>🗑</button>
                      </div>
@@ -8081,7 +8581,7 @@ export default function TakeoffCanvas() {
                        );
                      })()}
                    </div>
-                 ))}
+                 );})}
                </div>
              )}
              {leftTab === "stamp" && (
@@ -8107,7 +8607,7 @@ export default function TakeoffCanvas() {
        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         <div ref={containerRef} onPointerDown={(event) => {
           if (readOnly && tool !== "pan") { denyReadOnlyEdit(); return; }
-          if (tool === "select" && event.target?.closest?.(".takeoff-pdf-text-layer")) {
+          if (tool === "select" && !textLeaderMarkupId && event.target?.closest?.(".takeoff-pdf-text-layer")) {
             const point = toImage(event.clientX, event.clientY);
             if (!markupAt(point, 8 / tfRef.current.scale)) return;
           }
@@ -8115,7 +8615,7 @@ export default function TakeoffCanvas() {
         }} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp} onPointerLeave={leaveCanvas} onContextMenu={(e) => e.preventDefault()}
           onDoubleClick={(e) => { if (readOnly) { denyReadOnlyEdit(); return; } if (tool === "select" && e.target?.closest?.(".takeoff-pdf-text-layer") && !markupAt(toImage(e.clientX, e.clientY), 8 / tfRef.current.scale)) return; if (tool === "oneclick") { if (proposal?.regions.length) createProposal(); } else if (tool === "area" || tool === "deduct" || tool === "linear" || tool === "curve" || tool === "surface" || tool === "zone") finishShape(); else if (tool === "select") editMarkupAt(e); }}
-          style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--paper-cream)", "--canvas-tool-cursor": tool === "pan" ? "var(--cursor-grab, grab)" : tool === "select" ? "var(--cursor-default, default)" : tool === "text" ? "var(--cursor-text, text)" : "var(--cursor-crosshair, crosshair)", cursor: "var(--canvas-tool-cursor)", touchAction: "none" }}>
+          style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--paper-cream)", "--canvas-tool-cursor": tool === "pan" ? "var(--cursor-grab, grab)" : tool === "select" && !textLeaderMarkupId ? "var(--cursor-default, default)" : tool === "text" ? "var(--cursor-text, text)" : "var(--cursor-crosshair, crosshair)", cursor: "var(--canvas-tool-cursor)", touchAction: "none" }}>
           {/* aim crosshair (draw modes): retain the precision overlay alongside the themed cursor. Two crisp full-page hairlines riding the
               EFFECTIVE point (angle-locked / endpoint-snapped), the SPLINE STAR at
               the crossing, and a small readout chip in the house style. The 45°
@@ -8139,11 +8639,11 @@ export default function TakeoffCanvas() {
               all on the input's OWN handlers so the global keydown (which returns early
               for INPUT) never interferes. the editor uses the themed text cursor. */}
           {editor && (
-            editor.multiline ? <textarea name="inline-editor" autoComplete="off" ref={editorInputRef} autoFocus defaultValue={editor.value} rows={4}
+            editor.multiline ? <textarea name="inline-editor" aria-label="Text box content" autoComplete="off" ref={editorInputRef} autoFocus defaultValue={editor.value} rows={8}
               onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); finishEditor(true); } else if (e.key === "Escape") { e.preventDefault(); finishEditor(false); } }}
               onBlur={() => finishEditor(true)}
               placeholder="Type a note · Enter for a new line · Ctrl+Enter to place"
-              style={{ position: "absolute", left: editor.left, top: editor.top, zIndex: 9, width: 320, maxWidth: "calc(100% - 24px)", minHeight: 92, maxHeight: 220, padding: "7px 9px", font: "13px/1.4 var(--f-body, sans-serif)", color: "var(--ink)", background: "var(--paper-bright)", border: "1px solid var(--cobalt)", boxShadow: "0 2px 10px rgba(0,0,0,.18)", borderRadius: 3, cursor: "var(--cursor-text, text)", outline: "none", resize: "both", whiteSpace: "pre-wrap" }} /> :
+              style={{ position: "absolute", left: editor.left, top: editor.top, zIndex: 9, boxSizing: "border-box", width: editor.width, height: editor.height, maxWidth: "calc(100% - 32px)", maxHeight: "calc(100% - 32px)", padding: "11px 12px", font: "700 14px/1.45 var(--f-body, sans-serif)", color: darkMode ? "#f5f2e8" : "#0e1a2e", background: darkMode ? "rgba(20,26,31,.96)" : "rgba(255,247,237,.98)", border: `2px solid ${editor.markupColor || "#1f3fc7"}`, boxShadow: "0 4px 18px rgba(0,0,0,.22)", borderRadius: 0, cursor: "var(--cursor-text, text)", outline: "none", resize: "both", whiteSpace: "pre-wrap" }} /> :
             <input name="inline-editor" autoComplete="off" ref={editorInputRef} autoFocus defaultValue={editor.value}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); finishEditor(true); } else if (e.key === "Escape") { e.preventDefault(); finishEditor(false); } }}
               onBlur={() => finishEditor(true)}
@@ -8304,6 +8804,7 @@ export default function TakeoffCanvas() {
                     {showMarkups && visibleMarkups.filter((m) => m.sheet_id === p.key)
                       .slice().sort((a, b) => (a.type === "highlight" ? 0 : 1) - (b.type === "highlight" ? 0 : 1))
                       .map((m) => {
+                      if (editor?.markupId === m.id) return null;
                       const z = tf.scale;
                       const pixelsPerPoint = renderScalesRef.current.get(p.key) || RENDER_SCALE;
                       const base = m.color || (m.rfi_id ? "#1f3fc7" : "#c47a10");
@@ -8359,6 +8860,58 @@ export default function TakeoffCanvas() {
                                 <tspan key={index} x={baselineX} y={boxY + layout.baselines[index]}>{line || " "}</tspan>
                               ))}
                             </text>
+                          </g>
+                        );
+                      };
+                      // Text notes expose a small, screen-sized leader button at the
+                      // box corner. It is editor chrome only: the saved `target`
+                      // renders below, while PDF export draws the same line/arrowhead.
+                      const textLeaderButton = (markup, baselineX, baselineY) => {
+                        const layout = canvasMarkupTextLayout(markup.text || " ", pixelsPerPoint);
+                        const boxX = baselineX - layout.padX;
+                        const boxY = baselineY - layout.baselines[0];
+                        const size = 20 / z;
+                        const bx = boxX + layout.width - size / 2;
+                        const by = boxY - size / 2;
+                        const active = textLeaderMarkupId === markup.id;
+                        const ink = active ? "#fff" : mk;
+                        const arm = () => armTextLeader(markup.id);
+                        return (
+                          <g role="button" aria-label={markup.target ? "Repoint leader arrow for text box" : "Add leader arrow for text box"}
+                            aria-pressed={active} tabIndex={0}
+                            onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                            onClick={(event) => { event.preventDefault(); event.stopPropagation(); arm(); }}
+                            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); arm(); } }}
+                            style={{ pointerEvents: "all", cursor: "crosshair" }}>
+                            <rect x={bx} y={by} width={size} height={size} rx={3 / z}
+                              fill={active ? "#1f3fc7" : (darkMode ? "#20252b" : "#fffaf2")}
+                              stroke={active ? "#fff" : mk} strokeWidth={1.2 / z} />
+                            <line x1={bx + 5 / z} y1={by + 15 / z} x2={bx + 15 / z} y2={by + 5 / z}
+                              stroke={ink} strokeWidth={1.5 / z} strokeLinecap="round" />
+                            <path d={`M${bx + 10 / z},${by + 5 / z} H${bx + 15 / z} V${by + 10 / z}`}
+                              fill="none" stroke={ink} strokeWidth={1.5 / z} strokeLinecap="round" strokeLinejoin="round" />
+                          </g>
+                        );
+                      };
+                      // Selected leaders get a screen-sized remove control beside the
+                      // endpoint. It deletes only `target`, leaving the text note in
+                      // place; the shared markup command history makes this undoable.
+                      const textLeaderRemoveButton = (markup, targetX, targetY) => {
+                        if (!selM || !markup.target) return null;
+                        const radius = 9 / z;
+                        const cx = targetX + 16 / z;
+                        const cy = targetY - 16 / z;
+                        const remove = () => removeTextLeader(markup.id);
+                        return (
+                          <g role="button" aria-label="Remove leader arrow from text box" tabIndex={0}
+                            onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                            onClick={(event) => { event.preventDefault(); event.stopPropagation(); remove(); }}
+                            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); remove(); } }}
+                            style={{ pointerEvents: "all", cursor: "pointer" }}>
+                            <circle cx={cx} cy={cy} r={radius}
+                              fill={darkMode ? "#20252b" : "#fffaf2"} stroke="#b03a26" strokeWidth={1.5 / z} />
+                            <path d={`M${cx - 3.5 / z},${cy - 3.5 / z} L${cx + 3.5 / z},${cy + 3.5 / z} M${cx + 3.5 / z},${cy - 3.5 / z} L${cx - 3.5 / z},${cy + 3.5 / z}`}
+                              fill="none" stroke="#b03a26" strokeWidth={1.5 / z} strokeLinecap="round" />
                           </g>
                         );
                       };
@@ -8480,6 +9033,27 @@ export default function TakeoffCanvas() {
                         );
                       }
                       const [x, y] = m.at;
+                      if (m.type === "text") {
+                        const ax = x * p.img.w, ay = y * p.img.h;
+                        const tx = m.target?.[0] * p.img.w, ty = m.target?.[1] * p.img.h;
+                        return (
+                          <g key={m.id}>
+                            {m.target && <>
+                              {selM && <>
+                                <line x1={ax} y1={ay} x2={tx} y2={ty} stroke="#fff" strokeWidth={(0.9 * w * pixelsPerPoint) + 6 / z} strokeLinecap="round" />
+                                <line x1={ax} y1={ay} x2={tx} y2={ty} stroke="#1f3fc7" strokeOpacity="0.55" strokeWidth={(0.9 * w * pixelsPerPoint) + 3 / z} strokeLinecap="round" />
+                              </>}
+                              <line x1={ax} y1={ay} x2={tx} y2={ty} stroke={mk} strokeWidth={0.9 * w * pixelsPerPoint} strokeDasharray={dash} />
+                              <path d={arrowheadPath(ax, ay, tx, ty, 5 * pixelsPerPoint)} fill={mk} />
+                              {selM && <circle cx={tx} cy={ty} r={6 / z} fill="#fff" stroke="#1f3fc7" strokeWidth={2 / z} />}
+                              {textLeaderRemoveButton(m, tx, ty)}
+                            </>}
+                            {boxedLabel(m.text || " ", ax, ay, selM)}
+                            {textLeaderButton(m, ax, ay)}
+                            {badge(ax, ay - 24 * pixelsPerPoint)}
+                          </g>
+                        );
+                      }
                       return (
                         <g key={m.id}>
                           {boxedLabel(m.text || " ", x * p.img.w, y * p.img.h, selM)}

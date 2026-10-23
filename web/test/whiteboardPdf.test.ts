@@ -192,6 +192,30 @@ test("four ordered and overlapping custom areas export as one valid four-page PD
   assert.equal(result.filename, "Montana - Whiteboard Export.pdf");
 });
 
+test("exact-page custom exports follow the selected file card and preserve each selected PDF page", async () => {
+  const source = await PDFDocument.create();
+  source.addPage([600, 400]); source.addPage([600, 400]);
+  const bytes = await source.save();
+  const item = file({ page: 1, x: 120, y: 80, w: 502, h: 380 });
+  const calls: number[] = [];
+  const regions = [1, 2].map((sourcePage, index) => ({ id: `linked-${sourcePage}`, name: `Plan page ${sourcePage}`,
+    x: 9000 + index * 100, y: 9000, w: 40, h: 40, order: index, pageSize: "match", orientation: "auto", quality: "high", fit: "fit",
+    sourceItemId: item.id, sourcePage }));
+  const result = await buildWhiteboardPdf(board([item], [asset(bytes)]), { regions, renderer: { ...renderer,
+    renderPdfPage: async (_bytes, page) => { calls.push(page); return png; },
+  } });
+  const expected = boardContentRect(item);
+  const output = await PDFDocument.load(result.bytes);
+  assert.deepEqual(calls, [1, 2]);
+  assert.equal(output.getPageCount(), 2);
+  assert.deepEqual((result as any).pages.map((page: any) => page.bounds), [expected, expected],
+    "linked export geometry follows the exact current card content instead of the stale drawn rectangle");
+  assert.deepEqual(output.getPages().map((page) => page.getSize()), [
+    { width: expected.w * .75, height: expected.h * .75 },
+    { width: expected.w * .75, height: expected.h * .75 },
+  ]);
+});
+
 test("custom page layout preserves aspect ratio and caps huge match pages instead of failing", async () => {
   const region = { id: "huge", name: "Huge plan", x: -50000, y: 20000, w: 80000, h: 40000,
     pageSize: "match", orientation: "auto", quality: "high", fit: "fit" };

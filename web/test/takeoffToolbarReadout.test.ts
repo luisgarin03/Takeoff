@@ -28,6 +28,17 @@ test("toolbar summary has responsive wrapping styles instead of absolute positio
   assert.match(toolbarCss, /@media \(max-width: 600px\)[\s\S]*\.takeoff-toolbar-readout/);
 });
 
+test("toolbar summary accent follows the active condition line color", () => {
+  assert.match(
+    canvasSource,
+    /className="takeoff-toolbar-readout"[\s\S]*?style=\{\{ "--takeoff-readout-accent": activeColor \}\}/,
+  );
+  assert.match(
+    toolbarCss,
+    /border-left:\s*3px solid var\(--takeoff-readout-accent, var\(--cobalt\)\)/,
+  );
+});
+
 test("current zoom is shown in the header immediately before User Guide", () => {
   const zoom = canvasSource.indexOf('className="takeoff-header-zoom"');
   const guide = canvasSource.indexOf("<WorkspaceHelp", zoom);

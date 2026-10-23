@@ -92,9 +92,7 @@ export const HL_SIZES = [["F", 8], ["M", 14], ["B", 22]];   // screen px at draw
 // Expressed in TEMPLATE shape (finish_tag/waste_pct/materials, no fill — it
 // defaults from color) so seeding and the Library run the same constructor.
 export const FLOORING_DEFAULTS = [
-  { finish_tag: "perimeterWall", color: "#5b8def", hatch: "horiz", waste_pct: 0, materials: [] },
-  { finish_tag: "wallPartition", color: "#44b678", hatch: "diag", waste_pct: 0, materials: [] },
-  { finish_tag: "exteriorWall",  color: "#df6b57", hatch: "brick", waste_pct: 0, materials: [] },
-  { finish_tag: "tile",          color: "#8b5cf6", hatch: "grid",  waste_pct: 0, materials: [] },
-  { finish_tag: "ceiling",       color: "#d6a13c", hatch: "dots",  waste_pct: 0, materials: [] },
+  { finish_tag: "Chain Link Fence", color: "#5b8def", hatch: "horiz", waste_pct: 0, materials: [] },
+  { finish_tag: "Wood Fence",       color: "#44b678", hatch: "diag",  waste_pct: 0, materials: [] },
+  { finish_tag: "Aluminum Fence",   color: "#df6b57", hatch: "brick", waste_pct: 0, materials: [] },
 ];

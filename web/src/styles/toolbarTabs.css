@@ -51,7 +51,7 @@
   max-width: 560px !important;
   padding: 7px 10px;
   border: 1px solid var(--ink-faint);
-  border-left: 3px solid var(--cobalt);
+  border-left: 3px solid var(--takeoff-readout-accent, var(--cobalt));
   border-radius: 6px;
   background: var(--paper-cream);
   color: var(--ink);

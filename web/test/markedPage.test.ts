@@ -152,6 +152,27 @@ test("long markup captions wrap without losing words and use one backing rectang
   }
 });
 
+test("text-note leader arrows are retained in marked-page PDF output", async () => {
+  const countConstructPaths = async (bytes: Uint8Array) => {
+    const pdf = await getDocument({ data: bytes.slice(), useSystemFonts: true }).promise;
+    try {
+      const list = await (await pdf.getPage(1)).getOperatorList();
+      return list.fnArray.filter((fn) => fn === OPS.constructPath).length;
+    } finally { await pdf.destroy(); }
+  };
+
+  const f = await fixture();
+  try {
+    const options = { ...f.options, shapes: [], rfis: [], markups: [{ ...markup, rfi_id: undefined }] };
+    const plain = await buildMarkedSetPdf(options);
+    const led = await buildMarkedSetPdf({ ...options, markups: [{ ...markup, rfi_id: undefined, target: [.25, .3] }] });
+    assert.ok(
+      await countConstructPaths(led.bytes) >= await countConstructPaths(plain.bytes) + 2,
+      "the exported leader contributes a line and arrowhead in addition to the text box",
+    );
+  } finally { await f.pdf.destroy(); }
+});
+
 test("page download can omit condition and quantity labels while retaining notes", async () => {
   const f = await fixture();
   try {

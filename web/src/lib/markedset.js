@@ -733,6 +733,12 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
           if (t) boxedText(t, m.at[0] * W - bw / 2, y0 - 6 / ptScale, mcol, bold, mw);
         }
       } else if (m.type === "text" && m.at) {
+        if (m.target) {
+          line(m.at[0] * W, m.at[1] * H, m.target[0] * W, m.target[1] * H, mcol, 0.9 * mw, 0.9, mdash);
+          const [pax, pay] = toPage(m.at[0] * W, m.at[1] * H);
+          const [ptx, pty] = toPage(m.target[0] * W, m.target[1] * H);
+          pg.drawSvgPath(arrowheadPath(pax, -pay, ptx, -pty, 5), { x: 0, y: 0, color: mcol, opacity: 0.9 });
+        }
         boxedText(lbl(m.text), m.at[0] * W, m.at[1] * H, mcol, bold, mw);
       }
     }

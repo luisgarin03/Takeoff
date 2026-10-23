@@ -334,7 +334,7 @@ function exportSnapshot(board, allowEmpty = false) {
  * Browser-only decoding/text layout is injected so geometry and PDF boxes can
  * also be tested without a browser. No adapter receives the live board object.
  * @param {object} board
- * @param {{projectName?: string, boardName?: string, renderer?: BoardPdfRenderer, signal?: AbortSignal, region?: BoardRect, regions?: Array<BoardRect & {name?:string,pageSize?:string,orientation?:string,quality?:string,fit?:string}>, pageMode?: "single" | "pages", quality?: "compact" | "balanced" | "hd", onProgress?: (value: {completed:number,total:number,name:string}) => void}} options
+ * @param {{projectName?: string, boardName?: string, renderer?: BoardPdfRenderer, signal?: AbortSignal, region?: BoardRect, regions?: Array<BoardRect & {name?:string,pageSize?:string,orientation?:string,quality?:string,fit?:string,sourceItemId?:string,sourcePage?:number}>, pageMode?: "single" | "pages", quality?: "compact" | "balanced" | "hd", onProgress?: (value: {completed:number,total:number,name:string}) => void}} options
  */
 export async function buildWhiteboardPdf(board, { projectName, boardName = "Whiteboard", renderer, signal, region, regions, pageMode = "single", quality = "balanced", onProgress,
   _outputPage = null, _skipTotalBudget = false, _snapshot = null } = {}) {
@@ -355,14 +355,22 @@ export async function buildWhiteboardPdf(board, { projectName, boardName = "Whit
         throw new Error(`Page ${index + 1} has an invalid export area.`);
       }
       try {
-        const result = await buildWhiteboardPdf(board, { projectName, boardName: area.name || `Page ${index + 1}`, renderer, signal,
-          region: area, quality: qualityMap[area.quality] || quality, _outputPage: area, _skipTotalBudget: true, _snapshot: customSnapshot });
+        let outputArea = area, pageSnapshot = customSnapshot;
+        if (area.sourceItemId) {
+          const sourceItem = customSnapshot.items.find((item) => item.id === area.sourceItemId && item.kind === "file");
+          if (!sourceItem) throw new Error("The selected Whiteboard page is no longer available. Delete this PDF page and select it again.");
+          outputArea = { ...area, ...boardContentRect(sourceItem) };
+          pageSnapshot = { ...customSnapshot, items: customSnapshot.items.map((item) => item.id === sourceItem.id
+            ? { ...item, page: area.sourcePage || item.page } : item) };
+        }
+        const result = await buildWhiteboardPdf(pageSnapshot, { projectName, boardName: area.name || `Page ${index + 1}`, renderer, signal,
+          region: outputArea, quality: qualityMap[area.quality] || quality, _outputPage: outputArea, _skipTotalBudget: true, _snapshot: pageSnapshot });
         signal?.throwIfAborted();
         const embedded = (await combined.embedPdf(result.bytes, [0]))[0];
         const page = combined.addPage([embedded.width, embedded.height]);
         for (const setBox of ["setMediaBox", "setCropBox", "setTrimBox", "setBleedBox", "setArtBox"]) page[setBox](0, 0, embedded.width, embedded.height);
         page.drawPage(embedded, { x: 0, y: 0, width: embedded.width, height: embedded.height });
-        pages.push({ id: area.id, name: area.name || `Area ${index + 1}`, bounds: { x: area.x, y: area.y, w: area.w, h: area.h },
+        pages.push({ id: area.id, name: area.name || `Area ${index + 1}`, bounds: { x: outputArea.x, y: outputArea.y, w: outputArea.w, h: outputArea.h },
           width: embedded.width, height: embedded.height });
         onProgress?.({ completed: index + 1, total: regions.length, name: pages.at(-1).name });
         await new Promise((resolve) => setTimeout(resolve, 0));

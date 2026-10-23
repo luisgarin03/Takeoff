@@ -123,11 +123,13 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
             const dis = !!it.disabled;
             const checkable = "checked" in it;
             const fg = it.danger ? "var(--c-danger)" : "var(--ink)";
+            const depth = Math.max(0, Number(it.depth) || 0);
             const action = (
               <button key={it.id || i} type="button" disabled={dis} title={it.title || ""}
+                aria-expanded={it.disclosure ? it.disclosure === "expanded" : undefined}
                 onClick={() => { if (!dis) { if (!it.stayOpen) setOpen(false); it.onSelect?.(); } }}
                 style={{
-                  display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 12px",
+                  display: "flex", alignItems: "center", gap: 10, width: "100%", padding: `8px 12px 8px ${12 + depth * 18}px`,
                   border: "none", textAlign: "left", cursor: dis ? "default" : "pointer",
                   background: it.active ? "var(--paper-cream)" : "transparent",
                   borderLeft: it.active ? "2px solid var(--cobalt)" : "2px solid transparent",
@@ -136,9 +138,10 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
                 }}
                 onMouseEnter={(e) => { if (!dis && !it.active) e.currentTarget.style.background = "var(--paper-shadow)"; if (!dis) it.onHover?.(true); }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = it.active ? "var(--paper-cream)" : "transparent"; if (!dis) it.onHover?.(false); }}>
+                {it.disclosure && <span style={{ display: "inline-flex", width: 13, justifyContent: "center", color: "var(--ink-muted)" }}><Icon name={it.disclosure === "expanded" ? "chevronDown" : "chevronRight"} size={12} /></span>}
                 {checkable && <span style={{ display: "inline-flex", width: 15, justifyContent: "center", color: "var(--c-positive)", visibility: it.checked ? "visible" : "hidden" }}><Icon name="check" size={14} /></span>}
                 {it.icon && <span style={{ display: "inline-flex", width: 17, justifyContent: "center", color: it.tint || fg }}><Icon name={it.icon} size={16} /></span>}
-                <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 13, fontWeight: it.active ? 600 : 400, ...(it.accessory ? { minWidth: 0, overflowWrap: "anywhere" } : {}) }}>{it.label}</span>
+                <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 13, fontWeight: it.header || it.active ? 600 : 400, ...(it.accessory ? { minWidth: 0, overflowWrap: "anywhere" } : {}) }}>{it.label}</span>
                 {it.shortcut && <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-muted)" }}>{it.shortcut}</span>}
               </button>
             );

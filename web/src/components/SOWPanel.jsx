@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../brand/icons.jsx";
-import brandBanner from "../assets/beitzell-estimating-worksheet-stamp.png";
+import brandLogo from "../assets/beitzell-fence-company-logo.png";
 import {
   addWhiteboardSowEntry,
   addWhiteboardSowTitle,
@@ -104,7 +104,7 @@ const SOWPanel = memo(function SOWPanel({ board, sow, readOnly = false, onCommit
   const entryRefs = useRef(new Map());
   const brandingInput = useRef(null);
   const brandingAsset = sow.brandAssetId ? board.assets.find((asset) => asset.id === sow.brandAssetId && asset.type.startsWith("image/") && !asset.missing) : null;
-  const brandingSrc = brandingAsset ? `data:${brandingAsset.type};base64,${brandingAsset.data}` : brandBanner;
+  const brandingSrc = brandingAsset ? `data:${brandingAsset.type};base64,${brandingAsset.data}` : brandLogo;
 
   useEffect(() => { setRenameDraft(activeTab.name); }, [activeTab.id, activeTab.name]);
   useEffect(() => {
