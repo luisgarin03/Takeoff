@@ -61,3 +61,12 @@ test("loader styles delay the visual and include motion and high-contrast fallba
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.long-task-loader__bar[\s\S]*?animation:\s*none/);
   assert.match(css, /@media \(forced-colors:\s*active\)[\s\S]*?CanvasText/);
 });
+
+test("Whiteboard PDF export cancel text remains readable in the light theme", () => {
+  const css = readFileSync(new URL("../src/styles/whiteboard.css", import.meta.url), "utf8");
+  const rule = css.match(/\.wb-export-cancel\s*\{([^}]*)\}/)?.[1] || "";
+
+  assert.match(rule, /background:\s*#20242b\s*!important/);
+  assert.match(rule, /color:\s*#fff\s*!important/);
+  assert.match(rule, /-webkit-text-fill-color:\s*#fff\s*!important/);
+});

@@ -17,6 +17,7 @@
 - Matched the Whiteboard top toolbar shell to the estimating toolbar with a compact 58px desktop height, a subtle workspace-colored border, and no dark outline, while leaving every toolbar control unchanged.
 - Unified the Whiteboard PDF detail, item count, save-state, and zoom labels with the Takeoff header's 11px semibold monospaced status treatment.
 - Replaced the selected-object × in the Whiteboard toolbar with a red **Remove** button positioned at the top-right of the selected file, note, arrow, or rectangle. The button keeps a fixed readable screen size as the board zoom changes. Removal retains the existing read-only guard, keyboard shortcut, save path, and undo/redo behavior.
+- Kept the Whiteboard PDF export cancel label white against its dark progress background in the light theme, including Chrome's text-fill styling.
 
 ## Unreleased — Sample plan loading
 

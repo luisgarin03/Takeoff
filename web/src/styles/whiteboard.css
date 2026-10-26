@@ -287,7 +287,7 @@
 .wb-item.is-export-page-picked::after { border-color: #1f6b4a; background: #1f6b4a18; }
 .wb-export-page-target-label { position: absolute; z-index: 16; left: 50%; top: 50%; padding: 7px 10px; border-radius: 5px; background: #2563eb; color: #fff; font: 700 12px var(--f-body); white-space: nowrap; pointer-events: none; transform: translate(-50%, -50%); box-shadow: 0 3px 10px #0006; }
 .wb-item.is-export-page-picked .wb-export-page-target-label { background: #1f6b4a; }
-.wb-export-cancel { position: fixed; z-index: 3900; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); border-color: #ffffff70 !important; background: #20242b !important; color: #fff !important; box-shadow: 0 5px 20px #0008; }
+.wb-export-cancel { position: fixed; z-index: 3900; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); border-color: #ffffff70 !important; background: #20242b !important; color: #fff !important; -webkit-text-fill-color: #fff !important; box-shadow: 0 5px 20px #0008; }
 .wb-pdf-preview { position: fixed; z-index: 4000; inset: 28px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--ink-faint); border-radius: 9px; background: var(--paper-bright); box-shadow: 0 16px 60px #000b; }
 .wb-pdf-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 7px 12px; border-bottom: 1px solid var(--ink-faint); }
 .wb-pdf-preview > header button { min-width: 30px; min-height: 30px; padding: 3px; }
