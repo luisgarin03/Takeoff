@@ -912,11 +912,6 @@ export default function TakeoffCanvas() {
 
   const containerRef = useRef(null);
   const stageRef = useRef(null);
-  // Editor-only SVG controls live inside the CSS-scaled stage, but must remain
-  // the same physical size on screen. applyTf updates their inverse scale in
-  // the very same frame as the stage transform so they never pulse during the
-  // throttled React zoom mirror.
-  const fixedScreenControlRefs = useRef(new Set());
   const panelCanvasRefs = useRef(new Map()); // sheetKey → <canvas>
   const panelTextLayerRefs = useRef(new Map()); // sheetKey → selectable PDF.js text layer
   const panelTextLayerTasksRef = useRef(new Map()); // sheetKey → TextLayer render task
@@ -1228,27 +1223,10 @@ export default function TakeoffCanvas() {
   };
 
   // ── transform: tfRef is source of truth; write straight to the DOM ─────────
-  const registerFixedScreenControl = useCallback((node) => {
-    if (node) fixedScreenControlRefs.current.add(node);
-  }, []);
-  const syncFixedScreenControls = useCallback((scale) => {
-    const inverseScale = 1 / Math.max(Number(scale) || 1, 0.0001);
-    for (const node of fixedScreenControlRefs.current) {
-      if (!node.isConnected) {
-        fixedScreenControlRefs.current.delete(node);
-        continue;
-      }
-      const anchorX = Number(node.dataset.stageFixedX);
-      const anchorY = Number(node.dataset.stageFixedY);
-      if (!Number.isFinite(anchorX) || !Number.isFinite(anchorY)) continue;
-      node.setAttribute("transform", `translate(${anchorX} ${anchorY}) scale(${inverseScale})`);
-    }
-  }, []);
   const applyTf = useCallback(() => {
     const { x, y, scale } = tfRef.current;
     if (stageRef.current) stageRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
-    syncFixedScreenControls(scale);
-  }, [syncFixedScreenControls]);
+  }, []);
   // The preview and the base canvas occupy identical stage coordinates. Changing
   // only their visibility leaves all PDF, SVG, pan, and measurement coordinates
   // untouched. A missing/stale preview always leaves the base canvas visible.
@@ -8948,23 +8926,22 @@ export default function TakeoffCanvas() {
                           </g>
                         );
                       };
-                      // Text notes expose a small, screen-sized leader button at the
-                      // box corner. It is editor chrome only: the saved `target`
-                      // renders below, while PDF export draws the same line/arrowhead.
+                      // Text notes expose a compact leader button at the box corner.
+                      // It shares the note's stage coordinates, so the note and button
+                      // remain proportional while zooming. It is editor chrome only:
+                      // the saved `target` renders below, while PDF export draws the
+                      // same line/arrowhead.
                       const textLeaderButton = (markup, baselineX, baselineY) => {
                         const layout = canvasMarkupTextLayout(markup.text || " ", pixelsPerPoint);
                         const boxX = baselineX - layout.padX;
                         const boxY = baselineY - layout.baselines[0];
                         const anchorX = boxX + layout.width;
                         const anchorY = boxY;
-                        const inverseScale = 1 / Math.max(z, 0.0001);
                         const active = textLeaderMarkupId === markup.id;
                         const ink = active ? "#fff" : mk;
                         const arm = () => armTextLeader(markup.id);
                         return (
-                          <g ref={registerFixedScreenControl}
-                            data-stage-fixed-x={anchorX} data-stage-fixed-y={anchorY}
-                            transform={`translate(${anchorX} ${anchorY}) scale(${inverseScale})`}
+                          <g transform={`translate(${anchorX} ${anchorY})`}
                             role="button" aria-label={markup.target ? "Repoint leader arrow for text box" : "Add leader arrow for text box"}
                             aria-pressed={active} tabIndex={0}
                             onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
@@ -8981,17 +8958,14 @@ export default function TakeoffCanvas() {
                           </g>
                         );
                       };
-                      // Selected leaders get a screen-sized remove control beside the
+                      // Selected leaders get a proportional remove control beside the
                       // endpoint. It deletes only `target`, leaving the text note in
                       // place; the shared markup command history makes this undoable.
                       const textLeaderRemoveButton = (markup, targetX, targetY) => {
                         if (!selM || !markup.target) return null;
-                        const inverseScale = 1 / Math.max(z, 0.0001);
                         const remove = () => removeTextLeader(markup.id);
                         return (
-                          <g ref={registerFixedScreenControl}
-                            data-stage-fixed-x={targetX} data-stage-fixed-y={targetY}
-                            transform={`translate(${targetX} ${targetY}) scale(${inverseScale})`}
+                          <g transform={`translate(${targetX} ${targetY})`}
                             role="button" aria-label="Remove leader arrow from text box" tabIndex={0}
                             onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                             onClick={(event) => { event.preventDefault(); event.stopPropagation(); remove(); }}

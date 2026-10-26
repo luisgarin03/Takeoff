@@ -2,7 +2,7 @@
 
 ## Unreleased — Takeoff text-note controls
 
-- Kept the Text-note leader-arrow button and selected-arrow remove control at a fixed physical screen size throughout Takeoff pan/zoom gestures, without changing the note, leader geometry, export, or undo behavior.
+- Kept the Text-note leader-arrow button and selected-arrow remove control proportional to their text box while zooming, so the controls no longer overwhelm a small note at overview zoom. Note geometry, export, and undo behavior are unchanged.
 
 ## Unreleased — Whiteboard toolbar frame
 
