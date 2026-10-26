@@ -136,7 +136,7 @@
 :root body .wb .wb-toolbar-reveal svg { color: #fff !important; stroke: #fff !important; }
 /* Whiteboard chrome follows the pearl light theme. */
 :root:not([data-theme="dark"]) .wb-toolbar-overlay > .wb-header,
-:root:not([data-theme="dark"]) .wb-toolbar-overlay > .wb-tools { background: var(--workspace-surface); color: #000; border-color: #85858d; }
+:root:not([data-theme="dark"]) .wb-toolbar-overlay > .wb-tools { background: var(--workspace-surface); color: #000; border-color: var(--workspace-border); }
 :root:not([data-theme="dark"]) .wb-toolbar-overlay .wb-title,
 :root:not([data-theme="dark"]) .wb-toolbar-overlay .wb-title span,
 :root:not([data-theme="dark"]) .wb-toolbar-overlay .wb-resolution,

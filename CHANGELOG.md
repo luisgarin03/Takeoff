@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Whiteboard toolbar frame
+
+- Matched the Whiteboard top toolbar shell to the estimating toolbar with a compact 58px desktop height, a subtle workspace-colored border, and no dark outline, while leaving every toolbar control unchanged.
+
 ## Unreleased — Sample plan loading
 
 - Wait for sample PDF import to finish and always release the loading button on success, blocked imports, or errors. Show actionable download/import errors and bound sample downloads to 30 seconds.
