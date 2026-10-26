@@ -113,7 +113,7 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
         {!rail && <span style={{ display: "inline-flex", opacity: 0.7 }}><Icon name="chevronDown" size={11} /></span>}
       </button>
       {open && renderMenu(
-        <div ref={menuRef} className="tool-menu-popover" style={{
+        <div ref={menuRef} className="tool-menu-popover" data-portaled={portaled || undefined} style={{
           position: "absolute", top: "calc(100% + 4px)", [flip ? "right" : "left"]: 0, zIndex: 90,
           minWidth: MENU_W, background: "var(--paper-bright)", border: "1px solid var(--ink)",
           boxShadow: "var(--shadow-2)", padding: "4px 0",

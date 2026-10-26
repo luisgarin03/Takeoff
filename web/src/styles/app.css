@@ -2041,3 +2041,4 @@ select {
 
 /* Portaled hatch menus must clear the conditions drawer; the generic menu rule uses !important. */
 .tool-menu-popover.condition-hatch-popover { z-index: 1000 !important; }
+.tool-menu-popover[data-portaled="true"] { z-index: 1000 !important; }

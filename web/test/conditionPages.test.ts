@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { conditionPageKeys } from "../src/lib/conditionPages.js";
+
+const toolMenuSource = readFileSync(new URL("../src/components/ToolMenu.jsx", import.meta.url), "utf8");
+const appCss = readFileSync(new URL("../src/styles/app.css", import.meta.url), "utf8");
 
 test("condition pages are unique and follow loaded PDF and page order", () => {
   const pages = conditionPageKeys([
@@ -28,4 +32,9 @@ test("condition pages ignore incomplete shape references", () => {
 
   assert.deepEqual(pages.get("chain"), ["Civil.pdf"]);
   assert.equal(pages.size, 1);
+});
+
+test("portaled condition menus render above the conditions drawer", () => {
+  assert.match(toolMenuSource, /data-portaled=\{portaled \|\| undefined\}/);
+  assert.match(appCss, /\.tool-menu-popover\[data-portaled="true"\]\s*\{\s*z-index:\s*1000\s*!important;/);
 });
