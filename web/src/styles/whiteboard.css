@@ -390,17 +390,30 @@ path.wb-drawing-hit { fill: transparent; pointer-events: all; }
 .wb .wb-export-panel { top: calc(var(--wb-toolbar-height, 150px) + 6px); max-height: calc(100% - var(--wb-toolbar-height, 150px) - 18px); }
 .wb-toolbar-overlay[hidden] { display: none; }
 .wb-header-utilities { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.wb-header-utilities .wb-status { white-space: nowrap; margin: 0 4px 0 0; font: 12px var(--f-mono); }
+.wb-resolution,
+.wb-resolution output,
+.wb-header-item-count,
+.wb-header-utilities .wb-status,
+.wb-header-zoom {
+  color: var(--ink-muted);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.wb-header-utilities .wb-status { white-space: nowrap; margin: 0 4px 0 0; }
 .wb .wb-header-utilities button { border: 0; background: transparent; box-shadow: none; min-width: 28px; min-height: 30px; padding: 5px; color: var(--ink-muted); }
 .wb .wb-header-utilities button:hover:not(:disabled) { background: transparent; color: var(--ink); }
-.wb-header-zoom { color: var(--ink-muted); font: 600 11px var(--f-mono); white-space: nowrap; margin-left: 6px; }
+.wb-header-zoom { white-space: nowrap; margin-left: 6px; }
 .wb .wb-toolbar-reveal { position: absolute; z-index: 30; top: 5px; left: 50%; transform: translateX(-50%); }
 .wb:has(.wb-toolbar-overlay[hidden]) { --wb-toolbar-height: 0px !important; }
 .wb-primary-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .wb-primary-tools > [role="group"] { display: flex; align-items: center; gap: 4px; }
 .wb-toolbar-overlay:not(:has(.wb-tools button)) .wb-header { border-radius: 10px; }
 .wb-toolbar-overlay > .wb-tools:not(:has(button)) { display: none; }
-.wb-header-item-count { color: var(--ink-muted); font: 12px var(--f-mono); white-space: nowrap; margin-right: 10px; }
+.wb-header-item-count { white-space: nowrap; margin-right: 10px; }
 .wb-bottom > div { margin-left: auto; }
 .wb-zoom-controls { position: absolute; right: 14px; bottom: max(14px, env(safe-area-inset-bottom)); z-index: 20; display: flex; flex-direction: column; gap: 6px; }
 .wb .wb-zoom-controls button { width: 40px; height: 40px; padding: 0; border-radius: 9px; font: 700 20px var(--f-mono); }

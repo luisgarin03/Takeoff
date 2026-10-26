@@ -19,3 +19,12 @@ test("Whiteboard top toolbar uses the shared compact frame without styling its c
     /\.wb-toolbar-overlay > \.wb-tools \{ background: var\(--workspace-surface\); color: #000; border-color: var\(--workspace-border\); \}/,
   );
 });
+
+test("Whiteboard metadata uses one Takeoff-style compact mono treatment", () => {
+  assert.match(
+    whiteboardCss,
+    /\.wb-resolution,\s*\.wb-resolution output,\s*\.wb-header-item-count,\s*\.wb-header-utilities \.wb-status,\s*\.wb-header-zoom \{[^}]*font-family: var\(--f-mono\);[^}]*font-size: 11px;[^}]*font-weight: 600;[^}]*line-height: 1;/,
+  );
+  assert.doesNotMatch(whiteboardCss, /\.wb-header-utilities \.wb-status \{[^}]*font: 12px/);
+  assert.doesNotMatch(whiteboardCss, /\.wb-header-item-count \{[^}]*font: 12px/);
+});
