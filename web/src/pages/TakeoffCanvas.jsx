@@ -7833,7 +7833,9 @@ export default function TakeoffCanvas() {
       {projectSavePrompt !== null && <SaveProjectDialog filename={projectSavePrompt}
         canChooseLocation={typeof window.showSaveFilePicker === "function"} busy={!!projectFileBusy} error={projectFileError}
         required={projectSaveRequired}
-        onSave={(name) => confirmSaveProjectFile(name, projectSaveAs, projectSaveCompact)} onClose={() => { if (!projectSaveRequired && !projectFileLock.current) { setProjectSavePrompt(null); setProjectFileError(""); setProjectSaveCompact(false); } }} />}
+        onSave={(name) => confirmSaveProjectFile(name, projectSaveAs, projectSaveCompact)}
+        onSaveLater={() => { if (!projectFileLock.current) { setProjectSavePrompt(null); setProjectSaveRequired(false); setProjectSaveAs(false); setProjectSaveCompact(false); setProjectFileError(""); setCommitMsg("Plans imported. Project save deferred; your work remains available in browser recovery storage."); } }}
+        onClose={() => { if (!projectSaveRequired && !projectFileLock.current) { setProjectSavePrompt(null); setProjectFileError(""); setProjectSaveCompact(false); } }} />}
       {projectSavePrompt === null && (projectFileBusy || projectFileError || projectFilePrompt) && (
         <div role="dialog" aria-modal="true" aria-label="Project file" onDrop={(e) => e.stopPropagation()}
           style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", padding: 16 }}>

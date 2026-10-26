@@ -5,11 +5,13 @@ import test from "node:test";
 const canvas = readFileSync(new URL("../src/pages/TakeoffCanvas.jsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const dialog = readFileSync(new URL("../src/components/SaveProjectDialog.jsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
-test("a named local project requires a destination after its first plan import", () => {
+test("a named local project offers a destination or an explicit save-later path after plan import", () => {
   assert.match(canvas, /if \(!cloudWorkspace && projectName\.trim\(\) && !destination\)[\s\S]{0,400}setProjectSaveRequired\(true\)[\s\S]{0,250}setProjectSavePrompt\(projectFilename\(projectName\)\)/);
   assert.match(canvas, /<SaveProjectDialog[\s\S]{0,300}required=\{projectSaveRequired\}/);
-  assert.match(dialog, /required && <p[\s\S]{0,300}keep that file updated automatically/);
+  assert.match(dialog, /required && <p[\s\S]{0,300}save it later and continue working[\s\S]{0,200}browser recovery storage/);
   assert.match(dialog, /\{!required && <button[\s\S]{0,180}>Cancel<\/button>\}/);
+  assert.match(dialog, /\{required && onSaveLater && <button[\s\S]{0,180}>Save later<\/button>\}/);
+  assert.match(canvas, /onSaveLater=\{\(\) => \{[\s\S]{0,200}setProjectSavePrompt\(null\)[\s\S]{0,200}setProjectSaveRequired\(false\)/);
 });
 
 test("fast browser recovery saves schedule a coalesced portable-file autosave", () => {

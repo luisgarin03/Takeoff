@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../brand/icons.jsx";
 import LongTaskLoader from "./LongTaskLoader.jsx";
 
-export default function SaveProjectDialog({ filename, canChooseLocation, busy, error, required = false, onSave, onClose }) {
+export default function SaveProjectDialog({ filename, canChooseLocation, busy, error, required = false, onSave, onSaveLater, onClose }) {
   const [name, setName] = useState(filename);
   const input = useRef(null), root = useRef(null);
   const callbacks = useRef({ busy, onClose });
@@ -34,7 +34,7 @@ export default function SaveProjectDialog({ filename, canChooseLocation, busy, e
     <form className="panel" onSubmit={(e) => { e.preventDefault(); if (!busy && name.trim()) onSave(name); }}
       style={{ background: "var(--paper-bright)", color: "var(--ink)", padding: 24, width: "100%", maxWidth: 420, boxSizing: "border-box", maxHeight: "100%", overflowY: "auto", borderRadius: 8 }}>
       <h2 id="save-project-title" style={{ margin: "0 0 20px", fontSize: 18 }}>Save project</h2>
-      {required && <p style={{ marginTop: -8, color: "var(--ink-muted)", lineHeight: 1.45 }}>Your plans are imported. Choose where to save this project now; OpenTakeoff will keep that file updated automatically while you work.</p>}
+      {required && <p style={{ marginTop: -8, color: "var(--ink-muted)", lineHeight: 1.45 }}>Your plans are imported. Choose where to save this project now, or save it later and continue working. OpenTakeoff keeps your work in browser recovery storage in the meantime.</p>}
       <label htmlFor="save-project-name" style={{ display: "block", marginBottom: 6 }}>File name</label>
       <input ref={input} id="save-project-name" value={name} onChange={(e) => setName(e.target.value)} required readOnly={busy}
         style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px" }} />
@@ -46,6 +46,7 @@ export default function SaveProjectDialog({ filename, canChooseLocation, busy, e
       {error && <p role="alert" style={{ color: "var(--c-danger)", overflowWrap: "anywhere" }}>{error}</p>}
       <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 8, marginTop: 20 }}>
         {!required && <button className="btn-ghost" type="button" disabled={busy} onClick={onClose}>Cancel</button>}
+        {required && onSaveLater && <button className="btn-ghost" type="button" disabled={busy} onClick={onSaveLater}>Save later</button>}
         <button className="btn-primary" type="submit" disabled={busy || !name.trim()} style={{ display: "inline-flex", alignItems: "center", gap: 6, letterSpacing: 0 }}>
           <Icon name="document" size={15} />{canChooseLocation ? "Choose location..." : "Download"}
         </button>
