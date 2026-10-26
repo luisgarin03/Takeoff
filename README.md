@@ -139,6 +139,8 @@ App Store review/update channel.
 
 The **Takeoff** tab also contains the live condition summary. It shows the armed condition, scale/drawing guidance, current condition totals, visible shape count, and zoom without covering the plan canvas. The card wraps with the other Takeoff controls on narrower screens.
 
+Starting a scale-dependent measurement on an unscaled sheet opens a large centered **Set the scale first** dialog instead of relying on the small status line. Its scale dropdown offers the detected plan scale, every standard scale, and **Calibrate two points…**; the guidance reminds estimators to compare the choice with the printed plan dimension. Count and markup tools remain available without a scale because they do not calculate real-world area or length.
+
 Experimental Takeoff features stay in a hidden floating panel so the everyday toolbar and canvas rail remain balanced for deployment. Quickly click or tap the unchanged Beitzell Estimating logo three times to toggle **Experimental tools**. The panel contains the working Report, Zone, AI, Revisions, Render settings, and Command line controls; close it with × or Escape.
 
 Theme panel: choose any interface accent color with the Accent color picker. The choice previews immediately, saves in this browser, and applies to buttons, highlights, focus rings, and sliders in light and dark mode. Reset accent restores the default blue. Logo, cursor, and takeoff condition colors remain separate.

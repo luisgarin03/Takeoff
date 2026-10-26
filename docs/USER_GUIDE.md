@@ -292,7 +292,7 @@ Scale is the foundation. Every square foot on your report is pixels × scale², 
 
 ### What refuses to work without a scale
 
-Until a sheet has a scale, the Scale chip reads **Set scale…** in red, the live readout says **Set scale first**, and committing a measurement refuses with *"Set the scale for 〈sheet〉 first."* One-Click won't propose, and pasting a shape onto an unscaled sheet refuses too (paste re-prices on the target sheet). The one exception is **Count** — each (EA) quantities don't depend on scale, so counting works everywhere.
+Until a sheet has a scale, the Scale chip reads **Set scale…** in red. Starting a scale-dependent measurement opens a large centered **Set the scale first** dialog before the first point is placed. Use its scale dropdown to accept the detected plan scale, manually choose a standard scale, or start **Calibrate two points…**. Always compare the selected scale with the note printed on the plan; for the most reliable setup, calibrate by clicking both ends of a printed dimension and entering the measurement shown. **Not now** closes the dialog without changing tools. One-Click won't propose, and pasting a shape onto an unscaled sheet opens the same dialog because paste re-prices on the target sheet. **Count** and all markup tools continue to work without a scale because they do not depend on real-world area or length.
 
 This is deliberate. A takeoff tool that silently measures in pixels produces confident-looking garbage; OpenTakeoff would rather stop you for five seconds.
 

@@ -450,6 +450,7 @@ export default function TakeoffCanvas() {
   const [check, setCheck] = useState([]);             // Check tool: 0–2 stage-px points along a printed dimension
   const [checkStated, setCheckStated] = useState(""); // what the drawing says that dimension is
   const [scaleGuide, setScaleGuide] = useState(null); // ephemeral calibrated ruler {key, feet, px, label, at:[x,y]} — never persisted (buildPayload doesn't read it)
+  const [scaleRequiredSheet, setScaleRequiredSheet] = useState(null); // centered first-use scale gate; stores the sheet the blocked measurement targeted
   const scaleGuideTimerRef = useRef(0);
   const scaleGuidePreviewRef = useRef(false); // true while the visible guide is a hover PREVIEW of an unaccepted scale — the preview must die with the hover/menu; an accepted bar stays
   // One-slot revert stash: the scale a quantity-changing rescale replaced
@@ -3287,6 +3288,19 @@ export default function TakeoffCanvas() {
   }, [projectFileBusy, projectFileError, projectFilePrompt, projectSavePrompt, onMenuDepth]);
 
   useEffect(() => {
+    if (!scaleRequiredSheet) return;
+    const closeOnEscape = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setScaleRequiredSheet(null);
+    };
+    onMenuDepth(true);
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => { window.removeEventListener("keydown", closeOnEscape, true); onMenuDepth(false); };
+  }, [scaleRequiredSheet, onMenuDepth]);
+
+  useEffect(() => {
     if (!pdfPasswordPrompt && !pdfImportReport && !pdfOpeningSettingsOpen && !findOcrPrompt) return;
     onMenuDepth(true);
     return () => onMenuDepth(false);
@@ -3848,6 +3862,14 @@ export default function TakeoffCanvas() {
         : toImage(e.clientX, e.clientY);
     const fp = panelAt(p[0]);
     if (fp.key !== focusKey) setFocusKey(fp.key);
+    // Real-world area/length tools cannot place an honest first point until
+    // this sheet has a scale. Stop at the first click and surface the centered
+    // picker instead of letting a whole trace end in a tiny status message.
+    // Count and every markup tool remain available because neither needs scale.
+    if (["oneclick", "area", "rect", "linear", "curve", "surface", "deduct", "deduct-rect"].includes(tool) && !uppFor(fp.key)) {
+      promptForScale(fp.key);
+      return;
+    }
     if (tool === "highlighter" || tool === "draw") {
       // freehand ink uses raw coords (no snap/angle): highlighter is translucent,
       // Draw is opaque. Press-drag pan is intentionally unavailable while either
@@ -4636,6 +4658,12 @@ export default function TakeoffCanvas() {
     clearTimeout(scaleGuideTimerRef.current);
     scaleGuideTimerRef.current = setTimeout(() => setScaleGuide(null), 8000);
   }
+  function promptForScale(key) {
+    if (!key) return;
+    setFocusKey(key);
+    setScaleRequiredSheet(key);
+    setCommitMsg("");
+  }
   useEffect(() => { setScaleGuide(null); scaleGuidePreviewRef.current = false; }, [tool, groupSig]);
   useEffect(() => () => clearTimeout(scaleGuideTimerRef.current), []);
   // Kill a hover-preview guide (and only a preview — an accepted bar stays).
@@ -4741,7 +4769,7 @@ export default function TakeoffCanvas() {
     if (points.length < 3) return;
     const tp = panelAt(points[0][0]);
     const upp = uppFor(tp.key);
-    if (!upp) { setCommitMsg(`Set the scale for ${labelFor(tp)} first.`); return; }
+    if (!upp) { promptForScale(tp.key); return; }
     if (!activeCond) { setCommitMsg("Pick or add a condition first."); return; }
     const met = closedMetrics(points);
     // id + created_at are minted by the add command — the ONE creation gate
@@ -4758,7 +4786,7 @@ export default function TakeoffCanvas() {
     if (points.length < 2) return;
     const tp = panelAt(points[0][0]);
     const upp = uppFor(tp.key);
-    if (!upp) { setCommitMsg(`Set the scale for ${labelFor(tp)} first.`); return; }
+    if (!upp) { promptForScale(tp.key); return; }
     if (!activeCond) { setCommitMsg("Pick or add a condition first."); return; }
     // curved: verts stay the clicked CONTROL points (drag one → re-smooths);
     // length always comes from the flattened spline
@@ -4779,7 +4807,7 @@ export default function TakeoffCanvas() {
     if (points.length < 2) return;
     const tp = panelAt(points[0][0]);
     const upp = uppFor(tp.key);
-    if (!upp) { setCommitMsg(`Set the scale for ${labelFor(tp)} first.`); return; }
+    if (!upp) { promptForScale(tp.key); return; }
     if (!activeCond) { setCommitMsg("Pick or add a condition first."); return; }
     const h = Number(aCond?.height_ft) || 0;
     if (!(h > 0)) { setCommitMsg(`Set a height for ${aCond?.finish_tag || "this condition"} (H in the condition editor) — Surface Area = traced LF × height.`); return; }
@@ -4977,7 +5005,11 @@ export default function TakeoffCanvas() {
     const say = (message) => { setCommitMsg(message); return { ok: false, message }; };
     const tp = panelAt(p[0]);
     const upp = uppFor(tp.key);
-    if (!upp) return say(`Set the scale for ${labelFor(tp)} first.`);
+    if (!upp) {
+      const message = `Set the scale for ${labelFor(tp)} first.`;
+      if (!direct) { promptForScale(tp.key); return { ok: false, message }; }
+      return say(message);
+    }
     if (!(direct ? direct.conditionId : activeCond)) return say("Pick or add a condition first.");
     // a click may EXTEND a same-sheet proposal; voice deixis commits whole and
     // must never swallow a selection the human is still reviewing — ANY pending
@@ -5278,7 +5310,7 @@ export default function TakeoffCanvas() {
     if (!clipRef.current.length) return;
     const tp = lastPtrRef.current ? panelAt(toImage(lastPtrRef.current[0], lastPtrRef.current[1])[0]) : focusPanel;
     const needsScale = clipRef.current.some((c) => c.measure_role !== "count");
-    if (needsScale && !uppFor(tp.key)) { setCommitMsg(`Set the scale for ${labelFor(tp)} first — paste recomputes SF/LF there.`); return; }
+    if (needsScale && !uppFor(tp.key)) { promptForScale(tp.key); return; }
     let cross = false;
     const made = clipRef.current.map((c) => {
       const same = c.from === tp.key;
@@ -7628,6 +7660,12 @@ export default function TakeoffCanvas() {
   scaleItems.push({ id: "calibrate", icon: "calibrate", label: "Calibrate two points…", title: "Calibrate — click two points of a known dimension", active: tool === "calibrate", onSelect: () => setTool("calibrate") });
   scaleItems.push({ id: "check", icon: "check", label: "Check a dimension…", shortcut: "K", title: "Check a dimension (K) — click both ends of a printed dimension string; compares the measured length against what the drawing says", active: tool === "check", onSelect: () => setTool("check") });
   scaleItems.push({ note: "Remembered per sheet." });
+  const scalePromptItems = scaleItems.map((item) => (
+    item && typeof item === "object" && item.onSelect
+      ? { ...item, onSelect: () => { item.onSelect(); setScaleRequiredSheet(null); } }
+      : item
+  ));
+  const scaleRequiredPanel = scaleRequiredSheet ? panels.find((panel) => panel.key === scaleRequiredSheet) : null;
 
   // One-Click fill sensitivity — lives in the render menu now, so arming
   // One-Click never reshapes the toolbar. Detents at Strict / Balanced /
@@ -7731,6 +7769,38 @@ export default function TakeoffCanvas() {
         aria-label="Choose original PDFs or a ZIP containing missing project files" style={{ display: "none" }}
         onChange={(e) => { const files = Array.from(e.target.files || []); e.target.value = ""; if (files.length) replaceMissingProjectFiles(files); }} />
       <LongTaskLoader active={!!longTaskLabel} label={longTaskLabel || "Working…"} variant="fixed" delay={350} />
+      {scaleRequiredSheet && <div role="dialog" aria-modal="true" aria-labelledby="scale-required-title"
+        onPointerDown={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}
+        style={{ position: "fixed", inset: 0, zIndex: 3100, display: "grid", placeItems: "center", padding: 20, background: "rgba(0,0,0,.48)" }}>
+        <div className="panel" style={{ position: "relative", width: "min(520px, 100%)", padding: 28, boxSizing: "border-box", borderRadius: 10, background: "var(--paper-bright)", color: "var(--ink)", boxShadow: "var(--shadow-2)" }}>
+          <button type="button" aria-label="Close scale required message" onClick={() => setScaleRequiredSheet(null)}
+            style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, display: "grid", placeItems: "center", padding: 0, border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer" }}>×</button>
+          <h2 id="scale-required-title" style={{ margin: "0 42px 10px 0", fontSize: 22 }}>Set the scale first</h2>
+          <p style={{ margin: "0 0 20px", fontSize: 15, lineHeight: 1.55 }}>
+            You have to set the scale for <strong>{labelFor(scaleRequiredPanel || focusPanel)}</strong> before you can measure.
+          </p>
+          <div style={{ padding: 16, border: "1px solid var(--ink-faint)", background: "var(--paper-cream)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 3 }}>Sheet scale</div>
+              <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>Choose the detected scale or a standard scale.</div>
+            </div>
+            <ToolMenu
+              title={scaleTitle}
+              onOpenChange={onScaleMenuDepth}
+              face={<span>{scaleFace}</span>}
+              faceStyle={{ minWidth: 150, justifyContent: "space-between", fontFamily: "var(--f-mono)", fontSize: 12.5, ...scaleFaceStyle }}
+              menuStyle={{ minWidth: 300, maxHeight: "min(440px, 52vh)", overflowY: "auto" }}
+              items={scalePromptItems}
+            />
+          </div>
+          <p style={{ margin: "18px 0 0", padding: "12px 14px", borderLeft: "4px solid var(--c-warning)", background: "color-mix(in srgb, var(--c-warning) 10%, transparent)", fontSize: 13.5, lineHeight: 1.55 }}>
+            You can use the detected scale or manually choose a scale. Make sure it matches what the plan says. For the most reliable result, choose <strong>Calibrate two points</strong>, click both ends of a printed dimension, and enter the measurement shown on the plan.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+            <button type="button" className="btn-ghost" onClick={() => setScaleRequiredSheet(null)}>Not now</button>
+          </div>
+        </div>
+      </div>}
       <PdfPasswordDialog prompt={pdfPasswordPrompt} onSubmit={finishPdfPassword} onCancel={() => finishPdfPassword(null)} />
       <FindOcrPermissionDialog prompt={findOcrPrompt} onAllow={() => finishFindOcrPrompt(true)} onSkip={() => finishFindOcrPrompt(false)} />
       {pdfOpeningSettingsOpen && <PdfOpeningSettingsDialog preferences={pdfPreferences}

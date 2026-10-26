@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Visible scale requirement
+
+- Replaced the small bottom status warning for unscaled measurement attempts with a centered **Set the scale first** dialog shown on the first canvas click. The dialog reuses the detected/standard scale dropdown, offers two-point calibration, explains how to verify against a printed plan dimension, and can be dismissed with **Not now**; Count and markup tools remain scale-independent.
+
 ## Unreleased — Deferred project save
 
 - Added **Save later** to the post-import project-save prompt, allowing plans added from Project Data to remain in browser recovery storage while the user continues working without choosing a portable `.otk` destination immediately.
