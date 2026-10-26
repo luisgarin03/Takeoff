@@ -2,7 +2,7 @@
 
 ## Unreleased — Freehand Draw markup
 
-- Added an opaque **Draw** tool to the Takeoff Markup menu with the shared ten-color palette and a remembered 1–24 px brush-size control with live size preview. The dropdown widens while Draw is active so all ten swatches remain visible. Draw strokes use the existing low-latency freehand capture path, remain sheet-relative, select and move as markup objects, share Undo/Redo and project persistence, and render in downloaded pages, Marked Set PDFs, and Whiteboard imports.
+- Added an opaque **Draw** tool to the Takeoff Markup menu with an expandable color-and-brush widget directly beneath the Draw row, the shared ten-color palette, and a remembered 1–24 px brush-size control with live size preview. The dropdown widens only while that widget is expanded so all ten swatches remain visible. Draw strokes use the existing low-latency freehand capture path, remain sheet-relative, select and move as markup objects, share Undo/Redo and project persistence, and render in downloaded pages, Marked Set PDFs, and Whiteboard imports.
 
 ## Unreleased — Takeoff text-note controls
 

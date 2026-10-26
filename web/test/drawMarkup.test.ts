@@ -13,7 +13,9 @@ test("Draw is a markup tool and exposes the complete ten-color palette", () => {
     "#0D9488", "#BE185D", "#1F2937", "#DC2626", "#0891B2",
   ]);
   assert.match(canvasSource, /aria-label="Draw brush size" type="range" min="1" max="24"/);
-  assert.match(canvasSource, /const markupMenuStyle = tool === "draw" \? \{ minWidth: 284 \} : undefined/);
+  assert.match(canvasSource, /disclosure: isDraw \? \(drawSettingsOpen \? "expanded" : "collapsed"\) : undefined/);
+  assert.match(canvasSource, /item\.id === "draw" && drawStyleControls[\s\S]{0,100}\{ id: "draw-settings", custom: drawStyleControls \}/);
+  assert.match(canvasSource, /const markupMenuStyle = drawStyleControls \? \{ minWidth: 284 \} : undefined/);
   assert.equal((canvasSource.match(/menuStyle=\{markupMenuStyle\}/g) || []).length, 2);
 });
 

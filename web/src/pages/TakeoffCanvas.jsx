@@ -968,6 +968,7 @@ export default function TakeoffCanvas() {
     catch { return { color: ARROW_COLORS[0].value, size: 4 }; }
   });
   useEffect(() => { try { localStorage.setItem("opentakeoff_draw_style", JSON.stringify(drawStyle)); } catch { /* private mode */ } }, [drawStyle]);
+  const [drawSettingsOpen, setDrawSettingsOpen] = useState(false);
   const snapRef = useRef(null);        // current snapped image point (or null)
   const snapGridsRef = useRef(new Map()); // sheetKey → {cell, map} spatial hash of vector endpoints
   const vectorSegsRef = useRef(new Map()); // sheetKey → flat [x1,y1,x2,y2,…] linework segments (One-Click boundary source)
@@ -7103,16 +7104,26 @@ export default function TakeoffCanvas() {
   // Toolbar and canvas rail share the exact action objects and availability gates.
   const measureMenuItems = MEASURE_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, onSelect: () => setTool(t.id) }));
   const cutMenuItems = CUT_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, tint: "var(--c-danger)", onSelect: () => setTool(t.id) }));
-  const activateMarkupTool = (id) => { setTool(id); setMarkupDraft(null); setTextLeaderMarkupId(null); setPoly([]); };
+  const activateMarkupTool = (id) => {
+    setTool(id); setMarkupDraft(null); setTextLeaderMarkupId(null); setPoly([]);
+    if (id !== "draw") setDrawSettingsOpen(false);
+  };
   const markupMenuItems = [
     ...MARKUP_TOOLS.map((t) => {
       const mappedKey = markupShortcuts[t.id];
       const isMapping = mappingMarkupShortcut === t.id;
+      const isDraw = t.id === "draw";
       return {
         id: t.id, icon: t.icon, label: t.label,
         shortcut: mappedKey ? `Ctrl+${mappedKey}` : t.shortcut,
         active: tool === t.id,
-        onSelect: () => activateMarkupTool(t.id),
+        stayOpen: isDraw,
+        disclosure: isDraw ? (drawSettingsOpen ? "expanded" : "collapsed") : undefined,
+        onSelect: () => {
+          if (!isDraw) { activateMarkupTool(t.id); return; }
+          if (tool !== "draw") { activateMarkupTool("draw"); setDrawSettingsOpen(true); }
+          else setDrawSettingsOpen((open) => !open);
+        },
         accessory: <div style={{ display: "inline-flex", alignItems: "center", gap: 3, paddingRight: 5 }}>
           <button type="button" aria-label={isMapping ? `Press Ctrl and a key for ${t.label}` : `Map Ctrl shortcut for ${t.label}`}
             aria-pressed={isMapping} title={isMapping ? "Press Ctrl plus a letter or number; Escape cancels" : `Map a Ctrl shortcut for ${t.label}`}
@@ -7171,7 +7182,7 @@ export default function TakeoffCanvas() {
     </div>
   ) : null;
 
-  const drawStyleControls = tool === "draw" ? (
+  const drawStyleControls = tool === "draw" && drawSettingsOpen ? (
     <div role="group" aria-label="Draw brush settings" className="tool-menu-popover" style={{ background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "0 6px 22px rgba(0,0,0,.16)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 9 }}>
       <div style={{ font: "10px var(--f-mono)", color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: ".08em" }}>Draw color</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 20px)", gap: 4 }}>
@@ -7199,11 +7210,16 @@ export default function TakeoffCanvas() {
         onClick={() => setArrowColor(value)} style={{ width: 15, height: 15, minWidth: 15, padding: 0, borderRadius: "50%", background: value, border: arrowColor === value ? "2px solid var(--paper-bright)" : "1px solid #0006", boxShadow: arrowColor === value ? "0 0 0 2px var(--ink)" : "none", cursor: "pointer" }} />)}
     </div>
   ) : null;
-  const markupStyleControls = drawStyleControls || highlighterStyleControls || arrowStyleControls;
+  const markupStyleControls = highlighterStyleControls || arrowStyleControls;
+  const markupMenuItemsWithDrawSettings = markupMenuItems.flatMap((item) => (
+    item.id === "draw" && drawStyleControls
+      ? [item, { id: "draw-settings", custom: drawStyleControls }]
+      : [item]
+  ));
   // The ten Draw swatches need more room than the standard action-only menu.
   // Scope the wider panel to Draw so every other toolbar dropdown keeps its
   // established compact footprint.
-  const markupMenuStyle = tool === "draw" ? { minWidth: 284 } : undefined;
+  const markupMenuStyle = drawStyleControls ? { minWidth: 284 } : undefined;
 
   // panel-toggle for the right-edge rail — square like the zoom cluster, count as a
   // tiny mono line under the icon. Lives on the canvas, costs the toolbar zero rows.
@@ -7973,7 +7989,7 @@ export default function TakeoffCanvas() {
                 onOpenChange={onMarkupMenuDepth}
                 menuStyle={markupMenuStyle}
                 face={<><Icon name="markup" size={15} /><span>Markup</span></>}
-                items={[...markupMenuItems, ...(markupStyleControls ? [{ id: "markup-colors", custom: markupStyleControls }] : [])]}
+                items={[...markupMenuItemsWithDrawSettings, ...(markupStyleControls ? [{ id: "markup-colors", custom: markupStyleControls }] : [])]}
               />
               {markupStyleControls}
             </span>
@@ -9378,7 +9394,7 @@ export default function TakeoffCanvas() {
               active={measureActive || tool === "schedule" || tool === "deduct" || MARKUP_IDS.includes(tool)}
               onOpenChange={onMarkupMenuDepth}
               menuStyle={markupMenuStyle}
-              items={[{ section: "Measure" }, ...measureMenuItems, { id: "schedule", icon: "rectTool", label: "Schedule", title: "Import a finish/material schedule — click two opposite corners around the table", active: tool === "schedule", onSelect: () => { setScheduleAnchor(null); setTool((t) => t === "schedule" ? "select" : "schedule"); } }, { section: "Cut Out" }, ...cutMenuItems, { section: "Markup" }, ...markupMenuItems, ...(markupStyleControls ? [{ id: "markup-style", custom: markupStyleControls }] : [])]} />
+              items={[{ section: "Measure" }, ...measureMenuItems, { id: "schedule", icon: "rectTool", label: "Schedule", title: "Import a finish/material schedule — click two opposite corners around the table", active: tool === "schedule", onSelect: () => { setScheduleAnchor(null); setTool((t) => t === "schedule" ? "select" : "schedule"); } }, { section: "Cut Out" }, ...cutMenuItems, { section: "Markup" }, ...markupMenuItemsWithDrawSettings, ...(markupStyleControls ? [{ id: "markup-style", custom: markupStyleControls }] : [])]} />
             <ToolMenu rail title="Edit takeoffs" face={<Icon name="eraser" size={15} />}
               onOpenChange={onMenuDepth} items={editMenuItems} />
             {/* Share the toolbar gate/commit; isolate Finish presses even while Space is held. */}
