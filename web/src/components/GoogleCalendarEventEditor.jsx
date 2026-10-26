@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { calendarZone, zonedInput, zonedISO } from "../lib/calendarWorkspace.js";
 import { calendarDescriptionText } from "../lib/calendarDescription.js";
-const colorNames = { 1: "Lavender", 2: "Sage", 3: "Grape", 4: "Flamingo", 5: "Banana", 6: "Tangerine", 7: "Peacock", 8: "Graphite", 9: "Blueberry", 10: "Basil", 11: "Tomato" };
+import { googleCalendarDisplayColors, googleEventColorOptions } from "../lib/googleCalendarEvent.js";
 
 export default function GoogleCalendarEventEditor({ event, calendars, edge, onClose, onSaved }) {
   const zone = event.start?.timeZone || calendarZone();
@@ -18,6 +18,10 @@ export default function GoogleCalendarEventEditor({ event, calendars, edge, onCl
   const [destination, setDestination] = useState(""), [response, setResponse] = useState(event.attendees?.find((a) => a.self)?.responseStatus || "needsAction");
   useEffect(() => { let live = true; edge("calendar-colors").then((data) => { if (live) setColors(data.event || {}); }).catch(() => {}); return () => { live = false; }; }, [edge]);
   const change = (key, value) => setDraft((old) => ({ ...old, [key]: value }));
+  const colorOptions = googleEventColorOptions(colors);
+  const selectedColor = colorOptions.find((color) => color.id === draft.colorId);
+  const selectedCalendar = calendars.find((calendar) => calendar.id === calendarId);
+  const defaultColor = googleCalendarDisplayColors(selectedCalendar?.color, selectedCalendar?.textColor);
   async function execute(action) {
     setBusy(true); setError("");
     try {
@@ -52,7 +56,19 @@ export default function GoogleCalendarEventEditor({ event, calendars, edge, onCl
       <label>Timezone<input required value={timeZone} onChange={(e) => setTimeZone(e.target.value)} /></label>
       <label>Description<textarea className="google-event-description" rows={12} maxLength={20000} value={draft.description} onChange={(e) => change("description", e.target.value)} /></label>
       <label>Location<input maxLength={1000} value={draft.location} onChange={(e) => change("location", e.target.value)} /></label>
-      <label>Google event color<select value={draft.colorId} style={{ background: colors[draft.colorId]?.background, color: colors[draft.colorId]?.foreground }} onChange={(e) => change("colorId", e.target.value)}><option value="">Calendar default</option>{Object.entries(colors).map(([id, color]) => <option key={id} value={id} style={{ background: color.background, color: color.foreground }}>{colorNames[id] || `Color ${id}`}</option>)}</select></label>
+      <section className="google-event-color-field" aria-labelledby="google-event-color-label">
+        <span id="google-event-color-label">Google event color</span>
+        <div className="google-event-color-options" role="radiogroup" aria-labelledby="google-event-color-label">
+          <button type="button" role="radio" aria-checked={!draft.colorId} className={`google-event-color-default${!draft.colorId ? " is-selected" : ""}`} onClick={() => change("colorId", "")}>
+            <span className="google-event-color-swatch" style={{ "--event-color": defaultColor.color, "--event-contrast": defaultColor.contrastColor }} aria-hidden="true">{!draft.colorId ? "✓" : ""}</span>
+            Calendar default
+          </button>
+          <div className="google-event-color-grid">
+            {colorOptions.map((color) => <button key={color.id} type="button" role="radio" aria-checked={draft.colorId === color.id} aria-label={color.name} title={color.name} className={`google-event-color-swatch${draft.colorId === color.id ? " is-selected" : ""}`} style={{ "--event-color": color.color, "--event-contrast": color.contrastColor }} onClick={() => change("colorId", color.id)}>{draft.colorId === color.id ? "✓" : ""}</button>)}
+          </div>
+        </div>
+        <small>{selectedColor ? selectedColor.name : "Calendar default"} · Save to apply this color in Google Calendar.</small>
+      </section>
       <label>Repeat<select value={recurrence.startsWith("RRULE:") && !recurrence.includes("\n") ? recurrence : recurrence ? "custom" : ""} onChange={(e) => setRecurrence(e.target.value === "custom" ? "RRULE:FREQ=WEEKLY;INTERVAL=2" : e.target.value)}><option value="">Does not repeat</option><option value="RRULE:FREQ=DAILY">Daily</option><option value="RRULE:FREQ=WEEKLY">Weekly</option><option value="RRULE:FREQ=MONTHLY">Monthly</option><option value="RRULE:FREQ=YEARLY">Yearly</option><option value="custom">Custom</option>{recurrence && !["RRULE:FREQ=DAILY", "RRULE:FREQ=WEEKLY", "RRULE:FREQ=MONTHLY", "RRULE:FREQ=YEARLY"].includes(recurrence) && <option value={recurrence}>Custom recurrence</option>}</select></label>
       {!!recurrence && <label>Recurrence rules<textarea value={recurrence} onChange={(e) => setRecurrence(e.target.value)} placeholder="RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=10" /></label>}
       {event.recurringEventId && <p>You are editing this occurrence. Use Edit series in the details menu to change the whole series.</p>}

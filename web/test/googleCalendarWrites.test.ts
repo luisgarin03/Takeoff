@@ -31,6 +31,13 @@ test("Google updates and deletes require concurrency versions and send If-Match"
   assert.equal(calls.at(-1).method, "DELETE"); assert.equal(calls.at(-1).headers["If-Match"], "version");
   await assert.rejects(fixture("owner", 412).api("user", "update", { calendarId: "work", eventId: "id", etag: "old", event }), (e: any) => e.code === "OTK_CALENDAR_CONFLICT");
 });
+test("Google event color changes are sent to Google and can be reset to the calendar default", async () => {
+  const { api, calls } = fixture();
+  await api("user", "update", { calendarId: "work", eventId: "id", etag: "version", event: { ...event, colorId: "11" } });
+  assert.equal(JSON.parse(calls.at(-1).body).colorId, "11");
+  await api("user", "update", { calendarId: "work", eventId: "id", etag: "new-version", event: { ...event, colorId: null } });
+  assert.equal(JSON.parse(calls.at(-1).body).colorId, null);
+});
 test("Google read-only calendar permissions cannot be bypassed for writes or sharing", async () => {
   for (const action of ["create", "update", "delete", "quick-add", "move", "calendar-color", "delete-calendar", "share", "unshare", "acl"]) {
     const { api, calls } = fixture("reader");

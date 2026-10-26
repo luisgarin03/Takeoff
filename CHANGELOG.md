@@ -3,6 +3,7 @@
 ## Unreleased — Google Calendar event colors
 
 - Preserved each Google event's background and foreground assignment in the calendar grid, including per-event overrides; matched the built-in Eucalyptus and Banana presentation colors to Google Calendar's month view; and synchronized the event-detail indicator and Google calendar list marker.
+- Replaced the browser-styled Google event color dropdown with a visible, accessible swatch palette. Color choices and Calendar default now persist through Google Calendar's event API, with a built-in fallback palette while provider colors load.
 
 ## Unreleased — Condition page navigation
 
