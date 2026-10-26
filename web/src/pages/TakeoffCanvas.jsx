@@ -956,13 +956,18 @@ export default function TakeoffCanvas() {
   const highlightRef = useRef(null);   // live highlight-box preview (first corner → cursor; own translucent fill, NOT rectRef's condition fill)
   const arrowLineRef = useRef(null), arrowHeadRef = useRef(null);
   const [arrowColor, setArrowColor] = useState(ARROW_COLORS[0].value);
-  const hlRef = useRef(null);          // in-progress highlighter stroke {pts (stage px), key}
-  const hlPathRef = useRef(null);      // live highlighter preview path (imperative, WYSIWYG ink)
+  const hlRef = useRef(null);          // in-progress freehand stroke {type, style, pts (stage px), key}
+  const hlPathRef = useRef(null);      // live freehand preview path (imperative, WYSIWYG ink)
   const [hlStyle, setHlStyle] = useState(() => {
     try { return { color: HL_INKS[0], size: 14, tip: "chisel", ...JSON.parse(localStorage.getItem("opentakeoff_hl_style") || "{}") }; }
     catch { return { color: HL_INKS[0], size: 14, tip: "chisel" }; }
   });
   useEffect(() => { try { localStorage.setItem("opentakeoff_hl_style", JSON.stringify(hlStyle)); } catch { /* private mode */ } }, [hlStyle]);
+  const [drawStyle, setDrawStyle] = useState(() => {
+    try { return { color: ARROW_COLORS[0].value, size: 4, ...JSON.parse(localStorage.getItem("opentakeoff_draw_style") || "{}") }; }
+    catch { return { color: ARROW_COLORS[0].value, size: 4 }; }
+  });
+  useEffect(() => { try { localStorage.setItem("opentakeoff_draw_style", JSON.stringify(drawStyle)); } catch { /* private mode */ } }, [drawStyle]);
   const snapRef = useRef(null);        // current snapped image point (or null)
   const snapGridsRef = useRef(new Map()); // sheetKey → {cell, map} spatial hash of vector endpoints
   const vectorSegsRef = useRef(new Map()); // sheetKey → flat [x1,y1,x2,y2,…] linework segments (One-Click boundary source)
@@ -3830,17 +3835,24 @@ export default function TakeoffCanvas() {
         : toImage(e.clientX, e.clientY);
     const fp = panelAt(p[0]);
     if (fp.key !== focusKey) setFocusKey(fp.key);
-    if (tool === "highlighter") {
-      // ink is freehand: raw coords (no snap/angle), drag paints — press-drag pan is
-      // intentionally unavailable while armed (space/middle/right-drag still pan)
+    if (tool === "highlighter" || tool === "draw") {
+      // freehand ink uses raw coords (no snap/angle): highlighter is translucent,
+      // Draw is opaque. Press-drag pan is intentionally unavailable while either
+      // is armed (space/middle/right-drag still pan).
       const raw = toImage(e.clientX, e.clientY);
-      hlRef.current = { pts: [raw], key: panelAt(raw[0]).key };
+      const style = tool === "draw" ? { ...drawStyle } : { ...hlStyle };
+      hlRef.current = { type: tool, style, pts: [raw], key: panelAt(raw[0]).key };
       if (hlPathRef.current) {
         const el = hlPathRef.current;
-        const w = hlStyle.size / tfRef.current.scale;
+        const w = style.size / tfRef.current.scale;
         el.setAttribute("d", "");
-        if (hlStyle.tip === "chisel") { el.setAttribute("fill", hlStyle.color); el.setAttribute("fill-opacity", darkModeRef.current ? 0.42 : 0.32); el.setAttribute("stroke", "none"); }
-        else { el.setAttribute("fill", "none"); el.setAttribute("stroke", hlStyle.color); el.setAttribute("stroke-opacity", darkModeRef.current ? 0.42 : 0.32); el.setAttribute("stroke-width", w); el.setAttribute("stroke-linecap", "round"); el.setAttribute("stroke-linejoin", "round"); }
+        if (tool === "highlighter" && style.tip === "chisel") {
+          el.setAttribute("fill", style.color); el.setAttribute("fill-opacity", darkModeRef.current ? 0.42 : 0.32); el.setAttribute("stroke", "none");
+        } else {
+          el.setAttribute("fill", "none"); el.setAttribute("fill-opacity", "1"); el.setAttribute("stroke", style.color);
+          el.setAttribute("stroke-opacity", tool === "draw" ? "1" : (darkModeRef.current ? "0.42" : "0.32"));
+          el.setAttribute("stroke-width", w); el.setAttribute("stroke-linecap", "round"); el.setAttribute("stroke-linejoin", "round");
+        }
         el.style.display = "block";
       }
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -3942,8 +3954,8 @@ export default function TakeoffCanvas() {
       }
       return false;
     }
-    if (m.type === "highlight" && Array.isArray(m.pts)) {
-      // a freehand highlighter stroke — hit the ink band itself (reach = half the
+    if ((m.type === "highlight" || m.type === "draw") && Array.isArray(m.pts)) {
+      // a freehand stroke — hit the ink band itself (reach = half the
       // stroke width, floored at the shared threshold), never a bounding box, so a
       // stroke over a room shields only what it actually covers.
       if (m.pts.length < 2) return false;
@@ -4088,7 +4100,7 @@ export default function TakeoffCanvas() {
         // shapes: cloud/highlight rect, callout at+target, text at). The move stays a
         // no-op until it passes the threshold in onPointerMove, so a pure click (or the
         // first click of a double-click re-edit) never nudges the markup.
-        const orig = (mHit.type === "highlight" && Array.isArray(mHit.pts)) ? { pts: mHit.pts.map((v) => [...v]) }
+        const orig = Array.isArray(mHit.pts) ? { pts: mHit.pts.map((v) => [...v]) }
           : (mHit.type === "cloud" || mHit.type === "highlight") ? { rect: mHit.rect }
           : mHit.type === "callout" ? { at: mHit.at, target: mHit.target }
             : mHit.type === "arrow" ? { from: mHit.from, to: mHit.to }
@@ -4400,8 +4412,8 @@ export default function TakeoffCanvas() {
       const last = st.pts[st.pts.length - 1];
       if (Math.hypot(q[0] - last[0], q[1] - last[1]) >= 2.5 / tfRef.current.scale && st.pts.length < 4000) st.pts.push(q);
       if (hlPathRef.current) {
-        const w = hlStyle.size / tfRef.current.scale;
-        hlPathRef.current.setAttribute("d", hlStyle.tip === "chisel"
+        const w = st.style.size / tfRef.current.scale;
+        hlPathRef.current.setAttribute("d", st.type === "highlighter" && st.style.tip === "chisel"
           ? (st.pts.length > 1 ? "M" + chiselRibbon(st.pts, w, 45).map((v) => v.join(",")).join(" L") + " Z" : "")
           : strokePathD(st.pts));
       }
@@ -4536,8 +4548,10 @@ export default function TakeoffCanvas() {
           .map(([x, y]) => [(x - tp.xOffset) / tp.img.w, y / tp.img.h]);
         // width as a FRACTION of panel width — the stroke scales with the plan like ink,
         // and survives raster-budget changes (screen px ÷ scale ÷ panel width at draw time)
-        addMarkup({ type: "highlight", pts, color: hlStyle.color,
-                    w: (hlStyle.size / tfRef.current.scale) / tp.img.w, tip: hlStyle.tip }, tp.key);
+        const isDraw = st.type === "draw";
+        addMarkup({ type: isDraw ? "draw" : "highlight", pts, color: st.style.color,
+                    w: (st.style.size / tfRef.current.scale) / tp.img.w,
+                    ...(isDraw ? {} : { tip: st.style.tip }) }, tp.key);
       }
       return;
     }
@@ -5302,7 +5316,7 @@ export default function TakeoffCanvas() {
     // markups via addMarkup — don't yank the user off the Stamps tab mid-placement
     // (keep the current tab, or open Markups only if nothing's open). Highlighter
     // ink flows stroke after stroke — never pop the dock per stroke.
-    if (m.type === "highlight" && m.pts) return markup.id;
+    if ((m.type === "highlight" || m.type === "draw") && m.pts) return markup.id;
     setLeftTab((t) => (tool === "stamp" ? (t ?? "markup") : "markup"));
     return markup.id;
   }
@@ -5420,7 +5434,7 @@ export default function TakeoffCanvas() {
     const sp = panelByKey(m.sheet_id);
     if (!sp || !sp.img.w) return null;
     let nx, ny;
-    if (m.type === "highlight" && Array.isArray(m.pts) && m.pts.length) { const mid = m.pts[Math.floor((m.pts.length - 1) / 2)]; nx = mid[0]; ny = mid[1]; }
+    if (Array.isArray(m.pts) && m.pts.length) { const mid = m.pts[Math.floor((m.pts.length - 1) / 2)]; nx = mid[0]; ny = mid[1]; }
     else if ((m.type === "cloud" || m.type === "highlight") && m.rect) { nx = (m.rect[0][0] + m.rect[1][0]) / 2; ny = (m.rect[0][1] + m.rect[1][1]) / 2; }
     else if (m.type === "arrow" && m.from && m.to) { nx = (m.from[0] + m.to[0]) / 2; ny = (m.from[1] + m.to[1]) / 2; }
     else if (m.at) { nx = m.at[0]; ny = m.at[1]; }   // text + bubble + callout
@@ -5483,7 +5497,7 @@ export default function TakeoffCanvas() {
     if (!m) return;
     // an svg symbol carries no text — select it, but don't open a dead-end editor;
     // a highlighter stroke is pure ink (no text either), same rule
-    if (m.type === "svg" || (m.type === "highlight" && Array.isArray(m.pts))) { selectMarkup(m.id); return; }
+    if (m.type === "svg" || Array.isArray(m.pts)) { selectMarkup(m.id); return; }
     const anchor = markupAnchorStage(m);
     if (!anchor) return;
     selectMarkup(m.id);
@@ -5759,7 +5773,7 @@ export default function TakeoffCanvas() {
     const sp = panelByKey(m.sheet_id);
     if (!sp || !sp.img.w) return false;
     let anchor;
-    if (m.type === "highlight" && Array.isArray(m.pts) && m.pts.length) anchor = m.pts[Math.floor((m.pts.length - 1) / 2)];
+    if (Array.isArray(m.pts) && m.pts.length) anchor = m.pts[Math.floor((m.pts.length - 1) / 2)];
     else if ((m.type === "cloud" || m.type === "highlight") && m.rect) anchor = [(m.rect[0][0] + m.rect[1][0]) / 2, (m.rect[0][1] + m.rect[1][1]) / 2];
     else if (m.type === "callout") anchor = m.at || m.target;
     else if (m.type === "arrow" && m.from && m.to) anchor = [(m.from[0] + m.to[0]) / 2, (m.from[1] + m.to[1]) / 2];
@@ -7157,6 +7171,27 @@ export default function TakeoffCanvas() {
     </div>
   ) : null;
 
+  const drawStyleControls = tool === "draw" ? (
+    <div role="group" aria-label="Draw brush settings" className="tool-menu-popover" style={{ background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "0 6px 22px rgba(0,0,0,.16)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 9 }}>
+      <div style={{ font: "10px var(--f-mono)", color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: ".08em" }}>Draw color</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 20px)", gap: 4 }}>
+        {ARROW_COLORS.map(({ name, value }) => <button key={value} type="button" aria-label={`${name} draw color`} title={`${name}${drawStyle.color === value ? " — selected" : ""}`} aria-pressed={drawStyle.color === value}
+          onClick={() => setDrawStyle((style) => ({ ...style, color: value }))}
+          style={{ width: 20, height: 20, minWidth: 20, padding: 0, borderRadius: 4, background: value, border: drawStyle.color === value ? "2px solid var(--paper-bright)" : "1px solid #0005", boxShadow: drawStyle.color === value ? "0 0 0 2px var(--ink)" : "none", cursor: "pointer" }} />)}
+      </div>
+      <label style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", gap: 8, font: "10px var(--f-mono)", color: "var(--ink-muted)" }}>
+        <span>Brush size</span>
+        <input aria-label="Draw brush size" type="range" min="1" max="24" step="1" value={drawStyle.size}
+          onChange={(event) => setDrawStyle((style) => ({ ...style, size: Number(event.target.value) }))}
+          style={{ width: 112, accentColor: drawStyle.color, cursor: "pointer" }} />
+        <span style={{ minWidth: 34, color: "var(--ink)", textAlign: "right" }}>{drawStyle.size}px</span>
+      </label>
+      <div aria-hidden="true" style={{ height: 24, display: "flex", alignItems: "center", justifyContent: "center", borderTop: "1px solid var(--ink-faint)" }}>
+        <span style={{ width: Math.max(2, drawStyle.size), height: Math.max(2, drawStyle.size), maxWidth: 24, maxHeight: 24, borderRadius: "50%", background: drawStyle.color }} />
+      </div>
+    </div>
+  ) : null;
+
   const arrowStyleControls = tool === "arrow" ? (
     <div role="group" aria-label="Arrow color" className="tool-menu-popover" style={{ background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", borderRadius: 0, boxShadow: "0 6px 22px rgba(0,0,0,.16)", padding: "7px 8px", display: "flex", alignItems: "center", gap: 5 }}>
       <span style={{ fontSize: 10, color: "var(--ink-muted)", marginRight: 2 }}>Arrow</span>
@@ -7164,7 +7199,11 @@ export default function TakeoffCanvas() {
         onClick={() => setArrowColor(value)} style={{ width: 15, height: 15, minWidth: 15, padding: 0, borderRadius: "50%", background: value, border: arrowColor === value ? "2px solid var(--paper-bright)" : "1px solid #0006", boxShadow: arrowColor === value ? "0 0 0 2px var(--ink)" : "none", cursor: "pointer" }} />)}
     </div>
   ) : null;
-  const markupStyleControls = highlighterStyleControls || arrowStyleControls;
+  const markupStyleControls = drawStyleControls || highlighterStyleControls || arrowStyleControls;
+  // The ten Draw swatches need more room than the standard action-only menu.
+  // Scope the wider panel to Draw so every other toolbar dropdown keeps its
+  // established compact footprint.
+  const markupMenuStyle = tool === "draw" ? { minWidth: 284 } : undefined;
 
   // panel-toggle for the right-edge rail — square like the zoom cluster, count as a
   // tiny mono line under the icon. Lives on the canvas, costs the toolbar zero rows.
@@ -7932,6 +7971,7 @@ export default function TakeoffCanvas() {
                 title="Markup — annotations, not measurements"
                 active={MARKUP_IDS.includes(tool)}
                 onOpenChange={onMarkupMenuDepth}
+                menuStyle={markupMenuStyle}
                 face={<><Icon name="markup" size={15} /><span>Markup</span></>}
                 items={[...markupMenuItems, ...(markupStyleControls ? [{ id: "markup-colors", custom: markupStyleControls }] : [])]}
               />
@@ -8978,6 +9018,23 @@ export default function TakeoffCanvas() {
                           </g>
                         );
                       };
+                      if (m.type === "draw" && Array.isArray(m.pts)) {
+                        const ip = m.pts.map(([nx, ny]) => [nx * p.img.w, ny * p.img.h]);
+                        if (ip.length < 2) return null;
+                        const sw = (m.w || 0.004) * p.img.w * w;
+                        return (
+                          <g key={m.id}>
+                            {selM && (
+                              <>
+                                <path d={strokePathD(ip)} fill="none" stroke="#fff" strokeWidth={sw + 8 / z} strokeLinecap="round" strokeLinejoin="round" />
+                                <path d={strokePathD(ip)} fill="none" stroke="#1f3fc7" strokeOpacity={0.55} strokeWidth={sw + 4 / z} strokeLinecap="round" strokeLinejoin="round" />
+                              </>
+                            )}
+                            <path d={strokePathD(ip)} fill="none" stroke={m.color || ARROW_COLORS[0].value} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+                            {badge(ip[0][0], ip[0][1] - 9 * pixelsPerPoint)}
+                          </g>
+                        );
+                      }
                       if (m.type === "highlight" && Array.isArray(m.pts)) {
                         // freehand highlighter stroke — the ink keeps its OWN hue (a highlight
                         // IS its color; dark legibility comes from the higher opacity, not a
@@ -9320,6 +9377,7 @@ export default function TakeoffCanvas() {
               face={<Icon name="pencil" size={15} />}
               active={measureActive || tool === "schedule" || tool === "deduct" || MARKUP_IDS.includes(tool)}
               onOpenChange={onMarkupMenuDepth}
+              menuStyle={markupMenuStyle}
               items={[{ section: "Measure" }, ...measureMenuItems, { id: "schedule", icon: "rectTool", label: "Schedule", title: "Import a finish/material schedule — click two opposite corners around the table", active: tool === "schedule", onSelect: () => { setScheduleAnchor(null); setTool((t) => t === "schedule" ? "select" : "schedule"); } }, { section: "Cut Out" }, ...cutMenuItems, { section: "Markup" }, ...markupMenuItems, ...(markupStyleControls ? [{ id: "markup-style", custom: markupStyleControls }] : [])]} />
             <ToolMenu rail title="Edit takeoffs" face={<Icon name="eraser" size={15} />}
               onOpenChange={onMenuDepth} items={editMenuItems} />

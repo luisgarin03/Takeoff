@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Freehand Draw markup
+
+- Added an opaque **Draw** tool to the Takeoff Markup menu with the shared ten-color palette and a remembered 1–24 px brush-size control with live size preview. The dropdown widens while Draw is active so all ten swatches remain visible. Draw strokes use the existing low-latency freehand capture path, remain sheet-relative, select and move as markup objects, share Undo/Redo and project persistence, and render in downloaded pages, Marked Set PDFs, and Whiteboard imports.
+
 ## Unreleased — Takeoff text-note controls
 
 - Kept the Text-note leader-arrow button and selected-arrow remove control proportional to their text box while zooming, so the controls no longer overwhelm a small note at overview zoom. Note geometry, export, and undo behavior are unchanged.

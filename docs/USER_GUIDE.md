@@ -532,8 +532,9 @@ The markup layer is communication, never quantity: clouds, callouts, notes, high
 
 ### The markup tools
 
-The **Markup** section of the bottom-left Draw menu holds six tools:
+The **Markup** section of the bottom-left Draw menu holds seven tools:
 
+- **Draw** — opaque freehand ink for circling, underlining, and sketching directly on a plan. Choose one of the ten construction colors and a **1–24 px** brush size in the Draw settings, then press and drag to paint. The browser remembers both settings. Draw strokes remain attached to their sheet, scale with the plan, and can be selected, moved, recolored, reweighted, deleted, undone/redone, saved, and exported like other markups. Use `Space`-drag, middle-drag, or right-drag to pan while Draw is armed.
 - **Highlighter** (`H`) — freehand marker ink. Press and **drag to paint**, stroke after stroke, no dialog between them. While it's armed, a style popover hangs under the menu: five inks (yellow default), **F / M / B** tip sizes, and a **chisel or round** nib — remembered per browser. Because press-drag paints, press-drag panning is off while the highlighter is armed; pan with `Space`-drag, middle-drag, or right-drag. Strokes stick to their sheet, scale like real ink, and are real objects: with Select, click one (it glows), drag to move it, `⌫` deletes it.
 - **Revision cloud** — two corner clicks; the cloud lands immediately, then an optional note editor opens (`Esc` keeps the cloud, skips the note). Clouds can carry a **Rev △** revision number from the panel.
 - **Callout** — first click is the *target* (the thing you're pointing at), second is the label spot, then type the text.

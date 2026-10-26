@@ -639,7 +639,17 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
       const mcol = rgb(...hex(dark ? boostForDark(mbase) : mbase));
       const mdash = pdfDashFor(m.line_style || "solid");
       const mw = clampWeight(m.weight);   // stroke-width multiplier (markups only), default ×1
-      if (m.type === "highlight" && (m.pts || []).length >= 2) {
+      if (m.type === "draw" && (m.pts || []).length >= 2) {
+        // opaque freehand Draw ink — same rounded stroke and stored sheet-relative
+        // width as the canvas, using the selected palette color exactly.
+        const ipts = m.pts.map(([nx, ny]) => [nx * W, ny * H]);
+        const inkCol = rgb(...hex(m.color || "#C96442"));
+        const wImg = (m.w || 0.004) * W * mw;
+        pg.drawSvgPath(svgOpenPath(ipts), {
+          x: 0, y: 0, borderColor: inkCol, borderWidth: wImg * ptScale,
+          ...(LineCapStyle ? { borderLineCap: LineCapStyle.Round } : {}),
+        });
+      } else if (m.type === "highlight" && (m.pts || []).length >= 2) {
         // freehand highlighter stroke — ink stays its own color in both export
         // modes (a highlight IS its hue); width is stored as a fraction of sheet
         // width → image px → page points. Weight (×) multiplies like the canvas.

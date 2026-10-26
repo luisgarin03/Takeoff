@@ -64,6 +64,7 @@ export const CUT_TOOLS = [
   { id: "deduct-rect", icon: "deductRect", label: "Deduct rectangle", shortcut: "⇧D" },
 ];
 export const MARKUP_TOOLS = [
+  { id: "draw", icon: "brush", label: "Draw" },
   { id: "highlighter", icon: "highlighter", label: "Highlighter", shortcut: "H" },
   { id: "cloud", icon: "cloud", label: "Revision cloud" },
   { id: "callout", icon: "callout", label: "Callout" },
