@@ -12,7 +12,7 @@
 // the calibrated guide bar on the sheet behind the open menu).
 // Optional `accessory` controls are siblings of the action button, so a star
 // toggle can stay open without nesting buttons or triggering navigation.
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../brand/icons.jsx";
 
@@ -29,6 +29,15 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
   const menuRef = useRef(null);
   const [railPosition, setRailPosition] = useState({});
   const stopCanvasEvent = rail ? (e) => e.stopPropagation() : undefined;
+
+  useLayoutEffect(() => {
+    if (!open || !rail || !menuRef.current || !rootRef.current) return;
+    // Lift rail menus to fit their content instead of reserving only 320px
+    // below the trigger. Scroll only when the entire viewport is too short.
+    const height = Math.min(menuRef.current.scrollHeight + 2, window.innerHeight - 24);
+    const top = Math.max(12, Math.min(rootRef.current.getBoundingClientRect().top, window.innerHeight - height - 12));
+    setRailPosition((position) => ({ ...position, top, maxHeight: window.innerHeight - top - 12 }));
+  }, [open, rail]);
 
   useEffect(() => {
     if (!open) return;
@@ -112,7 +121,7 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
           ...(portaled ? railPosition : {}),
         }}>
           {items.map((it, i) => {
-            if (it === "divider") return <div key={i} style={{ height: 1, background: "var(--ink-faint)", margin: "4px 0" }} />;
+            if (it === "divider") return <div key={i} role="separator" style={{ height: 1, background: "var(--ink-faint)", margin: "4px 0" }} />;
             if (it.section) return (
               <div key={i} style={{ padding: "6px 12px 3px", fontFamily: "var(--f-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-muted)" }}>{it.section}</div>
             );
@@ -125,7 +134,7 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
             const fg = it.danger ? "var(--c-danger)" : "var(--ink)";
             const depth = Math.max(0, Number(it.depth) || 0);
             const action = (
-              <button key={it.id || i} type="button" disabled={dis} title={it.title || ""}
+              <button key={it.id || i} className="dropdown-action" data-danger={it.danger || undefined} type="button" disabled={dis} title={it.title || ""}
                 aria-expanded={it.disclosure ? it.disclosure === "expanded" : undefined}
                 onClick={() => { if (!dis) { if (!it.stayOpen) setOpen(false); it.onSelect?.(); } }}
                 style={{

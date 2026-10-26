@@ -1,5 +1,9 @@
 import { SHARING_UI_ENABLED } from "../lib/sharingVisibility.js";
+import { usePinchZoom } from "../lib/usePinchZoom.js";
 import { APP_NAME } from "../brand/appName.js";
+import PrintDialog from "../components/PrintDialog.jsx";
+import ProjectCalendar from "../components/CalendarWorkspace.jsx";
+import { buildPrintDocument } from "../lib/printPlans.js";
 import AccountAvatar from "../components/AccountAvatar.jsx";
 import cloudLogo from "../brand/google-cloud.png";
 // Takeoff Canvas — Phase 1 (+ pan/zoom + standard scales).
@@ -27,10 +31,12 @@ import { removeRestoredCompactFiles, sanitizeCompactProject } from "../lib/compa
 import { projectFileHandleFor, saveProjectArchive } from "../lib/saveProjectFile.js";
 import { canAutosaveProjectFile, projectFileAutosaveDelay, projectFileHandleStorageKey } from "../lib/projectFileAutosave.js";
 import SaveProjectDialog from "../components/SaveProjectDialog.jsx";
+import SaveSettingsDialog from "../components/SaveSettingsDialog.jsx";
+import AddConditionDialog from "../components/AddConditionDialog.jsx";
 import PdfExportDialog from "../components/PdfExportDialog.jsx";
 import LongTaskLoader from "../components/LongTaskLoader.jsx";
 import ProjectMetadataModal from "../components/ProjectMetadataModal.jsx";
-import { EMPTY_PROJECT_METADATA, withProjectEditor, withProjectAuthor, createProjectMetadata, formatProjectDate, metadataPayload, normalizeProjectMetadata, preserveUnknownProjectFields, touchProjectMetadata } from "../lib/projectMetadata.js";
+import { EMPTY_PROJECT_METADATA, withProjectEditor, withProjectAuthor, createProjectMetadata, metadataPayload, normalizeProjectMetadata, preserveUnknownProjectFields, touchProjectMetadata } from "../lib/projectMetadata.js";
 import CloudProjects from "../components/CloudProjects.jsx";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
 import { UUID as PROJECT_UUID } from "../lib/supabase/projectState.js";
@@ -61,7 +67,7 @@ import { calculationToConditionMaterials, emptyFenceCalculatorProject, fenceCalc
 import ReportPanel from "../components/ReportPanel.jsx";
 import RevisionsPanel from "../components/RevisionsPanel.jsx";
 import { diffTakeoffs } from "../lib/revisions.js";
-import TakeoffsPanel, { clampPanelW, PANEL_EXPANSION, CONDITION_DND_MIME, ConditionAppearanceEditor } from "../components/TakeoffsPanel.jsx";
+import TakeoffsPanel, { clampPanelW, PANEL_EXPANSION, CONDITION_DND_MIME, ConditionAppearanceEditor, ConditionIdentityFields } from "../components/TakeoffsPanel.jsx";
 import { HATCHES, PALETTE, NO_FILL, HatchPattern, HatchSwatch } from "../components/hatches.jsx";
 import { Icon } from "../brand/icons.jsx";
 import { RENDER_SCALE, MAX_GROUP, STANDARD_SCALES, parseSheetKey, compareSheetKeys, extractSheetNumber, detectScale, extractRegionText } from "../lib/sheets";
@@ -228,7 +234,9 @@ const PALETTE_MAX = 9;
 
 export default function TakeoffCanvas() {
   const licenseAccess = useLicenseAccess();
-  const readOnly = licenseAccess.readOnly;
+  const cloudAccount = useCloud();
+  const readOnly = licenseAccess.readOnly || !cloudAccount.user;
+  const readOnlyMessage = !cloudAccount.user ? "Log in to edit. You can view and navigate this project while logged out." : licenseAccess.message;
   // Client-only: a single local workspace in this browser (no project id, no backend).
   const [sheets, setSheets] = useState([]);
   const [active, setActive] = useState("");      // active source PDF file name
@@ -468,7 +476,7 @@ export default function TakeoffCanvas() {
   const [agentProposals, setAgentProposals] = useState([]);
   const [agentOpen, setAgentOpen] = useState(false);      // docked right-rail Agent panel
   const overlayDrawers = workspaceWidth <= 1100 ||
-    (leftTab ? leftPanelW : 0) + (takeoffsOpen ? panelW : 0) + (agentOpen ? agentPanelW : 0) > workspaceWidth - 480;
+    (agentOpen ? agentPanelW : 0) > workspaceWidth - 480;
   const [agentLog, setAgentLog] = useState([]);           // streaming run status [{kind, text}]
   const [agentRunning, setAgentRunning] = useState(false);
   const [showAiSettings, setShowAiSettings] = useState(false); // BYO-key config modal (ai.js seam)
@@ -764,9 +772,9 @@ export default function TakeoffCanvas() {
   const setCommitMsg = useCallback((text) => setCommitMsgState({ text }), []);
   const denyReadOnlyEdit = useCallback(() => {
     if (!readOnly) return false;
-    setCommitMsg(licenseAccess.message || "This workspace is read-only.");
+    setCommitMsg(readOnlyMessage || "This workspace is read-only.");
     return true;
-  }, [readOnly, licenseAccess.message, setCommitMsg]);
+  }, [readOnly, readOnlyMessage, setCommitMsg]);
   useEffect(() => {
     if (!readOnly) return undefined;
     setTool("pan"); setPoly([]); setMarkupDraft(null); setTextLeaderMarkupId(null); setEditor(null); setProposal(null); setArmedStamp(null);
@@ -807,6 +815,9 @@ export default function TakeoffCanvas() {
   const setProjectName = (name) => setProjectMetadata((meta) => ({ ...meta, name }));
   const unknownProjectFieldsRef = useRef({});
   const [projectMetadataModal, setProjectMetadataModal] = useState(null);
+  const calendarReturnPending = useRef(sessionStorage.getItem("otk:reopen-calendar") === "1" || new URLSearchParams(window.location.search).get("otkCalendar") === "1");
+  const [projectCalendarOpen, setProjectCalendarOpen] = useState(() => calendarReturnPending.current);
+  useEffect(() => { if (projectCalendarOpen) sessionStorage.removeItem("otk:reopen-calendar"); }, [projectCalendarOpen]);
   const [whiteboard, setWhiteboard] = useState(emptyWhiteboard);
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [whiteboardBusy, setWhiteboardBusy] = useState(false);
@@ -833,6 +844,8 @@ export default function TakeoffCanvas() {
   const [projectFileError, setProjectFileError] = useState("");
   const [projectFilePrompt, setProjectFilePrompt] = useState(null);
   const [projectSavePrompt, setProjectSavePrompt] = useState(null);
+  const [saveSettingsOpen, setSaveSettingsOpen] = useState(false);
+  const [addConditionOpen, setAddConditionOpen] = useState(false);
   const [projectSaveRequired, setProjectSaveRequired] = useState(false);
   const [projectSaveAs, setProjectSaveAs] = useState(false);
   const [projectSaveCompact, setProjectSaveCompact] = useState(false);
@@ -842,9 +855,8 @@ export default function TakeoffCanvas() {
   const [missingImportBusy, setMissingImportBusy] = useState("");
   const [missingImportError, setMissingImportError] = useState("");
   const [cloudView, setCloudView] = useState(() => SHARING_UI_ENABLED && new URLSearchParams(window.location.search).has("sharedProject") ? "projects" : null);
-  const cloudAccount = useCloud();
-  useEffect(() => { if (cloudAccount.authReturn) setCloudView(cloudAccount.authReturn.error ? "account" : "welcome"); }, [cloudAccount.authReturn]);
-  useEffect(() => { if (cloudAccount.driveReturn) setCloudView("account"); }, [cloudAccount.driveReturn]);
+  useEffect(() => { if (cloudAccount.authReturn && !calendarReturnPending.current) setCloudView(cloudAccount.authReturn.error ? "account" : "welcome"); }, [cloudAccount.authReturn]);
+  useEffect(() => { if (!cloudAccount.driveReturn) return; if (cloudAccount.driveReturn.calendar || calendarReturnPending.current) { setCloudView(null); setProjectCalendarOpen(true); calendarReturnPending.current = false; cloudAccount.clearDriveReturn(); } else setCloudView("account"); }, [cloudAccount.driveReturn, cloudAccount.clearDriveReturn]);
   const portableProjectId = useRef(crypto.randomUUID());
   const projectFileLock = useRef(false);
   const projectFileHandleRef = useRef(null);
@@ -859,6 +871,7 @@ export default function TakeoffCanvas() {
   const projectFileAutosaveBusyRef = useRef(false);
   const [pageExportBusy, setPageExportBusy] = useState(false);
   const [pageExportDialogOpen, setPageExportDialogOpen] = useState(false);
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [pageExportQuality, setPageExportQuality] = useState(loadPdfExportQuality);
   const pageExportLock = useRef(false);
   const [planImportBusy, setPlanImportBusy] = useState(false);
@@ -988,6 +1001,11 @@ export default function TakeoffCanvas() {
   // its onOpenChange effect when the callback identity changes, so an inline
   // arrow here would re-count an open menu on every canvas render
   const onMenuDepth = useCallback((o) => { menuDepthRef.current = Math.max(0, menuDepthRef.current + (o ? 1 : -1)); }, []);
+  useEffect(() => {
+    if (!takeoffsOpen) return;
+    onMenuDepth(true);
+    return () => onMenuDepth(false);
+  }, [takeoffsOpen, onMenuDepth]);
   const onMarkupMenuDepth = useCallback((o) => { onMenuDepth(o); if (!o) setMappingMarkupShortcut(null); }, [onMenuDepth]);
   const thumbCacheRef = useRef(new Map()); // sheetKey → thumbnail dataURL — survives gallery close
   const legacyPinnedRef = useRef(null);    // old `pinned` page numbers awaiting their one-shot tab migration
@@ -1134,6 +1152,8 @@ export default function TakeoffCanvas() {
     onToggle={() => { if (!denyReadOnlyEdit()) setFileBookmarks((current) => toggleFileBookmark(current, name)); }} />;
   const fileGroups = fileBookmarkGroups(sheets, fileBookmarks);
   const bookmarkGroups = sheetBookmarkGroups(openTabs, [...bookmarkedKeys, ...markedUpKeys], sheets);
+  const showingBookmarkedTabs = bookmarkGroups.bookmarked.length > 0;
+  const displayedSheetTabs = showingBookmarkedTabs ? bookmarkGroups.bookmarked : openTabs;
   const sheetJumpItem = (key) => ({ id: key, icon: "document", label: tabLabel(key),
     active: sheetGroup.length ? sheetGroup.includes(key) : key === sheetKey,
     onSelect: () => openSheets([key], false), accessory: bookmarkButton(key) });
@@ -1351,6 +1371,8 @@ export default function TakeoffCanvas() {
     markZoomCompositing(); applyTf(); syncRasterRepresentation(next.scale); setTf({ ...next });
   }, [applyTf, markZoomCompositing, syncRasterRepresentation]);
 
+  const touchZoom = usePinchZoom({ getView: () => tfRef.current, setView: setTfNow,
+    onStart: () => { panRef.current = null; pendingClickRef.current = null; } });
   const requestPdfPassword = useCallback(({ fileName, incorrect, attempt }) => new Promise((resolve) => {
     // Validation runs sequentially, but defensively release an older waiter if
     // a project switch/cancellation races a second protected document.
@@ -2084,7 +2106,7 @@ export default function TakeoffCanvas() {
   // open dropped/picked files of any kind: PDFs, images, and .zip plan sets all
   // get turned into PDF sheets (in-browser) by ingestFiles, then stashed locally
   async function handleFiles(fileList) {
-    if (denyReadOnlyEdit()) return;
+    if (denyReadOnlyEdit()) return false;
     const incoming = Array.from(fileList || []);
     if (!incoming.length) return;
     if (incoming.some((file) => /\.otk$/i.test(file.name))) {
@@ -2099,7 +2121,7 @@ export default function TakeoffCanvas() {
       setCommitMsg("Reading files…");
       let pdfs = [], skipped = [];
       try { ({ pdfs, skipped } = await ingestFiles(incoming, { onProgress: setCommitMsg })); }
-      catch (e) { setCommitMsg(`Couldn't read those files: ${e.message || e}`); return; }
+      catch (e) { setCommitMsg(`Couldn't read those files: ${e.message || e}`); return false; }
       const excluded = skipped.map((item) => ({ ...item, technical: "", retryable: false }));
       const accepted = [];
       for (let index = 0; index < pdfs.length; index++) {
@@ -2132,7 +2154,7 @@ export default function TakeoffCanvas() {
         setCommitMsg(excluded.length
           ? `Nothing to open — ${excluded.length} file${excluded.length === 1 ? "" : "s"} excluded.`
           : `No supported files found. Drop a PDF, an image, or a .zip plan set.`);
-        return;
+        return false;
       }
       await refreshSheets();
       const names = accepted.map((f) => f.name);
@@ -2159,6 +2181,7 @@ export default function TakeoffCanvas() {
         // .otk destination so the newly added source plans are backed up too.
         scheduleProjectFileAutosave(buildPayload({ touch: true }));
       }
+      return true;
     } finally {
       if (importAbortRef.current === controller) importAbortRef.current = null;
       setPlanImportBusy(false);
@@ -3060,7 +3083,7 @@ export default function TakeoffCanvas() {
     setProjectSavePrompt(projectFilename(compact ? `${projectName} - marked pages only` : projectName));
   }
 
-  async function confirmSaveProjectFile(name, saveAs = projectSaveAs, compact = projectSaveCompact) {
+  async function confirmSaveProjectFile(name, saveAs = projectSaveAs, compact = projectSaveCompact, backup = false) {
     if (projectFileLock.current || !hydrated.current || whiteboardBusy) return;
     clearProjectFileAutosaveWakeup();
     projectFileLock.current = true;
@@ -3070,14 +3093,14 @@ export default function TakeoffCanvas() {
       const result = await saveProjectArchive({
         name,
         pickFile: typeof window.showSaveFilePicker === "function" ? window.showSaveFilePicker.bind(window) : null,
-        existingHandle: compact ? null : projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current),
+        existingHandle: compact || backup ? null : projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current),
         saveAs: compact || saveAs,
         // Capture live edits, including anything still in the autosave delay.
         buildArchive: () => { persistedPayload = buildPayload({ touch: true }); return exportProjectFile(store, persistedPayload, { compact }); },
         download: downloadBytes,
       });
       if (result.status !== "cancelled") {
-        if (!compact) {
+        if (!compact && !backup) {
           projectFileHandleRef.current = result.handle || null;
           projectFileHandleProjectIdRef.current = result.handle ? portableProjectId.current : null;
           if (result.handle) {
@@ -3095,7 +3118,12 @@ export default function TakeoffCanvas() {
         setCommitMsg(`${compact ? "Marked-pages-only project" : "Project"} ${result.status === "saved" ? "saved" : "download started"}: ${result.filename}`);
       }
     } catch (e) { setProjectFileError(e.message || "Couldn't save the project file."); }
-    finally { projectFileLock.current = false; setProjectFileBusy(""); }
+    finally {
+      projectFileLock.current = false; setProjectFileBusy("");
+      if (backup && projectFileAutosavePayloadRef.current) {
+        armProjectFileAutosaveWakeup(projectFileAutosaveDelay(Date.now(), projectFileAutosaveFirstDirtyRef.current));
+      }
+    }
   }
 
   async function openProjectFile(file) {
@@ -5826,10 +5854,14 @@ export default function TakeoffCanvas() {
   }
   function addCondition() {
     if (denyReadOnlyEdit()) return;
-    const tag = (window.prompt("Finish tag for this condition (e.g. LVT-1):") || "").trim();
+    setAddConditionOpen(true);
+  }
+  function confirmAddCondition(tag) {
+    if (denyReadOnlyEdit()) return;
     if (!tag) return;
     const c = mintCondition(tag);
     activateCondition(c.id, { reassign: false });   // no reassign affordance on +condition; still dismisses a live bulk selection
+    setAddConditionOpen(false);
   }
 
   // ── In-canvas takeoff agent — capabilities, the accept gate, and the run ────
@@ -7553,10 +7585,11 @@ export default function TakeoffCanvas() {
 
   const scaleControls = cluster(`Scale — ${labelFor(focusPanel)}`,
           <>
-            <button onClick={() => setUnits((u) => (u === "metric" ? "imperial" : "metric"))}
-              title={units === "metric" ? "Metric display (m² / m) — click for imperial. Calibrate in meters; 1:50-style scales in the list. Display only — stored takeoffs never change." : "Imperial display (SF / LF) — click for metric (m² / m, calibrate in meters, 1:50-style scales). Display only — stored takeoffs never change."}
-              style={{ padding: "6px 10px", border: `1px solid ${units === "metric" ? "var(--cobalt)" : "var(--ink-faint)"}`, background: units === "metric" ? "var(--cobalt)" : "transparent", color: units === "metric" ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 700, fontFamily: "var(--f-mono)", fontSize: 11, lineHeight: 1 }}>
-              {units === "metric" ? "m" : "ft"}
+            <button type="button" className="units-toggle" role="switch" aria-checked={units === "metric"} aria-label="Metric units" data-metric={units === "metric"}
+              title="Switch between feet and meters. Stored measurements stay unchanged."
+              onClick={() => setUnits((u) => u === "metric" ? "imperial" : "metric")}>
+              <span className="units-toggle-thumb" aria-hidden="true" />
+              <span className="units-toggle-label" aria-hidden="true">FT</span><span className="units-toggle-label" aria-hidden="true">M</span>
             </button>
             <span className={!unitsPerPx && focusPanel.key ? "scale-needs-setting" : undefined} style={{ display: "inline-flex" }}>
             <ToolMenu
@@ -7581,22 +7614,19 @@ export default function TakeoffCanvas() {
       onOpenChange={onMenuDepth} disabled={!!projectFileBusy}
       items={[
         { id: "new-project", icon: "plus", label: "New project…", onSelect: () => setProjectMetadataModal("new") },
-        { id: "edit-project", label: "Edit project details…", onSelect: () => setProjectMetadataModal("edit"), disabled: !projectName },
-        { note: projectName ? `${projectMetadata.status}${projectMetadata.submissionDate ? ` · due ${formatProjectDate(projectMetadata.submissionDate, { dateStyle: "medium" })}` : " · no due date"}${projectMetadata.lastModifiedAt ? ` · modified ${formatProjectDate(projectMetadata.lastModifiedAt, { dateStyle: "medium", timeStyle: "short" })}` : ""}` : "Create a named project or open an existing project file." },
+        { id: "edit-project", label: "Project Data..", onSelect: () => setView("gallery") },
+        { id: "project-calendar", label: "Project calendar", onSelect: () => setProjectCalendarOpen(true) },
         "divider",
-        { id: "save-project", icon: "document", label: projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current) ? "Save project" : "Save project...", onSelect: () => saveProjectFile(false), disabled: !hydrated.current || !!loadError },
-        { id: "save-compact-project", icon: "document", label: "Save project with marked pages only...", onSelect: () => saveProjectFile(true, true),
-          title: compactProject ? "This project is already a marked-pages-only copy. Import the missing files before making another compact copy." : "Keep measured, marked, and page-bookmarked PDF pages; omit the remaining source-page content.",
-          disabled: !hydrated.current || !!loadError || !!compactProject },
-        { id: "save-project-as", label: "Save project as...", onSelect: () => saveProjectFile(true), disabled: !hydrated.current || !!loadError },
+        { id: "save-project", icon: "document", label: "Save..", onSelect: () => setSaveSettingsOpen(true), disabled: !hydrated.current || !!loadError },
         ...(compactProject ? [{ id: "import-missing-files", icon: "plus", label: "Import missing files...", onSelect: () => { setMissingImportError(""); setMissingImportOpen(true); },
           title: `Restore ${compactProject.files.length} original PDF${compactProject.files.length === 1 ? "" : "s"} from a folder or ZIP file.` }] : []),
         { id: "open-project", icon: "plus", label: "Open project...", onSelect: () => projectInputRef.current?.click() },
         { id: "open-recent", custom: <RecentProjectsMenu /> },
-        { id: "browse-cloud", icon: "sheets", label: "Cloud projects...", onSelect: () => setCloudView("projects"), disabled: !hydrated.current || !!loadError },
         { id: "pdf-opening-settings", icon: "sliders", label: "PDF opening & OCR...", onSelect: () => setPdfOpeningSettingsOpen(true),
           title: `Saved plans: ${pdfPreferences.openMode === PDF_OPEN_MODES.FAST ? "fast auto-detect" : "verify every page"} · Find OCR: ${pdfPreferences.ocrMode}` },
         "divider",
+        { id: "print-plans", icon: "document", label: "Print...", onSelect: () => setPrintDialogOpen(true),
+          disabled: !focusPanel.file || !hydrated.current || !!loadError },
         { id: "download-page", icon: "document", label: pageExportBusy ? "Downloading page..." : "Download this page...",
           title: "Choose export quality and download the current sheet with takeoff lines, notes, and markups but no measurement labels", onSelect: () => setPageExportDialogOpen(true),
           disabled: pageExportBusy || !focusPanel.file || !hydrated.current || !!loadError },
@@ -7638,6 +7668,28 @@ export default function TakeoffCanvas() {
       {pdfOpeningSettingsOpen && <PdfOpeningSettingsDialog preferences={pdfPreferences}
         onChange={(next) => setPdfPreferences(savePdfPreferences(next))}
         onClose={() => setPdfOpeningSettingsOpen(false)} />}
+      {printDialogOpen && <PrintDialog currentKey={focusPanel.key} onClose={() => setPrintDialogOpen(false)}
+        loadPages={async () => {
+          const pages = [];
+          for (const file of sheets) {
+            const pdf = await docFor(file.name);
+            for (let page = 1; page <= pdf.numPages; page++) {
+              const key = page === 1 ? file.name : `${file.name}#${page}`;
+              pages.push({ key, file: file.name, page, label: tabLabel(key) });
+            }
+          }
+          return pages;
+        }}
+        buildPdf={(pages, settings, progress, cancelled) => buildPrintDocument(pages, settings, async (sheet, options) => {
+          const result = await buildMarkedSetPdf({ projectName, dark: false, units, singleSheet: true, sheets: [sheet],
+            shapes: options.takeoffs ? shapes.filter((s) => s.sheet_id === sheet.key) : [],
+            markups: options.markups ? markups.filter((m) => m.sheet_id === sheet.key) : [],
+            chainLinkFences: options.takeoffs ? chainLinkFences.filter((f) => f.sheet_id === sheet.key) : [],
+            rfis, conditions, includeShapeLabels: false, quality: options.quality,
+            getPage: async (file, page) => (await docFor(file)).getPage(page), loadPdfData: (file) => store.loadPdfData(file),
+          });
+          return result.bytes;
+        }, progress, cancelled)} />}
       {pageExportDialogOpen && <PdfExportDialog title="Download this page" scopeLabel={focusPanel.key ? `${tabLabel(focusPanel.key)} · flattened visual PDF` : "Current page"}
         defaultQuality={pageExportQuality} busy={pageExportBusy}
         estimateFor={(quality) => {
@@ -7654,6 +7706,7 @@ export default function TakeoffCanvas() {
         setPdfImportReport(null);
         if (files.length) handleFiles(files);
       }} />
+      {projectCalendarOpen && <ProjectCalendar metadata={projectMetadata} onSaveMetadata={async (draft) => { if (denyReadOnlyEdit()) throw new Error("Project is view only."); setProjectMetadata((meta) => ({ ...meta, ...draft, lastModifiedAt: new Date().toISOString() })); }} onClose={() => setProjectCalendarOpen(false)} />}
       {projectMetadataModal && <ProjectMetadataModal mode={projectMetadataModal} initial={projectMetadata}
         hasWorkspace={!!(sheets.length || shapes.length || markups.length || rfis.length || projectName || fenceCalculatorProjectHasContent(fenceCalculatorProject))} saveState={saveState}
         onSubmit={submitProjectMetadata} onClose={() => setProjectMetadataModal(null)} />}
@@ -7691,7 +7744,7 @@ export default function TakeoffCanvas() {
       {cloudView && <CloudProjects initialView={cloudView} source={store} getPayload={buildPayload}
         onPersisted={(lastModifiedAt, savedMetadata) => { if (lastModifiedAt) setProjectMetadata((meta) => ({ ...meta, ...savedMetadata, lastModifiedAt })); }}
         onClose={() => { setCloudView(null); cloudAccount.clearAuthReturn(); cloudAccount.clearDriveReturn(); }} onOpenChange={onMenuDepth} />}
-      {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard} readOnly={readOnly} readOnlyMessage={licenseAccess.message}
+      {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard} readOnly={readOnly} readOnlyMessage={readOnlyMessage}
         onClose={() => { setWhiteboardOpen(false); setWhiteboardImportRequest(null); }}
         onSave={() => saveProjectFile(false)} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState}
         initialFiles={whiteboardImportRequest?.files} onInitialFilesHandled={() => setWhiteboardImportRequest(null)} />}
@@ -7702,6 +7755,13 @@ export default function TakeoffCanvas() {
         activeCondition={aCond}
         onAddToEstimate={addFenceCalculationToEstimate}
         onClose={() => setFenceCalculatorOpen(false)} />}
+      {addConditionOpen && <AddConditionDialog onAdd={confirmAddCondition} onClose={() => setAddConditionOpen(false)} />}
+      {saveSettingsOpen && <SaveSettingsDialog filename={projectFilename(projectName || "Untitled project")} compactProject={compactProject}
+        hasDestination={!!projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current)}
+        onClose={() => setSaveSettingsOpen(false)} onSave={(name, compact, saveAs, backup) => {
+          setSaveSettingsOpen(false);
+          void confirmSaveProjectFile(name, saveAs, compact, backup);
+        }} />}
       {projectSavePrompt !== null && <SaveProjectDialog filename={projectSavePrompt}
         canChooseLocation={typeof window.showSaveFilePicker === "function"} busy={!!projectFileBusy} error={projectFileError}
         required={projectSaveRequired}
@@ -7728,25 +7788,41 @@ export default function TakeoffCanvas() {
         ref={toolbarStackRef}
         className={`glass-toolbar-stack tabbed-toolbar-stack${toolbarHidden ? " is-hidden" : ""}`}
         style={{
-          left: !overlayDrawers && leftTab ? leftPanelW : 0,
-          right: overlayDrawers ? 0 : (takeoffsOpen ? panelW : 0) + (agentOpen ? agentPanelW : 0),
+          left: 0,
+          right: overlayDrawers ? 0 : (agentOpen ? agentPanelW : 0),
         }}
       >
         <BeitzellToolbar
           logo={<strong onClick={handleDevLogoGesture} onMouseDown={(event) => { if (event.detail > 1) event.preventDefault(); }} onDoubleClick={(event) => event.preventDefault()}
             style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}><BrandText /></strong>}
           account={<>
-        <output className="takeoff-header-zoom" aria-label={`Canvas zoom ${(tf.scale * 100).toFixed(0)} percent`} title="Current canvas zoom">ZOOM {(tf.scale * 100).toFixed(0)}%</output>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>
+          <LongTaskLoader active={saveState === "saving"} label="Saving project…" compact delay={500} />
+          {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved ✓" : ""}
+        </span>
+        {view === "canvas" && sheets.length > 0 && <button type="button" className="header-history-button"
+          onClick={() => setToolbarHidden(true)} title="Hide toolbar" aria-label="Hide toolbar">
+          <Icon name="eye" size={16} />
+        </button>}
+        <div className="header-history-actions" role="group" aria-label="Undo and redo">
+          {["undo", "redo"].map((action) => <button key={action} type="button" className="header-history-button"
+            aria-label={action === "undo" ? "Undo" : "Redo"} title={action === "undo" ? "Undo (Ctrl+Z)" : "Redo (Ctrl+Shift+Z)"}
+            onClick={(event) => {
+              if (poly.length) { if (action === "undo") setPoly((points) => points.slice(0, -1)); }
+              else if (chainLinkOpen && (chainUndoRef.current.length || chainRedoRef.current.length)) { if (action === "undo") undoChainLink(); else redoChainLink(); }
+              else if (action === "undo") undoShapeCommand(); else redoShapeCommand();
+              if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) event.currentTarget.animate([
+                { color: "var(--cobalt)", filter: "drop-shadow(0 0 5px var(--cobalt))" },
+                { color: "var(--ink-muted)", filter: "none" },
+              ], { duration: 500 });
+            }}><span style={{ display: "inline-flex", transform: action === "redo" ? "scaleX(-1)" : undefined }}><Icon name="undo" size={19} /></span></button>)}
+        </div>
+        <output className="takeoff-header-zoom" aria-label={`Canvas zoom ${(tf.scale * 100).toFixed(0)} percent`} title="Current canvas zoom">Zoom {(tf.scale * 100).toFixed(0)}%</output>
         <WorkspaceHelp metadata={projectMetadata} name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
         {cloudAccount?.user ? <button type="button" className="account-profile-button" ref={(el) => { if (el) el.parentElement.style.setProperty("--profile-button-width", `${el.getBoundingClientRect().width}px`); }} aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><AccountAvatar profile={cloudAccount.identity} /><span>{cloudAccount.identity.name}</span></button> : <button type="button" className="account-sign-in-button" onClick={() => setCloudView("projects")} disabled={!cloudAccount?.ready} aria-label="Sign in" title="Sign in to your account">Sign in</button>}
         <AccountChip note={cloudMode ? "Synced to Google Drive" : "Local workspace"} onOpenChange={onMenuDepth} />
           </>}
-          projectSelector={<>{projectControls}
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>
-          <LongTaskLoader active={saveState === "saving"} label="Saving project…" compact delay={500} />
-          {saveState === "saving" ? "saving…" : saveState === "saved" ? "saved ✓" : ""}
-        </span>
-          </>}
+          projectSelector={projectControls}
           project={<>
         {/* team cloud mode: always a way to leave this project, plus a way to
             browse the rest of the team's projects when the build names a root
@@ -7778,13 +7854,7 @@ export default function TakeoffCanvas() {
           </Link>
         )}
           </>}
-          sheets={<>
-        <button type="button" onClick={() => setView("gallery")}
-          title={`Plan set — the visual gallery; open one or several sheets (G)${sheetGroup.length ? ` · ${sheetGroup.length} side-by-side now` : ""}`}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: `1px solid ${sheetGroup.length ? "var(--cobalt)" : "var(--ink-faint)"}`, background: sheetGroup.length ? "var(--cobalt)" : "transparent", color: sheetGroup.length ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}>
-          <Icon name="sheets" size={15} />Loaded files
-        </button>
-        {sheets.length > 0 && (
+          sheetNavigation={<>{sheets.length > 0 && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
             <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={!!sheetGroup.length || page <= 1} title="Previous sheet (Left Arrow)"
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page <= 1) ? 0.4 : 1 }}><Icon name="chevronLeft" size={12} /></button>
@@ -7799,28 +7869,23 @@ export default function TakeoffCanvas() {
             <button type="button" onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={!!sheetGroup.length || page >= pageCount} title="Next sheet (Right Arrow)"
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page >= pageCount) ? 0.4 : 1 }}><Icon name="chevronRight" size={12} /></button>
           </span>
-        )}
-        <button type="button" onClick={importCurrentFileToWhiteboard}
-          disabled={!focusPanel?.file || whiteboardImportBusy || whiteboardBusy || !!loadError}
-          title="Import the currently focused page with measurements and markups to the whiteboard"
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: (!focusPanel?.file || whiteboardImportBusy || whiteboardBusy || loadError) ? "default" : "pointer", opacity: (!focusPanel?.file || whiteboardImportBusy || whiteboardBusy || loadError) ? .45 : 1, fontWeight: 600, fontSize: 12.5, lineHeight: 1 }}>
-          <Icon name="rectTool" size={15} />{whiteboardImportBusy ? "Importing…" : "Import to Whiteboard"}
-        </button>
+        )}</>}
+          sheets={<>
       {/* open-sheet tabs — what you opened from the gallery; click to view,  
           ⊞ to side-by-side, ✕ to close; the dropdown lists every open sheet */}
-      {openTabs.length > 0 && (
+      {displayedSheetTabs.length > 0 && (
         <div className="toolbar-sheet-tabs" style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
-          <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--ink-muted)" }}>Sheets</span>
-          {openTabs.slice(0, 8).map((k) => {
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--ink-muted)" }}>{showingBookmarkedTabs ? "Bookmarked" : "Sheets"}</span>
+          {displayedSheetTabs.slice(0, 8).map((k) => {
             const inGroup = sheetGroup.includes(k);
             const on = sheetGroup.length ? inGroup : k === sheetKey;
             const lbl = tabLabel(k);
             return (
               <span key={k} className={`sheet-tab${on ? " is-active" : ""}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--ink-faint)", borderBottom: on ? "2px solid var(--cobalt)" : "1px solid var(--ink-faint)", background: on ? "var(--paper-cream)" : "transparent", padding: "3px 6px 2px 9px", maxWidth: 190 }}>
-                <button className="sheet-tab-button" onClick={() => goToSheet(k)} title={k} style={{ border: "none", background: "none", cursor: "pointer", fontWeight: on ? 700 : 500, fontSize: 11.5, color: "var(--ink)", fontFamily: "var(--f-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140, padding: 0 }}>{lbl}</button>
+                <button className="sheet-tab-button" onClick={() => openSheets([k], false)} title={k} style={{ border: "none", background: "none", cursor: "pointer", fontWeight: on ? 700 : 500, fontSize: 11.5, color: "var(--ink)", fontFamily: "var(--f-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140, padding: 0 }}>{lbl}</button>
                 {bookmarkButton(k)}
                 <button className="sheet-tab-icon" onClick={() => toggleInGroup(k)} title={inGroup ? "Remove from side-by-side" : "Side-by-side with the current sheet"} style={{ border: "none", background: "none", cursor: "pointer", color: inGroup ? "var(--cobalt)" : "var(--ink-faint)", padding: 0, display: "inline-flex" }}><Icon name="sideBySide" size={11} /></button>
-                <button className="sheet-tab-icon" onClick={() => closeTab(k)} title="Close tab" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-muted)", padding: 0, display: "inline-flex" }}><Icon name="close" size={10} /></button>
+                {!showingBookmarkedTabs && <button className="sheet-tab-icon" onClick={() => closeTab(k)} title="Close tab" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-muted)", padding: 0, display: "inline-flex" }}><Icon name="close" size={10} /></button>}
               </span>
             );
           })}
@@ -7828,7 +7893,7 @@ export default function TakeoffCanvas() {
             <ToolMenu
               title="Jump to an open or bookmarked sheet"
               onOpenChange={onMenuDepth}
-              face={<span style={{ fontFamily: "var(--f-mono)", fontSize: 11 }}>{openTabs.length} open</span>}
+              face={<span style={{ fontFamily: "var(--f-mono)", fontSize: 11 }}>{showingBookmarkedTabs ? `${displayedSheetTabs.length} bookmarked` : `${openTabs.length} open`}</span>}
               menuStyle={{ maxHeight: `min(480px, max(48px, calc(100dvh - ${toolbarHeight + 16}px)))`, overflowY: "auto", overscrollBehavior: "contain" }}
               items={sheetJumpItems}
             />
@@ -7908,11 +7973,13 @@ export default function TakeoffCanvas() {
           </select>
         )}
         <div style={{ display: "inline-flex", borderLeft: "1px solid var(--ink-faint)", paddingLeft: 12 }}>{scaleControls}</div>
+            <button type="button" onClick={addCondition} title="Add a new condition"
+              style={{ padding: "3px 9px", borderRadius: 0, border: "1px solid var(--ink-faint)", background: "transparent", cursor: "pointer", fontSize: 12, color: "#fff" }}>+ Condition</button>
         <div
           className="takeoff-toolbar-readout"
           aria-label="Live takeoff summary"
           style={{ "--takeoff-readout-accent": activeColor }}>
-          <div className="takeoff-toolbar-readout-heading">{tool === "zone" ? "Zone check" : (aCond?.finish_tag || "No condition")}</div>
+          <div className="takeoff-toolbar-readout-heading">{tool === "zone" ? "Zone check" : aCond ? <ConditionIdentityFields cond={aCond} onUpdateCond={updateCond} afterWaste={<div className="condition-appearance-toolbar condition-card-appearance"><ConditionAppearanceEditor cond={aCond} onUpdateCond={updateCond} onSetCondParam={setCondParam} onAssignAttr={assignAttr} conditionColumns={conditionColumns} layout="row" /></div>} /> : "No condition"}</div>
           <div className="takeoff-toolbar-readout-live">
             {tool === "oneclick" && proposal?.regions.length ? (() => {
               const pos = proposal.regions.filter((r) => r.kind === "pos");
@@ -7953,7 +8020,7 @@ export default function TakeoffCanvas() {
                 {condH > 0 && <div className="takeoff-toolbar-readout-hint" title="Display only — perimeter × condition height">@H {num(condH, 2)}′: {fa(livePerim * condH)} vert{units === "metric" ? "" : ` · ${num((liveArea * condH) / 27)} CY`}</div>}
               </>
             ) : (
-              <div className="takeoff-toolbar-readout-detail">{!unitsPerPx ? "Set scale first" : tool === "zone" ? "Trace a region (an apartment, a wing) — ⏎ closes it and lists every condition inside" : !activeCond ? "Pick a condition" : tool === "oneclick" ? "Click inside a room — it selects itself" : tool === "surface" ? "Trace the wall run" : "Click to trace an area"}</div>
+              <div className="takeoff-toolbar-readout-detail">{!unitsPerPx ? "Set scale first" : tool === "zone" ? "Trace a region (an apartment, a wing) — ⏎ closes it and lists every condition inside" : !activeCond ? "Pick a condition" : tool === "oneclick" ? "Click inside a room — it selects itself" : tool === "surface" ? "Trace the wall run" : null}</div>
             )}
             {selShape?.measure_role === "surface_area" && (
               <div className="takeoff-toolbar-shape-height" title="Height for this wall only. Reset returns to the condition height.">
@@ -7966,18 +8033,17 @@ export default function TakeoffCanvas() {
             )}
           </div>
           <div className="takeoff-toolbar-readout-total">
-            <span>{aCond?.finish_tag || "—"} total ({condRow?.shape_count || 0}{condMult > 1 ? ` ×${condMult}` : ""})</span>
             <strong>
               {condTotal !== 0 && <span>{num(areaVal(condTotal, units))} {areaUnit(units)}{units === "imperial" ? ` · ${num(condTotal / 9)} SY` : ""}</span>}
               {wallTotal > 0 && <span>{num(areaVal(wallTotal, units))} {areaUnit(units)} wall</span>}
               {borderTotal > 0 && <span>{num(areaVal(borderTotal, units))} {areaUnit(units)} border</span>}
-              {lfTotal > 0 && <span>{num(lenVal(lfTotal, units))} {lenUnit(units)}</span>}
+              {lfTotal > 0 && <span>{num(lenVal(lfTotal, units))} {lenUnit(units).toUpperCase()}</span>}
               {countTotal > 0 && <span>{num(countTotal, 0)} EA</span>}
               {condTotal === 0 && lfTotal === 0 && countTotal === 0 && wallTotal === 0 && borderTotal === 0 && <span>—</span>}
             </strong>
+            <div className="takeoff-toolbar-readout-meta">Shapes in this page count = ({visibleShapes.length})</div>
             {vertTotal > 0 && <small title="Display only — floor-area perimeters × this condition's height (not committed)">{fa(vertTotal)} vert (perim × H)</small>}
           </div>
-          <div className="takeoff-toolbar-readout-meta">{visibleShapes.length} shapes on {groupKeys.length > 1 ? `${groupKeys.length} sheets` : "sheet"}</div>
         </div>
         {(finishOk || proposal?.regions.length > 0 || textLeaderMarkupId || (markupDraft && ["cloud", "callout", "highlight"].includes(tool))) && cluster("",
           <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 6, minWidth: 150 }}>
@@ -8021,7 +8087,7 @@ export default function TakeoffCanvas() {
           — the same one the docked panel row renders — so line/fill/hatch/height
           are editable without opening the sidebar. Shown once there's a
           condition to pin, so the drop zone is discoverable. */}
-      {conditions.length > 0 && (
+      {paletteConds.length > 0 && (
         <div
           onDragOver={(e) => { if (e.dataTransfer.types.includes(CONDITION_DND_MIME)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; } }}
           onDrop={(e) => { if (!e.dataTransfer.types.includes(CONDITION_DND_MIME)) return; e.preventDefault(); e.stopPropagation(); const id = e.dataTransfer.getData(CONDITION_DND_MIME); if (id) pinToPalette(id); }}
@@ -8060,16 +8126,11 @@ export default function TakeoffCanvas() {
               <span style={{ fontSize: 10.5, color: "var(--ink-muted)", fontStyle: "italic" }}>full ({PALETTE_MAX})</span>
             )}
             {/* add a condition without opening the (now-collapsed) sidebar */}
-            <button type="button" onClick={addCondition} title="Add a new condition"
-              style={{ padding: "3px 9px", borderRadius: 0, border: "1px dashed var(--ink-faint)", background: "transparent", cursor: "pointer", fontSize: 12, color: "var(--ink-muted)" }}>+ condition</button>
+
           </div>
           {/* the active condition's appearance editor, restored to the top bar —
               same component the docked panel row renders (one source of truth) */}
-          {aCond && (
-            <div style={{ marginTop: 5, paddingTop: 5, borderTop: "1px solid var(--ink-faint)" }}>
-              <ConditionAppearanceEditor cond={aCond} onUpdateCond={updateCond} onSetCondParam={setCondParam} onAssignAttr={assignAttr} conditionColumns={conditionColumns} layout="row" />
-            </div>
-          )}
+
         </div>
       )}
 
@@ -8299,6 +8360,9 @@ export default function TakeoffCanvas() {
             </header>
             <div className="takeoff-dev-panel-body">
               <div className="takeoff-dev-actions" aria-label="Experimental actions">
+                <button type="button" className="takeoff-dev-action" onClick={() => { setDevPanelOpen(false); setCloudView("account"); }} title="Open login">
+                  <Icon name="userGuide" size={17} /><span>Login</span>
+                </button>
                 <button type="button" className="takeoff-dev-action is-primary" onClick={() => { setDevPanelOpen(false); setShowReport(true); }}
                   disabled={!conditions.length} title="Open the takeoff report — per-condition breakdown with waste, plus CSV / JSON export.">
                   <Icon name="document" size={17} /><span>Report</span>
@@ -8423,17 +8487,16 @@ export default function TakeoffCanvas() {
         </div>
       )}
 
-      {view === "canvas" && sheets.length > 0 && (
+      {view === "canvas" && sheets.length > 0 && toolbarHidden && (
         <button
           type="button"
-          className={`toolbar-visibility-toggle${toolbarHidden ? " is-hidden" : ""}`}
-          onClick={() => setToolbarHidden((hidden) => !hidden)}
-          title={toolbarHidden ? "Show toolbar" : "Hide toolbar"}
-          aria-label={toolbarHidden ? "Show toolbar" : "Hide toolbar"}
-          aria-pressed={toolbarHidden}
+          className="toolbar-visibility-toggle is-hidden"
+          onClick={() => setToolbarHidden(false)}
+          title="Show toolbar"
+          aria-label="Show toolbar"
           style={{ top: toolbarOverlayTop }}
         >
-          <Icon name={toolbarHidden ? "chevronDown" : "chevronUp"} size={16} />
+          <Icon name="chevronDown" size={16} />
         </button>
       )}
 
@@ -8444,9 +8507,9 @@ export default function TakeoffCanvas() {
        {leftTab && (
          <div className="glass-drawer glass-drawer-markups" style={{ width: leftPanelW, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--ink-faint)", background: "var(--paper-bright)", overflow: "hidden", minHeight: 0 }}>
            {/* tab strip */}
-           <div style={{ display: "flex", alignItems: "stretch", background: "var(--cobalt)", color: "var(--accent-contrast)" }}>
+           <div className="markup-workspace-tabs" role="tablist" aria-label="Markup workspace" style={{ display: "flex", alignItems: "stretch", background: "var(--cobalt)", color: "var(--accent-contrast)" }}>
              {[{ id: "markup", label: "Markups", n: markupCount }, { id: "stamp", label: "Stamps", n: stampLib.stamps.length }, { id: "rfi", label: "RFIs", n: rfis.length }].map((t) => (
-               <button key={t.id} onClick={() => setLeftTab(t.id)} title={t.label}
+               <button key={t.id} role="tab" aria-selected={leftTab === t.id} onClick={() => setLeftTab(t.id)} title={t.label}
                  style={{ flex: 1, padding: "9px 6px", border: "none", borderBottom: leftTab === t.id ? "2px solid var(--accent-contrast)" : "2px solid transparent", background: leftTab === t.id ? "rgba(255,255,255,.18)" : "transparent", color: "var(--accent-contrast)", cursor: "pointer", fontWeight: leftTab === t.id ? 700 : 500, fontSize: 12 }}>
                  {t.label}{t.n ? ` · ${t.n}` : ""}
                </button>
@@ -8523,8 +8586,8 @@ export default function TakeoffCanvas() {
                          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, border: "1px solid transparent", borderRadius: 3, background: "none", cursor: "pointer", color: "var(--c-danger)" }}>
                          <Icon name="close" size={12} />
                        </button>}
-                       {m.type !== "svg" && <button onClick={() => setPanelEditId((id) => (id === m.id ? null : m.id))} title="Edit text" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-muted)" }}>✎</button>}
-                       <button onClick={() => deleteMarkup(m.id)} title="Delete markup" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--c-danger)" }}>🗑</button>
+                       {m.type !== "svg" && <button className="markup-edit-button" onClick={() => setPanelEditId((id) => (id === m.id ? null : m.id))} title="Edit text" aria-label="Edit markup text" aria-pressed={panelEditId === m.id} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-muted)" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m16 3 5 5-12 12-6 1 1-6ZM14 5l5 5M4 15l5 5" /></svg></button>}
+                       <button className="markup-delete-button" onClick={() => deleteMarkup(m.id)} title="Delete markup" aria-label="Delete markup" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--c-danger)" }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 15h12l1-15M10 10v7M14 10v7" /></svg></button>
                      </div>
                      {/* appearance — per-markup color (reuse PALETTE) + line style; both
                          additive: unset color falls back to the cobalt(linked)/amber default,
@@ -8605,7 +8668,7 @@ export default function TakeoffCanvas() {
          </div>
        )}
        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-        <div ref={containerRef} onPointerDown={(event) => {
+        <div ref={containerRef} {...touchZoom} onPointerDown={(event) => {
           if (readOnly && tool !== "pan") { denyReadOnlyEdit(); return; }
           if (tool === "select" && !textLeaderMarkupId && event.target?.closest?.(".takeoff-pdf-text-layer")) {
             const point = toImage(event.clientX, event.clientY);
@@ -8615,7 +8678,7 @@ export default function TakeoffCanvas() {
         }} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp} onPointerLeave={leaveCanvas} onContextMenu={(e) => e.preventDefault()}
           onDoubleClick={(e) => { if (readOnly) { denyReadOnlyEdit(); return; } if (tool === "select" && e.target?.closest?.(".takeoff-pdf-text-layer") && !markupAt(toImage(e.clientX, e.clientY), 8 / tfRef.current.scale)) return; if (tool === "oneclick") { if (proposal?.regions.length) createProposal(); } else if (tool === "area" || tool === "deduct" || tool === "linear" || tool === "curve" || tool === "surface" || tool === "zone") finishShape(); else if (tool === "select") editMarkupAt(e); }}
-          style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--paper-cream)", "--canvas-tool-cursor": tool === "pan" ? "var(--cursor-grab, grab)" : tool === "select" && !textLeaderMarkupId ? "var(--cursor-default, default)" : tool === "text" ? "var(--cursor-text, text)" : "var(--cursor-crosshair, crosshair)", cursor: "var(--canvas-tool-cursor)", touchAction: "none" }}>
+          style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--canvas-light-bg, var(--paper-cream))", "--canvas-tool-cursor": tool === "pan" ? "var(--cursor-grab, grab)" : tool === "select" && !textLeaderMarkupId ? "var(--cursor-default, default)" : tool === "text" ? "var(--cursor-text, text)" : "var(--cursor-crosshair, crosshair)", cursor: "var(--canvas-tool-cursor)", touchAction: "none" }}>
           {/* aim crosshair (draw modes): retain the precision overlay alongside the themed cursor. Two crisp full-page hairlines riding the
               EFFECTIVE point (angle-locked / endpoint-snapped), the SPLINE STAR at
               the crossing, and a small readout chip in the house style. The 45°
@@ -9251,7 +9314,7 @@ export default function TakeoffCanvas() {
             style={{ position: "absolute", left: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6 }}>
             {panelBtn(toggleFullscreen, isFullscreen ? "fullscreenExit" : "fullscreen", isFullscreen ? "Exit fullscreen" : "Enter fullscreen", isFullscreen, null, { "aria-label": isFullscreen ? "Exit fullscreen" : "Enter fullscreen", "aria-pressed": isFullscreen })}
             {sheets.length > 0 && <div style={{ display: "flex" }}>
-              {panelBtn(() => findOpen ? closeFind() : openFind(), "target", "Find and mark text in all loaded plans (Ctrl+F)", findOpen, null, { "aria-label": "Find text in all loaded plans", "aria-expanded": findOpen })}
+              {panelBtn(() => findOpen ? closeFind() : openFind(), "search", "Find and mark text in all loaded plans (Ctrl+F)", findOpen, null, { "aria-label": "Find text in all loaded plans", "aria-expanded": findOpen })}
             </div>}
             <ToolMenu rail title="Draw — measurement, cut out, and markup tools"
               face={<Icon name="pencil" size={15} />}
@@ -9369,6 +9432,7 @@ export default function TakeoffCanvas() {
           const drawer = e.target.closest("[data-drawer]")?.dataset.drawer;
           if (drawer) setFrontDrawer(drawer);
         }} style={{ position: "absolute", right: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
+          {panelBtn(importCurrentFileToWhiteboard, "importWhiteboard", whiteboardImportBusy ? "Importing…" : "Import to Whiteboard", false, null, { "aria-label": "Import to Whiteboard", disabled: !focusPanel?.file || whiteboardImportBusy || whiteboardBusy || !!loadError })}
           {panelBtn(() => setWhiteboardOpen(true), "rectTool", "Open whiteboard", whiteboardOpen, null, { "aria-label": "Whiteboard", disabled: !hydrated.current || !!loadError })}
           {panelBtn(() => setFenceCalculatorOpen(true), "calculator", "Fence Material Calculator — import the active takeoff's LF or count", fenceCalculatorOpen, null, { "aria-label": "Fence Material Calculator", disabled: !hydrated.current || !!loadError })}
           {panelBtn(() => {
@@ -9380,9 +9444,7 @@ export default function TakeoffCanvas() {
             if (!trackpadStartedRef.current) { trackpadStartedRef.current = true; setTrackpadVisible(true); }
             setSettingsOpen((v) => !v); trackpadPaintRef.current = "";
           }, "trackpad", "Trackpad settings", settingsOpen, null, { "aria-label": "Trackpad settings", "aria-expanded": settingsOpen, "aria-controls": "trackpad-settings" })}
-          {panelBtn(() => setLeftTab((t) => (t === "markup" ? null : "markup")), "markup", "Markups on these sheets (clouds, callouts, notes)", leftTab === "markup", markupCount, { "data-drawer": "markups" })}
-          {panelBtn(() => setLeftTab((t) => (t === "stamp" ? null : "stamp")), "stamp", "Stamps — reusable annotations dropped click-to-place", leftTab === "stamp", stampLib.stamps.length, { "data-drawer": "markups" })}
-          {panelBtn(() => setLeftTab((t) => (t === "rfi" ? null : "rfi")), "rfi", "RFI register — raise, track, and export Requests For Information", leftTab === "rfi", rfis.length, { "data-drawer": "markups" })}
+          {panelBtn(() => setLeftTab((t) => (t === "markup" ? null : "markup")), "brush", "Markups on these sheets (clouds, callouts, notes)", leftTab === "markup", markupCount, { "data-drawer": "markups" })}
           {panelBtn(toggleTakeoffs, "takeoffs", "Takeoffs — conditions + running totals", takeoffsOpen, visibleShapes.length, { "data-drawer": "conditions" })}
           <button type="button" onClick={() => setDiagnosticsOpen((v) => !v)} title="Rendering diagnostics" aria-label="Rendering diagnostics" aria-pressed={diagnosticsOpen}
             style={{ width: 34, minHeight: 34, border: `1px solid ${diagnosticsOpen ? "var(--cobalt)" : "var(--ink-faint)"}`, background: diagnosticsOpen ? "var(--cobalt)" : "var(--paper-bright)", color: diagnosticsOpen ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontSize: 9, fontWeight: 700 }}>diag</button>
@@ -9487,6 +9549,8 @@ export default function TakeoffCanvas() {
           canClose={openTabs.length > 0}
           onExit={() => setView("canvas")}
           initialMode={view === "picker" ? "browse" : "plan"}
+          projectMetadata={projectMetadata}
+          onSaveProjectMetadata={(draft) => { if (!denyReadOnlyEdit()) setProjectMetadata((meta) => ({ ...meta, ...draft, lastModifiedAt: new Date().toISOString() })); }}
           cloudMode={cloudMode}
           sheets={sheets} getDoc={docFor} scales={scales} detectedScales={detectedScales}
           shapes={shapes} labels={galleryLabels}
@@ -9495,6 +9559,8 @@ export default function TakeoffCanvas() {
           thumbCacheRef={thumbCacheRef} busyRef={statusRef}
           openTabs={openTabs} onOpen={openSheets}
           onAddFiles={handleFiles}
+          signedIn={!!cloudAccount.user}
+          onSignIn={() => setCloudView("account")}
           levels={sheetLevels}
           onAssignLevel={(keys, label) => { if (denyReadOnlyEdit()) return; setSheetLevels((m) => {
             const next = { ...m };

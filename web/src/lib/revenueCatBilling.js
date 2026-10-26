@@ -2,9 +2,8 @@ import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 
 const planEnv = Object.freeze({
-  starter: "VITE_REVENUECAT_PACKAGE_STARTER",
-  professional: "VITE_REVENUECAT_PACKAGE_PROFESSIONAL",
-  business: "VITE_REVENUECAT_PACKAGE_BUSINESS",
+  estimating_pro_monthly: "VITE_REVENUECAT_PACKAGE_ESTIMATING_PRO_MONTHLY",
+  estimating_pro_yearly: "VITE_REVENUECAT_PACKAGE_ESTIMATING_PRO_YEARLY",
 });
 
 let nativeSession = null;

@@ -18,7 +18,7 @@ test("live takeoff summary is rendered once inside the Takeoff toolbar tab", () 
 
 test("toolbar summary has responsive wrapping styles instead of absolute positioning", () => {
   const start = toolbarCss.indexOf(".takeoff-toolbar-readout {");
-  const end = toolbarCss.indexOf("}\n", start);
+  const end = toolbarCss.indexOf("}", start) + 1;
   const rule = toolbarCss.slice(start, end);
 
   assert.ok(start >= 0);

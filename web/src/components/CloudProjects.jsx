@@ -81,7 +81,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     if (cloud.authReturn) {
       if (!cloud.authReturn.error) setView("welcome");
       setError(cloud.authReturn.error);
-      setNotice(cloud.authReturn.error ? "" : "Signed in with Google.");
+      setNotice(cloud.authReturn.error ? "" : cloud.authReturn.calendarError || "Signed in with Google. Google Calendar is connected.");
     }
   }, [cloud.authReturn]);
   useEffect(() => {

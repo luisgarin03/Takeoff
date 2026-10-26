@@ -44,3 +44,10 @@ dialog[aria-labelledby="user-guide-title"]::backdrop { background: #0009; }
 .recent-project-detail { display: block; margin-top: 5px; color: var(--ink); font-size: 12px; font-weight: 400; line-height: 1.6; }
 .recent-project-card:hover { border-color: var(--cobalt); }
 .recent-project-card:focus-visible, .manual-index button:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+
+.manual-scale-example { display: inline-flex; flex-direction: column; gap: 6px; margin: 12px 0; max-width: 100%; font-size: 13px; line-height: 1.5; }
+.manual-scale-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: 32px; align-self: flex-start; padding: 8px 12px; border: 1px solid var(--ink-faint); border-radius: 6px; background: var(--paper-bright); color: var(--ink); }
+.manual-scale-options { display: flex; flex-direction: column; border: 1px solid var(--ink-faint); border-radius: 7px; background: var(--paper-bright); padding: 5px; box-shadow: 0 3px 12px #0002; }
+.manual-scale-options > span { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
+.manual-scale-detected { color: #65b88c; border-bottom: 1px solid var(--ink-faint); }
+.manual-scale-example small { color: var(--ink-muted); font-size: 11px; }

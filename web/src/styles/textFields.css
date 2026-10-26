@@ -1,0 +1,60 @@
+/* App-wide editing surface, intentionally identical in every theme.
+   Specificity intentionally clears legacy toolbar, table and dialog rules. */
+@media screen {
+  :root {
+    --field-bg: transparent;
+    --field-ink: #f4f4f5;
+    --field-border: #71717a #3f3f46 #3f3f46 #71717a;
+    --field-scheme: dark;
+    --field-placeholder: #a1a1aa;
+  }
+  .wb .wb-note,
+  .wb .wb-sow-takeoff-title {
+    --field-ink: #000;
+    --field-placeholder: #52525b;
+  }
+  :root:root:root:root body :is(
+    input:not([type]), input[type="text"], input[type="search"],
+    input[type="email"], input[type="password"], input[type="url"],
+    input[type="tel"], input[type="number"], input[type="date"],
+    input[type="datetime-local"], input[type="time"], input[type="month"],
+    input[type="week"], textarea, [contenteditable="true"],
+    [contenteditable="plaintext-only"], [role="textbox"]
+  ) {
+    box-sizing: border-box;
+    background: var(--field-bg) !important;
+    background-image: none !important;
+    color: var(--field-ink) !important;
+    -webkit-text-fill-color: var(--field-ink) !important;
+    caret-color: var(--field-ink) !important;
+    color-scheme: var(--field-scheme) !important;
+    border: 2px solid !important;
+    border-color: var(--field-border) !important;
+    border-radius: 7px !important;
+    padding: 5px 10px !important;
+    min-height: 0 !important;
+    font-family: var(--f-body) !important;
+    font-weight: 400 !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+  :root:root:root:root body :is(
+    input:not([type]), input[type="text"], input[type="search"],
+    input[type="email"], input[type="password"], input[type="url"],
+    input[type="tel"], input[type="number"], input[type="date"],
+    input[type="datetime-local"], input[type="time"], input[type="month"],
+    input[type="week"], textarea, [contenteditable="true"],
+    [contenteditable="plaintext-only"], [role="textbox"]
+  ):focus-visible {
+    outline: 2px solid #c8d3fa !important;
+    outline-offset: 1px !important;
+  }
+  :root:root:root:root body :is(input, textarea, [role="textbox"])::placeholder {
+    color: var(--field-placeholder) !important;
+    -webkit-text-fill-color: var(--field-placeholder) !important;
+    opacity: 1;
+  }
+  :root:root:root:root body :is(input, textarea, [role="textbox"])[aria-invalid="true"] {
+    border-color: #b03a26 !important;
+  }
+}

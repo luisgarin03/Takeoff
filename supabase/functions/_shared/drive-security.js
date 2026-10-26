@@ -34,7 +34,7 @@ export function returnUrl(value, origins) {
   if (!origins.includes(url.origin) || url.username || url.password || value.length > 2048) fail("OTK_DRIVE_RETURN");
   if (url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) fail("OTK_DRIVE_RETURN");
   url.hash = "";
-  for (const key of ["code", "state", "access_token", "refresh_token", "error", "error_description", "otkGoogle"]) url.searchParams.delete(key);
+  for (const key of ["code", "state", "access_token", "refresh_token", "error", "error_description", "otkGoogle", "stripe_checkout", "stripe_session"]) url.searchParams.delete(key);
   url.searchParams.set("otkDrive", "1");
   return url.href;
 }

@@ -1,0 +1,159 @@
+/* Solid, neutral workspace chrome inspired by shadcn/ui's source-owned
+   primitives. Condition palette colors remain project data. */
+:root { --workspace-surface: #fff; --workspace-muted: #f4f4f5; --workspace-border: #e4e4e7; --workspace-foreground: #18181b; --workspace-secondary: #71717a; }
+:root[data-theme="dark"] { --workspace-surface: #18181b; --workspace-muted: #27272a; --workspace-border: #3f3f46; --workspace-foreground: #fafafa; --workspace-secondary: #a1a1aa; }
+
+.estimating-toolbar,
+.canvas-workspace .glass-drawer-markups,
+.conditions-modal-scrim .conditions-modal {
+  background: var(--workspace-surface) !important;
+  background-image: none !important;
+  color: var(--workspace-foreground);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: var(--workspace-border) !important;
+  box-shadow: 0 -4px 20px #00000012;
+  font-family: var(--f-body);
+}
+.estimating-toolbar-header { border-bottom: 0; }
+:root .tabbed-toolbar-stack { box-sizing: border-box; padding: 5px 5px 0; }
+.estimating-toolbar:has(.estimating-toolbar-tabs button[aria-selected="true"]) .estimating-toolbar-header { border-bottom: 1px solid var(--workspace-border); }
+.estimating-toolbar-panel { background: var(--workspace-surface); border-radius: 0 0 9px 9px; }
+.takeoff-toolbar-readout { background: var(--workspace-surface); border-color: var(--workspace-border); border-left: 7px solid var(--takeoff-readout-accent, var(--cobalt)); border-radius: 8px; box-shadow: 0 1px 2px #00000008; padding: 10px 12px; }
+.takeoff-toolbar-readout-total { border-color: var(--workspace-border); }
+.takeoff-toolbar-readout-meta { color: var(--workspace-secondary); font-family: var(--f-body); letter-spacing: 0; }
+.estimating-toolbar-tabs { background: var(--workspace-muted); border: 0; padding: 4px; }
+.estimating-toolbar-tabs button { font-family: var(--f-body); font-weight: 500; }
+.estimating-toolbar-tabs button[aria-selected="true"] { background: var(--workspace-surface); border-color: transparent; box-shadow: 0 1px 3px #0002; }
+
+.canvas-workspace .glass-drawer-markups > .markup-workspace-tabs,
+.conditions-modal .takeoffs-tabs {
+  background: var(--workspace-surface) !important;
+  background-image: none !important;
+  color: var(--workspace-foreground) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: 1px solid var(--workspace-border);
+  padding: 8px 12px;
+  gap: 6px;
+}
+.canvas-workspace .markup-workspace-tabs > button { flex: 0 1 auto !important; min-width: 90px; border-radius: 6px; padding: 8px 14px !important; font: 500 13px var(--f-body); background: transparent !important; color: var(--workspace-secondary) !important; border: 0 !important; }
+.canvas-workspace .markup-workspace-tabs > button[aria-selected="true"] { color: var(--workspace-foreground) !important; background: var(--workspace-muted) !important; box-shadow: 0 1px 2px #0001; }
+.canvas-workspace .markup-workspace-tabs > button:last-child { margin-left: auto; min-width: 30px; padding: 6px !important; }
+.canvas-workspace .glass-drawer-markups > div:nth-child(2) { padding: 12px 16px; }
+.canvas-workspace .glass-drawer-markups button { border-radius: 6px; font-family: var(--f-body); }
+.canvas-workspace .glass-drawer-markups select { height: 30px; padding: 3px 8px; border: 1px solid var(--workspace-border); border-radius: 6px; background: var(--workspace-surface); color: var(--workspace-foreground); }
+
+.condition-summary { border-color: var(--workspace-border); }
+.conditions-modal .condition-summary > button { border-color: var(--workspace-border) !important; border-radius: 6px !important; }
+
+/* Match markup actions and swatches to the adjacent 30px selects. */
+.canvas-workspace .glass-drawer-markups > div:nth-child(2) button { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: 30px !important; min-height: 30px; min-width: 30px; padding: 4px 9px !important; line-height: 1; }
+.canvas-workspace .glass-drawer-markups > div:nth-child(2) button[title^="#"] { width: 30px !important; padding: 0 !important; }
+
+.canvas-workspace .glass-drawer-markups .markup-delete-button { color: #dc2626 !important; border: 1px solid color-mix(in srgb, #dc2626 50%, transparent) !important; border-radius: 6px; }
+:root[data-theme="dark"] .canvas-workspace .glass-drawer-markups .markup-delete-button { color: #f87171 !important; border-color: #f8717166 !important; }
+.canvas-workspace .glass-drawer-markups .markup-delete-button:hover { background: #ef44441a !important; }
+
+.canvas-workspace .glass-drawer-markups .markup-edit-button { color: var(--workspace-foreground) !important; border: 1px solid var(--workspace-border) !important; border-radius: 6px; }
+.canvas-workspace .glass-drawer-markups .markup-edit-button:hover,
+.canvas-workspace .glass-drawer-markups .markup-edit-button[aria-pressed="true"] { background: var(--workspace-muted) !important; }
+
+/* Align manual and profile controls with the 40px header controls. */
+.estimating-toolbar-account > button,
+.estimating-toolbar-account .account-profile-button { box-sizing: border-box; height: 40px; min-height: 40px; padding-top: 5px !important; padding-bottom: 5px !important; }
+
+.estimating-toolbar-account button[aria-label="User Guide"],
+.estimating-toolbar-account button[aria-label="User Guide"]:hover { border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
+
+.project-data-header { flex-shrink: 0; padding: 20px; border-bottom: 1px solid var(--ink-faint); background: var(--paper-cream); color: var(--ink); font-size: 12px; font-weight: 500; }
+.project-data-header input, .project-data-header select { box-sizing: border-box; width: 100%; height: 36px; padding: 6px 10px; border: 1px solid var(--ink-faint); border-radius: 6px; background: var(--paper-bright); color: var(--ink); font: inherit; }
+:root .conditions-modal-scrim .glass-drawer-conditions.conditions-modal > div:nth-child(2) > .takeoffs-tabs { background: #18181b !important; background-image: none !important; box-shadow: none !important; padding: 6px 12px !important; }
+.conditions-modal .takeoffs-tabs > .conditions-tab-list { display: inline-flex !important; flex: 0 1 auto !important; width: max-content !important; background: var(--workspace-muted); padding: 3px; border-radius: 9px; gap: 3px !important; max-width: calc(100% - 44px); overflow-x: auto; }
+.conditions-modal .conditions-tab-list button { min-height: 30px; border: 1px solid transparent !important; border-radius: 6px !important; padding: 4px 12px !important; background: transparent !important; color: var(--ink-muted) !important; opacity: 1 !important; font: 500 12px var(--f-body) !important; white-space: nowrap; }
+.conditions-modal .conditions-tab-list button[aria-selected="true"] { background: var(--workspace-surface) !important; color: var(--ink) !important; box-shadow: 0 1px 3px #0002; }
+.conditions-modal .takeoffs-tabs button[aria-label="Close conditions panel"] { width: 30px; height: 30px; border-radius: 6px; color: var(--workspace-secondary) !important; }
+.conditions-modal .takeoffs-tabs button[aria-label="Close conditions panel"]:hover { background: var(--workspace-muted) !important; color: var(--workspace-foreground) !important; }
+.estimating-toolbar-panel[id$="-Takeoff-panel"] button:not(.takeoff-toolbar-readout button):not(.tool-menu-popover button) { box-sizing: border-box; height: 30px !important; min-height: 30px !important; padding-top: 3px !important; padding-bottom: 3px !important; }
+.estimating-toolbar-account { align-items: center; }
+.estimating-toolbar-account > span,
+.estimating-toolbar-account > output,
+.estimating-toolbar-account > button,
+.estimating-toolbar-account .header-history-button { display: inline-flex; align-items: center; justify-content: center; align-self: center; height: 40px; box-sizing: border-box; line-height: 1; margin-top: 0; margin-bottom: 0; }
+.estimating-toolbar-account svg { display: block; flex-shrink: 0; }
+/* Shared dark dropdown surfaces. */
+:root:root body :is(.tool-menu-popover, [role="menu"], [role="listbox"]) { background: #181818 !important; background-image: none !important; color: #fafafa !important; border: 1px solid #292929 !important; border-radius: 11px !important; padding: 4px !important; box-shadow: 0 8px 24px #0004 !important; color-scheme: dark; }
+:root:root body :is(.tool-menu-popover .dropdown-action, [role="menuitem"], [role="option"]) { min-height: 30px; height: auto !important; border: 0 !important; border-radius: 5px !important; background: transparent !important; color: #fafafa !important; padding: 6px 8px; font: 400 13px var(--f-body); }
+:root:root body :is(.tool-menu-popover .dropdown-action, [role="menuitem"], [role="option"]):is(:hover, :focus-visible):not(:disabled) { background: #292929 !important; outline: none; }
+:root:root body .tool-menu-popover .dropdown-action[data-danger="true"],
+:root:root body .tool-menu-popover .dropdown-action[data-danger="true"] span { color: #ef6464 !important; }
+:root:root body .tool-menu-popover .dropdown-action:not([data-danger="true"]) > span { color: inherit; }
+:root:root body :is(.tool-menu-popover, [role="menu"]) [role="separator"] { background: #303030 !important; margin: 4px -4px !important; }
+:root:root body select { color-scheme: dark; background-color: #181818 !important; color: #fafafa !important; border: 1px solid #3f3f46 !important; border-radius: 7px !important; }
+:root:root body select :is(option, optgroup) { background: #181818; color: #fafafa; }
+/* Strong neutral text and icon contrast on light surfaces. */
+:root:not([data-theme="dark"]) { --ink: #000; --ink-muted: #000; --text-faint: #000; --workspace-foreground: #000; --workspace-secondary: #000; }
+:root:not([data-theme="dark"]) .estimating-toolbar .sheet-tab-icon { color: #000 !important; }
+:root:not([data-theme="dark"]) .estimating-toolbar-tabs button { color: #000; }
+:root:not([data-theme="dark"]) .estimating-toolbar-account { color: #000; }
+:root:not([data-theme="dark"]) .estimating-toolbar button:not(.header-history-button):not([aria-label="User Guide"]):not(.sheet-tab-icon):not(.dropdown-action) { border-color: #85858d !important; }
+:root:not([data-theme="dark"]) .estimating-toolbar .sheet-tab { border-color: #85858d !important; }
+:root:not([data-theme="dark"]) .canvas-panel-rail > button,
+:root:not([data-theme="dark"]) .canvas-tool-rail > button { border-color: #85858d !important; }
+/* Light-theme dropdowns retain the same shape with a white surface. */
+:root:root:not([data-theme="dark"]) body :is(.tool-menu-popover, [role="menu"], [role="listbox"]) { background: #fff !important; color: #000 !important; border-color: #85858d !important; color-scheme: light; }
+:root:root:not([data-theme="dark"]) body :is(.tool-menu-popover .dropdown-action, [role="menuitem"], [role="option"]),
+:root:root:not([data-theme="dark"]) body .tool-menu-popover .dropdown-action > span { color: #000 !important; }
+:root:root:not([data-theme="dark"]) body :is(.tool-menu-popover .dropdown-action, [role="menuitem"], [role="option"]):is(:hover, :focus-visible):not(:disabled) { background: #f0f0f2 !important; }
+:root:root:not([data-theme="dark"]) body :is(.tool-menu-popover, [role="menu"]) [role="separator"] { background: #d4d4d8 !important; }
+:root:root:not([data-theme="dark"]) body select { background-color: #fff !important; color: #000 !important; border-color: #85858d !important; color-scheme: light; }
+:root:root:not([data-theme="dark"]) body select :is(option, optgroup) { background: #fff; color: #000; }
+/* Pearl light theme: softly warm neutral surfaces. */
+:root:not([data-theme="dark"]) {
+  --paper-cream: #eeede8;
+  --paper-bright: #faf9f6;
+  --paper-shadow: #e5e3dd;
+  --surface-pop: #faf9f6;
+  --workspace-surface: #faf9f6;
+  --workspace-muted: #eeede8;
+  --workspace-border: #d5d2cb;
+  --divider-soft: #e8e6df;
+}
+:root:not([data-theme="dark"]) { --field-ink: #000; --field-placeholder: #52525b; }
+:root:root:not([data-theme="dark"]) body button { color: #000; }
+:root:root:not([data-theme="dark"]) body button:not(.dropdown-action):not([data-danger="true"]):not([aria-pressed="true"]) { -webkit-text-fill-color: #000; }
+:root:root:not([data-theme="dark"]) .estimating-toolbar .estimating-toolbar-tabs button[aria-selected="false"] { border-color: transparent !important; box-shadow: none !important; }
+:root:root:not([data-theme="dark"]) .estimating-toolbar .estimating-toolbar-tabs button[aria-selected="true"] { border-color: #85858d !important; }
+:root:root:root:root:not([data-theme="dark"]) body .estimating-toolbar .estimating-toolbar-tabs button[aria-selected="false"] { border-color: transparent !important; outline: none !important; box-shadow: none !important; }
+:root:root:root:root:not([data-theme="dark"]) body .estimating-toolbar .estimating-toolbar-tabs button[aria-selected="true"] { border: 1px solid #85858d !important; }
+:root:not([data-theme="dark"]) .conditions-modal-scrim .glass-drawer-conditions.conditions-modal > div:nth-child(2) > .takeoffs-tabs { background: var(--workspace-surface) !important; color: #000 !important; }
+:root:not([data-theme="dark"]) { --canvas-light-bg: #f7f6f2; }
+:root body .toolbar-visibility-toggle,
+:root body .wb .wb-toolbar-reveal { color: #fff !important; }
+:root body .toolbar-visibility-toggle svg,
+:root body .wb .wb-toolbar-reveal svg { color: #fff !important; stroke: #fff !important; }
+/* Whiteboard chrome follows the pearl light theme. */
+:root:not([data-theme="dark"]) .wb-toolbar-overlay > .wb-header,
+:root:not([data-theme="dark"]) .wb-toolbar-overlay > .wb-tools { background: var(--workspace-surface); color: #000; border-color: #85858d; }
+:root:not([data-theme="dark"]) .wb-toolbar-overlay .wb-title,
+:root:not([data-theme="dark"]) .wb-toolbar-overlay .wb-title span,
+:root:not([data-theme="dark"]) .wb-toolbar-overlay .wb-resolution,
+:root:not([data-theme="dark"]) .wb-toolbar-overlay .wb-header-utilities { color: #000; }
+:root:not([data-theme="dark"]) .wb-toolbar-overlay button:not(.dropdown-action) { color: #000; border-color: #85858d; }
+:root:not([data-theme="dark"]) .wb-toolbar-overlay .wb-title { border-color: #85858d; }
+/* Cool light surfaces matching the calendar reference. */
+:root:not([data-theme="dark"]) {
+  --paper-cream: #f8f9fd;
+  --paper-bright: #ffffff;
+  --paper-shadow: #e9edf5;
+  --surface-pop: #ffffff;
+  --workspace-surface: #ffffff;
+  --workspace-muted: #edf0f7;
+  --workspace-border: #dce1eb;
+  --divider-soft: #e5e9f1;
+  --canvas-light-bg: #f8f9fd;
+}
+:root:not([data-theme="dark"]) body .toolbar-visibility-toggle,
+:root:not([data-theme="dark"]) body .wb .wb-toolbar-reveal { background: #fff !important; border: 1px solid #85858d !important; color: #000 !important; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+:root:not([data-theme="dark"]) body .toolbar-visibility-toggle svg,
+:root:not([data-theme="dark"]) body .wb .wb-toolbar-reveal svg { color: #000 !important; stroke: #000 !important; }

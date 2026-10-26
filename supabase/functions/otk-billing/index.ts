@@ -16,7 +16,7 @@ type Json = Record<string, unknown>;
 
 function headersFor(origin: string) {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": "authorization,apikey,content-type,x-revenuecat-webhook-signature",
+    "Access-Control-Allow-Headers": "authorization,apikey,content-type,x-client-info,x-supabase-client-platform,x-supabase-client-platform-version,x-supabase-client-runtime,x-supabase-client-runtime-version,x-revenuecat-webhook-signature",
     "Access-Control-Allow-Methods": "POST,OPTIONS",
     "Cache-Control": "no-store",
     "Referrer-Policy": "no-referrer",
@@ -128,8 +128,9 @@ async function refresh(userId: string, event: Json = {}) {
   return record;
 }
 
-function subscriptionIsActive(record: Json) {
-  if (String(record.environment || "production") === "sandbox" && !allowSandboxLicenses) return false;
+function subscriptionIsActive(record: Json | null, allowSandbox = allowSandboxLicenses) {
+  if (!record) return false;
+  if (String(record.environment || "production") === "sandbox" && !allowSandbox) return false;
   const status = String(record.status || "");
   if (["active", "trialing", "grace"].includes(status)) return true;
   if (!["canceled", "billing_issue"].includes(status)) return false;
@@ -145,7 +146,6 @@ Deno.serve(async (req: Request) => {
     if (origin && !allowedOrigins.includes(origin)) return json({ code: "OTK_ACCESS" }, 403);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
     if (req.method !== "POST") return json({ code: "OTK_BILLING_REQUEST" }, 405);
-    if (!entitlementId || !revenueCatKey) return json({ code: "OTK_BILLING_SETUP" }, 503);
 
     const queryAction = new URL(req.url).searchParams.get("action") || "";
     const raw = await req.text();
@@ -154,6 +154,7 @@ Deno.serve(async (req: Request) => {
     try { requestBody = raw ? JSON.parse(raw) as Json : {}; } catch { return json({ code: "OTK_BILLING_JSON" }, 400); }
     const action = queryAction || String(requestBody.action || "refresh");
     if (action === "webhook") {
+      if (!entitlementId || !revenueCatKey) return json({ code: "OTK_BILLING_SETUP" }, 503);
       if (queryAction !== "webhook") return json({ code: "OTK_BILLING_SIGNATURE" }, 401);
       const payload = requestBody;
       const event = (payload.event || {}) as Json;
@@ -183,14 +184,15 @@ Deno.serve(async (req: Request) => {
       // Webhooks keep existing entitlements current. A brand-new account has
       // no row yet, so perform one authoritative RevenueCat lookup to seed it;
       // heartbeats thereafter remain a small database-only request.
-      const subscription = savedSubscription || await refresh(data.user.id);
+      const subscription = savedSubscription || (entitlementId && revenueCatKey ? await refresh(data.user.id) : null);
       // getUser() above verified the JWT signature. Prefer its server-issued
       // auth session id over the browser's installation id so a caller cannot
       // bypass the one-computer lease by editing local storage.
       const deviceId = verifiedSessionId(bearer) || uuid(requestBody.device_id);
       const deviceName = String(requestBody.device_name || "Computer").trim().slice(0, 120);
       if (!deviceId) return json({ code: "OTK_LICENSE_DEVICE" }, 400);
-      if (!subscriptionIsActive(subscription)) {
+      const localSandboxTest = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin) && /^(sk|rk)_test_/.test(env("STRIPE_TEST_SECRET_KEY"));
+      if (!subscriptionIsActive(subscription, allowSandboxLicenses || localSandboxTest)) {
         return json({ subscription, session: { granted: false, reason: "subscription" } });
       }
       const { data: rows, error: claimError } = await db.rpc("otk_claim_license_session", {
@@ -209,9 +211,17 @@ Deno.serve(async (req: Request) => {
       } });
     }
     if (action !== "refresh") return json({ code: "OTK_BILLING_ACTION" }, 400);
+    const { data: stripeSubscription, error: stripeReadError } = await db.from("otk_subscriptions").select("*").eq("user_id", data.user.id).eq("provider", "stripe").maybeSingle();
+    if (stripeReadError) throw stripeReadError;
+    if (stripeSubscription) return json({ subscription: stripeSubscription });
+    if (!entitlementId || !revenueCatKey) {
+      const { data: subscription, error } = await db.from("otk_subscriptions").select("*").eq("user_id", data.user.id).maybeSingle();
+      if (error) throw error;
+      return json({ subscription });
+    }
     return json({ subscription: await refresh(data.user.id) });
   } catch (error) {
-    console.error("otk-billing request failed", { name: error?.name || "Error", message: String(error?.message || error).slice(0, 300) });
+    console.error("otk-billing request failed", { name: error instanceof Error ? error.name : "Error" });
     return json({ code: "OTK_BILLING_FAILED" }, 502);
   }
 });

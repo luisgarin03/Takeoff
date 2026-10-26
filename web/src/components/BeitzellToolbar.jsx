@@ -5,7 +5,7 @@ import "../styles/toolbarTabs.css";
 export const ToolbarPanelContext = createContext(null);
 const TABS = ["Sheets", "Takeoff"];
 
-export default function BeitzellToolbar({ logo, projectSelector, account, project, sheets, takeoff }) {
+export default function BeitzellToolbar({ logo, projectSelector, account, project, sheets, takeoff, sheetNavigation }) {
   const [active, setActive] = useState(null);
   const id = useId();
   const tabsRef = useRef(null);
@@ -44,6 +44,7 @@ export default function BeitzellToolbar({ logo, projectSelector, account, projec
           aria-selected={active === tab} aria-expanded={active === tab} aria-controls={`${id}-${tab}-panel`} tabIndex={active === tab || (active === null && tab === TABS[0]) ? 0 : -1}
           onClick={() => setActive((current) => current === tab ? null : tab)}>{tab}</button>)}
       </div>
+      <ToolbarPanelContext.Provider value={true}><div className="estimating-toolbar-sheet-navigation">{sheetNavigation}</div></ToolbarPanelContext.Provider>
       <ToolbarPanelContext.Provider value={true}><div className="estimating-toolbar-account">{account}</div></ToolbarPanelContext.Provider>
     </div>
     {TABS.map((tab) => <ToolbarPanelContext.Provider key={tab} value={active === tab}>

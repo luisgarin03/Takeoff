@@ -72,7 +72,7 @@ export default function RfiPanel({ docked = false, rfis = [], markups = [], onUp
               <span style={{ padding: "1px 7px", background: st.color, color: "#fff", fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase" }}>{st.label}</span>
               <span style={{ flex: 1 }} />
               <span style={{ fontSize: 10.5, color: "var(--ink-muted)" }}>{linked.length} linked</span>
-              <button onClick={() => { if (window.confirm(`Delete ${r.number}? Linked markups keep their annotation but lose the RFI link.`)) onDeleteRfi && onDeleteRfi(r.id); }}
+              <button onClick={() => onDeleteRfi?.(r.id)}
                 title="Delete this RFI (hard remove; clears links)" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--c-danger)" }}>🗑</button>
             </div>
 

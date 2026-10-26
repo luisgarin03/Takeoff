@@ -1,3 +1,4 @@
+import { normalizeBidDetails } from "./calendarBidDetails.js";
 export const PROJECT_STATUSES = ["Ongoing", "Needs revision", "Done"];
 
 export const EMPTY_PROJECT_METADATA = Object.freeze({
@@ -43,6 +44,7 @@ export function normalizeProjectMetadata(payload = {}) {
   const name = typeof raw.name === "string" ? raw.name.trim() : (typeof payload.project_name === "string" ? payload.project_name.trim() : "");
   return {
     name,
+    ...(raw.bidDetails ? { bidDetails: normalizeBidDetails(raw.bidDetails) } : {}),
     ...Object.fromEntries(["authorId", "authorName", "authorEmail", "lastModifiedById", "lastModifiedByName", "lastModifiedByEmail"].filter((key) => typeof raw[key] === "string" && raw[key].trim()).map((key) => [key, raw[key].trim().slice(0, 254)])),
     submissionDate: isoDate(raw.submissionDate || raw.submission_date || ""),
     status: PROJECT_STATUSES.includes(raw.status) ? raw.status : "Ongoing",

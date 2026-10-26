@@ -1,5 +1,49 @@
 # Changelog
 
+## Unreleased — Sample plan loading
+
+- Wait for sample PDF import to finish and always release the loading button on success, blocked imports, or errors. Show actionable download/import errors and bound sample downloads to 30 seconds.
+
+## Unreleased — Calendar return and Pro test access
+
+- Calendar authorization returns to Calendar instead of opening subscription/account screens, retains the project, and strips old checkout parameters. Fixed development remount handling of the reopen flag. Active Stripe sandbox subscriptions are recognized for local development testing without granting production licenses.
+
+## Unreleased — Stripe sandbox subscriptions
+
+- Added authenticated test-only Stripe Checkout for Estimating Pro monthly ($40) and yearly ($400), server-verified subscriptions, signed webhooks, customer portal, and sandbox status labels.
+
+## Unreleased — Calendar-only authorization
+
+- Calendar connection requests only Calendar read permissions, removes Drive settings from the Calendar panel, and disconnects Calendar without revoking existing Drive access. Fixed browser preflight headers required by the Supabase client.
+
+## Unreleased — Google Calendar connection recovery
+
+- Granted the server function the missing permission to save Google connection metadata, retained browser read-only access, and added specific Calendar authorization/service errors.
+
+## Unreleased — Bid details in calendar
+
+- Added a tall scrolling bid card with project, client/GC, contact, due time, amount, folder, document and invitation links, location, and meeting notes. Bid details can be edited with project/event editing access and persist in project metadata or the event description.
+
+## Unreleased — Calendar event cards
+
+- Clicking an event opens a scrollable detail card with dates, location, notes, safe links, attachments, and permitted edit/delete actions. Project deadlines open their project from the card; Google events remain read-only.
+
+## Unreleased — Calendar dark appearance
+
+- Styled the calendar with charcoal chrome, a near-black grid, subtle dividers, readable controls, and blue today markers in dark mode.
+
+## Unreleased — Consistent text fields
+
+- Unified text and number inputs and text areas with the project-name field style: thin gray borders, rounded corners, consistent padding, and visible keyboard focus, with light and dark editing surfaces matching the app theme.
+
+## Unreleased — Unified save settings
+
+- Replaced the project dropdown save actions with one **Save..** entry and removed Cloud projects. Added a centered settings panel with explained full/marked-pages-only options, editable filename, Save as, and dated backups that preserve the active file destination.
+
+## Unreleased — Print plans
+
+- Added Project > Print with individual page selection, PDF preview, quality, paper, layout, margins, grayscale, and independent markup/takeoff controls. Printer, copies, and duplex are selected in the browser print dialog.
+
 ## Unreleased — toolbar and Profile
 
 - Required a save destination after the first plan import into a named local project, then immediately writes the complete `.otk`. Fast browser recovery still saves about a second after edits, while retained writable project files now receive coalesced background updates after 30 quiet seconds or at least every two minutes during continuous work; archive generation waits for idle time and never opens a background permission prompt.
@@ -454,3 +498,43 @@ The hatch pattern picker opens above the canvas and stays within the window, inc
 After sign-in, a welcome screen replaces the automatic Drive folder prompt. Free accounts see a view-only message and Get Premium opens subscription options; active subscribers see a welcome-back message.
 
 User Guide is now in the top bar, immediately left of the profile, and stays available across toolbar tabs.
+
+Text-field styling also covers dates, times, editable labels, and text areas. Fields use compact vertical padding, gray upper/left borders, and softer lower/right borders. Light mode uses white fields; dark mode uses charcoal fields with light text.
+
+The Takeoff toolbar summary card contains the editable active condition name, multiplier, and waste allowance. The separate appearance row now contains only appearance controls. Waste still affects report order quantities only, and the docked condition editor retains its existing controls.
+
+The condition summary shows its editable name once; the totals section displays quantities without repeating that name.
+
+Drawing-tool rail menus expand upward as needed to show their full list within the available screen height; scrolling is retained only when the list exceeds the viewport.
+
+The sheet selector and previous/next controls sit in the top header immediately after Takeoff, available with either toolbar tab open or collapsed.
+
+The Sheets tab strip shows bookmarked pages when any are available, including automatic markup bookmarks, in plan order. With no bookmarks it shows open sheets. The overflow menu retains access to other open pages; bookmarking is separate from closing a tab.
+
+Plan set PDF headers show the filename in normal text with a page count. A separate **Erase** button on the right removes the PDF using the existing removal confirmation and affected-page preview.
+
+Conditions opens as a centered panel over an undimmed canvas, retaining Takeoffs, Library, Materials, and Columns. Close with ×, Escape, or outside the panel; the canvas no longer shrinks when it opens. Panel tab/filter state survives reopening.
+
+Hatch previews use independent SVG patterns so selecting a condition or hiding its toolbar does not hide matching hatch swatches elsewhere.
+
+**+ Condition** opens a centered New condition dialog instead of a browser prompt. Enter a condition name, then choose **Add condition** or press Enter. Cancel or Escape dismisses it without adding anything.
+
+The estimating toolbar, condition controls, and Markups/Stamps/RFIs drawer use solid shadcn-inspired surfaces, compact tabs, flat fields, and neutral borders in light and dark mode. Takeoff palette colors remain unchanged.
+
+**Project Data..** combines project details and the plan set. Edit the project name, submission/due date, and status at the top and choose **Save details**; manage PDFs and select pages below. The former Edit project details menu entry now opens this combined panel.
+
+- Set up Supabase subscription and license-session tables and deployed the authenticated billing endpoint. Subscription and session checks can read existing entitlements before RevenueCat checkout is configured; accounts without a record are treated as unsubscribed.
+- Added Project calendar with month navigation, project due dates, Google Calendar authorization, calendar selection, event display, and duplicate-safe manual deadline syncing.
+
+- Added a visible Sign in button to the empty workspace landing card, opening the existing account login form.
+
+- Initial Google sign-in now requests Calendar permissions and securely saves the approved connection, removing the separate Calendar sign-in step.
+
+- Fixed Google calendars disappearing after login or reopening Calendar: automatically reload connected calendars and restore per-account visibility selections.
+
+- Google Calendar events now use Google calendar colors and individual event color overrides, including text colors.
+
+
+Google Calendar editing: approve editing access in Calendar Settings. Use + Google event to create events; open an event and choose Edit to change dates, location, description, Google color, recurrence, attendees, reminders, visibility, availability, or RSVP. The editor supports duplicate, move, and confirmed deletion; recurring occurrences and the full series are separate edit choices. Drag and resize writable Google events to reschedule. Manage Google calendars in Settings provides creation, renaming, colors, quick-add, availability, preferences, sharing, and confirmed secondary-calendar deletion. Google account permissions are enforced on the server and stale event changes are rejected with version checks. Invitation/update emails are opt-in. Existing read-only authorizations continue to display events until editing permission is approved. Administrative ownership transfer, primary-calendar clearing, and webhook channel management are not exposed in the app.
+
+- Google event descriptions display readable text with paragraph breaks and links in the editor. Unchanged descriptions retain original formatting when saving other fields.

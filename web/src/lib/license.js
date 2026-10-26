@@ -1,5 +1,9 @@
 export const licenseRequired = (env = import.meta.env || {}) => String(env.VITE_REQUIRE_ACTIVE_LICENSE || "") === "1";
-export const sandboxLicensesAllowed = (env = import.meta.env || {}) => String(env.VITE_ALLOW_SANDBOX_LICENSES || "") === "1";
+export const sandboxLicensesAllowed = (env = import.meta.env || {}, href = globalThis.location?.href || "") => {
+  if (String(env.VITE_ALLOW_SANDBOX_LICENSES || "") === "1") return true;
+  try { return env.DEV === true && ["localhost", "127.0.0.1", "[::1]"].includes(new URL(href).hostname); }
+  catch { return false; }
+};
 
 export function hasActiveLicense(record, now = Date.now(), allowSandbox = false) {
   if (!record) return false;

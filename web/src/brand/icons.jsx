@@ -9,6 +9,12 @@ function I({ children, size = 24, stroke = 1.5, color = "currentColor" }) {
 }
 
 export const icons = {
+  camera: (s) => <I size={s}><path d="M3 7H7L9 4H15L17 7H21V20H3Z" /><circle cx="12" cy="13" r="4" /></I>,
+  brush: (s) => <I size={s}><path d="M10 14 18 3a2 2 0 0 1 3 3L13 17Z" /><path d="M10 14c-3-1-5 1-5 4 0 2-2 3-3 3 4 1 9 0 10-3" /></I>,
+  eye: (s) => <I size={s}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></I>,
+  importWhiteboard: (s) => <I size={s}><path d="M4 4 H20 V20 H4 V15 M1 10 H14 M10 6 L14 10 L10 14" /></I>,
+  userGuide: (s) => <I size={s}><circle cx="12" cy="12" r="9" /><circle cx="13" cy="7" r="1.1" fill="currentColor" stroke="none" /><path d="M10 11c1.8-1.4 3.5-1.5 3-.1l-2 6c-.5 1.5 1.2 1 2.6-.4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></I>,
+  search: (s) => <I size={s}><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5 L21 21" /></I>,
   blueprint: (s) => <I size={s}><path d="M5 4 H21 V18 H7 M5 4 C2 4 2 8 5 8 H7 V21 H5 C2 21 2 17 5 17 H7 M3 6 V19" /><path d="M10 7 H18 V14 H14 V10 H10 Z M10 17 H18" /></I>,
   eraser: (s) => <I size={s}><path d="M3 14 L13 4 L21 12 L13 20 H9 Z M8 9 L16 17 M13 20 H22" /></I>,
   folder: (s) => <I size={s}><path d="M3 5 H9 L12 8 H21 V20 H3 Z" /></I>,
