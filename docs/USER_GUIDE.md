@@ -234,7 +234,7 @@ Press `G` (or click **Sheets** in the toolbar) for the visual gallery: one card 
 
 ### Tabs, groups, and Regroup
 
-Open sheets ride a **Sheets** tab strip: click a tab to view it, **⊞** to put it side-by-side with the current sheet, **✕** to close the tab. The current-sheet dropdown lists each loaded PDF as a collapsible parent with its pages nested directly underneath. The active PDF expands automatically; use its chevron to collapse it or expand another PDF without navigating. Choosing a nested page opens that exact sheet. The same menu holds **Ungroup — back to one sheet** and **Regroup (N)** — one click to restore your last side-by-side composition after working sheets individually. Each sheet in a group keeps its own scale, takeoffs, and markups.
+Open sheets ride a **Sheets** tab strip: click a tab to view it, **⊞** to put it side-by-side with the current sheet, **✕** to close the tab. The current-sheet dropdown lists each loaded PDF as a collapsible parent with its pages nested directly underneath. The active PDF expands automatically and the displayed page is highlighted with the active interface color; use its chevron to collapse it or expand another PDF without navigating. Choosing a nested page opens that exact sheet. The same menu holds **Ungroup — back to one sheet** and **Regroup (N)** — one click to restore your last side-by-side composition after working sheets individually. Each sheet in a group keeps its own scale, takeoffs, and markups.
 
 ### Levels (multi-floor sets)
 

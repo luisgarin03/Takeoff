@@ -85,6 +85,7 @@
 :root:root body :is(.tool-menu-popover, [role="menu"], [role="listbox"]) { background: #181818 !important; background-image: none !important; color: #fafafa !important; border: 1px solid #292929 !important; border-radius: 11px !important; padding: 4px !important; box-shadow: 0 8px 24px #0004 !important; color-scheme: dark; }
 :root:root body :is(.tool-menu-popover .dropdown-action, [role="menuitem"], [role="option"]) { min-height: 30px; height: auto !important; border: 0 !important; border-radius: 5px !important; background: transparent !important; color: #fafafa !important; padding: 6px 8px; font: 400 13px var(--f-body); }
 :root:root body :is(.tool-menu-popover .dropdown-action, [role="menuitem"], [role="option"]):is(:hover, :focus-visible):not(:disabled) { background: #292929 !important; outline: none; }
+:root:root body .tool-menu-popover .dropdown-action[data-active="true"] { background: color-mix(in srgb, var(--cobalt) 22%, #181818) !important; border-left: 3px solid var(--cobalt) !important; }
 :root:root body .tool-menu-popover .dropdown-action[data-danger="true"],
 :root:root body .tool-menu-popover .dropdown-action[data-danger="true"] span { color: #ef6464 !important; }
 :root:root body .tool-menu-popover .dropdown-action:not([data-danger="true"]) > span { color: inherit; }
@@ -105,6 +106,7 @@
 :root:root:not([data-theme="dark"]) body :is(.tool-menu-popover .dropdown-action, [role="menuitem"], [role="option"]),
 :root:root:not([data-theme="dark"]) body .tool-menu-popover .dropdown-action > span { color: #000 !important; }
 :root:root:not([data-theme="dark"]) body :is(.tool-menu-popover .dropdown-action, [role="menuitem"], [role="option"]):is(:hover, :focus-visible):not(:disabled) { background: #f0f0f2 !important; }
+:root:root:not([data-theme="dark"]) body .tool-menu-popover .dropdown-action[data-active="true"] { background: color-mix(in srgb, var(--cobalt) 14%, #fff) !important; }
 :root:root:not([data-theme="dark"]) body :is(.tool-menu-popover, [role="menu"]) [role="separator"] { background: #d4d4d8 !important; }
 :root:root:not([data-theme="dark"]) body select { background-color: #fff !important; color: #000 !important; border-color: #85858d !important; color-scheme: light; }
 :root:root:not([data-theme="dark"]) body select :is(option, optgroup) { background: #fff; color: #000; }

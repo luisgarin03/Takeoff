@@ -46,6 +46,7 @@
 
 ## Unreleased — toolbar and Profile
 
+- Restored the current-page highlight in the nested PDF page selector after the shared workspace dropdown theme had overridden ToolMenu's active background and border. Active rows now expose `aria-current` and retain a theme-aware accent in both light and dark modes.
 - Required a save destination after the first plan import into a named local project, then immediately writes the complete `.otk`. Fast browser recovery still saves about a second after edits, while retained writable project files now receive coalesced background updates after 30 quiet seconds or at least every two minutes during continuous work; archive generation waits for idle time and never opens a background permission prompt.
 - Reworked the current-sheet selector into collapsible PDF sets with pages nested directly under their source file. The active PDF expands automatically, other sets load their page count only when opened, favorites remain first, and collapsed files do not mount thousands of hidden page rows.
 - Added markup operations to the shared chronological Undo/Redo history, including creation, deletion, movement, text/style edits, and text-leader placement, repointing, or removal. A selected text leader now shows a blue endpoint handle that can be dragged independently of its text box, while clicking the shaft still selects the note. A red × beside the selected arrow tip and a matching Markups-panel action remove only the leader; Undo restores it.

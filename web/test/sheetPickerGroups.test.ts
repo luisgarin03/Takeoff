@@ -4,6 +4,7 @@ import test from "node:test";
 
 const canvas = readFileSync(new URL("../src/pages/TakeoffCanvas.jsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const menu = readFileSync(new URL("../src/components/ToolMenu.jsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const workspaceCss = readFileSync(new URL("../src/styles/workspaceUi.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 test("sheet selector groups nested page rows below collapsible PDF parents", () => {
   assert.match(canvas, /section: "PDF sets"/);
@@ -21,4 +22,11 @@ test("page counts load lazily and only the active PDF expands automatically", ()
 test("the shared menu renders disclosure chevrons and nested indentation", () => {
   assert.match(menu, /const depth = Math\.max\(0, Number\(it\.depth\) \|\| 0\)/);
   assert.match(menu, /it\.disclosure === "expanded" \? "chevronDown" : "chevronRight"/);
+});
+
+test("the current page keeps a visible active row under the shared dropdown theme", () => {
+  assert.match(canvas, /active: name === active && n === page/);
+  assert.match(menu, /data-active=\{it\.active \|\| undefined\}/);
+  assert.match(menu, /aria-current=\{it\.active \? "true" : undefined\}/);
+  assert.match(workspaceCss, /\.dropdown-action\[data-active="true"\][^{]*\{[^}]*background:[^}]*!important;[^}]*border-left:[^}]*var\(--cobalt\)[^}]*!important;/);
 });

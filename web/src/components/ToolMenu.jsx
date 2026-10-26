@@ -134,7 +134,9 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
             const fg = it.danger ? "var(--c-danger)" : "var(--ink)";
             const depth = Math.max(0, Number(it.depth) || 0);
             const action = (
-              <button key={it.id || i} className="dropdown-action" data-danger={it.danger || undefined} type="button" disabled={dis} title={it.title || ""}
+              <button key={it.id || i} className="dropdown-action" data-danger={it.danger || undefined}
+                data-active={it.active || undefined} aria-current={it.active ? "true" : undefined}
+                type="button" disabled={dis} title={it.title || ""}
                 aria-expanded={it.disclosure ? it.disclosure === "expanded" : undefined}
                 onClick={() => { if (!dis) { if (!it.stayOpen) setOpen(false); it.onSelect?.(); } }}
                 style={{
