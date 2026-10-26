@@ -3,6 +3,7 @@
 ## Unreleased — Whiteboard toolbar frame
 
 - Matched the Whiteboard top toolbar shell to the estimating toolbar with a compact 58px desktop height, a subtle workspace-colored border, and no dark outline, while leaving every toolbar control unchanged.
+- Replaced the selected-object × in the Whiteboard toolbar with a red **Remove** button positioned at the top-right of the selected file, note, arrow, or rectangle. The button keeps a fixed readable screen size as the board zoom changes. Removal retains the existing read-only guard, keyboard shortcut, save path, and undo/redo behavior.
 
 ## Unreleased — Sample plan loading
 

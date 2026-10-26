@@ -305,6 +305,9 @@ path.wb-drawing-hit { fill: transparent; pointer-events: all; }
 .wb-drawing-handle[data-handle="top-left"], .wb-drawing-handle[data-handle="bottom-right"] { cursor: var(--cursor-nwse-resize, nwse-resize); }
 .wb-drawing-handle[data-handle="ne"], .wb-drawing-handle[data-handle="sw"],
 .wb-drawing-handle[data-handle="top-right"], .wb-drawing-handle[data-handle="bottom-left"] { cursor: var(--cursor-nesw-resize, nesw-resize); }
+.wb .wb-selected-remove { position: absolute; z-index: 22; min-width: 0; min-height: 28px; padding: 5px 9px; border: 1px solid #b91c1c; border-radius: 6px; background: #dc2626; color: #fff !important; -webkit-text-fill-color: #fff !important; font: 700 12px var(--f-body); line-height: 16px; white-space: nowrap; box-shadow: 0 3px 10px #00000038; transform: translate(-100%, calc(-100% - 7px)); }
+.wb .wb-selected-remove:hover:not(:disabled) { border-color: #991b1b; background: #b91c1c; color: #fff !important; }
+.wb .wb-selected-remove:disabled { background: #dc2626; color: #fff !important; opacity: .45; }
 .wb-arrow-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 4px !important; }
 .wb .wb-arrow-colors button { width: 19px; height: 19px; min-width: 19px; min-height: 19px; padding: 0; border-radius: 50%; }
 .wb-empty { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center; color: var(--ink-muted); pointer-events: none; }

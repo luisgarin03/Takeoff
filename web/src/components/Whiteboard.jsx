@@ -732,6 +732,21 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
   const activeArrow = (board.arrows || []).find((arrow) => arrow.id === selected);
   const activeRectangle = (board.rectangles || []).find((rectangle) => rectangle.id === selected);
   const active = activeItem || activeArrow || activeRectangle;
+  const selectedRemoveAnchor = (() => {
+    if (activeItem) {
+      const shown = preview?.id === activeItem.id ? { ...activeItem, ...preview } : activeItem;
+      return { x: view.x + (shown.x + shown.w) * view.scale, y: view.y + shown.y * view.scale };
+    }
+    if (activeArrow) {
+      const shown = drawingPreview?.type === "arrow" && drawingPreview.id === activeArrow.id ? drawingPreview.drawing : activeArrow;
+      return { x: view.x + Math.max(shown.from[0], shown.to[0]) * view.scale, y: view.y + Math.min(shown.from[1], shown.to[1]) * view.scale };
+    }
+    if (activeRectangle) {
+      const shown = drawingPreview?.type === "rectangle" && drawingPreview.id === activeRectangle.id ? drawingPreview.drawing : activeRectangle;
+      return { x: view.x + (shown.x + shown.w) * view.scale, y: view.y + shown.y * view.scale };
+    }
+    return null;
+  })();
   const assets = new Map(board.assets.map((asset) => [asset.id, asset]));
   const activeAsset = activeItem?.kind === "file" ? assets.get(activeItem.assetId) : null;
   const canCropImage = !!activeAsset?.type?.startsWith("image/") && !activeAsset.missing;
@@ -812,7 +827,6 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
           style={{ backgroundColor: value }} onClick={() => setDrawingColor(value)} />)}
       </div>}
       {active && !imageCrop && <>
-        <Button icon="close" label="Delete selected object" disabled={busy || readOnly} onClick={removeSelected} />
         {canCropImage && <Button icon="crop" label={activeItem.crop ? "Adjust image crop" : "Crop image"} disabled={busy || readOnly} onClick={beginImageCrop}>{activeItem.crop ? "Adjust crop" : "Crop"}</Button>}
         {activeItem?.kind === "note" && <div className="wb-colors" role="group" aria-label="Note color">{Object.entries(NOTE_COLORS).map(([name, color]) =>
           <button type="button" key={name} aria-label={`${name} note`} title={`${name} note`} aria-pressed={activeItem.color === name} style={{ background: color }} onClick={() => patch(selected, { color: name })} />)}</div>}
@@ -879,6 +893,11 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
         {drawingPreview?.screen && drawingPreview.type === "arrow" && <ArrowGraphic from={drawingPreview.from} to={drawingPreview.to} color={drawingPreview.color} />}
         {drawingPreview?.screen && drawingPreview.type === "rectangle" && <RectangleGraphic rect={drawingPreview.rect} color={drawingPreview.color} />}
       </svg>
+      {selectedRemoveAnchor && !imageCrop && <button type="button" className="wb-selected-remove"
+        aria-label="Remove selected object" disabled={busy || readOnly}
+        style={{ left: selectedRemoveAnchor.x, top: selectedRemoveAnchor.y }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => { event.stopPropagation(); removeSelected(); }}>Remove</button>}
       {imageCrop && <div className="wb-image-crop-overlay" aria-label="Crop image" style={{
         left: view.x + imageCrop.base.x * view.scale, top: view.y + imageCrop.base.y * view.scale,
         width: imageCrop.base.w * view.scale, height: imageCrop.base.h * view.scale,
