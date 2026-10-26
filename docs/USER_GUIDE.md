@@ -1170,7 +1170,7 @@ Choose Continue with Google and approve Calendar access during sign-in to connec
 
 Calendar automatically restores your connected Google calendar list after sign-in. Calendars are initially visible; use their checkboxes to choose which to display. Selections are remembered per account in this browser.
 
-Google events display their Google Calendar colors. An individual event color takes precedence over its calendar color.
+Google events display their Google Calendar background and foreground assignments. An individual event color takes precedence over its calendar color; built-in Eucalyptus and Banana events match Google Calendar's month-view presentation, and the event detail indicator uses the same assigned color.
 
 
 Google Calendar editing: approve editing access in Calendar Settings. Use + Google event to create events; open an event and choose Edit to change dates, location, description, Google color, recurrence, attendees, reminders, visibility, availability, or RSVP. The editor supports duplicate, move, and confirmed deletion; recurring occurrences and the full series are separate edit choices. Drag and resize writable Google events to reschedule. Manage Google calendars in Settings provides creation, renaming, colors, quick-add, availability, preferences, sharing, and confirmed secondary-calendar deletion. Google account permissions are enforced on the server and stale event changes are rejected with version checks. Invitation/update emails are opt-in. Existing read-only authorizations continue to display events until editing permission is approved. Administrative ownership transfer, primary-calendar clearing, and webhook channel management are not exposed in the app.

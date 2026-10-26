@@ -205,7 +205,7 @@ Google sign-in requests read-only Google Calendar access during the initial cons
 
 Connected Google calendars load automatically when Calendar opens; each account's calendar visibility selections are remembered in this browser.
 
-Google Calendar imports preserve calendar and individual event colors.
+Google Calendar imports preserve each event's background and foreground assignment. Individual event colors take precedence over the calendar default, and built-in Eucalyptus and Banana events use the same presentation colors as Google Calendar's month view.
 
 
 Google Calendar editing: approve editing access in Calendar Settings. Use + Google event to create events; open an event and choose Edit to change dates, location, description, Google color, recurrence, attendees, reminders, visibility, availability, or RSVP. The editor supports duplicate, move, and confirmed deletion; recurring occurrences and the full series are separate edit choices. Drag and resize writable Google events to reschedule. Manage Google calendars in Settings provides creation, renaming, colors, quick-add, availability, preferences, sharing, and confirmed secondary-calendar deletion. Google account permissions are enforced on the server and stale event changes are rejected with version checks. Invitation/update emails are opt-in. Existing read-only authorizations continue to display events until editing permission is approved. Administrative ownership transfer, primary-calendar clearing, and webhook channel management are not exposed in the app.

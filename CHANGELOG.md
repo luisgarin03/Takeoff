@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Google Calendar event colors
+
+- Preserved each Google event's background and foreground assignment in the calendar grid, including per-event overrides; matched the built-in Eucalyptus and Banana presentation colors to Google Calendar's month view; and synchronized the event-detail indicator and Google calendar list marker.
+
 ## Unreleased — Condition page navigation
 
 - Added a page-pin dropdown to every Takeoffs condition row. It deduplicates and lists all named pages containing that condition in loaded PDF/page order, opens a selected page directly, and remains disabled when the condition has not been used.

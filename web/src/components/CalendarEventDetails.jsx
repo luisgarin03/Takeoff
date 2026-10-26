@@ -55,7 +55,7 @@ export default function CalendarEventDetails({ event, editable, busy, onClose, o
         <button aria-label="Close event details" title="Close" onClick={onClose}>{icons.close(20)}</button>
       </div>
       <div className="calendar-detail-scroll">
-        <div className="calendar-detail-heading"><span className="calendar-detail-color" style={{ background: event.backgroundColor || "#70a89f" }} /><div><h3>{event.title}</h3><p>{format(start)}{end && end.getTime() !== start.getTime() ? ` – ${format(end)}` : ""}{event.allDay ? " · All day" : ` · ${zone}`}</p></div></div>
+        <div className="calendar-detail-heading"><span className="calendar-detail-color" style={{ background: event.color || event.backgroundColor || "#70a89f" }} /><div><h3>{event.title}</h3><p>{format(start)}{end && end.getTime() !== start.getTime() ? ` – ${format(end)}` : ""}{event.allDay ? " · All day" : ` · ${zone}`}</p></div></div>
         {editBid ? <form className="calendar-bid-form" onSubmit={async (e) => { e.preventDefault(); setSaving(true); setError(""); try { await onSaveBid(bid); setEditBid(false); } catch (err) { setError(err.message); } finally { setSaving(false); } }}>
           <h4>Edit bid details</h4>{Object.entries(BID_FIELDS).map(([key,label]) => <label key={key}>{label}{key === "notes" || key === "contact" ? <textarea rows={key === "notes" ? 5 : 2} maxLength={10000} value={bid[key]} onChange={(e) => setBid({ ...bid, [key]: e.target.value })} /> : <input maxLength={10000} value={bid[key]} onChange={(e) => setBid({ ...bid, [key]: e.target.value })} />}</label>)}
           <button type="submit" disabled={saving}>Save bid details</button><button type="button" onClick={() => setEditBid(false)}>Cancel</button>
