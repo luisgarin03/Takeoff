@@ -20,9 +20,9 @@ import { ToolbarPanelContext } from "./BeitzellToolbar.jsx";
 
 const MENU_W = 232;
 
-export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false, rail = false }) {
+export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false, rail = false, portal = false }) {
   const toolbarActive = useContext(ToolbarPanelContext);
-  const portaled = rail || toolbarActive !== null;
+  const portaled = portal || rail || toolbarActive !== null;
   const [open, setOpen] = useState(false);
   const [flip, setFlip] = useState(false);
   const rootRef = useRef(null);
@@ -53,12 +53,12 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
     if (toolbarActive === false) setOpen(false);
   }, [toolbarActive]);
   useEffect(() => {
-    if (!open || toolbarActive === null) return;
+    if (!open || !portaled) return;
     const close = (event) => { if (!menuRef.current?.contains(event.target)) setOpen(false); };
     window.addEventListener("resize", close);
     document.addEventListener("scroll", close, true);
     return () => { window.removeEventListener("resize", close); document.removeEventListener("scroll", close, true); };
-  }, [open, toolbarActive]);
+  }, [open, portaled]);
 
   // Notify strictly in open/close PAIRS: fire true only when opening, and repay
   // it in the cleanup — which also runs if the menu unmounts while open (e.g.

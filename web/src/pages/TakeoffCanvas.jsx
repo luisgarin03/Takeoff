@@ -71,6 +71,7 @@ import TakeoffsPanel, { clampPanelW, PANEL_EXPANSION, CONDITION_DND_MIME, Condit
 import { HATCHES, PALETTE, NO_FILL, HatchPattern, HatchSwatch } from "../components/hatches.jsx";
 import { Icon } from "../brand/icons.jsx";
 import { RENDER_SCALE, MAX_GROUP, STANDARD_SCALES, parseSheetKey, compareSheetKeys, extractSheetNumber, detectScale, extractRegionText } from "../lib/sheets";
+import { conditionPageKeys } from "../lib/conditionPages.js";
 import { normalizeLoadedGroups } from "../lib/sheetGroups";
 import { isCanvasBusy } from "../lib/canvasBusy";
 import { parseSchedule, rowToSeed } from "../lib/scheduleParse";
@@ -1149,6 +1150,17 @@ export default function TakeoffCanvas() {
     const base = t.file.replace(/\.pdf$/i, "");
     return lvl + (t.page > 1 ? `${base} · ${t.page}` : base);
   };
+  const conditionPagesById = useMemo(() => {
+    const pageKeysByCondition = conditionPageKeys(shapes, sheets.map((sheet) => sheet.name));
+    return new Map([...pageKeysByCondition].map(([conditionId, keys]) => [conditionId, keys.map((key) => {
+      const level = sheetLevels[key] ? `${sheetLevels[key]} · ` : "";
+      if (galleryLabels[key]) return { key, label: level + galleryLabels[key] };
+      const parsed = parseSheetKey(key);
+      if (parsed.file === active && pageLabels[parsed.page]) return { key, label: level + pageLabels[parsed.page] };
+      const base = parsed.file.replace(/\.pdf$/i, "");
+      return { key, label: level + (parsed.page > 1 ? `${base} · ${parsed.page}` : base) };
+    })]));
+  }, [shapes, sheets, sheetLevels, galleryLabels, active, pageLabels]);
   const bookmarkedKeys = new Set(sheetBookmarks);
   const markedUpKeys = new Set(markupSheetBookmarkKeys(markups));
   const bookmarkButton = (key) => <SheetBookmarkButton label={tabLabel(key)} bookmarked={bookmarkedKeys.has(key)} markedUp={markedUpKeys.has(key)}
@@ -7451,6 +7463,7 @@ export default function TakeoffCanvas() {
   const panelHandlersRef = useRef(null);
   panelHandlersRef.current = {
     onActivate: activateCondition, onLocate: locateCondition,
+    onOpenConditionPage: (_conditionId, key) => openSheets([key], false),
     onAddCondition: addCondition, onDeleteCondition: deleteCondition,
     onUpdateCond: updateCond, onSetCondParam: setCondParam, onAssignAttr: assignAttr,
     onAddMaterial: addMaterial, onUpdateMaterial: updateMaterial, onRemoveMaterial: removeMaterial,
@@ -9600,6 +9613,7 @@ export default function TakeoffCanvas() {
           conditions={conditions}
           activeCond={activeCond}
           visRowById={visRowById}
+          conditionPagesById={conditionPagesById}
           conditionColumns={conditionColumns}
           shapeLabels={shapeLabels}
           templates={templates}

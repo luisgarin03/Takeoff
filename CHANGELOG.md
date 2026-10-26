@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Condition page navigation
+
+- Added a page-pin dropdown to every Takeoffs condition row. It deduplicates and lists all named pages containing that condition in loaded PDF/page order, opens a selected page directly, and remains disabled when the condition has not been used.
+
 ## Unreleased — Freehand Draw markup
 
 - Added an opaque **Draw** tool to the Takeoff Markup menu with an expandable color-and-brush widget directly beneath the Draw row, the shared ten-color palette, and a remembered 1–24 px brush-size control with live size preview. The dropdown widens only while that widget is expanded so all ten swatches remain visible. Draw strokes use the existing low-latency freehand capture path, remain sheet-relative, select and move as markup objects, share Undo/Redo and project persistence, and render in downloaded pages, Marked Set PDFs, and Whiteboard imports.

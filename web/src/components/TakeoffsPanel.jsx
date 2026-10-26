@@ -27,6 +27,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../brand/icons.jsx";
+import ToolMenu from "./ToolMenu.jsx";
 import { attrValue, columnLabel } from "../lib/conditionColumns.js";
 import { SPEC_FIELDS } from "../lib/reportColumns.js";
 import { num } from "../lib/num.js";
@@ -41,6 +42,7 @@ export const PANEL_EXPANSION = 1.3;
 export const PANEL_MIN_W = 240 * PANEL_EXPANSION;
 export const PANEL_MAX_W = 560 * PANEL_EXPANSION;
 export const clampPanelW = (w) => Math.min(PANEL_MAX_W, Math.max(PANEL_MIN_W, w));
+const EMPTY_CONDITION_PAGES = new Map();
 
 // drag-and-drop payload type carrying a condition id — a condition row here is
 // a drag SOURCE, the top-bar quick-access palette (TakeoffCanvas) is the drop
@@ -461,10 +463,10 @@ export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondPara
 
 function TakeoffsPanel({
   open, width, multiSheet, units = "imperial",
-  conditions, activeCond, visRowById, conditionColumns, shapeLabels = [], templates, palette = [],
+  conditions, activeCond, visRowById, conditionPagesById = EMPTY_CONDITION_PAGES, conditionColumns, shapeLabels = [], templates, palette = [],
   matLib, matLibById, linkedCountById,
   panelPrefs, onPanelPrefs, reassigning, epoch, clearSelectionRef,
-  onActivate, onSetActive, onLocate,
+  onActivate, onSetActive, onLocate, onOpenConditionPage,
   onAddCondition, onDeleteCondition, onUpdateCond, onSetCondParam, onAssignAttr,
   onAddMaterial, onUpdateMaterial, onRemoveMaterial,
   onBulkWaste, onBulkColor, onBulkDelete,
@@ -622,6 +624,7 @@ function TakeoffsPanel({
     const mult = c.multiplier || 1;
     const sf = row?.floor_sf || 0, lf = row?.lf || 0, ea = row?.ea || 0, wsf = row?.wall_sf || 0;
     const shapeCount = row?.shape_count || 0;
+    const usedPages = conditionPagesById.get(c.id) || [];
     const on = c.id === activeCond;
     const matOn = on && panelMatOpen;
     const checked = checkedConds.has(c.id);
@@ -656,6 +659,22 @@ function TakeoffsPanel({
             </div>}
           </div>
           <span style={{ fontFamily: "var(--f-mono,monospace)", fontSize: 10.5, color: "var(--ink-muted)", flexShrink: 0 }}>{shapeCount}▦</span>
+          <span draggable={false} onDragStart={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+            <ToolMenu portal disabled={!usedPages.length}
+              title={usedPages.length ? `Open a page where ${c.finish_tag} is used` : `${c.finish_tag} has not been used on any page`}
+              face={<Icon name="pin" size={12} />}
+              faceStyle={{ flexShrink: 0, justifyContent: "center", gap: 3, width: 39, height: 22, padding: 0, borderRadius: 0, color: "var(--ink-muted)", fontSize: 11 }}
+              menuStyle={{ minWidth: 260, maxWidth: 380 }}
+              items={[
+                { section: `Used on ${usedPages.length} page${usedPages.length === 1 ? "" : "s"}` },
+                ...usedPages.map((usedPage) => ({
+                  id: usedPage.key,
+                  icon: "document",
+                  label: usedPage.label,
+                  onSelect: () => onOpenConditionPage(c.id, usedPage.key),
+                })),
+              ]} />
+          </span>
           <button onClick={(e) => { e.stopPropagation(); onLocate(c.id); }} title="Zoom the canvas to this condition's takeoffs"
             style={{ flexShrink: 0, padding: "2px 6px", borderRadius: 0, border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", fontSize: 12, lineHeight: 1 }}>⌖</button>
           <button onClick={(e) => { e.stopPropagation(); onSetActive(c.id); setPanelMatOpen((v) => (on ? !v : true)); }}
