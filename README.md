@@ -170,7 +170,7 @@ The Takeoff toolbar summary card contains the editable active condition name, mu
 
 The condition summary shows its editable name once; the totals section displays quantities without repeating that name.
 
-Drawing-tool rail menus expand upward as needed to show their full list within the available screen height; scrolling is retained only when the list exceeds the viewport.
+The bottom-left Draw dropdown is 40 pixels wider to the right than the standard rail menu and fills the available height from the bottom of the top toolbar to the viewport edge. Its tools scroll inside the panel only when they exceed that space; the adjacent Edit dropdown retains its compact sizing.
 
 The sheet selector and previous/next controls sit in the top header immediately after Takeoff, available with either toolbar tab open or collapsed.
 

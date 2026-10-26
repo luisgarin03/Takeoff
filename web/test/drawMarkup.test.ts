@@ -15,8 +15,9 @@ test("Draw is a markup tool and exposes the complete ten-color palette", () => {
   assert.match(canvasSource, /aria-label="Draw brush size" type="range" min="1" max="24"/);
   assert.match(canvasSource, /disclosure: isDraw \? \(drawSettingsOpen \? "expanded" : "collapsed"\) : undefined/);
   assert.match(canvasSource, /item\.id === "draw" && drawStyleControls[\s\S]{0,100}\{ id: "draw-settings", custom: drawStyleControls \}/);
-  assert.match(canvasSource, /const markupMenuStyle = drawStyleControls \? \{ minWidth: 284 \} : undefined/);
+  assert.match(canvasSource, /const markupMenuStyle = \{ minWidth: drawStyleControls \? 324 : 272 \}/);
   assert.equal((canvasSource.match(/menuStyle=\{markupMenuStyle\}/g) || []).length, 2);
+  assert.match(canvasSource, /railTop=\{toolbarHeight\}[\s\S]{0,80}railFillHeight/);
 });
 
 test("Draw captures opaque freehand ink with its own remembered color and size", () => {

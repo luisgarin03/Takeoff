@@ -7228,10 +7228,10 @@ export default function TakeoffCanvas() {
       ? [item, { id: "draw-settings", custom: drawStyleControls }]
       : [item]
   ));
-  // The ten Draw swatches need more room than the standard action-only menu.
-  // Scope the wider panel to Draw so every other toolbar dropdown keeps its
-  // established compact footprint.
-  const markupMenuStyle = drawStyleControls ? { minWidth: 284 } : undefined;
+  // Give the combined Draw menu forty more pixels to the right than the shared
+  // 232px action-menu baseline. Its expanded brush widget gets the same forty-
+  // pixel increase over the previous 284px width.
+  const markupMenuStyle = { minWidth: drawStyleControls ? 324 : 272 };
 
   // panel-toggle for the right-edge rail — square like the zoom cluster, count as a
   // tiny mono line under the icon. Lives on the canvas, costs the toolbar zero rows.
@@ -9406,6 +9406,8 @@ export default function TakeoffCanvas() {
               face={<Icon name="pencil" size={15} />}
               active={measureActive || tool === "schedule" || tool === "deduct" || MARKUP_IDS.includes(tool)}
               onOpenChange={onMarkupMenuDepth}
+              railTop={toolbarHeight}
+              railFillHeight
               menuStyle={markupMenuStyle}
               items={[{ section: "Measure" }, ...measureMenuItems, { id: "schedule", icon: "rectTool", label: "Schedule", title: "Import a finish/material schedule — click two opposite corners around the table", active: tool === "schedule", onSelect: () => { setScheduleAnchor(null); setTool((t) => t === "schedule" ? "select" : "schedule"); } }, { section: "Cut Out" }, ...cutMenuItems, { section: "Markup" }, ...markupMenuItemsWithDrawSettings, ...(markupStyleControls ? [{ id: "markup-style", custom: markupStyleControls }] : [])]} />
             <ToolMenu rail title="Edit takeoffs" face={<Icon name="eraser" size={15} />}

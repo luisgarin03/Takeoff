@@ -20,7 +20,7 @@ import { ToolbarPanelContext } from "./BeitzellToolbar.jsx";
 
 const MENU_W = 232;
 
-export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false, rail = false, portal = false }) {
+export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false, rail = false, railTop, railFillHeight = false, portal = false }) {
   const toolbarActive = useContext(ToolbarPanelContext);
   const portaled = portal || rail || toolbarActive !== null;
   const [open, setOpen] = useState(false);
@@ -34,10 +34,12 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
     if (!open || !rail || !menuRef.current || !rootRef.current) return;
     // Lift rail menus to fit their content instead of reserving only 320px
     // below the trigger. Scroll only when the entire viewport is too short.
-    const height = Math.min(menuRef.current.scrollHeight + 2, window.innerHeight - 24);
-    const top = Math.max(12, Math.min(rootRef.current.getBoundingClientRect().top, window.innerHeight - height - 12));
-    setRailPosition((position) => ({ ...position, top, maxHeight: window.innerHeight - top - 12 }));
-  }, [open, rail]);
+    const viewportTop = Number.isFinite(railTop) ? Math.max(12, railTop) : 12;
+    const height = Math.min(menuRef.current.scrollHeight + 2, Math.max(0, window.innerHeight - viewportTop - 12));
+    const top = railFillHeight ? viewportTop : Math.max(viewportTop, Math.min(rootRef.current.getBoundingClientRect().top, window.innerHeight - height - 12));
+    const availableHeight = Math.max(0, window.innerHeight - top - 12);
+    setRailPosition((position) => ({ ...position, top, maxHeight: availableHeight, ...(railFillHeight ? { height: availableHeight } : {}) }));
+  }, [open, rail, railTop, railFillHeight]);
 
   useEffect(() => {
     if (!open) return;
@@ -80,9 +82,11 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
       setFlip(r.left + menuW > window.innerWidth - 16);
       if (portaled) {
         const width = Math.min(menuW, window.innerWidth - 24);
-        const top = Math.max(12, Math.min(rail ? r.top : r.bottom + 4, window.innerHeight - (rail ? 320 : 160)));
+        const viewportTop = rail && Number.isFinite(railTop) ? Math.max(12, railTop) : 12;
+        const top = railFillHeight ? viewportTop : Math.max(viewportTop, Math.min(rail ? r.top : r.bottom + 4, window.innerHeight - (rail ? 320 : 160)));
+        const availableHeight = Math.max(0, window.innerHeight - top - 12);
         setRailPosition({ position: "fixed", top, left: Math.max(12, Math.min(rail ? r.right + 8 : r.left, window.innerWidth - width - 12)),
-          right: "auto", width, minWidth: 0, maxHeight: Math.max(0, window.innerHeight - top - 12),
+          right: "auto", width, minWidth: 0, maxHeight: availableHeight, ...(railFillHeight ? { height: availableHeight } : {}),
           overflowY: "auto", overscrollBehavior: "contain", touchAction: "pan-y", boxSizing: "border-box", zIndex: 1000 });
       }
     }

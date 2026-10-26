@@ -258,7 +258,7 @@ Open **Project > PDF opening & OCR** to choose how new imports and saved plans i
 
 ### Pan & zoom
 
-The fixed bottom-left canvas controls are **Draw (pencil icon)**, **Edit (pen icon)**, **Pan**, **Select**, **+ Zoom**, **− Zoom**, **fit**, and **☾**, in that order. Draw opens the shared Measure, Cut Out, and Markup choices; Edit opens the existing editing actions with the same availability rules. When Highlighter is armed, reopen Draw to adjust ink, size, and tip. The original top Theme, Mode, Draw, and Edit controls are hidden; their actions remain available through the rails and existing keyboard shortcuts. Rail menus open beside the controls and scroll within the viewport; taps on them do not reach the canvas. A **✓ Finish** button appears above Pan only when the toolbar Finish action is available: at least three points for Area, Deduct, or a single-sheet Zone, or two for Linear, Curve, or Surface. Its tooltip and accessible label show the live point count. Either Finish button completes the same trace; finishing or cancelling removes the extra button without moving the six controls below it. Pan and Select use the existing mode state and `P` / `V` shortcuts, with the active mode filled in ink.
+The fixed bottom-left canvas controls are **Draw (pencil icon)**, **Edit (pen icon)**, **Pan**, **Select**, **+ Zoom**, **− Zoom**, **fit**, and **☾**, in that order. Draw opens the shared Measure, Cut Out, and Markup choices; Edit opens the existing editing actions with the same availability rules. When Highlighter is armed, reopen Draw to adjust ink, size, and tip. The original top Theme, Mode, Draw, and Edit controls are hidden; their actions remain available through the rails and existing keyboard shortcuts. The Draw dropdown extends 40 pixels farther right than the standard rail menu and fills the height beneath the top toolbar; its tools scroll inside that space when necessary. Taps on rail menus do not reach the canvas. A **✓ Finish** button appears above Pan only when the toolbar Finish action is available: at least three points for Area, Deduct, or a single-sheet Zone, or two for Linear, Curve, or Surface. Its tooltip and accessible label show the live point count. Either Finish button completes the same trace; finishing or cancelling removes the extra button without moving the six controls below it. Pan and Select use the existing mode state and `P` / `V` shortcuts, with the active mode filled in ink.
 
 Panning is always at hand, whatever tool is armed:
 
@@ -1134,7 +1134,7 @@ The Takeoff toolbar summary card contains the editable active condition name, mu
 
 The condition summary shows its editable name once; the totals section displays quantities without repeating that name.
 
-Drawing-tool rail menus expand upward as needed to show their full list within the available screen height; scrolling is retained only when the list exceeds the viewport.
+The Draw rail menu spans the available height beneath the top toolbar and is 40 pixels wider to the right than a standard rail dropdown. Its tools scroll only when they exceed that space; other rail menus retain their compact dimensions.
 
 The sheet selector and previous/next controls sit in the top header immediately after Takeoff, available with either toolbar tab open or collapsed.
 
