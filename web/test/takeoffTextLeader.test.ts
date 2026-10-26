@@ -11,6 +11,13 @@ test("every text box exposes a leader-arrow control", () => {
   assert.match(source, /m\.type === "text" && <button[\s\S]{0,500}armTextLeader\(m\.id\)/);
 });
 
+test("text leader controls remain fixed in screen space throughout imperative zoom", () => {
+  assert.match(source, /const fixedScreenControlRefs = useRef\(new Set\(\)\)/);
+  assert.match(source, /function textLeaderButton|const textLeaderButton[\s\S]{0,1800}ref=\{registerFixedScreenControl\}[\s\S]{0,300}data-stage-fixed-x=\{anchorX\}/);
+  assert.match(source, /const applyTf = useCallback\([\s\S]{0,450}syncFixedScreenControls\(scale\)/);
+  assert.match(source, /node\.setAttribute\("transform", `translate\(\$\{anchorX\} \$\{anchorY\}\) scale\(\$\{inverseScale\}\)`\)/);
+});
+
 test("the leader button arms one next-click target with cancellation", () => {
   assert.match(source, /function armTextLeader\(mid\)/);
   assert.match(source, /if \(textLeaderMarkupId\) placeTextLeader\(p\)/);

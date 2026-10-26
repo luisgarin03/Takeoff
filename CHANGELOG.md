@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Takeoff text-note controls
+
+- Kept the Text-note leader-arrow button and selected-arrow remove control at a fixed physical screen size throughout Takeoff pan/zoom gestures, without changing the note, leader geometry, export, or undo behavior.
+
 ## Unreleased — Whiteboard toolbar frame
 
 - Matched the Whiteboard top toolbar shell to the estimating toolbar with a compact 58px desktop height, a subtle workspace-colored border, and no dark outline, while leaving every toolbar control unchanged.

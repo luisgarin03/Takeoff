@@ -912,6 +912,11 @@ export default function TakeoffCanvas() {
 
   const containerRef = useRef(null);
   const stageRef = useRef(null);
+  // Editor-only SVG controls live inside the CSS-scaled stage, but must remain
+  // the same physical size on screen. applyTf updates their inverse scale in
+  // the very same frame as the stage transform so they never pulse during the
+  // throttled React zoom mirror.
+  const fixedScreenControlRefs = useRef(new Set());
   const panelCanvasRefs = useRef(new Map()); // sheetKey → <canvas>
   const panelTextLayerRefs = useRef(new Map()); // sheetKey → selectable PDF.js text layer
   const panelTextLayerTasksRef = useRef(new Map()); // sheetKey → TextLayer render task
@@ -1223,10 +1228,27 @@ export default function TakeoffCanvas() {
   };
 
   // ── transform: tfRef is source of truth; write straight to the DOM ─────────
+  const registerFixedScreenControl = useCallback((node) => {
+    if (node) fixedScreenControlRefs.current.add(node);
+  }, []);
+  const syncFixedScreenControls = useCallback((scale) => {
+    const inverseScale = 1 / Math.max(Number(scale) || 1, 0.0001);
+    for (const node of fixedScreenControlRefs.current) {
+      if (!node.isConnected) {
+        fixedScreenControlRefs.current.delete(node);
+        continue;
+      }
+      const anchorX = Number(node.dataset.stageFixedX);
+      const anchorY = Number(node.dataset.stageFixedY);
+      if (!Number.isFinite(anchorX) || !Number.isFinite(anchorY)) continue;
+      node.setAttribute("transform", `translate(${anchorX} ${anchorY}) scale(${inverseScale})`);
+    }
+  }, []);
   const applyTf = useCallback(() => {
     const { x, y, scale } = tfRef.current;
     if (stageRef.current) stageRef.current.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
-  }, []);
+    syncFixedScreenControls(scale);
+  }, [syncFixedScreenControls]);
   // The preview and the base canvas occupy identical stage coordinates. Changing
   // only their visibility leaves all PDF, SVG, pan, and measurement coordinates
   // untouched. A missing/stale preview always leaves the base canvas visible.
@@ -8933,26 +8955,29 @@ export default function TakeoffCanvas() {
                         const layout = canvasMarkupTextLayout(markup.text || " ", pixelsPerPoint);
                         const boxX = baselineX - layout.padX;
                         const boxY = baselineY - layout.baselines[0];
-                        const size = 20 / z;
-                        const bx = boxX + layout.width - size / 2;
-                        const by = boxY - size / 2;
+                        const anchorX = boxX + layout.width;
+                        const anchorY = boxY;
+                        const inverseScale = 1 / Math.max(z, 0.0001);
                         const active = textLeaderMarkupId === markup.id;
                         const ink = active ? "#fff" : mk;
                         const arm = () => armTextLeader(markup.id);
                         return (
-                          <g role="button" aria-label={markup.target ? "Repoint leader arrow for text box" : "Add leader arrow for text box"}
+                          <g ref={registerFixedScreenControl}
+                            data-stage-fixed-x={anchorX} data-stage-fixed-y={anchorY}
+                            transform={`translate(${anchorX} ${anchorY}) scale(${inverseScale})`}
+                            role="button" aria-label={markup.target ? "Repoint leader arrow for text box" : "Add leader arrow for text box"}
                             aria-pressed={active} tabIndex={0}
                             onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                             onClick={(event) => { event.preventDefault(); event.stopPropagation(); arm(); }}
                             onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); arm(); } }}
                             style={{ pointerEvents: "all", cursor: "crosshair" }}>
-                            <rect x={bx} y={by} width={size} height={size} rx={3 / z}
+                            <rect x={-10} y={-10} width={20} height={20} rx={3}
                               fill={active ? "#1f3fc7" : (darkMode ? "#20252b" : "#fffaf2")}
-                              stroke={active ? "#fff" : mk} strokeWidth={1.2 / z} />
-                            <line x1={bx + 5 / z} y1={by + 15 / z} x2={bx + 15 / z} y2={by + 5 / z}
-                              stroke={ink} strokeWidth={1.5 / z} strokeLinecap="round" />
-                            <path d={`M${bx + 10 / z},${by + 5 / z} H${bx + 15 / z} V${by + 10 / z}`}
-                              fill="none" stroke={ink} strokeWidth={1.5 / z} strokeLinecap="round" strokeLinejoin="round" />
+                              stroke={active ? "#fff" : mk} strokeWidth={1.2} />
+                            <line x1={-5} y1={5} x2={5} y2={-5}
+                              stroke={ink} strokeWidth={1.5} strokeLinecap="round" />
+                            <path d="M0,-5 H5 V0"
+                              fill="none" stroke={ink} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                           </g>
                         );
                       };
@@ -8961,20 +8986,21 @@ export default function TakeoffCanvas() {
                       // place; the shared markup command history makes this undoable.
                       const textLeaderRemoveButton = (markup, targetX, targetY) => {
                         if (!selM || !markup.target) return null;
-                        const radius = 9 / z;
-                        const cx = targetX + 16 / z;
-                        const cy = targetY - 16 / z;
+                        const inverseScale = 1 / Math.max(z, 0.0001);
                         const remove = () => removeTextLeader(markup.id);
                         return (
-                          <g role="button" aria-label="Remove leader arrow from text box" tabIndex={0}
+                          <g ref={registerFixedScreenControl}
+                            data-stage-fixed-x={targetX} data-stage-fixed-y={targetY}
+                            transform={`translate(${targetX} ${targetY}) scale(${inverseScale})`}
+                            role="button" aria-label="Remove leader arrow from text box" tabIndex={0}
                             onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                             onClick={(event) => { event.preventDefault(); event.stopPropagation(); remove(); }}
                             onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); remove(); } }}
                             style={{ pointerEvents: "all", cursor: "pointer" }}>
-                            <circle cx={cx} cy={cy} r={radius}
-                              fill={darkMode ? "#20252b" : "#fffaf2"} stroke="#b03a26" strokeWidth={1.5 / z} />
-                            <path d={`M${cx - 3.5 / z},${cy - 3.5 / z} L${cx + 3.5 / z},${cy + 3.5 / z} M${cx + 3.5 / z},${cy - 3.5 / z} L${cx - 3.5 / z},${cy + 3.5 / z}`}
-                              fill="none" stroke="#b03a26" strokeWidth={1.5 / z} strokeLinecap="round" />
+                            <circle cx={16} cy={-16} r={9}
+                              fill={darkMode ? "#20252b" : "#fffaf2"} stroke="#b03a26" strokeWidth={1.5} />
+                            <path d="M12.5,-19.5 L19.5,-12.5 M19.5,-19.5 L12.5,-12.5"
+                              fill="none" stroke="#b03a26" strokeWidth={1.5} strokeLinecap="round" />
                           </g>
                         );
                       };
