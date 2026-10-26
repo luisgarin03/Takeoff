@@ -287,7 +287,49 @@ function AddValueInput({ onAdd }) {
 // the docked panel AND the restored top-bar band render the SAME editor (one
 // source of truth, like the app's single activateCondition path). Owns only its
 // hatch-popover open state; everything else flows through the passed handlers.
-export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondParam, onAssignAttr, conditionColumns = [], layout = "stack" }) {
+export function ConditionIdentityFields({ cond: c, onUpdateCond, afterWaste }) {
+  const nameRef = useRef(null);
+  useLayoutEffect(() => {
+    const field = nameRef.current;
+    if (!field) return;
+    const fit = () => {
+      field.style.height = "0px";
+      field.style.height = `${field.scrollHeight + 4}px`;
+    };
+    fit();
+    let previousWidth = field.getBoundingClientRect().width;
+    const observer = new ResizeObserver(() => {
+      const width = field.getBoundingClientRect().width;
+      if (width !== previousWidth) { previousWidth = width; fit(); }
+    });
+    observer.observe(field);
+    return () => observer.disconnect();
+  }, [c?.finish_tag]);
+  if (!c) return null;
+  return (
+    <div className="condition-identity-fields">
+        <textarea ref={nameRef} className="condition-name-input" name="condition-finish-tag" rows={1} value={c.finish_tag} onChange={(e) => onUpdateCond({ finish_tag: e.target.value })}
+          title="Rename this condition / finish tag"
+          style={{ padding: "3px 6px", borderRadius: 0, border: "1px solid var(--ink-faint)", fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 12, color: "var(--ink)" }} />
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Multiply this condition by N identical units (measure one, ×N)">
+          <span style={{ color: "var(--ink-muted)" }}>×</span>
+          <input name="condition-multiplier" type="number" min="1" step="1" value={c.multiplier || 1}
+            onChange={(e) => onUpdateCond({ multiplier: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+            style={{ width: 46, padding: "3px 5px", borderRadius: 0, border: "1px solid var(--ink-faint)", fontSize: 12 }} />
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Waste % — a flooring allowance added on top of the measured quantity in the Report. You choose it per condition (e.g. ~8% straight-lay LVP, ~15% diagonal, ~20% herringbone).">
+          <span style={{ color: "var(--ink-muted)" }}>Waste</span>
+          <input name="condition-waste-pct" type="number" min="0" step="1" value={c.waste_pct ?? 0}
+            onChange={(e) => onUpdateCond({ waste_pct: Math.max(0, parseFloat(e.target.value) || 0) })}
+            style={{ width: 50, padding: "3px 5px", borderRadius: 0, border: "1px solid var(--ink-faint)", fontSize: 12 }} />
+          <span style={{ color: "var(--ink-muted)" }}>%</span>
+        </span>
+        {afterWaste}
+      </div>
+  );
+}
+
+export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondParam, onAssignAttr, conditionColumns = [], layout = "stack", hideIdentity = false }) {
   const [hatchOpen, setHatchOpen] = useState(false);
   const hatchRef = useRef(null);
   const hatchMenuRef = useRef(null);
@@ -329,25 +371,8 @@ export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondPara
     <div style={isRow
       ? { padding: "6px 2px 2px", display: "flex", flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 10, rowGap: 8, fontSize: 11 }
       : { padding: "4px 12px 10px", display: "flex", flexDirection: "column", gap: 7, fontSize: 11 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <input className="condition-name-input" name="condition-finish-tag" size={Math.max(16, String(c.finish_tag || "").length + 2)} value={c.finish_tag} onChange={(e) => onUpdateCond({ finish_tag: e.target.value })}
-          title="Rename this condition / finish tag"
-          style={{ padding: "3px 6px", borderRadius: 0, border: "1px solid var(--ink-faint)", fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 12, color: "var(--ink)" }} />
-        <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Multiply this condition by N identical units (measure one, ×N)">
-          <span style={{ color: "var(--ink-muted)" }}>×</span>
-          <input name="condition-multiplier" type="number" min="1" step="1" value={c.multiplier || 1}
-            onChange={(e) => onUpdateCond({ multiplier: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-            style={{ width: 46, padding: "3px 5px", borderRadius: 0, border: "1px solid var(--ink-faint)", fontSize: 12 }} />
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Waste % — a flooring allowance added on top of the measured quantity in the Report. You choose it per condition (e.g. ~8% straight-lay LVP, ~15% diagonal, ~20% herringbone).">
-          <span style={{ color: "var(--ink-muted)" }}>Waste</span>
-          <input name="condition-waste-pct" type="number" min="0" step="1" value={c.waste_pct ?? 0}
-            onChange={(e) => onUpdateCond({ waste_pct: Math.max(0, parseFloat(e.target.value) || 0) })}
-            style={{ width: 50, padding: "3px 5px", borderRadius: 0, border: "1px solid var(--ink-faint)", fontSize: 12 }} />
-          <span style={{ color: "var(--ink-muted)" }}>%</span>
-        </span>
-      </div>
-      {isRow && rule()}
+      {!isRow && !hideIdentity && <ConditionIdentityFields cond={c} onUpdateCond={onUpdateCond} />}
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 16, rowGap: 7 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
         <span style={{ color: "var(--ink-muted)", width: 26 }}>Line</span>
         {PALETTE.map((p) => <button key={p} title={p} onClick={() => onUpdateCond({ color: p })} style={{ width: 16, height: 16, borderRadius: 4, background: p, border: c.color === p ? "2px solid var(--ink)" : "1px solid var(--ink-faint)", cursor: "pointer" }} />)}
@@ -356,6 +381,7 @@ export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondPara
         <span style={{ color: "var(--ink-muted)", width: 26 }}>Fill</span>
         <button title="No fill" onClick={() => onUpdateCond({ fill: NO_FILL })} style={{ width: 16, height: 16, borderRadius: 4, background: "var(--paper-bright)", border: c.fill === NO_FILL ? "2px solid var(--ink)" : "1px solid var(--ink-faint)", cursor: "pointer", fontSize: 9, lineHeight: "12px", color: "var(--c-danger)" }}>⦸</button>
         {PALETTE.map((p) => <button key={p} title={p} onClick={() => onUpdateCond({ fill: p })} style={{ width: 16, height: 16, borderRadius: 4, background: p, opacity: 0.55, border: c.fill === p ? "2px solid var(--ink)" : "1px solid var(--ink-faint)", cursor: "pointer" }} />)}
+      </div>
       </div>
       {isRow && rule()}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -385,7 +411,7 @@ export function ConditionAppearanceEditor({ cond: c, onUpdateCond, onSetCondPara
           <span style={{ color: "var(--ink-muted)" }}>Shape</span>
           <select name="condition-line-marker" value={normalizeLineMarker(c.line_marker)} onChange={(e) => onUpdateCond({ line_marker: e.target.value })}
             style={{ fontSize: 11, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", padding: "1px 3px" }}>
-            {LINE_MARKER_IDS.map((id) => <option key={id} value={id}>{LINE_MARKERS[id].glyph} {LINE_MARKERS[id].label}</option>)}
+            {LINE_MARKER_IDS.map((id) => <option key={id} value={id}>{id === "none" ? "No shape" : `${LINE_MARKERS[id].glyph} ${LINE_MARKERS[id].label}`}</option>)}
           </select>
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }} title="Height (ft) — the default for NEW wall traces (SF = LF × H) and the vertical-SF display on floor areas. Walls keep the height they were drawn at — select a wall to change just that one.">
@@ -447,7 +473,7 @@ function TakeoffsPanel({
   onUpdateLibMaterial, onPushLibUpdate, onDeleteLibMaterial, onAddLibMaterial,
   onAddColumn, onRenameColumn, onDeleteColumn, onAddColumnValue, onRemoveColumnValue, onRenameColumnValue,
   onAddLabel, onRenameLabel, onRemoveLabel,
-  onToggleCollapse, onHoldGesture, onTogglePin, onCalculateFence,
+  onToggleCollapse, onHoldGesture, onCalculateFence,
 }) {
   const [panelTab, setPanelTab] = useState("takeoffs");       // "takeoffs" | "library" | "materials" | "columns"
   const [condQuery, setCondQuery] = useState("");             // live filter over the condition list (transient, never persisted)
@@ -620,11 +646,14 @@ function TakeoffsPanel({
           style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", cursor: "pointer", outline: reassigning ? "1px dashed var(--cobalt)" : "none", outlineOffset: -3, userSelect: "none" }}>
           {hot && <span title={pinned ? `Palette shortcut — press ${hIdx + 1} to activate` : `Press ${hIdx + 1} to activate (pin to lock this number)`} style={{ fontSize: 9, fontFamily: "var(--f-mono,monospace)", color: pinned ? "var(--cobalt)" : "var(--ink-muted)", border: `1px solid ${pinned ? "var(--cobalt)" : "var(--ink-faint)"}`, borderRadius: 3, padding: "0 3px", flexShrink: 0 }}>{hIdx + 1}</span>}
           <span style={{ borderRadius: 4, overflow: "hidden", lineHeight: 0, flexShrink: 0 }}><HatchSwatch type={c.hatch || "solid"} line={c.color} fill={c.fill} /></span>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontWeight: on ? 700 : 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.finish_tag}{mult > 1 ? <span style={{ color: "var(--ink-muted)", fontWeight: 500 }}> ×{mult}</span> : null}</div>
-            <div style={{ fontFamily: "var(--f-mono,monospace)", fontSize: 11, color: "var(--ink-muted)" }}>
+          <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 12, flexWrap: on ? "wrap" : "nowrap" }}>
+            <div style={{ flexShrink: 0, fontFamily: "var(--f-mono,monospace)", fontSize: 16, fontWeight: 700, lineHeight: 1.4, color: "var(--ink)" }}>
               {sf ? fa(sf) : ""}{wsf ? `${sf ? " · " : ""}${fa(wsf)} wall` : ""}{lf ? `${sf || wsf ? " · " : ""}${fl(lf)}` : ""}{ea ? `${sf || wsf || lf ? " · " : ""}${num(ea, 0)} EA` : ""}{!sf && !wsf && !lf && !ea ? "—" : ""}
             </div>
+            {!on && <div style={{ minWidth: 0, flex: 1, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.finish_tag}{mult > 1 ? <span style={{ color: "var(--ink-muted)", fontWeight: 500 }}> ×{mult}</span> : null}</div>}
+            {on && <div className="condition-summary-identity" onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} draggable={false} onDragStart={(event) => event.stopPropagation()}>
+              <ConditionIdentityFields cond={c} onUpdateCond={onUpdateCond} />
+            </div>}
           </div>
           <span style={{ fontFamily: "var(--f-mono,monospace)", fontSize: 10.5, color: "var(--ink-muted)", flexShrink: 0 }}>{shapeCount}▦</span>
           <button onClick={(e) => { e.stopPropagation(); onLocate(c.id); }} title="Zoom the canvas to this condition's takeoffs"
@@ -640,11 +669,7 @@ function TakeoffsPanel({
             style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", padding: "2px 5px", borderRadius: 0, border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", lineHeight: 0 }}>
             <Icon name="calculator" size={12} />
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onTogglePin(c.id); }}
-            title={pinned ? "Unpin from the top-bar palette" : (palette.length >= 9 ? "Palette is full (9)" : "Pin to the top-bar palette for one-click access")}
-            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", padding: "2px 5px", borderRadius: 0, border: `1px solid ${pinned ? "var(--cobalt)" : "var(--ink-faint)"}`, background: "transparent", color: pinned ? "var(--cobalt)" : (!pinned && palette.length >= 9 ? "var(--ink-faint)" : "var(--ink-muted)"), cursor: "pointer", lineHeight: 0 }}>
-            <Icon name="pin" size={12} />
-          </button>
+
           <button onClick={(e) => { e.stopPropagation(); onDeleteCondition(c.id); }} title="Delete this condition (and its takeoffs)"
             style={{ flexShrink: 0, padding: "2px 6px", borderRadius: 0, border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--c-danger)", cursor: "pointer", fontSize: 12 }}>✕</button>
         </div>
@@ -652,7 +677,7 @@ function TakeoffsPanel({
             used to live in its own toolbar row above the canvas. Extracted to
             ConditionAppearanceEditor so the docked panel AND the top-bar band
             render the same editor from one source of truth. */}
-        {on && <ConditionAppearanceEditor cond={c} onUpdateCond={onUpdateCond} onSetCondParam={onSetCondParam} onAssignAttr={onAssignAttr} conditionColumns={conditionColumns} />}
+        {on && <ConditionAppearanceEditor cond={c} onUpdateCond={onUpdateCond} onSetCondParam={onSetCondParam} onAssignAttr={onAssignAttr} conditionColumns={conditionColumns} hideIdentity />}
         {matOn && (
           <div style={{ padding: "8px 12px 10px", background: "var(--paper-cream)", borderTop: "1px solid var(--ink-faint)", fontSize: 11.5 }}>
             <div style={{ marginBottom: 6, color: "var(--ink-muted)" }}>Supporting Materials — order qty = measured ÷ coverage, rounded up.</div>
@@ -679,18 +704,30 @@ function TakeoffsPanel({
     );
   };
 
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement;
+    rootRef.current?.querySelector('input, button')?.focus();
+    const key = (event) => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onToggleCollapse(); }
+    };
+    rootRef.current?.addEventListener("keydown", key);
+    const root = rootRef.current;
+    return () => { root?.removeEventListener("keydown", key); previous?.focus?.(); };
+  }, [open, onToggleCollapse]);
   if (!open) return null;
-  return (
-    <div ref={rootRef} className="glass-drawer glass-drawer-conditions" style={{ width, flexShrink: 0, display: "flex", background: "var(--paper-bright)", borderLeft: "1px solid var(--ink-faint)", fontSize: 12.5 }}>
+  return createPortal(
+    <div className="conditions-modal-scrim">
+    <div ref={rootRef} role="dialog" aria-modal="false" aria-label="Conditions and takeoffs" className="glass-drawer glass-drawer-conditions conditions-modal" style={{ width: Math.max(760, width), flexShrink: 0, display: "flex", background: "var(--paper-bright)", fontSize: 12.5 }}>
       <div onPointerDown={onResizeDown} onPointerMove={onResizeMove} onPointerUp={onResizeEnd}
         onPointerCancel={onResizeEnd} onLostPointerCapture={onResizeEnd}
         title="Drag to resize"
         style={{ width: 5, flexShrink: 0, cursor: "var(--cursor-col-resize, col-resize)", touchAction: "none", background: "transparent", borderRight: "1px solid var(--ink-faint)" }} />
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <div className="takeoffs-tabs" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "7px 12px", background: "var(--ink)", color: "var(--paper-cream)", flexShrink: 0 }}>
-          <span style={{ display: "inline-flex", gap: 2 }}>
-            {[["takeoffs", `Takeoffs · ${multiSheet ? "these sheets" : "this sheet"}`], ["library", `Library${templates.length ? ` (${templates.length})` : ""}`], ["materials", `Materials${matLib.length ? ` (${matLib.length})` : ""}`], ["columns", `Columns${conditionColumns.length ? ` (${conditionColumns.length})` : ""}`]].map(([id, label]) => (
-              <button key={id} onClick={() => setPanelTab(id)}
+          <span className="conditions-tab-list" role="tablist" aria-label="Conditions workspace" style={{ display: "inline-flex", gap: 2 }}>
+            {[["takeoffs", `Conditions in ${multiSheet ? "these sheets" : "this sheet"}`], ["library", `Library${templates.length ? ` (${templates.length})` : ""}`], ["materials", `Materials${matLib.length ? ` (${matLib.length})` : ""}`], ["columns", `Columns${conditionColumns.length ? ` (${conditionColumns.length})` : ""}`]].map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={panelTab === id} onClick={() => setPanelTab(id)}
                 style={{ padding: "3px 8px", border: "none", borderBottom: panelTab === id ? "2px solid var(--paper-cream)" : "2px solid transparent", background: "none", color: "var(--paper-cream)", opacity: panelTab === id ? 1 : 0.65, cursor: "pointer", fontWeight: 700, fontSize: 12.5 }}>{label}</button>
             ))}
           </span>
@@ -698,8 +735,8 @@ function TakeoffsPanel({
             <button hidden onClick={() => onPanelPrefs((p) => ({ ...p, strip: !p.strip }))}
               title="Compact strip — also show the conditions as a horizontal strip above the canvas (handy on small projects with the panel collapsed)"
               style={{ background: panelPrefs.strip ? "var(--paper-cream)" : "none", border: "1px solid var(--paper-cream)", color: panelPrefs.strip ? "var(--ink)" : "var(--paper-cream)", fontSize: 9.5, fontFamily: "var(--f-mono)", letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", padding: "2px 6px", lineHeight: 1.4 }}>strip</button>
-            <button onClick={onToggleCollapse} title="Collapse the panel (the ☰ button on the canvas edge brings it back)"
-              style={{ background: "none", border: "none", color: "var(--paper-cream)", fontSize: 15, cursor: "pointer", lineHeight: 1 }}>»</button>
+            <button onClick={onToggleCollapse} title="Close conditions panel" aria-label="Close conditions panel"
+              style={{ background: "none", border: "none", color: "var(--paper-cream)", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
           </span>
         </div>
         {panelTab === "takeoffs" && <>
@@ -920,6 +957,7 @@ function TakeoffsPanel({
         )}
       </div>
     </div>
+    </div>, document.body
   );
 }
 

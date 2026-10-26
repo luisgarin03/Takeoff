@@ -2,11 +2,18 @@ import { Capacitor } from "@capacitor/core";
 import { cloudError } from "./errors.js";
 export const DRIVE_RETURN = "com.opentakeoff.app://drive-auth";
 const PENDING = "otk:drive-return-workspace";
+export function calendarReturnUrl(href) {
+  const url = new URL(href);
+  for (const key of ["stripe_checkout", "stripe_session", "otkGoogle", "code", "otkDrive"]) url.searchParams.delete(key);
+  url.searchParams.set("otkCalendar", "1");
+  url.hash = "";
+  return url.href;
+}
 
 export function driveReturnResult(href) {
   const url = new URL(href), result = url.searchParams.get("otkDrive");
   if (!result) return null;
-  return { error: result === "account" ? cloudError(new Error("OTK_DRIVE_ACCOUNT")).message
+  return { ...(url.searchParams.get("otkCalendar") === "1" ? { calendar: true } : {}), error: result === "account" ? cloudError(new Error("OTK_DRIVE_ACCOUNT")).message
     : result === "failed" ? cloudError(new Error("OTK_DRIVE_CONSENT")).message : "" };
 }
 export function isDriveDeepLink(href) {
@@ -29,7 +36,7 @@ export async function listenForDriveReturn(onReturn, signal) {
   if (signal?.aborted) return () => {};
   const url = new URL(window.location.href), returned = driveReturnResult(url.href);
   if (returned) {
-    url.searchParams.delete("otkDrive"); window.history.replaceState(window.history.state, "", url.href); onReturn(returned);
+    url.searchParams.delete("otkDrive"); url.searchParams.delete("otkCalendar"); window.history.replaceState(window.history.state, "", url.href); onReturn(returned);
   }
   if (!Capacitor.isNativePlatform()) return () => {};
   const { App } = await import("@capacitor/app");

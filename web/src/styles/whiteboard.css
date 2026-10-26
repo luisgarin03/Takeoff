@@ -32,12 +32,18 @@
 .wb button:disabled { opacity: .4; cursor: default; }
 .wb button[aria-pressed="true"] { border-color: var(--cobalt); box-shadow: inset 0 0 0 1px var(--cobalt); }
 .wb button:focus-visible, .wb textarea:focus-visible, .wb input:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
-.wb-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; background: var(--paper-bright); border-bottom: 1px solid var(--ink-faint); flex-shrink: 0; }
-.wb-title { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 100px; overflow: hidden; }
+.wb-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; background: var(--paper-bright); border: 1px solid var(--ink-faint); margin: 5px 5px 0; border-radius: 10px 10px 0 0; flex-shrink: 0; }
+.wb-toolbar-overlay { position: absolute; inset: 0 0 auto; z-index: 20; pointer-events: none; background: transparent; }
+.wb-toolbar-overlay > * { pointer-events: auto; }
+.wb > .wb-viewport { z-index: 0; isolation: isolate; }
+.wb-toolbar-overlay > .wb-tools { margin: 0 5px 5px; border: 1px solid var(--ink-faint); border-top: 0; border-radius: 0 0 10px 10px; }
+.wb-title { display: flex; flex-direction: column; gap: 3px; flex: 0 1 auto; min-width: 100px; overflow: hidden; border-right: 1px solid var(--ink-faint); padding-right: 18px; margin-right: 6px; }
 .wb-title strong { font-size: 16px; }
 .wb-title span { color: var(--ink-muted); text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .wb-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .wb-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--ink-faint); background: var(--paper-bright); flex-shrink: 0; }
+.wb-toolbar-overlay > .wb-header,
+.wb-toolbar-overlay > .wb-tools { background: #18181b; }
 .wb-tools > div { display: flex; gap: 3px; }
 .wb-export-actions { display: inline-flex; align-items: center; gap: 4px; }
 .wb-export-actions button { min-height: 28px; padding: 4px 8px; font-size: 11px; }
@@ -375,3 +381,22 @@ path.wb-drawing-hit { fill: transparent; pointer-events: all; }
   .wb-sow-entry textarea { font-size: 8px; }
   .wb-sow-entry.is-title textarea { font-size: 9px; }
 }
+.wb .wb-export-panel { top: calc(var(--wb-toolbar-height, 150px) + 6px); max-height: calc(100% - var(--wb-toolbar-height, 150px) - 18px); }
+.wb-toolbar-overlay[hidden] { display: none; }
+.wb-header-utilities { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.wb-header-utilities .wb-status { white-space: nowrap; margin: 0 4px 0 0; font: 12px var(--f-mono); }
+.wb .wb-header-utilities button { border: 0; background: transparent; box-shadow: none; min-width: 28px; min-height: 30px; padding: 5px; color: var(--ink-muted); }
+.wb .wb-header-utilities button:hover:not(:disabled) { background: transparent; color: var(--ink); }
+.wb-header-zoom { color: var(--ink-muted); font: 600 11px var(--f-mono); white-space: nowrap; margin-left: 6px; }
+.wb .wb-toolbar-reveal { position: absolute; z-index: 30; top: 5px; left: 50%; transform: translateX(-50%); }
+.wb:has(.wb-toolbar-overlay[hidden]) { --wb-toolbar-height: 0px !important; }
+.wb-primary-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.wb-primary-tools > [role="group"] { display: flex; align-items: center; gap: 4px; }
+.wb-toolbar-overlay:not(:has(.wb-tools button)) .wb-header { border-radius: 10px; }
+.wb-toolbar-overlay > .wb-tools:not(:has(button)) { display: none; }
+.wb-header-item-count { color: var(--ink-muted); font: 12px var(--f-mono); white-space: nowrap; margin-right: 10px; }
+.wb-bottom > div { margin-left: auto; }
+.wb-zoom-controls { position: absolute; right: 14px; bottom: max(14px, env(safe-area-inset-bottom)); z-index: 20; display: flex; flex-direction: column; gap: 6px; }
+.wb .wb-zoom-controls button { width: 40px; height: 40px; padding: 0; border-radius: 9px; font: 700 20px var(--f-mono); }
+.wb .wb-zoom-controls button:last-child { font-size: 14px; font-weight: 400; }
+:root:not([data-theme="dark"]) .wb .wb-zoom-controls button { color: #000; border-color: #85858d; }

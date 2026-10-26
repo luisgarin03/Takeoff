@@ -34,7 +34,7 @@ Fresh workspaces start with **Chain Link Fence**, **Wood Fence**, and **Aluminum
 
 The live Takeoff summary uses the active condition's line color on its left edge, so the current measurement color stays visible while drawing and reviewing totals.
 
-Local **Save project** reuses a previously selected file handle only for that same project; **New project…** starts with a fresh named save destination. After plans are first imported into a named local project, choosing that destination is required and the first complete `.otk` save runs immediately. The app continues its fast browser recovery save after edits, then coalesces portable-file updates until 30 seconds of idle time, with a two-minute maximum wait during continuous work. Expensive archive rebuilding runs only while the app is otherwise idle. **Save project as…** always chooses a new destination. Google Drive projects use a stable-ID-backed, human-readable `Estimate save data/Projects/<Project Name>/` folder (existing tagged project folders retain their location) containing `<Project Name>.otk`, with `PDFs/` and `Assets/` created only when those separate files are needed.
+Local **Save project** reuses a previously selected file handle only for that same project; **New project…** starts with a fresh named save destination. After plans are first imported into a named local project, choosing that destination is required and the first complete `.otk` save runs immediately. The app continues its fast browser recovery save after edits, then coalesces portable-file updates until 30 seconds of idle time, with a two-minute maximum wait during continuous work. Expensive archive rebuilding runs only while the app is otherwise idle. **Save.. → Choose a new location / Save as** always chooses a new destination. Google Drive projects use a stable-ID-backed, human-readable `Estimate save data/Projects/<Project Name>/` folder (existing tagged project folders retain their location) containing `<Project Name>.otk`, with `PDFs/` and `Assets/` created only when those separate files are needed.
 
 Cloud Projects now provides scoped folder navigation, persistent project authors, complete-folder ZIP export under **This project → Download Locally**, and opening through a user-selected Google Drive for desktop folder. See [workflow and validation](docs/CLOUD_PROJECT_LIBRARY.md) for browser support, export limits and deployment requirements.
 
@@ -44,7 +44,7 @@ Cloud Projects now provides scoped folder navigation, persistent project authors
 
 Portable projects: **Project > Save project** asks for a filename and opens a Save As location picker in supported browsers (otherwise a named download). Once a supported browser grants a retained file handle, background portable saves update that same `.otk` without reopening the picker or interrupting drawing. The handle is retained per project and reused after reopening when write permission remains granted; background work never triggers a permission prompt. The single file contains the plan PDFs, takeoff data, scales, markups, RFIs, tabs, and revisions. **Project > Open project** restores it into a separate local workspace without replacing the currently saved project.
 
-Projects whose full plan set exceeds the 512 MB portable limit can use **Project > Save project with marked pages only**. The compact `.otk` keeps full-quality PDF content for measured pages, pages with markups/notes, and page bookmarks—including pages referenced by saved revisions—while omitted pages become tiny placeholders that preserve the original page numbers. Reopening shows a clear compact-project notice. **Import missing files** accepts the original folder, PDFs, or a ZIP and restores only exact filename/size/hash matches, so existing measurements cannot be attached to a different drawing revision.
+Projects whose full plan set exceeds the 512 MB portable limit can use **Project > Save.. > Marked pages only**. The compact `.otk` keeps full-quality PDF content for measured pages, pages with markups/notes, and page bookmarks—including pages referenced by saved revisions—while omitted pages become tiny placeholders that preserve the original page numbers. Reopening shows a clear compact-project notice. **Import missing files** accepts the original folder, PDFs, or a ZIP and restores only exact filename/size/hash matches, so existing measurements cannot be attached to a different drawing revision.
 
 Longer plan loads and renders, Find scans, exports, and project saves share a white four-bar loading indicator, so work in progress is visible until the operation finishes.
 
@@ -146,3 +146,64 @@ After sign-in, a welcome screen replaces the automatic Drive folder prompt. Free
 User Guide is now in the top bar, immediately left of the profile, and stays available across toolbar tabs.
 
 The Find panel's **Help** tab explains every search, suggestion, navigation, and highlight control. Drag either lower corner to resize the panel down to the screen's bottom edge; the panel keeps a small margin so its controls remain reachable.
+
+
+### Print plans
+
+Choose **Print...** in the project dropdown to open the centered print panel with a left settings sidebar, fixed bottom actions, and a large page preview on the right. Select the current page, all pages, or individual pages across loaded files. Choose Compact/Balanced/HD quality, paper size (including original sheet size), automatic/portrait/landscape layout, and margins. Toggle markups/notes, takeoff measurements, and grayscale independently. **Prepare preview** creates a PDF containing only the selected plan pages, in plan order, with no cover. **Print...** opens the browser print dialog for printer, copies, and duplex settings; choose matching paper and 100% scaling for the prepared layout. The prepared PDF can also be opened in a new tab. Plans fit within the chosen margins without stretching, which can change drawing scale. Print output uses white paper and excludes temporary Find highlights. Close or Cancel stops preparation after the current page. All processing stays in your browser.
+
+
+### Unified save settings
+
+The project dropdown now has one **Save..** entry. Its centered panel explains **Full project** (all available plans and project content) and **Marked pages only** (a separate smaller copy retaining measured, marked, or bookmarked pages). Edit the filename or choose **Choose a new location / Save as**. **Create a dated backup copy** adds a timestamp and preserves the active save destination. For an already compact project, saving preserves only available content; restore missing originals before making a complete source-plan backup.
+
+
+Text and number fields and multiline text areas share a consistent gray outline, rounded corners, and padding, with a visible keyboard-focus ring and backgrounds matching the app theme.
+
+Text-field styling also covers dates, times, editable labels, and text areas. Fields use compact vertical padding, gray upper/left borders, and softer lower/right borders. Light mode uses white fields; dark mode uses charcoal fields with light text.
+
+The Takeoff toolbar summary card contains the editable active condition name, multiplier, and waste allowance. The separate appearance row now contains only appearance controls. Waste still affects report order quantities only, and the docked condition editor retains its existing controls.
+
+The condition summary shows its editable name once; the totals section displays quantities without repeating that name.
+
+Drawing-tool rail menus expand upward as needed to show their full list within the available screen height; scrolling is retained only when the list exceeds the viewport.
+
+The sheet selector and previous/next controls sit in the top header immediately after Takeoff, available with either toolbar tab open or collapsed.
+
+The Sheets tab strip shows bookmarked pages when any are available, including automatic markup bookmarks, in plan order. With no bookmarks it shows open sheets. The overflow menu retains access to other open pages; bookmarking is separate from closing a tab.
+
+Plan set PDF headers show the filename in normal text with a page count. A separate **Erase** button on the right removes the PDF using the existing removal confirmation and affected-page preview.
+
+Conditions opens as a centered panel over an undimmed canvas, retaining Takeoffs, Library, Materials, and Columns. Close with ×, Escape, or outside the panel; the canvas no longer shrinks when it opens. Panel tab/filter state survives reopening.
+
+Hatch previews use independent SVG patterns so selecting a condition or hiding its toolbar does not hide matching hatch swatches elsewhere.
+
+**+ Condition** opens a centered New condition dialog instead of a browser prompt. Enter a condition name, then choose **Add condition** or press Enter. Cancel or Escape dismisses it without adding anything.
+
+The estimating toolbar, condition controls, and Markups/Stamps/RFIs drawer use solid shadcn-inspired surfaces, compact tabs, flat fields, and neutral borders in light and dark mode. Takeoff palette colors remain unchanged.
+
+**Project Data..** combines project details and the plan set. Edit the project name, submission/due date, and status at the top and choose **Save details**; manage PDFs and select pages below. The former Edit project details menu entry now opens this combined panel.
+
+Subscription verification reads protected Supabase entitlements through the existing billing integration. RevenueCat payment synchronization is configured separately; missing subscription records do not grant paid access.
+Project calendar displays local project due dates and read-only Google Calendar events. Click an event to view its date, location, notes, links, and attachments in a detail card; app events expose edit/delete controls when you have editing access.
+
+Calendar bid details: click an event for the tall scrolling bid card. With editing access, use the pencil or Take meeting notes to enter project, client/GC, contact, due time, amount, folder, document links, original invitation, location, and notes. Project fields travel with project metadata; app-event fields save in the event description. Google events remain read-only. Missing information is shown as Not added.
+
+Stripe sandbox subscriptions: Estimating Pro is $40/month or $400/year through test-only Stripe Checkout. See [setup and test guide](docs/STRIPE_SANDBOX.md). No real card charges are enabled.
+
+Calendar authorization restores the calendar and current project after Google approval. Active Stripe sandbox subscriptions enable local development testing; hosted production builds still require a production license.
+
+Load sample plan waits for PDF import to complete and reports download/import errors with a retryable button. Sign in with editing access in the current browser before importing a sample.
+
+The empty workspace landing card includes a Sign in button that opens the account login form.
+
+Google sign-in requests read-only Google Calendar access during the initial consent flow and saves the connection for Calendar.
+
+Connected Google calendars load automatically when Calendar opens; each account's calendar visibility selections are remembered in this browser.
+
+Google Calendar imports preserve calendar and individual event colors.
+
+
+Google Calendar editing: approve editing access in Calendar Settings. Use + Google event to create events; open an event and choose Edit to change dates, location, description, Google color, recurrence, attendees, reminders, visibility, availability, or RSVP. The editor supports duplicate, move, and confirmed deletion; recurring occurrences and the full series are separate edit choices. Drag and resize writable Google events to reschedule. Manage Google calendars in Settings provides creation, renaming, colors, quick-add, availability, preferences, sharing, and confirmed secondary-calendar deletion. Google account permissions are enforced on the server and stale event changes are rejected with version checks. Invitation/update emails are opt-in. Existing read-only authorizations continue to display events until editing permission is approved. Administrative ownership transfer, primary-calendar clearing, and webhook channel management are not exposed in the app.
+
+Google event descriptions are edited as readable text rather than HTML source.

@@ -15,18 +15,18 @@ function loadPicker() {
   });
   return loaded;
 }
-export async function pickDriveFiles(drive) {
+export async function pickDriveFiles(drive, { title = "Choose the .otk project and any supporting files to share" } = {}) {
   await loadPicker();
   const { accessToken, developerKey, appId } = await drive.sharePicker();
   return new Promise((resolve) => {
     const g = window.google.picker;
     const picker = new g.PickerBuilder().setDeveloperKey(developerKey).setAppId(appId)
       .setOAuthToken(accessToken).setOrigin(window.location.origin)
-      .setTitle("Choose the .otk project and any supporting files to share")
+      .setTitle(title)
       .enableFeature(g.Feature.MULTISELECT_ENABLED)
       .addView(new g.DocsView(g.ViewId.DOCS).setIncludeFolders(true).setSelectFolderEnabled(false))
       .setCallback((data) => {
-        if (data.action === g.Action.PICKED) { picker.dispose(); resolve(data.docs.map((doc) => ({ id: doc.id, name: doc.name }))); }
+        if (data.action === g.Action.PICKED) { picker.dispose(); resolve(data.docs.map((doc) => ({ id: doc.id, name: doc.name, mimeType: doc.mimeType || "application/octet-stream", url: doc.url || `https://drive.google.com/file/d/${encodeURIComponent(doc.id)}/view` }))); }
         else if (data.action === g.Action.CANCEL) { picker.dispose(); resolve(null); }
       }).build();
     picker.setVisible(true);

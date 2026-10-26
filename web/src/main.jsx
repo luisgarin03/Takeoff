@@ -16,6 +16,8 @@ import { initTheme } from "./lib/theme.js";
 import { CloudProvider } from "./lib/supabase/CloudContext.jsx";
 import LicenseGate from "./components/LicenseGate.jsx";
 import { AppUpdateNotice } from "./components/AppUpdates.jsx";
+import "./styles/textFields.css";
+import "./styles/workspaceUi.css";
 
 initTheme();   // index.html set data-theme pre-paint; this keeps it live
 

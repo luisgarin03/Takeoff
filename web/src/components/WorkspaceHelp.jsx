@@ -27,7 +27,7 @@ export default function WorkspaceHelp({ name, metadata, hasWorkspace, ready, onM
     return () => { onMenuDepth(false); previous?.focus(); };
   }, [open, onMenuDepth]);
   return <>
-    <button type="button" onClick={() => setOpen(true)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 10px", background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", cursor: "pointer", whiteSpace: "nowrap" }}><Icon name="document" size={15} />User Guide</button>
+    <button type="button" onClick={() => setOpen(true)} aria-label="User Guide" title="User Guide" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 40, padding: 8, background: "transparent", color: "var(--ink)", border: "1px solid var(--ink-faint)", cursor: "pointer" }}><Icon name="userGuide" size={23} /></button>
     {open && createPortal(<dialog ref={dialog} aria-labelledby="user-guide-title" onCancel={() => setOpen(false)} onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
       onKeyDown={(e) => e.stopPropagation()} style={{ width: "min(960px, 92vw)", height: "min(850px, 86vh)", padding: 0, border: "1px solid var(--ink-faint)", borderRadius: 10, background: "var(--paper-bright)", color: "var(--ink)", overflow: "hidden" }}>
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>

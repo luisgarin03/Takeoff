@@ -1,8 +1,7 @@
 // Display catalog only. A future server must map these IDs to provider prices.
 export const SUBSCRIPTION_PLANS = Object.freeze([
-  Object.freeze({ id: "starter", name: "Starter", price: 40, interval: "month", currency: "USD" }),
-  Object.freeze({ id: "professional", name: "Professional", price: 50, interval: "month", currency: "USD" }),
-  Object.freeze({ id: "business", name: "Business", price: 60, interval: "month", currency: "USD" }),
+  Object.freeze({ id: "estimating_pro_monthly", name: "Estimating Pro", billingLabel: "Monthly", price: 40, interval: "month", currency: "USD" }),
+  Object.freeze({ id: "estimating_pro_yearly", name: "Estimating Pro", billingLabel: "Yearly", price: 400, interval: "year", currency: "USD" }),
 ]);
 
 /**

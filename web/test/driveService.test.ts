@@ -194,3 +194,11 @@ test("existing legacy project folder remains under its tagged root on save", asy
   await h.api.begin(owner,id,h.hash);
   assert.deepEqual(parents,["folder-Estimate save data"]);
 });
+test("Calendar connect requests Calendar permissions without Drive", async () => {
+  const h = await fixture();
+  const result = await h.api.connect(owner, "http://localhost:5173/", true);
+  const scopes = new URL(result.url).searchParams.get("scope")!.split(" ");
+  assert.ok(scopes.includes("https://www.googleapis.com/auth/calendar.events.readonly"));
+  assert.ok(scopes.includes("https://www.googleapis.com/auth/calendar.calendarlist.readonly"));
+  assert.ok(!scopes.some((scope) => scope.includes("/auth/drive")));
+});

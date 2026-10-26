@@ -1,4 +1,5 @@
 import { createDriveLibrary } from "./drive-library.js";
+import { createProjectCalendar, CALENDAR_SCOPES } from "./project-calendar.js";
 import { createDriveSharing } from "./drive-sharing.js";
 import { DRIVE_SCOPE, CHUNK, MAX_FILE, fail, randomToken, sha256, base64, returnUrl, assertAccess, validateFile } from "./drive-security.js";
 
@@ -50,6 +51,7 @@ export function createDriveService({ store, google, cipher, config, fetcher = fe
     return result;
   }
   return {
+    calendar: createProjectCalendar({ token, fetcher }),
     library: createDriveLibrary({ store, google, token }),
     sharing: createDriveSharing({ store, google, token, config }),
     async picker(user) {
@@ -60,13 +62,31 @@ export function createDriveService({ store, google, cipher, config, fetcher = fe
       const row = await store.connection(user);
       return { configured: true, connected: row?.status === "connected", email: row?.email || "", status: row?.status || "disconnected" };
     },
-    async connect(user, destination) {
+    async importCalendarSignIn(user, refreshToken) {
+      if (typeof refreshToken !== "string" || !refreshToken || refreshToken.length > 8192) fail("OTK_DRIVE_CONSENT");
+      // Refresh with our configured client: reject grants issued to another app.
+      const grant = await oauthToken({ grant_type: "refresh_token", refresh_token: refreshToken });
+      const scopes = (grant.scope || "").split(" ");
+      if (!CALENDAR_SCOPES.split(" ").every((scope) => scopes.includes(scope))) fail("OTK_DRIVE_CONSENT");
+      const response = await fetcher("https://openidconnect.googleapis.com/v1/userinfo", {
+        signal: AbortSignal.timeout(20000), headers: { Authorization: `Bearer ${grant.access_token}` } });
+      const identity = await response.json();
+      const linked = user.identities?.some((item) => item.provider === "google" && (item.identity_data?.sub || item.id) === identity.sub);
+      if (!response.ok || !identity.sub || !identity.email_verified || !linked) fail("OTK_DRIVE_ACCOUNT");
+      const old = await store.connection(user.id);
+      if (old?.google_sub && old.google_sub !== identity.sub) fail("OTK_DRIVE_ACCOUNT");
+      await store.putConnection({ user_id: user.id, google_sub: identity.sub, email: identity.email,
+        token_cipher: await cipher.seal(refreshToken, user.id), status: "connected", updated_at: new Date().toISOString(), oauth_nonce: null });
+      await config.onGoogleConnected?.(user.id, identity.email, scopes);
+      return { connected: true };
+    },
+    async connect(user, destination, calendar = false) {
       const state = randomToken(), verifier = randomToken();
       const challenge = base64(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
       await store.startOAuth({ state_hash: await sha256(state), user_id: user, verifier_cipher: await cipher.seal(verifier, user),
         return_url: returnUrl(destination, config.origins), expires_at: new Date(Date.now() + 600000).toISOString() });
       return { url: `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({ client_id: config.clientId, redirect_uri: config.callback,
-        response_type: "code", scope: `openid email ${DRIVE_SCOPE}`, access_type: "offline", prompt: "consent select_account",
+        response_type: "code", scope: `openid email ${calendar ? `${CALENDAR_SCOPES} https://www.googleapis.com/auth/calendar` : DRIVE_SCOPE}`, include_granted_scopes: "true", access_type: "offline", prompt: "consent select_account",
         state, code_challenge: challenge, code_challenge_method: "S256" })}` };
     },
     async callback(params) {
@@ -78,7 +98,8 @@ export function createDriveService({ store, google, cipher, config, fetcher = fe
         if (params.has("error") || !params.get("code")) fail("OTK_DRIVE_CONSENT");
         const grant = await oauthToken({ grant_type: "authorization_code", code: params.get("code"), redirect_uri: config.callback,
           code_verifier: await cipher.open(pending.verifier_cipher, pending.user_id) });
-        if (!grant.scope?.split(" ").includes(DRIVE_SCOPE) || !grant.refresh_token) fail("OTK_DRIVE_CONSENT");
+        const granted = grant.scope?.split(" ") || [];
+        if ((!granted.includes(DRIVE_SCOPE) && !CALENDAR_SCOPES.split(" ").every((scope) => granted.includes(scope))) || !grant.refresh_token) fail("OTK_DRIVE_CONSENT");
         const response = await fetcher("https://openidconnect.googleapis.com/v1/userinfo", {
           signal: AbortSignal.timeout(20000), headers: { Authorization: `Bearer ${grant.access_token}` } });
         const identity = await response.json();
@@ -88,6 +109,7 @@ export function createDriveService({ store, google, cipher, config, fetcher = fe
         const accepted = await store.completeOAuth(pending, { google_sub: identity.sub, email: identity.email,
           token_cipher: await cipher.seal(grant.refresh_token, pending.user_id), status: "connected", updated_at: new Date().toISOString() });
         if (!accepted) fail("OTK_DRIVE_RETURN");
+        await config.onGoogleConnected?.(pending.user_id, identity.email, (grant.scope || "").split(" "));
         destination.searchParams.set("otkDrive", "connected");
       } catch (e) {
         destination.searchParams.set("otkDrive", e.code === "OTK_DRIVE_ACCOUNT" ? "account" : "failed");
@@ -99,6 +121,7 @@ export function createDriveService({ store, google, cipher, config, fetcher = fe
       await store.cancelOAuth(user);
       // Clear server access before contacting Google, including if revocation is offline.
       await store.patchConnection(user, { token_cipher: null, status: "disconnected", oauth_nonce: null });
+      await config.onGoogleDisconnected?.(user);
       let revoked = true;
       if (old?.token_cipher) {
         try {

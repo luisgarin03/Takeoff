@@ -263,3 +263,111 @@
   .takeoff-dev-panel-body { max-height: calc(100dvh - 132px); }
   .takeoff-dev-action, .takeoff-dev-field > span > button, .takeoff-dev-field > input { min-height: 44px; }
 }
+
+/* Active condition identity belongs to the live summary card. */
+.condition-identity-fields { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.takeoff-toolbar-readout { flex-basis: 640px; max-width: 860px !important; grid-template-columns: minmax(280px, 1fr) minmax(120px, .45fr); }
+.takeoff-toolbar-readout-heading { overflow: visible; white-space: normal; text-transform: none; letter-spacing: normal; }
+.takeoff-toolbar-readout .condition-identity-fields { gap: 6px; font-size: 11px; font-weight: 400; }
+.takeoff-toolbar-readout .condition-name-input { flex: 1 1 200px; width: 100%; min-width: 0; max-width: 100%; }
+.takeoff-toolbar-readout .condition-identity-fields > span { flex-shrink: 0; }
+@media (max-width: 600px) { .takeoff-toolbar-readout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "heading" "live" "meta" "total"; min-width: 0; } .takeoff-toolbar-readout-total { border-left: 0; border-top: 1px solid var(--ink-faint); margin-top: 6px; padding: 6px 0 0; } }
+
+.estimating-toolbar-sheet-navigation { display: flex; align-items: center; min-width: 0; flex: 0 1 auto; }
+.estimating-toolbar-sheet-navigation button { min-height: 40px; border-radius: 6px; }
+.estimating-toolbar-sheet-navigation > span { min-width: 0; }
+
+
+/* Compact top-level Sheets / Takeoff switcher. */
+.estimating-toolbar-tabs { padding: 3px; gap: 2px; border-radius: 7px; }
+.estimating-toolbar-tabs button { min-height: 32px; padding: 4px 11px; }
+
+/* Compact condition appearance controls and square palette swatches. */
+.estimating-toolbar-panel .condition-appearance-toolbar :is(button, select, input:not([type="range"])) { min-height: 28px; height: 28px; }
+.estimating-toolbar-panel .condition-appearance-toolbar button[title^="#"],
+.estimating-toolbar-panel .condition-appearance-toolbar button[title="No fill"] { min-width: 28px; width: 28px !important; height: 28px !important; padding: 0; }
+.estimating-toolbar-panel .condition-appearance-toolbar select { padding-top: 2px; padding-bottom: 2px; }
+
+.conditions-modal-scrim { position: fixed; inset: 0; z-index: 500; display: grid; place-items: center; padding: 12px 20px; box-sizing: border-box; background: transparent; }
+.conditions-modal { position: relative; height: calc(100dvh - 24px); max-width: calc(100vw - 40px); min-height: 0; overflow: hidden; border: 1px solid var(--ink-faint); border-radius: 10px; box-shadow: var(--shadow-pop); }
+.conditions-modal > div:first-child { display: none; }
+.conditions-modal .takeoffs-tabs { flex-shrink: 0; }
+@media (max-width: 600px) { .conditions-modal-scrim { padding: 8px; } .conditions-modal { max-width: calc(100vw - 16px); height: calc(100dvh - 16px); } }
+
+/* Conditions workspace fills the viewport on every screen size. */
+.conditions-modal-scrim { padding: 0; }
+.conditions-modal-scrim .conditions-modal { width: 100vw !important; max-width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+
+/* Conditions workspace keeps a uniform 12px viewport inset. */
+.conditions-modal-scrim { padding: 12px; }
+.conditions-modal-scrim .conditions-modal { width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); border: 1px solid var(--ink-faint); border-radius: 8px; box-sizing: border-box; }
+
+/* Conditions opens as a half-height bottom drawer. */
+.conditions-modal-scrim { padding: 0; align-items: end; pointer-events: none; }
+.conditions-modal-scrim .conditions-modal { pointer-events: auto; }
+.conditions-modal-scrim .conditions-modal { width: 100vw !important; max-width: 100vw; height: 50dvh; max-height: 50dvh; border: 1px solid var(--ink-faint); border-bottom: 0; border-radius: 10px 10px 0 0; box-sizing: border-box; animation: conditions-drawer-up 180ms ease-out; }
+@keyframes conditions-drawer-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .conditions-modal-scrim .conditions-modal { animation: none; } }
+
+.header-history-actions { display: inline-flex; align-items: center; gap: 3px; margin-right: 8px; }
+.estimating-toolbar-account .header-history-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; min-height: 30px; padding: 4px; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--ink-muted); cursor: pointer; }
+.estimating-toolbar-account .header-history-button:hover, .estimating-toolbar-account .header-history-button:active { color: var(--cobalt); }
+
+.condition-summary-identity { flex: 1 1 320px; min-width: 0; }
+.condition-summary-identity .condition-name-input { flex: 1 1 220px; width: 100%; min-width: 0; }
+.condition-summary-identity .condition-identity-fields > span { flex-shrink: 0; }
+
+/* Keep the selected condition name compact beside its measurement. */
+.condition-summary-identity { flex: 1 1 320px; margin-right: 40px; }
+.condition-summary-identity .condition-name-input { flex: 1 1 220px; width: 100%; max-width: 100%; }
+
+/* Match selected condition actions to the compact name field. */
+.conditions-modal .condition-summary > button { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: 28px; min-height: 28px; min-width: 28px; padding: 4px 7px !important; border-radius: 6px !important; }
+.conditions-modal .condition-summary > button svg { width: 15px; height: 15px; }
+
+/* Condition appearance dropdowns align with the 28px height/thickness fields. */
+.conditions-modal button[title="Choose a hatch pattern"],
+.conditions-modal select { box-sizing: border-box; height: 28px; min-height: 28px; padding-top: 3px !important; padding-bottom: 3px !important; }
+
+/* Condition names wrap and grow instead of clipping long descriptions. */
+textarea.condition-name-input { display: block; resize: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 16px; min-height: 28px; max-height: none; }
+
+/* Measurement and shape count sit before the editable condition name. */
+.takeoff-toolbar-readout { grid-template-columns: minmax(110px, .3fr) minmax(280px, 1fr); grid-template-areas: "total heading" "total live"; }
+.takeoff-toolbar-readout-total { border-left: 0; border-right: 1px solid var(--ink-faint); padding-left: 0; padding-right: 12px; }
+.takeoff-toolbar-readout-total strong { margin-top: 0; }
+@media (max-width: 600px) { .takeoff-toolbar-readout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "total" "heading" "live"; } .takeoff-toolbar-readout-total { border-right: 0; border-top: 0; border-bottom: 1px solid var(--ink-faint); margin-top: 0; padding: 0 0 6px; margin-bottom: 6px; } }
+
+.takeoff-toolbar-readout-total { border: 0; }
+
+
+.takeoff-toolbar-readout-total strong { font-size: 20px; font-weight: 700; line-height: 1.2; }
+
+
+/* Full-width active condition card with appearance controls before waste. */
+.takeoff-toolbar-readout { flex: 1 1 100%; width: 100%; max-width: 100% !important; grid-template-columns: 185px minmax(0, 1fr); }
+.takeoff-toolbar-readout .condition-name-input { flex: 1 1 420px; max-width: 600px; }
+.condition-card-appearance { flex: 0 1 auto; min-width: 0; }
+.condition-card-appearance > div { padding: 0 !important; }
+@media (max-width: 600px) { .takeoff-toolbar-readout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Use the entire condition card width for the editable description row. */
+.takeoff-toolbar-readout .condition-name-input { flex: 1 1 420px; max-width: none; width: auto; }
+.takeoff-toolbar-readout .condition-card-appearance { flex: 1 0 100%; width: 100%; }
+
+/* Animated imperial / metric scale switch. */
+.estimating-toolbar-panel .units-toggle { position: relative; isolation: isolate; display: inline-flex; align-items: center; width: 76px; height: 40px; min-height: 40px; padding: 3px; border: 1px solid var(--ink-faint); border-radius: 8px !important; background: var(--paper-shadow); color: var(--ink-muted); cursor: pointer; }
+.units-toggle-thumb { position: absolute; z-index: -1; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 5px; background: var(--cobalt); box-shadow: 0 1px 3px #0003; transition: transform 180ms ease; }
+.units-toggle[data-metric="true"] .units-toggle-thumb { transform: translateX(100%); }
+.units-toggle-label { flex: 1; text-align: center; font: 700 12px var(--f-mono); transition: color 180ms ease; }
+.units-toggle[data-metric="false"] .units-toggle-label:nth-child(2), .units-toggle[data-metric="true"] .units-toggle-label:last-child { color: #fff; }
+@media (prefers-reduced-motion: reduce) { .units-toggle-thumb, .units-toggle-label { transition: none; } }
+
+/* Separate the measurement block from the condition editing controls. */
+.takeoff-toolbar-readout-total { border-right: 1px solid var(--ink-faint); }
+@media (max-width: 600px) { .takeoff-toolbar-readout-total { border-right: 0; border-bottom: 1px solid var(--ink-faint); } }
+
+/* Markups, Stamps and RFIs share a half-height bottom drawer. */
+.canvas-workspace .glass-drawer-markups { position: fixed !important; inset: auto 0 0 0 !important; width: 100vw !important; max-width: 100vw !important; height: 50dvh; max-height: 50dvh; z-index: 450 !important; border: 1px solid var(--ink-faint); border-bottom: 0; border-radius: 10px 10px 0 0; box-sizing: border-box; animation: conditions-drawer-up 180ms ease-out; }
+.canvas-workspace .glass-drawer-markups > div:first-child { flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) { .canvas-workspace .glass-drawer-markups { animation: none; } }

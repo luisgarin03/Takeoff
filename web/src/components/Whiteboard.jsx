@@ -5,6 +5,8 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Icon } from "../brand/icons.jsx";
 import LongTaskLoader from "./LongTaskLoader.jsx";
 import PdfExportDialog from "./PdfExportDialog.jsx";
+import ToolMenu from "./ToolMenu.jsx";
+import { usePinchZoom } from "../lib/usePinchZoom.js";
 import SOWPanel from "./SOWPanel.jsx";
 import { ARROW_COLORS } from "../lib/canvasConstants.js";
 import { downloadBytes } from "../lib/markedset.js";
@@ -221,6 +223,18 @@ const FileCard = memo(function FileCard({ asset, item, onPage, visible, resoluti
 export default function Whiteboard({ board, onChange, onClose: onClosed, onSave, onBusyChange, projectName, saveState,
   initialFiles = null, onInitialFilesHandled, readOnly = false, readOnlyMessage = "" }) {
   const root = useRef(null), viewport = useRef(null), input = useRef(null);
+  const cameraInput = useRef(null);
+  const toolbarRef = useRef(null);
+  const [toolbarHidden, setToolbarHidden] = useState(false);
+  useEffect(() => {
+    const element = toolbarRef.current;
+    if (!element) return;
+    const update = () => root.current?.style.setProperty("--wb-toolbar-height", `${element.getBoundingClientRect().height}px`);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const [closing, setClosing] = useState(false);
   const closeTimer = useRef(null), closeCallback = useRef(onClosed);
   closeCallback.current = onClosed;
@@ -257,8 +271,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
   const exporting = !!exportMode;
   const [preview, setPreview] = useState(null);
-  const [pdfResolution, setPdfResolution] = useState(2);
-  const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
+  const [pdfResolution, setPdfResolution] = useState(3);
+  const [pdfRefreshKey] = useState(0);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const gesture = useRef(null), pointers = useRef(new Map());
   const pastePoint = useRef(null);
@@ -357,6 +371,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
   const point = (e) => { const r = viewport.current.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const center = () => ({ x: viewport.current.clientWidth / 2, y: viewport.current.clientHeight / 2 });
   const setCamera = (next) => { viewRef.current = next; setView(next); };
+  const touchZoom = usePinchZoom({ getView: () => viewRef.current, setView: setCamera,
+    onStart: () => { gesture.current = null; pointers.current.clear(); setPreview(null); setDrawingPreview(null); setAreaDraft(null); setSowPreview(null); } });
   const zoom = (factor) => setCamera(zoomBoard(viewRef.current, center(), viewRef.current.scale * factor));
   const fit = () => setCamera(fitWhiteboard(boardRef.current, viewport.current.clientWidth, viewport.current.clientHeight));
 
@@ -741,30 +757,52 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
       estimateFor={(quality) => estimateWhiteboardSize(boardRef.current, exportRequest, quality)}
       onExport={(quality) => { const saved = savePdfExportQuality(quality); setExportQuality(saved); exportPdf(exportRequest.region, exportRequest.pageMode, saved); }}
       onClose={() => { if (!exporting) setExportRequest(null); }} />}
+    {toolbarHidden && <Button icon="chevronDown" className="wb-toolbar-reveal" label="Show toolbar" onClick={() => setToolbarHidden(false)} />}
+    <div className="wb-toolbar-overlay" ref={toolbarRef} hidden={toolbarHidden}>
     <header className="wb-header">
       <Button icon="chevronLeft" label="Close whiteboard" onClick={onClose} disabled={busy} />
       <div className="wb-title"><strong>Whiteboard</strong><span>{projectName || "Untitled project"}</span></div>
-      <div className="wb-actions">
-        <button type="button" onClick={() => input.current.click()} disabled={busy || readOnly}><Icon name="plus" size={16} />Add files</button>
-        <button type="button" onClick={() => addNote()} disabled={busy || readOnly || board.items.length >= 2000}><Icon name="textNote" size={16} />Note</button>
-        <button type="button" onClick={() => commit(addWhiteboardSowPanel(boardRef.current))} disabled={busy || readOnly}><Icon name="plus" size={16} />SOW panel</button>
-        <button type="button" onClick={onSave} disabled={busy || readOnly}><Icon name="document" size={16} />Save project</button>
-        <Button icon="document" label="Export whiteboard as PDF" onClick={() => setExportRequest({ title: "Export whiteboard as PDF", scopeLabel: "Entire whiteboard · one flattened visual PDF page", region: null, pageMode: null })} disabled={busy || exporting} aria-busy={exportMode === "single"}>{exportMode === "single" ? "Exporting…" : "Export whiteboard as PDF"}</Button>
-        <Button icon="sheets" label="Export whiteboard as pages" onClick={() => setExportRequest({ title: "Export whiteboard as pages", scopeLabel: "Entire whiteboard · flattened Letter landscape pages", region: null, pageMode: "pages" })} disabled={busy || exporting} aria-busy={exportMode === "pages"}>{exportMode === "pages" ? "Exporting pages…" : "Export whiteboard as pages"}</Button>
-        <Button icon="fullscreen" label="Select Content to Export" onClick={() => {
-          if (showExportPages) closeExportPages(); else { setShowExportPages(true); setMode("export-area"); }
-        }} disabled={busy || exporting || readOnly} aria-pressed={showExportPages}>Select Content to Export</Button>
+      <div className="wb-primary-tools">
+
+      {hasPdf && <>
+        <label className="wb-resolution" title="Higher PDF preview resolution is sharper when zoomed in but takes longer to render and more memory.">
+          <span>PDF detail</span>
+          <input type="range" min="1" max="3" step="1" value={pdfResolution} aria-label="PDF preview resolution"
+            onChange={(e) => setPdfResolution(Number(e.target.value))} />
+          <output>{pdfResolution}×</output>
+        </label>
+      </>}
       </div>
+      <div className="wb-actions">
+        <ToolMenu title="Add" face={<><Icon name="plus" size={16} /><span>Add</span></>} disabled={busy || readOnly}
+          menuStyle={{ minWidth: 190 }}
+          items={[
+            { label: "Add files", icon: "plus", onSelect: () => input.current.click() },
+            { label: "Take photo", icon: "camera", onSelect: () => cameraInput.current?.click() },
+            { label: "Note", icon: "textNote", disabled: board.items.length >= 2000, onSelect: () => addNote() },
+            { label: "SOW panel", icon: "plus", onSelect: () => commit(addWhiteboardSowPanel(boardRef.current)) },
+          ]} />
+        <ToolMenu title="Export" face={<><Icon name="document" size={17} /><span>{exporting ? "Exporting…" : "Export"}</span></>} disabled={busy || exporting}
+          menuStyle={{ right: 0, left: "auto", minWidth: 250 }}
+          items={[
+            { label: "Export whiteboard as PDF", icon: "document", onSelect: () => setExportRequest({ title: "Export whiteboard as PDF", scopeLabel: "Entire whiteboard · one flattened visual PDF page", region: null, pageMode: null }) },
+            { label: "Select Content to Export", icon: "fullscreen", disabled: readOnly, onSelect: () => { if (showExportPages) closeExportPages(); else { setShowExportPages(true); setMode("export-area"); } } },
+          ]} />
+      </div>
+      <div className="wb-header-utilities">
+        <span className="wb-header-item-count">{board.items.length + drawingCount} Items</span>
+      <span className="wb-status" role="status" aria-hidden={longTaskLabel ? "true" : undefined}>{exportMode === "custom" ? exportTaskLabel : exportMode === "pages" ? "Exporting pages..." : exportMode === "selection" ? "Exporting selection..." : exportMode === "single" ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : lastExportSize ? `Last export ${formatFileSize(lastExportSize)}` : saveState === "saved" ? "Saved ✓" : ""}</span>
+        <Button icon="eye" label="Hide toolbar" onClick={() => setToolbarHidden(true)} />
+      <Button icon="undo" label="Undo whiteboard change" disabled={busy || readOnly || !!imageCrop || !history.current.past.length} onClick={() => undo()} />
+      <Button icon="undo" className="wb-redo" label="Redo whiteboard change" disabled={busy || readOnly || !!imageCrop || !history.current.future.length} onClick={() => undo(true)} />
+        <output className="wb-header-zoom" aria-label="Whiteboard zoom">Zoom {Math.round(view.scale * 100)}%</output>
+      </div>
+      <input ref={cameraInput} type="file" accept="image/*" capture="environment" aria-label="Take a work photo" hidden
+        onChange={(event) => { if (event.target.files?.length) addFiles(event.target.files); event.target.value = ""; }} />
       <input ref={input} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp" aria-label="Whiteboard files" hidden
         onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
     </header>
     <div className="wb-tools">
-      <div role="group" aria-label="Whiteboard mode">
-        <Button icon="select" label="Select and move" disabled={!!imageCrop || readOnly} aria-pressed={mode === "select"} onClick={() => setMode("select")} />
-        <Button icon="pan" label="Pan whiteboard" disabled={!!imageCrop} aria-pressed={mode === "pan"} onClick={() => setMode("pan")} />
-        <Button icon="arrow" label="Draw arrow" disabled={!!imageCrop || readOnly} aria-pressed={mode === "arrow"} onClick={() => setMode(mode === "arrow" ? "select" : "arrow")} />
-        <Button icon="rectTool" label="Draw rectangle" disabled={!!imageCrop || readOnly} aria-pressed={mode === "rectangle"} onClick={() => setMode(mode === "rectangle" ? "select" : "rectangle")} />
-      </div>
       {imageCrop && <div className="wb-crop-actions" role="group" aria-label="Image crop actions">
         <Button icon="check" className="is-primary" label="Apply image crop" onClick={applyImageCrop}>Apply crop</Button>
         <Button icon="close" label="Cancel image crop" onClick={clearImageCrop}>Cancel</Button>
@@ -773,28 +811,17 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
         {ARROW_COLORS.map(({ name, value }) => <button key={value} type="button" aria-label={`${name} ${mode} color`} title={`${name} ${mode} color`} aria-pressed={drawingColor === value}
           style={{ backgroundColor: value }} onClick={() => setDrawingColor(value)} />)}
       </div>}
-      <Button icon="undo" label="Undo whiteboard change" disabled={busy || readOnly || !!imageCrop || !history.current.past.length} onClick={() => undo()} />
-      <Button icon="undo" className="wb-redo" label="Redo whiteboard change" disabled={busy || readOnly || !!imageCrop || !history.current.future.length} onClick={() => undo(true)} />
       {active && !imageCrop && <>
         <Button icon="close" label="Delete selected object" disabled={busy || readOnly} onClick={removeSelected} />
         {canCropImage && <Button icon="crop" label={activeItem.crop ? "Adjust image crop" : "Crop image"} disabled={busy || readOnly} onClick={beginImageCrop}>{activeItem.crop ? "Adjust crop" : "Crop"}</Button>}
         {activeItem?.kind === "note" && <div className="wb-colors" role="group" aria-label="Note color">{Object.entries(NOTE_COLORS).map(([name, color]) =>
           <button type="button" key={name} aria-label={`${name} note`} title={`${name} note`} aria-pressed={activeItem.color === name} style={{ background: color }} onClick={() => patch(selected, { color: name })} />)}</div>}
       </>}
-      {hasPdf && <>
-        <label className="wb-resolution" title="Higher PDF preview resolution is sharper when zoomed in but takes longer to render and more memory.">
-          <span>PDF detail</span>
-          <input type="range" min="1" max="3" step="1" value={pdfResolution} aria-label="PDF preview resolution"
-            onChange={(e) => setPdfResolution(Number(e.target.value))} />
-          <output>{pdfResolution}×</output>
-        </label>
-        <button type="button" className="wb-refresh" title="Render visible PDF previews again at the selected detail" aria-label="Refresh PDF previews"
-          disabled={busy || exporting} onClick={() => setPdfRefreshKey((key) => key + 1)}>Refresh</button>
-      </>}
-      <span className="wb-status" role="status" aria-hidden={longTaskLabel ? "true" : undefined}>{exportMode === "custom" ? exportTaskLabel : exportMode === "pages" ? "Exporting pages..." : exportMode === "selection" ? "Exporting selection..." : exportMode === "single" ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : lastExportSize ? `Last export ${formatFileSize(lastExportSize)}` : saveState === "saved" ? "Saved locally" : ""}</span>
+
+    </div>
     </div>
     {error && <div className="wb-error" role="alert"><span>{error}</span><Button icon="close" label="Dismiss whiteboard error" onClick={() => setError("")} /></div>}
-    <div ref={viewport} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}${mode === "arrow" ? " is-arrow" : ""}${mode === "rectangle" ? " is-rectangle" : ""}${mode === "export-area" ? " is-crop" : ""}${mode === "export-page" ? " is-export-page" : ""}${imageCrop ? " is-image-crop" : ""}`} aria-label="Whiteboard canvas"
+    <div ref={viewport} {...touchZoom} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}${mode === "arrow" ? " is-arrow" : ""}${mode === "rectangle" ? " is-rectangle" : ""}${mode === "export-area" ? " is-crop" : ""}${mode === "export-page" ? " is-export-page" : ""}${imageCrop ? " is-image-crop" : ""}`} aria-label="Whiteboard canvas"
       style={{ backgroundSize: `${24 * view.scale}px ${24 * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
       onPointerDown={(e) => { pastePoint.current = point(e); start(e); }} onPointerMove={(e) => { pastePoint.current = point(e); move(e); }} onPointerUp={(e) => end(e)} onPointerCancel={(e) => end(e, true)}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); addFiles(e.dataTransfer.files, point(e)); }}>
@@ -925,17 +952,20 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
         <footer>
           <button type="button" className="wb-export-method" aria-pressed={mode === "export-area"} onClick={() => { setMode(mode === "export-area" ? "select" : "export-area"); setShowExportPages(true); }} disabled={exporting}><Icon name="plus" size={14} />Add Area</button>
           <button type="button" className="wb-export-method" aria-pressed={mode === "export-page"} onClick={() => { setMode(mode === "export-page" ? "select" : "export-page"); setShowExportPages(true); }} disabled={exporting}><Icon name="document" size={14} />Select Pages</button>
-          <button type="button" className="wb-export-clear" onClick={() => { if (window.confirm("Clear all PDF export areas?")) { commit(clearWhiteboardExportAreas(boardRef.current)); setSelected(null); } }} disabled={exporting || !(board.exportAreas || []).length}>Clear All</button>
+          <button type="button" className="wb-export-clear" onClick={() => { commit(clearWhiteboardExportAreas(boardRef.current)); setSelected(null); }} disabled={exporting || !(board.exportAreas || []).length}>Clear All</button>
           <button type="button" className="wb-export-preview" onClick={() => exportCustomPages(true)} disabled={exporting || !(board.exportAreas || []).length}>Preview PDF</button>
           <button type="button" className="is-primary wb-export-download" onClick={() => exportCustomPages(false)} disabled={exporting || !(board.exportAreas || []).length}>Export All to One PDF</button>
         </footer>
       </aside>}
     </div>
-    <footer className="wb-bottom"><span>{board.items.length + drawingCount} items</span><div>
-      <Button icon="chevronDown" label="Zoom out whiteboard" onClick={() => zoom(1 / 1.2)} />
-      <button type="button" className="wb-zoom" title="Reset zoom" aria-label="Reset whiteboard zoom" onClick={() => setCamera(zoomBoard(viewRef.current, center(), 1))}>{Math.round(view.scale * 100)}%</button>
-      <Button icon="plus" label="Zoom in whiteboard" onClick={() => zoom(1.2)} />
-      <Button icon="fullscreen" label="Fit whiteboard" onClick={fit} />
-    </div></footer>
+    <div className="wb-zoom-controls" role="group" aria-label="Whiteboard zoom controls">
+      <Button icon="select" label="Select and move" disabled={!!imageCrop || readOnly} aria-pressed={mode === "select"} onClick={() => setMode("select")} />
+      <Button icon="pan" label="Pan whiteboard" disabled={!!imageCrop} aria-pressed={mode === "pan"} onClick={() => setMode("pan")} />
+      <Button icon="arrow" label="Draw arrow" disabled={!!imageCrop || readOnly} aria-pressed={mode === "arrow"} onClick={() => setMode(mode === "arrow" ? "select" : "arrow")} />
+      <Button icon="rectTool" label="Draw rectangle" disabled={!!imageCrop || readOnly} aria-pressed={mode === "rectangle"} onClick={() => setMode(mode === "rectangle" ? "select" : "rectangle")} />
+      <button type="button" title="Zoom in whiteboard" aria-label="Zoom in whiteboard" onClick={() => zoom(1.2)}>+</button>
+      <button type="button" title="Zoom out whiteboard" aria-label="Zoom out whiteboard" onClick={() => zoom(1 / 1.2)}>−</button>
+      <button type="button" title="Fit whiteboard" aria-label="Fit whiteboard" onClick={fit}>fit</button>
+    </div>
   </section>, document.body);
 }

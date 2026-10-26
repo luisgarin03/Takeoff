@@ -13,7 +13,14 @@ const chapters = visibleGuide.replace(/\r\n/g, "\n").split(/^## /m).slice(1).map
   return { id: `manual-chapter-${i}`, title, body: body.join("\n") };
 });
 function Inline({ text }) {
-  return text.split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*[^*]+\*)/g).map((part, i) => {
+  return text.split(/(\[\[loaded-files-widget\]\]|\[\[scale-icon\]\]|\[\[scale-widget\]\]|\n|\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*[^*]+\*)/g).map((part, i) => {
+    if (part === "[[loaded-files-widget]]") return <span key={i} className="manual-button" style={{ display: "inline-flex", margin: "10px 0" }} role="img" aria-label="Loaded files button illustration"><Icon name="sheets" size={17} /><span>Loaded files</span></span>;
+    if (part === "\n") return <br key={i} />;
+    if (part === "[[scale-icon]]") return <span key={i} style={{ display: "inline-flex", verticalAlign: "middle", color: "#65b88c" }} aria-label="Green detected scale icon"><Icon name="target" size={16} /></span>;
+    if (part === "[[scale-widget]]") return <span key={i} className="manual-scale-example" role="img" aria-label="Illustration of the Set scale dropdown with an automatically detected scale and a two-point calibration option">
+      <span className="manual-scale-trigger">Set scale… <Icon name="chevronDown" size={13} /></span>
+      <span className="manual-scale-options"><span className="manual-scale-detected"><Icon name="target" size={16} /> Plan says 1/4″ = 1′-0″ — use it</span><span>Calibrate two points…</span></span>
+    </span>;
     if (part.startsWith("**")) return <strong key={i}>{part.slice(2, -2)}</strong>;
     if (part.startsWith("`")) return <kbd key={i}>{part.slice(1, -1)}</kbd>;
     if (part.startsWith("*")) return <em key={i}>{part.slice(1, -1)}</em>;
@@ -49,7 +56,14 @@ function Blocks({ text, chapter }) {
     if (/^```/.test(block)) return <pre key={i}>{block.replace(/^```[^\n]*\n/, "").replace(/\n```$/, "")}</pre>;
     const lines = block.split("\n");
     if (lines.every((line) => /^[-*] /.test(line))) return <ul key={i}>{lines.map((line, j) => <li key={j}><Inline text={line.slice(2)} /></li>)}</ul>;
-    if (lines.every((line) => /^\d+\. /.test(line))) return <ol key={i}>{lines.map((line, j) => <li key={j}><Inline text={line.replace(/^\d+\. /, "")} /></li>)}</ol>;
+    if (/^\d+\. /.test(lines[0]) && lines.every((line) => /^\d+\. |^ {2,}/.test(line))) {
+      const items = [];
+      for (const line of lines) {
+        if (/^\d+\. /.test(line)) items.push(line.replace(/^\d+\. /, ""));
+        else items[items.length - 1] += `\n${line.trim()}`;
+      }
+      return <ol key={i}>{items.map((item, j) => <li key={j}><Inline text={item} /></li>)}</ol>;
+    }
     if (lines.length > 1 && lines[0].startsWith("|")) {
       const rows = lines.filter((line) => !/^\|[\s:|-]+\|$/.test(line)).map((line) => line.replace(/^\||\|$/g, "").split("|"));
       return <div className="manual-table" key={i}><table><thead><tr>{rows[0].map((cell, j) => <th key={j}><Inline text={cell.trim()} /></th>)}</tr></thead><tbody>{rows.slice(1).map((row, j) => <tr key={j}>{row.map((cell, k) => <td key={k}><Inline text={cell.trim()} /></td>)}</tr>)}</tbody></table></div>;
@@ -65,7 +79,6 @@ export default function ManualContent() {
     <nav className="manual-index" aria-label="Manual topics"><strong>CONTENTS</strong>{chapters.map((item, i) => <button key={item.id} aria-current={i === active ? "page" : undefined} onClick={() => { setActive(i); article.current.scrollTop = 0; }}>{item.title.includes("Google Drive Cloud Sync") && <img className="manual-drive-logo" src={googleDriveLogo} alt="" width={18} height={18} />}{item.title.replace(/`/g, "")}</button>)}</nav>
     <article className="manual-article" ref={article} aria-label={chapter.title}>
       <h2>{chapter.title.includes("Google Drive Cloud Sync") && <img className="manual-drive-logo" src={googleDriveLogo} alt="" width={26} height={26} />}{chapter.title}</h2><References title={chapter.title.replace(/^\d+\. /, "")} />
-      <p className="manual-hint">Button pictures identify controls in the estimating workspace. Keyboard shortcuts appear beside them.</p>
       <Blocks text={chapter.body} chapter={chapter.id} />
     </article>
   </div>;

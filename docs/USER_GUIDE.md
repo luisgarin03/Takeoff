@@ -46,8 +46,14 @@ This manual takes you from a blank browser tab to a finished, exported takeoff, 
 
 The fastest way to learn the canvas is to run one takeoff end to end on the bundled plan.
 
-1. **Load the sample.** On the opening screen, click **Load sample plan** — a real medical-center floor finish plan. (Your own plans: drag a PDF anywhere onto the page.)
-2. **Accept the scale.** Open the **Set scale…** chip in the toolbar. The plan's drawn scale note has already been read off the sheet — click **Plan says 1/4″ = 1′-0″ — use it**. A calibrated ruler bar flashes on the sheet for a few seconds so you can eyeball that it's right (a door opening is about 3′).
+1. **Load your plans.**
+   [[loaded-files-widget]]
+2. **Set scale.** Open the **Set scale…** dropdown button in the toolbar.
+   The app automatically detects scale notes in your plans. When a scale is detected, it appears at the top of the dropdown with a green icon [[scale-icon]].
+   When selected, a calibrated ruler bar flashes on the sheet for a few seconds so you can eyeball that it is right (a door opening is about 3′).
+   Always double-check the detected scale against the scale written on the sheet.
+   You can also calibrate two points and enter the length shown on the plans between those points.
+   [[scale-widget]]
 3. **Pick a condition.** A fresh workspace ships with three starter conditions — Chain Link Fence, Wood Fence, and Aluminum Fence. Press `1` to arm the first (the number keys answer in list order until you pin your own palette), or open the **☰ Takeoffs** rail button and click one.
 4. **One-Click the rooms.** Press `O`, then click inside a room. The room traces itself, wall to wall, as a dashed proposal. Click the next room, and the next. Press `⏎` to create them all.
 5. **Read the report.** Open **Report** for the per-condition breakdown — SF, SY, waste-adjusted order quantities, and the materials buy list. Export **CSV**, **Excel**, or a **Marked set** PDF.
@@ -98,8 +104,8 @@ Successful sign-in now opens a welcome screen instead of prompting you to connec
 
 This optional folder browser is useful for browsing several jobs. It is not required for opening a single synced `.otk`.
 
-1. Open **Project → Cloud projects...**.
-2. If prompted, sign in and dismiss the welcome screen; reopen **Project → Cloud projects...** when you want the folder browser.
+1. Use **Project → Open project...** to open a local or synced .otk file.
+2. The Cloud projects shortcut has been removed from the project dropdown.
 3. In the source-folder view, click **Locate Google Drive Folder**.
 4. In the device's folder picker, choose the synced folder you want to browse and allow access. You can select your existing source folder or a specific project folder. The app lists the folder you selected.
 5. The **Source Folder:** line shows the selected folder and the subfolders you enter. This is plain text, not a link. Browsers expose this relative folder path rather than the complete PC or phone filesystem path.
@@ -142,7 +148,7 @@ Opening an .otk imports it into a local browser workspace. It does not establish
 2. Choose **Save project...**. If prompted, name the project and confirm the project filename.
 3. In the save picker, choose the intended .otk location inside your synced Google Drive folder. To update an existing project file, select that file and confirm replacement when prompted.
 4. Wait for the app's save to finish, then let Google Drive finish syncing before opening that file on another device.
-5. Use **Save project as...** for a separate copy or another location. During the current session, ordinary **Save project** can reuse the file selected for this project by the save picker.
+5. Use **Save.. → Choose a new location / Save as** for a separate copy or another location. During the current session, ordinary **Save project** can reuse the file selected for this project by the save picker.
 
 The selected source folder is a browsing location; it does not automatically become the save destination. Browser autosave and a **saved** indicator refer to the working browser data, not proof that the .otk in Google Drive has been updated. If the browser downloads the .otk instead of showing a save picker, move or upload that downloaded file into the intended Drive folder yourself.
 
@@ -618,13 +624,13 @@ Open **Project** and choose **New project…** to start a clean workspace with a
 
 Project details, creation time, and last persisted modification time are stored in browser and cloud saves and inside the existing portable `.otk` archive. Older projects without metadata continue to open with safe defaults.
 
-**Save project** suggests `<Project Name>.otk`. After the first plans are imported into a named local project, the save dialog remains open until you choose the project's destination (or complete the browser-managed download where direct file access is unavailable), then writes the first complete project immediately. In browsers that support retained file handles, later saves update that same file directly. The handle belongs only to the project that selected it: after **New project…** or opening another project, the next Save asks for a new destination and uses that project's name rather than reusing the previous project's file. Use **Save project as…** to choose another name or location; renaming the project changes the next Save As suggestion without silently creating another file.
+**Save project** suggests `<Project Name>.otk`. After the first plans are imported into a named local project, the save dialog remains open until you choose the project's destination (or complete the browser-managed download where direct file access is unavailable), then writes the first complete project immediately. In browsers that support retained file handles, later saves update that same file directly. The handle belongs only to the project that selected it: after **New project…** or opening another project, the next Save asks for a new destination and uses that project's name rather than reusing the previous project's file. Use **Save.. → Choose a new location / Save as** to choose another name or location; renaming the project changes the next Save As suggestion without silently creating another file.
 
 For the Google Drive folder workflow, see [Google Drive Cloud Sync](#google-drive-cloud-sync). New source-folder creation makes **Estimate save data / Projects**. Selecting an existing source displays its actual contents; it does not reorganize your files or select the destination for future saves.
 
 ### Optional cloud projects
 
-Use **Project → Cloud projects...** to request the optional folder browser. Successful sign-in first shows the welcome/subscription screen described in Google Drive Cloud Sync. Open a synced file directly with **Project → Open project...**. App sign-in and Google Drive for desktop sign-in serve different purposes; neither one automatically saves your browser edits into a project file.
+Use **Project → Open project...** to open a local or synced project file. The Cloud projects shortcut has been removed from the project dropdown.
 
 Use the avatar or name beside the app logo to edit your display name or log out. Signing out does not erase local browser work or previously downloaded project copies.
 
@@ -679,7 +685,7 @@ Use **Project > Save project...** in the top toolbar or Plan Set header to save 
 
 The normal file contains all loaded plan PDFs (including images previously converted to PDFs), conditions and attached materials, measurements, calibration scales, markups, RFIs, sheet tabs/groups/levels/page bookmarks/file favorites, project/client details, and revision snapshots. Finish any in-progress trace before saving.
 
-If the full project is too large for the 512 MB portable limit, choose **Project → Save project with marked pages only…** directly below Save project. This always creates a separate compact copy. It retains the original vector/raster quality for every page that has a measurement, note, markup, chain-link-post overlay, direct RFI page reference, or page bookmark. Pages required by saved revisions are included too. PDFs with no qualifying pages are omitted. Other pages become very small placeholders so sheet numbers and every saved measurement remain aligned with the original file.
+If the full project is too large for the 512 MB portable limit, choose **Project → Save..**, then select **Marked pages only**. This always creates a separate compact copy. It retains the original vector/raster quality for every page that has a measurement, note, markup, chain-link-post overlay, direct RFI page reference, or page bookmark. Pages required by saved revisions are included too. PDFs with no qualifying pages are omitted. Other pages become very small placeholders so sheet numbers and every saved measurement remain aligned with the original file.
 
 When a compact project is reopened, OpenTakeoff displays **Only marked pages were saved**. You can continue working with the retained pages or choose **Import missing files**. Select the original project folder, individual PDFs, or a ZIP containing them. Restoration is non-destructive and accepts only files whose filename, byte size, and SHA-256 content hash exactly match the originals used when the compact copy was created. Matching files replace their compact placeholders; unmatched or different revisions are skipped and reported. The recovery list remains available under **Project → Import missing files…** until every original PDF has been restored.
 
@@ -1008,7 +1014,6 @@ Use this directory to choose the right tool, then consult the detailed chapter n
 | Save project / Save project as | Preserve an editable portable project | Save into your synced Drive folder to transfer it; browser autosave is separate. Google Drive Cloud Sync and Saving, your data & Contribute. |
 | Save project with marked pages only | Make a separate compact project | Unneeded source pages become placeholders. Keep originals for recovery; do not treat this as a complete source-plan archive. Saving, your data & Contribute. |
 | Import missing files | Restore source pages omitted by compact saving | Requires matching original files, not a similarly named newer revision. Saving, your data & Contribute. |
-| Cloud projects | Browse an explicitly selected local source folder or available cloud library | Optional browsing; not required to open a local synced `.otk`. Google Drive Cloud Sync. |
 | Open Recent | Return to a remembered browser workspace | Does not refresh an imported copy from Drive. Google Drive Cloud Sync. |
 | Sheet gallery / Sheets | Find, open, and navigate PDF pages | Use page labels and levels to keep large sets organized. Opening plans & moving around. |
 | Page bookmarks / file favorites | Keep important pages and source PDFs easy to find | A page bookmark also helps retain that page in a compact project. Opening plans & moving around and Saving, your data & Contribute. |
@@ -1108,3 +1113,65 @@ Rendering diagnostics displays performance information to help identify slow dra
 Sharing and some cloud/AI controls are implemented but hidden or service-dependent in this build. Do not assume that a hidden invitation workflow, a configured server, or a subscription purchase is available merely because it is described in a technical document. For routine project transfer, use the local synced `.otk` workflow in Google Drive Cloud Sync.
 
 The Find panel's **Help** tab explains every search, suggestion, navigation, and highlight control. Drag either lower corner to resize the panel down to the screen's bottom edge; the panel keeps a small margin so its controls remain reachable.
+
+
+### Print plans
+
+Choose **Print...** in the project dropdown to open the centered print panel with a left settings sidebar, fixed bottom actions, and a large page preview on the right. Select the current page, all pages, or individual pages across loaded files. Choose Compact/Balanced/HD quality, paper size (including original sheet size), automatic/portrait/landscape layout, and margins. Toggle markups/notes, takeoff measurements, and grayscale independently. **Prepare preview** creates a PDF containing only the selected plan pages, in plan order, with no cover. **Print...** opens the browser print dialog for printer, copies, and duplex settings; choose matching paper and 100% scaling for the prepared layout. The prepared PDF can also be opened in a new tab. Plans fit within the chosen margins without stretching, which can change drawing scale. Print output uses white paper and excludes temporary Find highlights. Close or Cancel stops preparation after the current page. All processing stays in your browser.
+
+
+### Unified save settings
+
+The project dropdown now has one **Save..** entry. Its centered panel explains **Full project** (all available plans and project content) and **Marked pages only** (a separate smaller copy retaining measured, marked, or bookmarked pages). Edit the filename or choose **Choose a new location / Save as**. **Create a dated backup copy** adds a timestamp and preserves the active save destination. For an already compact project, saving preserves only available content; restore missing originals before making a complete source-plan backup.
+
+
+Text and number fields and multiline text areas share a consistent gray outline, rounded corners, and padding, with a visible keyboard-focus ring and backgrounds matching the app theme.
+
+Text-field styling also covers dates, times, editable labels, and text areas. Fields use compact vertical padding, gray upper/left borders, and softer lower/right borders. Light mode uses white fields; dark mode uses charcoal fields with light text.
+
+The Takeoff toolbar summary card contains the editable active condition name, multiplier, and waste allowance. The separate appearance row now contains only appearance controls. Waste still affects report order quantities only, and the docked condition editor retains its existing controls.
+
+The condition summary shows its editable name once; the totals section displays quantities without repeating that name.
+
+Drawing-tool rail menus expand upward as needed to show their full list within the available screen height; scrolling is retained only when the list exceeds the viewport.
+
+The sheet selector and previous/next controls sit in the top header immediately after Takeoff, available with either toolbar tab open or collapsed.
+
+The Sheets tab strip shows bookmarked pages when any are available, including automatic markup bookmarks, in plan order. With no bookmarks it shows open sheets. The overflow menu retains access to other open pages; bookmarking is separate from closing a tab.
+
+Plan set PDF headers show the filename in normal text with a page count. A separate **Erase** button on the right removes the PDF using the existing removal confirmation and affected-page preview.
+
+Conditions opens as a centered panel over an undimmed canvas, retaining Takeoffs, Library, Materials, and Columns. Close with ×, Escape, or outside the panel; the canvas no longer shrinks when it opens. Panel tab/filter state survives reopening.
+
+Hatch previews use independent SVG patterns so selecting a condition or hiding its toolbar does not hide matching hatch swatches elsewhere.
+
+**+ Condition** opens a centered New condition dialog instead of a browser prompt. Enter a condition name, then choose **Add condition** or press Enter. Cancel or Escape dismisses it without adding anything.
+
+The estimating toolbar, condition controls, and Markups/Stamps/RFIs drawer use solid shadcn-inspired surfaces, compact tabs, flat fields, and neutral borders in light and dark mode. Takeoff palette colors remain unchanged.
+
+**Project Data..** combines project details and the plan set. Edit the project name, submission/due date, and status at the top and choose **Save details**; manage PDFs and select pages below. The former Edit project details menu entry now opens this combined panel.
+
+Subscription checks use the signed-in Supabase account and its protected `otk_subscriptions` record. A missing record means no subscription. Administrators manage entitlements; users cannot assign themselves a paid plan. Payment synchronization requires RevenueCat server credentials and webhooks. Without those credentials, subscription checks still read the saved Supabase record.
+
+Project calendar: open the project menu and choose Project calendar. Local projects appear on their submission / due dates. Click an event to open its detail card with dates, location, notes, links, and attachment references when available. Use Open project for local deadlines. App events offer Edit and Delete when you have editing access; deletion asks for confirmation, and recurring-event deletion removes the entire series. Google events are read-only and offer Open in Google Calendar. Connect Google Calendar in Settings, then Load calendars and choose a calendar to display its events. The Google Calendar API must be enabled for the existing Google OAuth project. Calendar credentials remain encrypted on the server with the Drive connection.
+
+Calendar bid details: click an event for the tall scrolling bid card. With editing access, use the pencil or Take meeting notes to enter project, client/GC, contact, due time, amount, folder, document links, original invitation, location, and notes. Project fields travel with project metadata; app-event fields save in the event description. Google events remain read-only. Missing information is shown as Not added.
+
+Stripe sandbox subscriptions: Estimating Pro is $40/month or $400/year through test-only Stripe Checkout. See [setup and test guide](STRIPE_SANDBOX.md). No real card charges are enabled.
+
+Calendar authorization restores the calendar and current project after Google approval. Active Stripe sandbox subscriptions enable local development testing; hosted production builds still require a production license.
+
+Load sample plan waits for PDF import to complete and reports download/import errors with a retryable button. Sign in with editing access in the current browser before importing a sample.
+
+On the empty workspace screen, use **Sign in** above Open your plans to open the account login form.
+
+Choose Continue with Google and approve Calendar access during sign-in to connect Calendar automatically. Email/password users and users who decline or revoke permission can connect from Calendar settings.
+
+Calendar automatically restores your connected Google calendar list after sign-in. Calendars are initially visible; use their checkboxes to choose which to display. Selections are remembered per account in this browser.
+
+Google events display their Google Calendar colors. An individual event color takes precedence over its calendar color.
+
+
+Google Calendar editing: approve editing access in Calendar Settings. Use + Google event to create events; open an event and choose Edit to change dates, location, description, Google color, recurrence, attendees, reminders, visibility, availability, or RSVP. The editor supports duplicate, move, and confirmed deletion; recurring occurrences and the full series are separate edit choices. Drag and resize writable Google events to reschedule. Manage Google calendars in Settings provides creation, renaming, colors, quick-add, availability, preferences, sharing, and confirmed secondary-calendar deletion. Google account permissions are enforced on the server and stale event changes are rejected with version checks. Invitation/update emails are opt-in. Existing read-only authorizations continue to display events until editing permission is approved. Administrative ownership transfer, primary-calendar clearing, and webhook channel management are not exposed in the app.
+
+The Google event Description field displays normal text, preserving paragraph breaks and link destinations. Saving other fields leaves the original description formatting intact.

@@ -41,7 +41,7 @@ test("RevenueCat configuration uses native IAP on iOS and HTTPS checkout on desk
     VITE_REVENUECAT_IOS_API_KEY: "appl_public",
     VITE_REVENUECAT_ENTITLEMENT_ID: "opentakeoff_pro",
     VITE_REVENUECAT_WEB_PURCHASE_URL: "https://pay.rev.cat/live-token/",
-    VITE_REVENUECAT_PACKAGE_STARTER: "$rc_monthly",
+    VITE_REVENUECAT_PACKAGE_ESTIMATING_PRO_MONTHLY: "$rc_monthly",
   };
   const ios = revenueCatConfig(env, "ios");
   assert.equal(ios.checkoutConfigured, true);
@@ -50,7 +50,7 @@ test("RevenueCat configuration uses native IAP on iOS and HTTPS checkout on desk
   const desktop = revenueCatConfig(env, "web");
   assert.equal(desktop.checkoutConfigured, true);
   assert.equal(desktop.purchaseUrl, "https://pay.rev.cat/live-token");
-  assert.equal(desktop.packages.starter, "$rc_monthly");
+  assert.equal(desktop.packages.estimating_pro_monthly, "$rc_monthly");
   assert.equal(revenueCatConfig({ ...env, VITE_REVENUECAT_WEB_PURCHASE_URL: "javascript:alert(1)" }, "web").checkoutConfigured, false);
 });
 

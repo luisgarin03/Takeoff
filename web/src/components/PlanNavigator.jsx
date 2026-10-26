@@ -30,9 +30,11 @@ import { parseSheetKey, extractSheetNumber, detectScale, RENDER_SCALE, MAX_GROUP
 import { isGoogleConfigured } from "../lib/google/auth.js";
 import { projectHomeFolderId } from "../lib/projectHome.js";
 import { groupSheetsByLevel, sortGalleryGroups } from "../lib/sheetLevels.js";
+import { loadSamplePlan } from "../lib/samplePlan.js";
 
 const ColorBendsBackground = lazy(() => import("./backgrounds/ColorBendsBackground.jsx"));
 
+import ProjectDataHeader from "./ProjectDataHeader.jsx";
 const THUMB_W = 380;
 const ROOT = { id: undefined, name: "Project" };   // id undefined → cloudStore's default (project folder)
 
@@ -55,11 +57,12 @@ const ctrlBtn = { display: "inline-flex", alignItems: "center", gap: 6, padding:
 export default function PlanNavigator({
   // presentation + exit
   canClose, onExit, initialMode = "plan", cloudMode,
+  projectMetadata, onSaveProjectMetadata,
   // plan-set (gallery) data
   sheets, getDoc, scales, detectedScales, shapes, labels, onLabel, onDetect,
   thumbCacheRef, busyRef, openTabs, onOpen,
   onAddFiles, onClosePdf, onRemoveFromProject,
-  onCloseProject, onBrowseProjects,
+  onCloseProject, onBrowseProjects, onSignIn, signedIn = false,
   levels = {}, onAssignLevel,
   // browse (Drive) data
   listFolder, addSheets, onAdded,
@@ -139,6 +142,7 @@ export default function PlanNavigator({
   const [pages, setPages] = useState({});   // file -> numPages (as discovered)
   const [sel, setSel] = useState([]);
   const [sampleBusy, setSampleBusy] = useState(false);
+  const [sampleError, setSampleError] = useState("");
   const [driveBusy, setDriveBusy] = useState(false);
   const [driveErr, setDriveErr] = useState("");
   const [addMenu, setAddMenu] = useState(false);
@@ -154,16 +158,7 @@ export default function PlanNavigator({
 
   const loadSample = async () => {
     if (sampleBusy || !onAddFiles) return;
-    setSampleBusy(true);
-    try {
-      const base = import.meta.env.BASE_URL || "/";
-      const res = await fetch(`${base}demo/sample-finish-plan.pdf`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      onAddFiles([new File([blob], "sample-finish-plan.pdf", { type: "application/pdf" })]);
-    } catch {
-      setSampleBusy(false);
-    }
+    await loadSamplePlan({ baseUrl: import.meta.env.BASE_URL || "/", addFiles: onAddFiles, onBusy: setSampleBusy, onError: setSampleError });
   };
 
   const handleDriveSignIn = () => {
@@ -319,10 +314,10 @@ export default function PlanNavigator({
   };
 
   // ══ RENDER ════════════════════════════════════════════════════════════════
-  const title = mode === "browse" ? "Add sheets from Drive" : "Plan set";
+  const title = mode === "browse" ? "Add sheets from Drive" : "Project Data..";
   const subtitle = mode === "browse"
     ? "pick the PDFs to open — specs & as-builts stay unopened"
-    : `${allKeys.length || "…"} sheets · pick one or several — the order you pick is the left-to-right order`;
+    : `${allKeys.length || "…"} Sheets · The order you pick is the left-to-right order`;
 
   const header = (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--ink)", background: "var(--paper-bright)", flexWrap: "wrap" }}>
@@ -331,8 +326,8 @@ export default function PlanNavigator({
         style={{ ...ctrlBtn, padding: "6px 8px", opacity: canGoBack ? 1 : 0.35, cursor: canGoBack ? "pointer" : "default" }}>
         <Icon name="chevronLeft" size={14} />
       </button>}
-      <Icon name="sheets" size={18} />
-      <strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>{title}</strong>
+      {mode === "browse" && <><Icon name="sheets" size={18} />
+      <strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>{title}</strong></>}
       {onBrowseProjects && (
         <button onClick={onBrowseProjects} title="Back to your team's projects"
           style={{ border: "none", background: "transparent", color: "var(--cobalt)", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 12, padding: "2px 4px" }}>
@@ -352,7 +347,7 @@ export default function PlanNavigator({
           ))}
         </div>
       ) : (
-        <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--ink-muted)" }}>{subtitle}</span>
+        <span style={{ fontFamily: "var(--f-body)", fontSize: 12, color: "var(--ink)" }}>{subtitle}</span>
       )}
 
       <div style={{ flex: 1 }} />
@@ -410,7 +405,7 @@ export default function PlanNavigator({
       {onCloseProject && (
         <button onClick={onCloseProject} title="Close this project and return to the local canvas" style={{ ...ctrlBtn, color: "var(--ink-muted)" }}>Close project</button>
       )}
-      {canClose && (
+      {canClose && mode !== "plan" && (
         <button onClick={onExit} title="Back to the canvas (Esc)" style={ctrlBtn}>
           <Icon name="close" size={12} />Close
         </button>
@@ -510,26 +505,38 @@ export default function PlanNavigator({
             const parsed = parseSheetKey(key);
             const isFirstPageOfPdf = !grp.keys.slice(0, keyIndex).some((otherKey) => parseSheetKey(otherKey).file === parsed.file);
             const collapsed = collapsedPdfs[parsed.file] ?? true;
+            const pdfKeys = allKeys.filter((sheetKey) => parseSheetKey(sheetKey).file === parsed.file);
+            const pdfSelected = pdfKeys.length > 0 && pdfKeys.every((sheetKey) => selectedKeys.has(sheetKey));
+            const pdfPartSelected = !pdfSelected && pdfKeys.some((sheetKey) => selectedKeys.has(sheetKey));
             return (
               <React.Fragment key={key}>
                 {isFirstPageOfPdf && (
-                  <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 0, minWidth: 0, border: "1px solid var(--ink-faint)", borderRadius: 6, overflow: "hidden" }}>
+                    <input type="checkbox" aria-label={`Select all sheets in ${parsed.file}`} checked={pdfSelected}
+                      ref={(element) => { if (element) element.indeterminate = pdfPartSelected; }}
+                      disabled={!enumerated}
+                      onChange={() => setSel((current) => {
+                        const fileKeys = new Set(pdfKeys);
+                        return pdfSelected ? current.filter((sheetKey) => !fileKeys.has(sheetKey)) : [...current, ...pdfKeys.filter((sheetKey) => !current.includes(sheetKey))];
+                      })}
+                      style={{ width: 17, height: 17, margin: "0 0 0 12px", flexShrink: 0, cursor: "pointer", accentColor: "var(--cobalt)" }} />
                     <button type="button" aria-expanded={!collapsed} aria-label={`${collapsed ? "Expand" : "Collapse"} previews for ${parsed.file}`}
                       title={`${collapsed ? "Expand" : "Collapse"} page previews`}
                       onClick={() => setCollapsedPdfs((current) => ({ ...current, [parsed.file]: !(current[parsed.file] ?? true) }))}
-                      style={{ ...ctrlBtn, flexShrink: 0, minWidth: 36, minHeight: 36, justifyContent: "center" }}>
-                      <span aria-hidden="true" style={{ fontSize: 18 }}>{collapsed ? "▸" : "▾"}</span>
+                      style={{ flex: 1, minWidth: 0, padding: "7px 10px", border: 0, borderRadius: 0, background: "transparent", color: "var(--ink)", fontFamily: "var(--f-mono)", fontSize: 12, cursor: "pointer", textAlign: "left" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}><strong style={{ overflowWrap: "anywhere" }}>{parsed.file}</strong><Icon name={collapsed ? "chevronRight" : "chevronDown"} size={13} /></span>
+                    <small style={{ display: "block", marginTop: 3, color: "var(--ink-muted)" }}>{pages[parsed.file]} {pages[parsed.file] === 1 ? "page" : "pages"}</small>
                     </button>
-                  {onClosePdf ? (
+                  {onClosePdf && (
                   <button type="button" onClick={(e) => { e.stopPropagation(); requestClose(parsed.file); }}
+                    aria-label={`Remove PDF ${parsed.file}`}
                     onMouseEnter={() => setHoveredRemovalFile(parsed.file)} onMouseLeave={() => setHoveredRemovalFile(null)}
                     onFocus={() => setFocusedRemovalFile(parsed.file)} onBlur={() => setFocusedRemovalFile(null)}
                     title={`Remove all pages of ${parsed.file} from the plan set${cloudMode ? " (the PDF stays in Drive)" : ""}`}
-                    style={{ display: "block", gridColumn: "1 / -1", justifySelf: "start", maxWidth: "100%", margin: 0, padding: "7px 10px", border: "1px solid #b91c1c", borderRadius: 6, background: "#b91c1c", color: "#fff", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 600, whiteSpace: "normal", overflowWrap: "anywhere", textAlign: "left" }}>
-                    Remove {parsed.file}
-                    <small style={{ display: "block", marginTop: 3, fontWeight: 400 }}>Entire PDF · {pages[parsed.file]} {pages[parsed.file] === 1 ? "page" : "pages"} will be removed</small>
+                    style={{ ...ctrlBtn, flexShrink: 0, alignSelf: "center", alignItems: "center", justifyContent: "center", boxSizing: "border-box", lineHeight: 1, padding: "0 8px", height: 26, minHeight: 26, margin: "0 7px", fontSize: 11.5, color: "var(--c-danger)", border: "1px solid var(--c-danger)", borderRadius: 6, background: "transparent" }}>
+                    <Icon name="close" size={12} /> Remove
                   </button>
-                  ) : <strong>{parsed.file}</strong>}
+                  )}
                   </div>
                 )}
               {!collapsed && <div data-sheetkey={key} ref={(el) => { if (el && !thumb) obsRef.current?.observe(el); }}
@@ -575,6 +582,15 @@ export default function PlanNavigator({
                 <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--cobalt)", marginBottom: 6 }}>TAKEOFF · ONE WORKSPACE</div>
                 <div style={{ fontFamily: "var(--f-display)", fontSize: 18, color: "var(--ink)", lineHeight: 1.32, marginBottom: 5 }}>Measure plans. Build estimates.</div>
                 <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.55, marginBottom: 20 }}>Keep quantities, notes, and measurements together.</div>
+                {!signedIn && onSignIn && (
+                  <div style={{ margin: "18px 0 22px" }}>
+                    <button type="button" onClick={onSignIn}
+                      style={{ padding: "12px 28px", border: "1px solid var(--ink)", background: "var(--paper-bright)", color: "var(--ink)", fontFamily: "var(--f-body)", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                      Sign in
+                    </button>
+                    <div style={{ marginTop: 7, fontSize: 12.5 }}>Sign in to use your subscription and edit plans.</div>
+                  </div>
+                )}
                 <button onClick={() => fileRef.current?.click()}
                   style={{ display: "block", width: "100%", margin: "24px auto 0", padding: "44px 24px", border: "2px dashed var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", color: "var(--ink-muted)", fontFamily: "var(--f-body)", fontSize: 13.5, lineHeight: 1.7 }}>
                   <div style={{ fontFamily: "var(--f-display)", fontSize: 20, color: "var(--ink)", marginBottom: 8 }}>Open your plans</div>
@@ -606,6 +622,7 @@ export default function PlanNavigator({
                   style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "13px 22px", border: "1px solid var(--ink)", background: "var(--cobalt)", color: "var(--paper-bright)", cursor: sampleBusy ? "default" : "pointer", opacity: sampleBusy ? 0.65 : 1, fontWeight: 700, fontSize: 14, fontFamily: "var(--f-body)" }}>
                   <Icon name="takeoff" size={16} />{sampleBusy ? "Loading sample…" : "Load sample plan"}
                 </button>
+                {sampleError && <p role="alert" style={{ color: "var(--c-danger)", fontSize: 13, lineHeight: 1.5 }}>{sampleError}</p>}
                 <div style={{ fontFamily: "var(--f-body)", fontSize: 12.5, color: "var(--ink-muted)", marginTop: 11, lineHeight: 1.6 }}>
                   Try a sample plan and start measuring.
                 </div>
@@ -622,7 +639,7 @@ export default function PlanNavigator({
       </div>
       {sheets.length > 0 && (
         <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "12px 18px", borderTop: "1px solid var(--ink)", background: "var(--paper-bright)" }}>
-          <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--ink-muted)" }}>{sel.length ? `${sel.length} selected` : "select sheets, or hover a card and hit View"}</span>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--ink-muted)" }}>{sel.length ? `${sel.length} selected` : "Select sheets, or hover a card and hit View"}</span>
           <div style={{ flex: 1 }} />
           {sel.length > 0 && (
             <>
@@ -689,6 +706,10 @@ export default function PlanNavigator({
         label={adding ? "Adding selected plans…" : sampleBusy ? "Loading sample plan…" : driveBusy ? "Signing in to Google Drive…" : "Reading plan folder…"}
         variant="overlay"
       />
+      {mode === "plan" && <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-bright)" }}><Icon name="sheets" size={18} /><strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>{title}</strong>
+        {canClose && <button type="button" onClick={onExit} title="Back to the canvas (Esc)" style={{ ...ctrlBtn, marginLeft: "auto" }}><Icon name="close" size={12} />Close</button>}
+      </div>}
+      {mode === "plan" && projectMetadata && onSaveProjectMetadata && <ProjectDataHeader key={projectMetadata.projectId || "project"} metadata={projectMetadata} onSave={onSaveProjectMetadata} />}
       {(mode !== "plan" || sheets.length > 0 || canClose) && header}
       {onAddFiles && (
         <input name="sheet-file" ref={fileRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}

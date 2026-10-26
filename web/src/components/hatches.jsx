@@ -4,7 +4,7 @@
 // import back would be a cycle; living here instead gives the shared SVG
 // primitives a neutral home both files can import without one.
 
-import React from "react";
+import React, { useId } from "react";
 
 // Architectural / flooring hatch templates. Each condition gets a line color, a
 // fill color (or No Fill), and one hatch style — rendered as an SVG <pattern> so
@@ -61,8 +61,11 @@ export function HatchPattern({ id, type, line, fill, dark }) {
 
 // Preview swatch — renders the ACTUAL pattern so the picker always matches the draw.
 export function HatchSwatch({ type, line, fill }) {
+  const instanceId = useId();
   const fc = fill && fill !== NO_FILL ? fill : null;
-  const pid = `sw-${type}-${String(line).replace("#", "")}-${String(fill).replace("#", "")}`;
+  // Each preview owns its pattern. Shared IDs can resolve to a hidden toolbar
+  // swatch when selecting a condition mounts another copy of the editor.
+  const pid = `sw-${instanceId.replace(/:/g, "")}`;
   return (
     <svg width="26" height="18" style={{ display: "block", overflow: "hidden" }}>
       {type !== "solid" && <defs><HatchPattern id={pid} type={type} line={line} fill={fill} /></defs>}

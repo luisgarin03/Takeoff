@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { BrandText } from "../brand/marks.jsx";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
 import { createAuth } from "../lib/supabase/auth.js";
-import { createRevenueCatBillingAdapter } from "../lib/revenueCatBilling.js";
+import { createAppBillingAdapter } from "../lib/stripeBilling.js";
 import { createBillingService } from "../lib/subscriptions.js";
 import { licenseRequired, resolveLicenseAccess, sandboxLicensesAllowed } from "../lib/license.js";
 import { currentLicenseDevice, LICENSE_HEARTBEAT_MS } from "../lib/licenseSession.js";
@@ -51,7 +51,7 @@ function AccountForm({ cloud }) {
 
 export default function LicenseGate({ children }) {
   const required = licenseRequired(), cloud = useCloud();
-  const service = useMemo(() => createBillingService(createRevenueCatBillingAdapter(cloud.client)), [cloud.client]);
+  const service = useMemo(() => createBillingService(createAppBillingAdapter(cloud.client)), [cloud.client]);
   const device = useMemo(() => currentLicenseDevice(), []);
   const [state, setState] = useState({ userId: "", loading: true, record: null, session: null, error: "" });
   const [refresh, setRefresh] = useState(0);
