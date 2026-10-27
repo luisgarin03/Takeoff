@@ -62,7 +62,7 @@ import DiagnosticsMonitor from "../components/DiagnosticsMonitor.jsx";
 import PlanNavigator from "../components/PlanNavigator.jsx";
 import Whiteboard from "../components/Whiteboard.jsx";
 import { addWhiteboardSowEntry, addWhiteboardSowPanel, addWhiteboardSowTitle, emptyWhiteboard, sanitizeWhiteboardFileHeaderColors, sanitizeWhiteboardSow, WHITEBOARD_FILE_LIMIT, whiteboardHasContent } from "../lib/whiteboard.js";
-import { measurementCallout, measurementSowText, syncMeasurementCallouts, syncMeasurementSowBoard } from "../lib/measurementSow.js";
+import { conditionAutoNoteArrowEnabled, measurementCallout, measurementSowText, syncMeasurementCallouts, syncMeasurementSowBoard } from "../lib/measurementSow.js";
 import FenceCalculatorPanel from "../features/fenceCalculator/components/FenceCalculatorPanel.jsx";
 import ChainLinkFencePanel from "../components/ChainLinkFencePanel.jsx";
 import { calculateChainLinkFence, createChainLinkFence, insertFenceMarker, pathMetrics, pointAtPathT, projectPointToPath, removeFenceMarker, sanitizeChainLinkFences, updateFenceMarker } from "../lib/chainLinkFence.js";
@@ -687,10 +687,13 @@ export default function TakeoffCanvas() {
         || { finish_tag: "Condition", color: "#C96442" };
       return { shape, condition };
     });
-    setMarkups((current) => [...current, ...rows.map(({ shape, condition }) => ({
-      id: uid("mk"), created_at: nowIso(), sheet_id: shape.sheet_id, rfi_id: "",
-      ...measurementCallout(shape, condition, units),
-    }))]);
+    const calloutRows = rows.filter(({ condition }) => conditionAutoNoteArrowEnabled(condition));
+    if (calloutRows.length) {
+      setMarkups((current) => [...current, ...calloutRows.map(({ shape, condition }) => ({
+        id: uid("mk"), created_at: nowIso(), sheet_id: shape.sheet_id, rfi_id: "",
+        ...measurementCallout(shape, condition, units),
+      }))]);
+    }
     setWhiteboard((current) => {
       let next = sanitizeWhiteboardSow(current);
       if (!next.sows.length) next = addWhiteboardSowPanel(next);
@@ -5933,6 +5936,7 @@ export default function TakeoffCanvas() {
       line_marker: "none", // optional visual identifier for Linear runs; never affects LF
       multiplier: 1,        // ×N for identical repeated units (measure one, multiply)
       waste_pct: 0,         // flooring waste allowance (manual) — applied in the Report
+      auto_note_arrow: true, // create a condition-colored note + leader for each new measurement
       materials: [],        // supporting materials (adhesive, grout, …) with coverage rates
     };
     agentStateRef.current = { ...agentStateRef.current, conditions: [...cs, c] };
@@ -7403,6 +7407,7 @@ export default function TakeoffCanvas() {
     finish_tag: c.finish_tag, color: c.color, fill: c.fill, hatch: c.hatch || "solid",
     line_marker: normalizeLineMarker(c.line_marker),
     waste_pct: c.waste_pct || 0,
+    auto_note_arrow: conditionAutoNoteArrowEnabled(c),
     ...(c.height_ft != null ? { height_ft: c.height_ft } : {}),
     ...(c.thickness_in != null ? { thickness_in: c.thickness_in } : {}),
     ...(c.laborType != null ? { laborType: c.laborType } : {}),
@@ -7524,6 +7529,7 @@ export default function TakeoffCanvas() {
   panelHandlersRef.current = {
     onActivate: activateCondition, onLocate: locateCondition,
     onOpenConditionPage: (_conditionId, key) => openSheets([key], false),
+    onToggleAutoNoteArrow: (id, enabled) => updateCondById(id, { auto_note_arrow: enabled }),
     onAddCondition: addCondition, onDeleteCondition: deleteCondition,
     onUpdateCond: updateCond, onSetCondParam: setCondParam, onAssignAttr: assignAttr,
     onAddMaterial: addMaterial, onUpdateMaterial: updateMaterial, onRemoveMaterial: removeMaterial,

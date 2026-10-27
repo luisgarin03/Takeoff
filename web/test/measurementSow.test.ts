@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { measurementAggregateQuantity, measurementAggregateSowText, measurementCallout, measurementCalloutGeometry, measurementQuantity, measurementSowText, syncMeasurementCallouts, syncMeasurementSowBoard } from "../src/lib/measurementSow.js";
+import { conditionAutoNoteArrowEnabled, measurementAggregateQuantity, measurementAggregateSowText, measurementCallout, measurementCalloutGeometry, measurementQuantity, measurementSowText, syncMeasurementCallouts, syncMeasurementSowBoard } from "../src/lib/measurementSow.js";
+
+test("automatic plan notes default on and honor a condition-level opt-out", () => {
+  assert.equal(conditionAutoNoteArrowEnabled(undefined), true);
+  assert.equal(conditionAutoNoteArrowEnabled({}), true);
+  assert.equal(conditionAutoNoteArrowEnabled({ auto_note_arrow: true }), true);
+  assert.equal(conditionAutoNoteArrowEnabled({ auto_note_arrow: false }), false);
+});
 
 test("formats automatic SOW lines as [measurement] - condition name", () => {
   const condition = { finish_tag: "10' ornamental fence", color: "#2563EB" };

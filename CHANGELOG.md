@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Per-condition automatic callouts
+
+- Added an **Auto** callout toggle to every Takeoffs condition row. It defaults on and controls whether newly committed measurements for that condition create the automatic condition-colored text box and leader arrow. Turning it off leaves existing callouts intact and continues updating the combined Whiteboard SOW total. The choice persists with projects and reusable condition templates.
+
 ## Unreleased — Visible scale requirement
 
 - Replaced the small bottom status warning for unscaled measurement attempts with a centered **Set the scale first** dialog shown on the first canvas click. The dialog reuses the detected/standard scale dropdown, offers two-point calibration, explains how to verify against a printed plan dimension, and can be dismissed with **Not now**; Count and markup tools remain scale-independent.

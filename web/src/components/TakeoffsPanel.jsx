@@ -467,6 +467,7 @@ function TakeoffsPanel({
   matLib, matLibById, linkedCountById,
   panelPrefs, onPanelPrefs, reassigning, epoch, clearSelectionRef,
   onActivate, onSetActive, onLocate, onOpenConditionPage,
+  onToggleAutoNoteArrow,
   onAddCondition, onDeleteCondition, onUpdateCond, onSetCondParam, onAssignAttr,
   onAddMaterial, onUpdateMaterial, onRemoveMaterial,
   onBulkWaste, onBulkColor, onBulkDelete,
@@ -625,6 +626,7 @@ function TakeoffsPanel({
     const sf = row?.floor_sf || 0, lf = row?.lf || 0, ea = row?.ea || 0, wsf = row?.wall_sf || 0;
     const shapeCount = row?.shape_count || 0;
     const usedPages = conditionPagesById.get(c.id) || [];
+    const autoNoteArrow = c.auto_note_arrow !== false;
     const on = c.id === activeCond;
     const matOn = on && panelMatOpen;
     const checked = checkedConds.has(c.id);
@@ -659,6 +661,20 @@ function TakeoffsPanel({
             </div>}
           </div>
           <span style={{ fontFamily: "var(--f-mono,monospace)", fontSize: 10.5, color: "var(--ink-muted)", flexShrink: 0 }}>{shapeCount}▦</span>
+          <button type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleAutoNoteArrow(c.id, !autoNoteArrow); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            draggable={false}
+            onDragStart={(e) => e.stopPropagation()}
+            aria-pressed={autoNoteArrow}
+            aria-label={`${autoNoteArrow ? "Disable" : "Enable"} automatic note and arrow for ${c.finish_tag}`}
+            title={autoNoteArrow
+              ? "Automatic note + arrow is on — click to stop creating it for new measurements"
+              : "Automatic note + arrow is off — click to create it for new measurements"}
+            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 3, width: 50, height: 22, padding: 0, borderRadius: 0, border: `1px solid ${autoNoteArrow ? "var(--c-positive)" : "var(--ink-faint)"}`, background: autoNoteArrow ? "var(--tint-active)" : "transparent", color: autoNoteArrow ? "var(--c-positive)" : "var(--ink-muted)", cursor: "pointer", fontSize: 9.5, fontWeight: 700 }}>
+            <Icon name="callout" size={12} /><span>Auto</span>
+          </button>
           <span draggable={false} onDragStart={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
             <ToolMenu portal disabled={!usedPages.length}
               title={usedPages.length ? `Open a page where ${c.finish_tag} is used` : `${c.finish_tag} has not been used on any page`}

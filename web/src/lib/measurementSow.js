@@ -10,6 +10,14 @@ const measurementColor = (condition) => typeof condition?.color === "string" && 
 const conditionForShape = (shape, conditionsById) => conditionsById.get(shape.condition_id)
   || { finish_tag: "Condition", color: FALLBACK_COLOR };
 
+/**
+ * Automatic plan notes are enabled by default for backward compatibility.
+ * A condition stores only an explicit false when the estimator turns them off.
+ */
+export function conditionAutoNoteArrowEnabled(condition) {
+  return condition?.auto_note_arrow !== false;
+}
+
 function formatQuantity(value, digits = 1) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "0";

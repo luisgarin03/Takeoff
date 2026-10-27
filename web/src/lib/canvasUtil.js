@@ -71,6 +71,7 @@ export const instantiateTemplate = (t) => ({
   ...(t.thickness_in != null ? { thickness_in: t.thickness_in } : {}),
   ...(t.laborType != null ? { laborType: t.laborType } : {}),
   ...(t.subfloorType != null ? { subfloorType: t.subfloorType } : {}),
+  auto_note_arrow: t.auto_note_arrow !== false,
   // instantiateMaterial (lib/materials.js) deep-copies nested grout geometry —
   // a shallow spread would alias one template object into live condition state
   materials: (t.materials || []).map((m) => instantiateMaterial(m, uid("mat"))),
