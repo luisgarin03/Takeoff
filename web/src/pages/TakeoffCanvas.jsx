@@ -63,6 +63,7 @@ import PlanNavigator from "../components/PlanNavigator.jsx";
 import Whiteboard from "../components/Whiteboard.jsx";
 import { addWhiteboardSowEntry, addWhiteboardSowPanel, addWhiteboardSowTitle, emptyWhiteboard, sanitizeWhiteboardFileHeaderColors, sanitizeWhiteboardSow, WHITEBOARD_FILE_LIMIT, whiteboardHasContent } from "../lib/whiteboard.js";
 import { conditionAutoNoteArrowEnabled, measurementCallout, measurementSowText, syncMeasurementCallouts, syncMeasurementSowBoard } from "../lib/measurementSow.js";
+import { filterVisibleConditionContent } from "../lib/conditionVisibility.js";
 import FenceCalculatorPanel from "../features/fenceCalculator/components/FenceCalculatorPanel.jsx";
 import ChainLinkFencePanel from "../components/ChainLinkFencePanel.jsx";
 import { calculateChainLinkFence, createChainLinkFence, insertFenceMarker, pathMetrics, pointAtPathT, projectPointToPath, removeFenceMarker, sanitizeChainLinkFences, updateFenceMarker } from "../lib/chainLinkFence.js";
@@ -1223,10 +1224,15 @@ export default function TakeoffCanvas() {
     const keys = new Set(sheetGroup.length ? sheetGroup : [sheetKey]);
     return shapes.filter((s) => keys.has(s.sheet_id));
   }, [shapes, sheetGroup, sheetKey]);
-  const visibleMarkups = useMemo(() => {
+  const conditionVisibleContent = useMemo(() => filterVisibleConditionContent({ conditions, shapes, markups, chainLinkFences }), [conditions, shapes, markups, chainLinkFences]);
+  const displayedShapes = useMemo(() => {
     const keys = new Set(sheetGroup.length ? sheetGroup : [sheetKey]);
-    return markups.filter((m) => keys.has(m.sheet_id));
-  }, [markups, sheetGroup, sheetKey]);
+    return conditionVisibleContent.shapes.filter((shape) => keys.has(shape.sheet_id));
+  }, [conditionVisibleContent, sheetGroup, sheetKey]);
+  const displayedMarkups = useMemo(() => {
+    const keys = new Set(sheetGroup.length ? sheetGroup : [sheetKey]);
+    return conditionVisibleContent.markups.filter((markup) => keys.has(markup.sheet_id));
+  }, [conditionVisibleContent, sheetGroup, sheetKey]);
   // scale is PER PAGE (plan sets are never one uniform scale) — set it once per
   // sheet and it's remembered. In group mode the scale dropdown and hints target
   // the FOCUSED panel (the one last clicked); single mode focuses the lone panel.
@@ -4057,7 +4063,7 @@ export default function TakeoffCanvas() {
   // newest first, non-highlight markup before a highlight at the same point.
   function markupAt(p, thr) {
     if (!showMarkups) return null;
-    const rev = [...visibleMarkups].reverse();
+    const rev = [...displayedMarkups].reverse();
     return rev.find((m) => m.type !== "highlight" && hitMarkup(m, p, thr))
       || rev.find((m) => m.type === "highlight" && hitMarkup(m, p, thr))
       || null;
@@ -4074,7 +4080,7 @@ export default function TakeoffCanvas() {
     // shaft itself still selects through hitMarkup; the arrowhead drag moves
     // only `target`, leaving the text box anchored in place.
     if (showMarkups) {
-      const leaderHit = [...visibleMarkups].reverse().find((markup) => {
+      const leaderHit = [...displayedMarkups].reverse().find((markup) => {
         if (markup.type !== "text" || !markup.target) return false;
         const sp = panelByKey(markup.sheet_id);
         if (!sp?.img.w) return false;
@@ -4173,7 +4179,7 @@ export default function TakeoffCanvas() {
       e.currentTarget.setPointerCapture(e.pointerId); return;
     }
     // 4. otherwise pick a shape (or clear the selection)
-    const hit = [...visibleShapes].reverse().find((s) => {
+    const hit = [...displayedShapes].reverse().find((s) => {
       const sp = panelByKey(s.sheet_id);
       return hitShapeC(s, p[0] - sp.xOffset, p[1], sp.img.w, sp.img.h, thr);
     });
@@ -4439,7 +4445,7 @@ export default function TakeoffCanvas() {
     if (panRef.current || dragRef.current || pendingClickRef.current || status !== "ready") { el.style.display = "none"; hoverIdRef.current = ""; return; }
     const pt = toImage(e.clientX, e.clientY);
     const thr = 8 / tfRef.current.scale;
-    const hit = [...visibleShapes].reverse().find((s) => {
+    const hit = [...displayedShapes].reverse().find((s) => {
       const sp = panelByKey(s.sheet_id);
       return hitShapeC(s, pt[0] - sp.xOffset, pt[1], sp.img.w, sp.img.h, thr);
     });
@@ -5408,8 +5414,8 @@ export default function TakeoffCanvas() {
       setCommitMsg(`Building ${sheet.label} PDF...`);
       const { bytes, filename } = await buildMarkedSetPdf({
         projectName, dark: darkMode, units, singleSheet: true, includeShapeLabels: false, sheets: [sheet],
-        shapes: shapes.filter((s) => s.sheet_id === sheet.key),
-        markups: markups.filter((m) => m.sheet_id === sheet.key), chainLinkFences: chainLinkFences.filter((fence) => fence.sheet_id === sheet.key), findHighlights, rfis, conditions,
+        shapes: conditionVisibleContent.shapes.filter((s) => s.sheet_id === sheet.key),
+        markups: conditionVisibleContent.markups.filter((m) => m.sheet_id === sheet.key), chainLinkFences: conditionVisibleContent.chainLinkFences.filter((fence) => fence.sheet_id === sheet.key), findHighlights, rfis, conditions,
         getPage: async (file, pageNum) => (await docFor(file)).getPage(pageNum),
         loadPdfData: (file) => store.loadPdfData(file),
         quality,
@@ -5436,8 +5442,8 @@ export default function TakeoffCanvas() {
       const findHighlights = findHighlightsForPageExport(findResults, sheet.key, true, activeFindPage?.key);
       const importOptions = {
         projectName, dark: false, units, singleSheet: true, includeShapeLabels: false, sheets: [sheet],
-        shapes: shapes.filter((shape) => shape.sheet_id === sheet.key),
-        markups: markups.filter((markup) => markup.sheet_id === sheet.key), chainLinkFences: chainLinkFences.filter((fence) => fence.sheet_id === sheet.key), findHighlights, rfis, conditions,
+        shapes: conditionVisibleContent.shapes.filter((shape) => shape.sheet_id === sheet.key),
+        markups: conditionVisibleContent.markups.filter((markup) => markup.sheet_id === sheet.key), chainLinkFences: conditionVisibleContent.chainLinkFences.filter((fence) => fence.sheet_id === sheet.key), findHighlights, rfis, conditions,
         getPage: async (sourceFile, pageNumber) => (await docFor(sourceFile)).getPage(pageNumber),
         loadPdfData: (sourceFile) => store.loadPdfData(sourceFile),
         quality: "hd",
@@ -5473,8 +5479,9 @@ export default function TakeoffCanvas() {
     setMarkedSetExportBusy(true);
     try {
       setCommitMsg("Building the marked set…");
-      const exportMarkups = includeMarkups ? markups : [];
-      const keys = [...new Set([...shapes.map((s) => s.sheet_id), ...exportMarkups.map((m) => m.sheet_id)])];
+      const exportShapes = conditionVisibleContent.shapes;
+      const exportMarkups = includeMarkups ? conditionVisibleContent.markups : [];
+      const keys = [...new Set([...exportShapes.map((s) => s.sheet_id), ...exportMarkups.map((m) => m.sheet_id)])];
       const sheetMeta = keys.map((key) => {
         const { file, page } = parseSheetKey(key);
         return { key, file, page, label: tabLabel(key) };
@@ -5484,7 +5491,7 @@ export default function TakeoffCanvas() {
       const brand = resolveBranding({ ...(await loadBrandingSelection(projectIdFromUrl())), profiles: loadProfiles().profiles });
       const { bytes, filename } = await buildMarkedSetPdf({
         projectName, clientInfo, company: brand.company, credit: brand.credit, coverTitle: brand.coverTitle,
-        dark: darkMode, units, sheets: sheetMeta, shapes, markups: exportMarkups, chainLinkFences, rfis, conditions,
+        dark: darkMode, units, sheets: sheetMeta, shapes: exportShapes, markups: exportMarkups, chainLinkFences: conditionVisibleContent.chainLinkFences, rfis, conditions,
         getPage: async (file, pageNum) => (await docFor(file)).getPage(pageNum),
         loadPdfData: (file) => store.loadPdfData(file),
       });
@@ -5567,7 +5574,7 @@ export default function TakeoffCanvas() {
     if (!showMarkups) return;
     const p = toImage(e.clientX, e.clientY);
     const thr = 8 / tfRef.current.scale;
-    const rev = [...visibleMarkups].reverse();
+    const rev = [...displayedMarkups].reverse();
     const m = rev.find((mm) => mm.type !== "highlight" && hitMarkup(mm, p, thr))
       || rev.find((mm) => mm.type === "highlight" && hitMarkup(mm, p, thr));
     if (!m) return;
@@ -5937,6 +5944,7 @@ export default function TakeoffCanvas() {
       multiplier: 1,        // ×N for identical repeated units (measure one, multiply)
       waste_pct: 0,         // flooring waste allowance (manual) — applied in the Report
       auto_note_arrow: true, // create a condition-colored note + leader for each new measurement
+      takeoff_visible: true, // presentation-only: hide/show this condition on plans and flattened outputs
       materials: [],        // supporting materials (adhesive, grout, …) with coverage rates
     };
     agentStateRef.current = { ...agentStateRef.current, conditions: [...cs, c] };
@@ -7153,7 +7161,7 @@ export default function TakeoffCanvas() {
   };
 
   const markupCount = markups.filter((m) => panelKeySet.has(m.sheet_id)).length;
-  const selShape = selectedId ? visibleShapes.find((s) => s.id === selectedId) : null;
+  const selShape = selectedId ? displayedShapes.find((s) => s.id === selectedId) : null;
   const setShapeHeight = (raw) => {
     const v = Math.max(0, parseFloat(raw) || 0);
     const next = shapes.map((s) => {
@@ -7530,6 +7538,19 @@ export default function TakeoffCanvas() {
     onActivate: activateCondition, onLocate: locateCondition,
     onOpenConditionPage: (_conditionId, key) => openSheets([key], false),
     onToggleAutoNoteArrow: (id, enabled) => updateCondById(id, { auto_note_arrow: enabled }),
+    onToggleTakeoffVisibility: (id, enabled) => {
+      updateCondById(id, { takeoff_visible: enabled });
+      if (!enabled) {
+        const selectedShape = shapes.find((shape) => shape.id === selectedId);
+        if (selectedShape?.condition_id === id) { setSelectedId(null); setSelVert(null); }
+        const selectedMarkup = markups.find((markup) => markup.id === selectedMarkupId);
+        const linkedShape = selectedMarkup?.measurement_shape_id ? shapes.find((shape) => shape.id === selectedMarkup.measurement_shape_id) : null;
+        if (linkedShape?.condition_id === id) setSelectedMarkupId(null);
+        const selectedFence = chainLinkFences.find((fence) => fence.id === selectedChainFenceId);
+        const fenceShape = selectedFence ? shapes.find((shape) => shape.id === selectedFence.shape_id) : null;
+        if (fenceShape?.condition_id === id) { setSelectedChainFenceId(null); setSelectedChainMarkerId(null); }
+      }
+    },
     onAddCondition: addCondition, onDeleteCondition: deleteCondition,
     onUpdateCond: updateCond, onSetCondParam: setCondParam, onAssignAttr: assignAttr,
     onAddMaterial: addMaterial, onUpdateMaterial: updateMaterial, onRemoveMaterial: removeMaterial,
@@ -7854,9 +7875,9 @@ export default function TakeoffCanvas() {
         }}
         buildPdf={(pages, settings, progress, cancelled) => buildPrintDocument(pages, settings, async (sheet, options) => {
           const result = await buildMarkedSetPdf({ projectName, dark: false, units, singleSheet: true, sheets: [sheet],
-            shapes: options.takeoffs ? shapes.filter((s) => s.sheet_id === sheet.key) : [],
-            markups: options.markups ? markups.filter((m) => m.sheet_id === sheet.key) : [],
-            chainLinkFences: options.takeoffs ? chainLinkFences.filter((f) => f.sheet_id === sheet.key) : [],
+            shapes: options.takeoffs ? conditionVisibleContent.shapes.filter((s) => s.sheet_id === sheet.key) : [],
+            markups: options.markups ? conditionVisibleContent.markups.filter((m) => m.sheet_id === sheet.key) : [],
+            chainLinkFences: options.takeoffs ? conditionVisibleContent.chainLinkFences.filter((f) => f.sheet_id === sheet.key) : [],
             rfis, conditions, includeShapeLabels: false, quality: options.quality,
             getPage: async (file, page) => (await docFor(file)).getPage(page), loadPdfData: (file) => store.loadPdfData(file),
           });
@@ -7866,9 +7887,9 @@ export default function TakeoffCanvas() {
         defaultQuality={pageExportQuality} busy={pageExportBusy}
         estimateFor={(quality) => {
           const dims = panelImgs[focusPanel.key] || { w: 1600, h: 1100 };
-          const vectorItems = shapes.filter((shape) => shape.sheet_id === focusPanel.key).length
-            + markups.filter((markup) => markup.sheet_id === focusPanel.key).length
-            + chainLinkFences.filter((fence) => fence.sheet_id === focusPanel.key).length;
+          const vectorItems = conditionVisibleContent.shapes.filter((shape) => shape.sheet_id === focusPanel.key).length
+            + conditionVisibleContent.markups.filter((markup) => markup.sheet_id === focusPanel.key).length
+            + conditionVisibleContent.chainLinkFences.filter((fence) => fence.sheet_id === focusPanel.key).length;
           return estimatePdfExportSize({ width: dims.w || 1600, height: dims.h || 1100, pages: 1, vectorItems }, quality);
         }}
         onExport={(quality) => { const saved = savePdfExportQuality(quality); setPageExportQuality(saved); downloadCurrentPage(saved); }}
@@ -8920,7 +8941,7 @@ export default function TakeoffCanvas() {
               </defs>
               {/* committed shapes + markups, one group per panel in its local frame */}
               {panels.map((p) => {
-                const pShapes = visibleShapes.filter((s) => s.sheet_id === p.key);
+                const pShapes = displayedShapes.filter((s) => s.sheet_id === p.key);
                 const dn = (vn) => vn.map(([x, y]) => [x * p.img.w, y * p.img.h]);
                 const label = labelFor(p);
                 return (
@@ -8977,7 +8998,7 @@ export default function TakeoffCanvas() {
                     {/* Chain-link post calculators are linked overlays, not measurements.
                         Squares are persisted corner/terminal markers; circles are
                         derived per section from calibrated path length. */}
-                    {chainLinkFences.filter((fence) => fence.sheet_id === p.key).map((fence) => {
+                    {conditionVisibleContent.chainLinkFences.filter((fence) => fence.sheet_id === p.key).map((fence) => {
                       const shape = pShapes.find((item) => item.id === fence.shape_id);
                       if (!shape) return null;
                       const calculation = calculateChainLinkFence(fence, chainShapePoints(shape, p), uppFor(p.key));
@@ -9050,7 +9071,7 @@ export default function TakeoffCanvas() {
                         (white outer ring + cobalt inner). Per-markup color drives the STROKE/
                         FILL (dark-boosted on the dark canvas); RFI linkage is an unconditional
                         ⬢/number badge, independent of the note text. Layer hides via showMarkups. */}
-                    {showMarkups && visibleMarkups.filter((m) => m.sheet_id === p.key)
+                    {showMarkups && displayedMarkups.filter((m) => m.sheet_id === p.key)
                       .slice().sort((a, b) => (a.type === "highlight" ? 0 : 1) - (b.type === "highlight" ? 0 : 1))
                       .map((m) => {
                       if (editor?.markupId === m.id) return null;

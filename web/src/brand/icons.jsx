@@ -12,6 +12,7 @@ export const icons = {
   camera: (s) => <I size={s}><path d="M3 7H7L9 4H15L17 7H21V20H3Z" /><circle cx="12" cy="13" r="4" /></I>,
   brush: (s) => <I size={s}><path d="M10 14 18 3a2 2 0 0 1 3 3L13 17Z" /><path d="M10 14c-3-1-5 1-5 4 0 2-2 3-3 3 4 1 9 0 10-3" /></I>,
   eye: (s) => <I size={s}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></I>,
+  eyeOff: (s) => <I size={s}><path d="M3 3 21 21" /><path d="M10.6 5.2C11.1 5.1 11.5 5 12 5c6.5 0 10 7 10 7a16.8 16.8 0 0 1-3 4.1M6.2 6.2C3.5 8.2 2 12 2 12s3.5 7 10 7c1.8 0 3.4-.5 4.7-1.2" /><path d="M9.9 9.9A3 3 0 0 0 14.1 14.1" /></I>,
   importWhiteboard: (s) => <I size={s}><path d="M4 4 H20 V20 H4 V15 M1 10 H14 M10 6 L14 10 L10 14" /></I>,
   userGuide: (s) => <I size={s}><circle cx="12" cy="12" r="9" /><circle cx="13" cy="7" r="1.1" fill="currentColor" stroke="none" /><path d="M10 11c1.8-1.4 3.5-1.5 3-.1l-2 6c-.5 1.5 1.2 1 2.6-.4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></I>,
   search: (s) => <I size={s}><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5 L21 21" /></I>,

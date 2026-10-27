@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — Per-condition takeoff visibility
+
+- Added an eye toggle to every Takeoffs condition row. Hidden conditions keep all measurements and totals but remove their plan graphics, linked automatic callouts, and linked chain-link post overlays from the live canvas, downloaded pages, printed plans, Marked Set PDFs, and Whiteboard page imports. Visibility persists with the project and defaults on for existing projects.
+
 ## Unreleased — Per-condition automatic callouts
 
 - Added an **Auto** callout toggle to every Takeoffs condition row. It defaults on and controls whether newly committed measurements for that condition create the automatic condition-colored text box and leader arrow. Turning it off leaves existing callouts intact and continues updating the combined Whiteboard SOW total. The choice persists with projects and reusable condition templates.

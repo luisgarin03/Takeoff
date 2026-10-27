@@ -467,7 +467,7 @@ function TakeoffsPanel({
   matLib, matLibById, linkedCountById,
   panelPrefs, onPanelPrefs, reassigning, epoch, clearSelectionRef,
   onActivate, onSetActive, onLocate, onOpenConditionPage,
-  onToggleAutoNoteArrow,
+  onToggleAutoNoteArrow, onToggleTakeoffVisibility,
   onAddCondition, onDeleteCondition, onUpdateCond, onSetCondParam, onAssignAttr,
   onAddMaterial, onUpdateMaterial, onRemoveMaterial,
   onBulkWaste, onBulkColor, onBulkDelete,
@@ -627,6 +627,7 @@ function TakeoffsPanel({
     const shapeCount = row?.shape_count || 0;
     const usedPages = conditionPagesById.get(c.id) || [];
     const autoNoteArrow = c.auto_note_arrow !== false;
+    const takeoffVisible = c.takeoff_visible !== false;
     const on = c.id === activeCond;
     const matOn = on && panelMatOpen;
     const checked = checkedConds.has(c.id);
@@ -661,6 +662,20 @@ function TakeoffsPanel({
             </div>}
           </div>
           <span style={{ fontFamily: "var(--f-mono,monospace)", fontSize: 10.5, color: "var(--ink-muted)", flexShrink: 0 }}>{shapeCount}▦</span>
+          <button type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleTakeoffVisibility(c.id, !takeoffVisible); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            draggable={false}
+            onDragStart={(e) => e.stopPropagation()}
+            aria-pressed={takeoffVisible}
+            aria-label={`${takeoffVisible ? "Hide" : "Show"} takeoff markup for ${c.finish_tag}`}
+            title={takeoffVisible
+              ? "Hide this condition's takeoff markup from the plan and PDF/Whiteboard exports"
+              : "Show this condition's takeoff markup on the plan and in PDF/Whiteboard exports"}
+            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 22, padding: 0, borderRadius: 0, border: `1px solid ${takeoffVisible ? "var(--cobalt)" : "var(--ink-faint)"}`, background: takeoffVisible ? "var(--tint-select)" : "transparent", color: takeoffVisible ? "var(--cobalt)" : "var(--ink-muted)", cursor: "pointer", lineHeight: 0 }}>
+            <Icon name={takeoffVisible ? "eye" : "eyeOff"} size={13} />
+          </button>
           <button type="button"
             onClick={(e) => { e.stopPropagation(); onToggleAutoNoteArrow(c.id, !autoNoteArrow); }}
             onPointerDown={(e) => e.stopPropagation()}
