@@ -45,17 +45,24 @@
   --grain-inverse-rgb: 255, 255, 255;
 
   /* frosted toolbar glass */
-  --glass-toolbar-primary: rgba(248, 250, 255, .58);
-  --glass-toolbar-secondary: rgba(255, 255, 255, .46);
-  --glass-toolbar-strip: rgba(255, 255, 255, .38);
+  --glass-toolbar-primary: rgba(248, 250, 255, .92);
+  --glass-toolbar-secondary: rgba(250, 252, 255, .88);
+  --glass-toolbar-strip: rgba(250, 252, 255, .84);
   --glass-toolbar-border: rgba(112, 124, 145, .34);
-  --glass-toolbar-highlight: rgba(255, 255, 255, .74);
-  --glass-toolbar-shadow: 0 14px 34px rgba(31, 42, 68, .12);
+  --glass-toolbar-highlight: rgba(255, 255, 255, .88);
+  --glass-toolbar-shadow: 0 14px 34px rgba(31, 42, 68, .16);
+  --glass-toolbar-blur: 42px;
+  --glass-toolbar-saturate: 1.28;
   --glass-control-bg: rgba(32, 34, 38, .86);
   --glass-control-bg-hover: rgba(21, 23, 27, .92);
   --glass-control-border: rgba(255, 255, 255, .20);
   --glass-control-text: #ffffff;
   --glass-control-muted: rgba(255, 255, 255, .70);
+  --glass-drawer-bg: rgba(250, 252, 255, .72);
+  --glass-drawer-header: rgba(248, 250, 255, .50);
+  --glass-drawer-border: rgba(112, 124, 145, .34);
+  --glass-drawer-highlight: rgba(255, 255, 255, .70);
+  --glass-drawer-shadow: 0 18px 42px rgba(31, 42, 68, .14);
 
   /* type */
   --f-display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
@@ -139,17 +146,24 @@
     --grain-rgb: 255, 255, 255;
     --grain-inverse-rgb: 0, 0, 0;
 
-    --glass-toolbar-primary: rgba(31, 33, 35, .54);
-    --glass-toolbar-secondary: rgba(25, 27, 29, .48);
-    --glass-toolbar-strip: rgba(25, 27, 29, .40);
+    --glass-toolbar-primary: rgba(31, 33, 35, .82);
+    --glass-toolbar-secondary: rgba(30, 31, 33, .76);
+    --glass-toolbar-strip: rgba(31, 32, 34, .72);
     --glass-toolbar-border: rgba(255, 255, 255, .18);
     --glass-toolbar-highlight: rgba(255, 255, 255, .18);
     --glass-toolbar-shadow: 0 16px 44px rgba(0, 0, 0, .34);
+    --glass-toolbar-blur: 42px;
+    --glass-toolbar-saturate: 1.32;
     --glass-control-bg: rgba(28, 29, 31, .92);
     --glass-control-bg-hover: rgba(42, 44, 47, .96);
     --glass-control-border: rgba(255, 255, 255, .18);
     --glass-control-text: #ffffff;
     --glass-control-muted: rgba(255, 255, 255, .68);
+    --glass-drawer-bg: rgba(27, 28, 30, .74);
+    --glass-drawer-header: rgba(34, 36, 39, .70);
+    --glass-drawer-border: rgba(255, 255, 255, .18);
+    --glass-drawer-highlight: rgba(255, 255, 255, .14);
+    --glass-drawer-shadow: 0 18px 46px rgba(0, 0, 0, .34);
   }
 }
 
@@ -216,3 +230,15 @@
 
 /* dot leader (between mono labels) */
 .dot-leader { flex: 1; border-bottom: 1px dotted var(--ink-faint); margin: 0 8px; align-self: end; height: .8em; }
+
+/* Custom accents affect screen chrome only; plan colors and print stay intact. */
+@media screen {
+  :root[data-custom-accent] {
+    --cobalt: var(--custom-accent);
+    --cobalt-deep: color-mix(in srgb, var(--custom-accent) 88%, var(--custom-accent-contrast));
+    --accent-contrast: var(--custom-accent-contrast);
+    --tint-select: color-mix(in srgb, var(--custom-accent) 15%, var(--paper-bright));
+    --ring: 0 0 0 3px color-mix(in srgb, var(--custom-accent) 32%, transparent);
+    accent-color: var(--custom-accent);
+  }
+}

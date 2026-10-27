@@ -1,3 +1,4 @@
+import { APP_NAME } from "../brand/appName.js";
 // Per-shape detail export — MEASURED quantities only: no condition multiplier,
 // no waste (those are condition-level report adjustments; see totals.js).
 // Deduct rows carry NEGATIVE area SF so a column sum reconciles with the
@@ -42,7 +43,7 @@ export function shapesDetail(conditions, shapes, sheetLabel) {
   });
 }
 
-export function shapesToCsv(rows, projectName = "", brandName = "OpenTakeoff") {
+export function shapesToCsv(rows, projectName = "", brandName = APP_NAME) {
   const header = ["Shape", "Sheet", "Sheet ID", "Finish", "Role", "Area SF", "LF", "EA", "Height ft", "Height override", "Origin"];
   const lines = [
     "# Per-shape measured quantities — no multiplier or waste; deducts negative; LF on floor/deduct/surface rows is trace reference only (incl. openings) — linear rows alone sum to condition LF",

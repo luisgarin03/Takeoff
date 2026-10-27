@@ -50,3 +50,5 @@ output/
 web/android/.gradle/
 web/android/app/build/
 web/android/build/
+
+/tmp/pdfs/

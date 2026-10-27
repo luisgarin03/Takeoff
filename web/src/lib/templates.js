@@ -28,9 +28,10 @@ export function sanitizeTemplates(raw) {
     .filter((t) => isPlainObject(t) && typeof t.finish_tag === "string" && t.finish_tag.trim())
     .map((t) => {
       const out = { ...t, materials: (Array.isArray(t.materials) ? t.materials : []).filter(isPlainObject) };
-      for (const k of ["color", "fill", "hatch"]) {
+      for (const k of ["color", "fill", "hatch", "line_marker"]) {
         if (k in out && typeof out[k] !== "string") delete out[k];
       }
+      if ("line_marker" in out && !["none", "circle", "x"].includes(out.line_marker)) delete out.line_marker;
       return out;
     });
 }

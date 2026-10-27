@@ -1,6 +1,259 @@
 # Changelog
 
+## Unreleased — Visible scale requirement
+
+- Replaced the small bottom status warning for unscaled measurement attempts with a centered **Set the scale first** dialog shown on the first canvas click. The dialog reuses the detected/standard scale dropdown, offers two-point calibration, explains how to verify against a printed plan dimension, and can be dismissed with **Not now**; Count and markup tools remain scale-independent.
+
+## Unreleased — Deferred project save
+
+- Added **Save later** to the post-import project-save prompt, allowing plans added from Project Data to remain in browser recovery storage while the user continues working without choosing a portable `.otk` destination immediately.
+
+## Unreleased — Google Calendar event colors
+
+- Preserved each Google event's background and foreground assignment in the calendar grid, including per-event overrides; matched the built-in Eucalyptus and Banana presentation colors to Google Calendar's month view; and synchronized the event-detail indicator and Google calendar list marker.
+- Replaced the browser-styled Google event color dropdown with a visible, accessible swatch palette. Color choices and Calendar default now persist through Google Calendar's event API, with a built-in fallback palette while provider colors load.
+
+## Unreleased — Condition page navigation
+
+- Added a page-pin dropdown to every Takeoffs condition row. It deduplicates and lists all named pages containing that condition in loaded PDF/page order, opens a selected page directly, and remains disabled when the condition has not been used.
+
+## Unreleased — Freehand Draw markup
+
+- Added an opaque **Draw** tool to the Takeoff Markup menu with an expandable color-and-brush widget directly beneath the Draw row, the shared ten-color palette, and a remembered 1–24 px brush-size control with live size preview. The dropdown widens only while that widget is expanded so all ten swatches remain visible. Draw strokes use the existing low-latency freehand capture path, remain sheet-relative, select and move as markup objects, share Undo/Redo and project persistence, and render in downloaded pages, Marked Set PDFs, and Whiteboard imports.
+- Extended the bottom-left Draw dropdown 40 pixels to the right and made it fill the available height beneath the top toolbar, while preserving internal scrolling and the compact sizing of neighboring rail menus.
+
+## Unreleased — Takeoff text-note controls
+
+- Kept the Text-note leader-arrow button and selected-arrow remove control proportional to their text box while zooming, so the controls no longer overwhelm a small note at overview zoom. Note geometry, export, and undo behavior are unchanged.
+
+## Unreleased — Whiteboard toolbar frame
+
+- Matched the Whiteboard top toolbar shell to the estimating toolbar with a compact 58px desktop height, a subtle workspace-colored border, and no dark outline, while leaving every toolbar control unchanged.
+- Unified the Whiteboard PDF detail, item count, save-state, and zoom labels with the Takeoff header's 11px semibold monospaced status treatment.
+- Replaced the selected-object × in the Whiteboard toolbar with a red **Remove** button positioned at the top-right of the selected file, note, arrow, or rectangle. The button keeps a fixed readable screen size as the board zoom changes. Removal retains the existing read-only guard, keyboard shortcut, save path, and undo/redo behavior.
+- Kept the Whiteboard PDF export cancel label white against its dark progress background in the light theme, including Chrome's text-fill styling.
+
+## Unreleased — Sample plan loading
+
+- Wait for sample PDF import to finish and always release the loading button on success, blocked imports, or errors. Show actionable download/import errors and bound sample downloads to 30 seconds.
+
+## Unreleased — Calendar return and Pro test access
+
+- Calendar authorization returns to Calendar instead of opening subscription/account screens, retains the project, and strips old checkout parameters. Fixed development remount handling of the reopen flag. Active Stripe sandbox subscriptions are recognized for local development testing without granting production licenses.
+
+## Unreleased — Stripe sandbox subscriptions
+
+- Added authenticated test-only Stripe Checkout for Estimating Pro monthly ($40) and yearly ($400), server-verified subscriptions, signed webhooks, customer portal, and sandbox status labels.
+
+## Unreleased — Calendar-only authorization
+
+- Calendar connection requests only Calendar read permissions, removes Drive settings from the Calendar panel, and disconnects Calendar without revoking existing Drive access. Fixed browser preflight headers required by the Supabase client.
+
+## Unreleased — Google Calendar connection recovery
+
+- Granted the server function the missing permission to save Google connection metadata, retained browser read-only access, and added specific Calendar authorization/service errors.
+
+## Unreleased — Bid details in calendar
+
+- Added a tall scrolling bid card with project, client/GC, contact, due time, amount, folder, document and invitation links, location, and meeting notes. Bid details can be edited with project/event editing access and persist in project metadata or the event description.
+
+## Unreleased — Calendar event cards
+
+- Clicking an event opens a scrollable detail card with dates, location, notes, safe links, attachments, and permitted edit/delete actions. Project deadlines open their project from the card; Google events remain read-only.
+
+## Unreleased — Calendar dark appearance
+
+- Styled the calendar with charcoal chrome, a near-black grid, subtle dividers, readable controls, and blue today markers in dark mode.
+
+## Unreleased — Consistent text fields
+
+- Unified text and number inputs and text areas with the project-name field style: thin gray borders, rounded corners, consistent padding, and visible keyboard focus, with light and dark editing surfaces matching the app theme.
+
+## Unreleased — Unified save settings
+
+- Replaced the project dropdown save actions with one **Save..** entry and removed Cloud projects. Added a centered settings panel with explained full/marked-pages-only options, editable filename, Save as, and dated backups that preserve the active file destination.
+
+## Unreleased — Print plans
+
+- Added Project > Print with individual page selection, PDF preview, quality, paper, layout, margins, grayscale, and independent markup/takeoff controls. Printer, copies, and duplex are selected in the browser print dialog.
+
+## Unreleased — toolbar and Profile
+
+- Restored the current-page highlight in the nested PDF page selector after the shared workspace dropdown theme had overridden ToolMenu's active background and border. Active rows now expose `aria-current` and retain a theme-aware accent in both light and dark modes.
+- Required a save destination after the first plan import into a named local project, then immediately writes the complete `.otk`. Fast browser recovery still saves about a second after edits, while retained writable project files now receive coalesced background updates after 30 quiet seconds or at least every two minutes during continuous work; archive generation waits for idle time and never opens a background permission prompt.
+- Reworked the current-sheet selector into collapsible PDF sets with pages nested directly under their source file. The active PDF expands automatically, other sets load their page count only when opened, favorites remain first, and collapsed files do not mount thousands of hidden page rows.
+- Added markup operations to the shared chronological Undo/Redo history, including creation, deletion, movement, text/style edits, and text-leader placement, repointing, or removal. A selected text leader now shows a blue endpoint handle that can be dragged independently of its text box, while clicking the shaft still selects the note. A red × beside the selected arrow tip and a matching Markups-panel action remove only the leader; Undo restores it.
+- Added a leader-arrow control to every canvas Text note. Arm it from the text box or its Markups row, then click the plan point the note should identify; Escape cancels targeting. The leader stays attached while the text box moves and is included in marked-page PDFs and Whiteboard imports.
+- Linked canvas markup selection to the Markups panel. Selecting a note, callout, cloud, arrow, highlight, highlighter stroke, or stamp now highlights and scrolls its panel row into view; clicking a row selects the canvas markup so its existing text, color, style, weight, and RFI controls are immediately available.
+- Replaced the five generic fresh-workspace conditions with three fence defaults: **Chain Link Fence**, **Wood Fence**, and **Aluminum Fence**. Existing projects and reusable condition libraries are not migrated or overwritten.
+- Made the live Takeoff summary's left accent follow the selected condition's line color, updating immediately when the active condition or its color changes.
+- Added **Download JSON File** directly below the Find summary. It exports the complete latest completed search from cached results with schema `1.1`, independent page/PDF rankings, zero-match searched PDFs, per-keyword totals, exact matched text and bounded context, available normalized coordinates/page metadata, navigation references, and deterministic construction categories. Rank, one-match filtering, and highlight visibility do not alter the export, and no PDF is rescanned.
+- Simplified the top toolbar with a blueprint project selector, User Guide beside the profile, and closed-by-default Sheets/Takeoff tabs. The live zoom percentage now sits immediately left of User Guide instead of inside the Takeoff summary. Renamed the gallery button to Loaded files.
+- Added a **Rank** control beside Find's Matching pages heading. It toggles the result list between normal plan order and highest-to-lowest per-page match count, with stable ordering when pages have equal totals.
+- Added **Hide 1 match pages** to filter low-signal one-match pages out of Find's list and navigation without deleting their highlights. Find now requires whole-word boundaries, preventing terms such as **gate** from being counted inside **aggregate** or **gated**.
+- Pages containing saved markups now receive an automatic blue pencil bookmark in sheet tabs and page menus. These pages join the Bookmarked group without changing manual star data; deleting the final markup removes the pencil and reveals any underlying manual star.
+- Added collapsed-by-default PDF sets, explicit red removal buttons with page counts, and affected-page hover previews. Simplified gallery controls.
+- Made Find matching-page results grow with the panel and added illustrated control help.
+
+- Removed the Find panel's 760px height cap and expanded its Help tab with explanations for every control.
+
+- Fixed Count PDF overlays so exported page PDFs, Marked Sets, and Whiteboard imports retain the same condition-colored square with a white outline shown on the Takeoff canvas instead of changing Count marks into circles.
+
+- Raised takeoff markups above the selectable PDF text layer visually and in hit-testing. In Select mode, an overlapping note, callout, cloud, arrow, or highlight now receives the click/double-click first, while unobstructed PDF text remains selectable and copyable.
+
+- Added a per-condition **No mark / Circle / X** marker selector for Linear takeoffs. **No mark** is the default, preserving existing plain-line conditions; optional screen-constant markers repeat along straight and curved runs, carry into flattened page/Marked Set/Whiteboard-import PDFs, and remain strictly visual so measurement geometry and LF totals are unchanged.
+
+- Added owner-controlled application updates. Signed Windows installers now use a fixed GitHub Release feed, check on launch and every four hours, expose manual check/download controls in Profile, show download progress, and install only after the user confirms a restart. A tag-gated GitHub Actions workflow requires matching versions and Windows signing secrets before publishing the NSIS installer, differential block map, and update metadata. iOS remains on Apple's approved App Store update path.
+
+- Added launch-ready Supabase/RevenueCat subscription infrastructure: server-owned per-user license records with read-own RLS, verified billing webhooks, authenticated entitlement refresh, Apple-native purchase/restore support, identified hosted checkout for Windows/web, and an opt-in sign-in/license gate that stays disabled until production configuration is complete. Production gating rejects sandbox transactions by default while preserving paid access through a recorded billing-grace period. Editing now additionally requires internet and a short server-owned one-computer lease; offline, unsubscribed, and second-computer sessions open read-only while retaining viewing and export. A persistence-level write guard backs up the disabled editing UI. Added the Capacitor iOS project, iOS sync/open scripts, Windows code-signing configuration, focused license tests, and a full release/setup checklist. No payment, Supabase, Apple, or signing secrets are committed.
+
+- Added a hidden floating **Experimental tools** panel for deployment-facing cleanup. Three quick clicks or taps on the visually unchanged Beitzell Estimating logo toggle the panel. Report, Zone, AI, Revisions, Render settings, and the Command line retain their existing behavior there, while their former Takeoff-toolbar and canvas-rail positions close up naturally on desktop and mobile.
+
+- Group estimating controls into Project, Sheets and Takeoff tabs, keeping logo/account outside.
+- Preserve mounted control state and use scroll-safe dropdowns on mobile.
+- Restyle Profile with account cards and configurable $40/$50/$60 subscription plans.
+- Connect the billing adapter to RevenueCat and Supabase while retaining safe unconfigured behavior.
+
 All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
+
+## Unreleased
+
+- Added exact page selection to Whiteboard's **PDF Export Pages** manager. **Select Content to Export** opens the manager; **Add Area** still creates a freeform crop, while **Select Pages** lets a user click any PDF or image card to add its exact content bounds and current PDF page. Linked entries follow moved cards, preserve separately selected pages from the same multipage PDF, avoid duplicates, persist with the project, and are removed with their source card. Closing the manager now hides every export outline and page label without deleting the saved selections, and its redundant “Whiteboard PDF” eyebrow was removed.
+- Replaced the Whiteboard SOW panel's cropped legacy worksheet banner with the standalone Beitzell Fence Company logo. The default logo and editable takeoff title now use centered, matching horizontal insets in both the live panel and PDF exports.
+- Fixed Whiteboard SOW line-item color palettes being clipped by the bottom of their panel. The full preset palette and custom-color control can now extend beyond the panel boundary while the panel retains its rounded header.
+
+- Added persistent custom multipage Whiteboard PDF export. **Select Content to Export** creates any number of numbered, overlapping world-coordinate rectangles with move/resize handles; the **PDF Export Pages** manager supports rename, locate, reorder, duplicate, delete, per-page orientation, paper size, Standard/High/Maximum quality, preview, confirmed Clear All, and one-file export. Area geometry and settings save with local/cloud/`.otk` projects and participate in undo/redo. Exports clip every page exactly, omit all selection UI, preserve aspect ratio, render regions sequentially with progress/cancellation, retain per-source raster safeguards, and avoid the legacy 64-megapixel combined-board limit by processing each selected page independently.
+
+- Made pages sent through **Import to Whiteboard** open at a full plan-scale board size and automatically fit the newly selected page to the Whiteboard viewport. Existing distant notes/SOW panels no longer shrink a new import into the whole-board overview, and the larger saved page footprint provides more usable detail before the 400% zoom ceiling.
+
+- Fixed **Import to Whiteboard** text-note orientation on rotated PDF pages. Preserved vector pages now compensate markup text for the source page's 90°, 180°, or 270° PDF rotation while retaining the correct note position and horizontal note box.
+
+- Moved the live condition/measurement summary from its floating top-right canvas overlay into the **Takeoff** toolbar tab. Scale prompts, drawing guidance, condition totals, shape count, zoom, One-Click status, and per-wall height editing remain available without covering the plan and now wrap with the toolbar on narrow screens.
+
+- Fixed PDF export quality for construction drawings: **Import to Whiteboard** now preserves the original current PDF page as vector content and adds measurements/markups over it, eliminating the former Balanced-JPEG pass before HD export. Protected or unusually large pages fall back to the maximum safe HD raster. Compact and Balanced retain substantially clearer small text, while HD automatically fits oversized sheets to the safe 16-megapixel raster ceiling instead of failing because of rounded pixels or an enlarged Whiteboard card. Whiteboard now budgets the renderer's actual flattened pixels rather than its editor display size.
+
+- Moved **Open ChatGPT ↗** and **Project Assistant** from the always-visible workspace overlay into the canvas **AI** Agent drawer. Opening Project Assistant closes that drawer before showing the resizable assistant, leaving the plan workspace unobstructed.
+- Added a shared PDF quality chooser to **Project > Download this page** and every Whiteboard PDF export. Compact, Balanced, and HD show estimated output-size ranges before rendering, remember the latest choice, and report the actual completed size. Balanced/HD raise the flattened-plan raster budget for small construction callouts while the distribution PDF still drops source OCR/text, fonts, forms, annotation data, metadata, and complex resources. OpenTakeoff vector annotations stay sharp and lightweight; Whiteboard notes and SOW panels re-render at the chosen quality.
+
+- Added separate ChatGPT choices without removing either workflow: **Open ChatGPT ↗** launches the regular `chatgpt.com` website in a new tab using the user's existing account, while **Project Assistant** retains the optional API-powered, resizable/dockable cross-workspace assistant. The direct ChatGPT link is also available from the assistant header. The project assistant's streamlined interface includes a normal message composer, prompt suggestions, New chat, collapsible Project context, compact conversation options, and assistant/user conversation styling. OpenAI credentials and model selection remain server-only; requests are size/rate/time limited, streamed, cancellable, and use `store: false`. Estimators explicitly choose page/project context and metadata sharing. A strict local tool registry grounds answers in bounded PDF text, existing Find/OCR keyword marks, authoritative takeoff/report totals, scales, SOW, whiteboard, calculators, RFIs, compact-project status, and revision summaries. Citations navigate back into OpenTakeoff. Supported bookmarks, metadata, SOW rows, and RFI drafts require approval, reject stale project state, and expose immediate Undo. Chat persistence is bounded, optional, additive, and key-free; unconfigured deployments continue normally.
+
+- Added **Save project with marked pages only** for projects that exceed the 512 MB portable limit. Compact `.otk` files retain full-quality measured, marked, page-bookmarked, and revision-referenced PDF pages; omitted content becomes lightweight page-number-preserving placeholders. Reopened compact projects explain the limitation and provide **Import missing files** for a folder, original PDFs, or ZIP. Restoration requires exact filename, byte-size, and SHA-256 matches, supports partial recovery, updates revision metadata, and never attaches measurements to a different plan revision.
+
+- Enabled explicit English spelling, grammar, and autocorrect assistance in Whiteboard SOW title and line-item editors, with browser correction suggestions available from underlined text.
+
+- Added an independent Chain-Link Fence Post Calculator linked to completed Linear takeoffs. Square terminal/corner markers snap and drag along cumulative polyline distance; circular line posts are derived per section using `ceil(length / maximum spacing) - 1`, with a 10 ft default, metric display, closed-loop handling, visibility/size controls, dedicated undo/redo, project and `.otk` persistence, Report quantities, and exported PDF overlays. Existing linear geometry and totals remain unchanged.
+
+- Added independent file favorites to the Sheets selector. Every loaded PDF now has its own star, favorite files group ahead of the remaining files without changing source order, and file favorites persist separately from page bookmarks through autosave, revisions, cloud/local storage, and portable `.otk` projects.
+
+- Connected completed takeoff measurements to the Whiteboard SOW workflow. The first SOW panel now keeps one `[combined measurement] - condition name` line per condition instead of one row per measured segment. Precise LF values are summed before the final condition total rounds upward once; adding, editing, reassigning, or deleting measurements updates or removes that live total. Each segment retains its own persistent matching plan callout, whose condition-colored box and arrow point back to its measured geometry. Compound undo/redo restores the linked total and callouts, while manual and manually duplicated SOW rows remain independent. New automation still runs only at the completed-measurement commit, so condition setup, previews, copy/paste, hydration, and undo/redo do not create duplicates.
+
+- Reduced exported PDF weight by flattening source plan/PDF pages into bounded JPEG images and re-encoding/downsampling Whiteboard image attachments when useful. Source OCR/search text, hidden text, embedded fonts, metadata, and complex page resources are left behind, while visible takeoff geometry, notes, SOW content, highlights, and markups remain export overlays.
+
+- Fixed slow plan imports introduced by compatibility checking. Fast auto-detect now applies consistently to local drops, Google Drive selections, portable projects, saved-plan first use, and newly imported plans; it checks only the first page before opening and defers later-page rendering until navigation. Local and cloud imports also reuse the bytes already read for validation instead of reading large files twice. Explicit **Verify every page** behavior is unchanged, and OCR remains Find-only.
+
+- Mapped the keyboard Left/Right Arrow keys to the Sheets toolbar's previous/next page controls. Navigation stays within the active PDF and is suppressed while typing, using menus or dialogs, editing an unfinished canvas interaction, or displaying sheets side by side.
+
+- Added **Import to Whiteboard** to the Sheets toolbar. It creates a crisp one-page PDF from the currently focused page, including measured takeoff lines, saved markups/notes, and visible Find highlights, then opens that marked page through the normal Whiteboard attachment workflow. Automatic colored condition and quantity labels are omitted to avoid duplicating manually added notes.
+
+- Reduced the default SOW worksheet width so it is proportionate to Whiteboard plan cards and lowered its minimum resize width. Its typography, line-item rows, padding, and branding header now use compact plan-scale dimensions on the board, with matching measurements in PDF exports, so a SOW does not visually overpower an adjacent construction sheet. Replaced its fixed combined branding banner with one framed header section containing a replaceable logo and persisted editable takeoff-title field; the divider makes the logo area independently resizable. The fixed “Project Estimating Worksheet” subtitle is removed, the **SOW** section heading is now editable, and screen plus PDF exports share the same layout. Split the SOW add action into **+ Line Item** and **+ Title**. Titles are bold black text without color controls and remain editable, reorderable, duplicable, persistent, and exportable alongside color-coded line items. Every title and line item now has an **AA** action to convert its text to uppercase through the normal undo/save path. Whiteboards can now hold multiple simultaneously visible SOW panels: add a blank panel from the toolbar, rename it in place, duplicate it as an independent offset copy, or delete it without reusing the same worksheet for another scope. Legacy scope tabs migrate into separate panels, and all panels participate in undo/redo, local/cloud/`.otk` persistence, and every Whiteboard PDF export mode.
+
+- Saved plan projects now open with Fast auto-detect by default instead of rendering every page during every initialization. Successful compatibility checks are cached with a lightweight file signature and reused until the PDF changes; **Project > PDF opening & OCR** can restore strict every-page verification. Find OCR now has independent Automatic, Ask first, and Off preferences, with Ask first applying once to each search job.
+
+- PDF compatibility checks no longer reject an entire plan set because one page cannot be painted by PDF.js. OpenTakeoff keeps any document with at least one renderable page available so readable pages can open and Find can continue extracting searchable text; wholly unreadable, invalid, password-protected, and unsupported-protection files remain blocked.
+- Find now falls back to bundled, local browser OCR when a PDF page has no usable selectable text. Scanned plans can be searched and highlighted without an external OCR service, while normal text PDFs retain the faster text-layer path.
+- Moved the two-point calibration instructions and real-length input into the **Takeoff** toolbar tab so the expanded top toolbar can no longer cover the feet/meters field.
+
+- Added branded, movable and width-resizable Scope of Work panels as true Whiteboard objects. New projects receive one empty **Scope 1** panel; users can add, rename, duplicate, move, resize, and safely delete independent panels, plus add, edit, duplicate, delete, recolor, and reorder fully wrapped entries inside each one. Scope copy wraps only between complete words both on the board and in PDF exports. Panels use the full ten-color Whiteboard palette, follow pan/zoom, participate in undo/redo and all existing project save paths, and appear together in full, paginated, and selected-area PDF exports at their saved board positions and widths. Resize handles, editor-only footer controls, counts, and add buttons stay out of exported PDFs.
+
+- Added **Export whiteboard as pages** beside the existing single-page action. It creates a multi-page Letter-landscape PDF for easier sharing and printing while preserving the Whiteboard's canonical arrangement, attachment crops, notes, arrows, and rectangles.
+
+- Whiteboard full-page and selected-area PDF exports now share the exact logical attachment geometry used by the live board. PDF detail changes sharpness without moving content, fractional image crops retain their unrounded layout size, mobile file controls no longer change the exportable preview box, and drawing bounds retain complete arrowheads and outline strokes at page/selection edges.
+
+- Fixed one-page and marked-set PDF annotations that exported as tiny, unwrapped single rows. Captions now use one bounded multi-line paper-backed box at 12 pt, retain every word across rotated/cropped pages, and use the same sheet-relative layout, stroke widths, and arrowheads on the estimating canvas so zoom accurately previews the download.
+
+- Added a shared white four-bar loading indicator for longer plan loads and renders, Find scans, exports, and project saves.
+
+- Reworked PDF Find into a persistent, movable, non-modal panel. Searches now start only after a scope button is pressed, results are grouped into a clickable page list with per-page keywords and counts, and the arrow controls move between matching pages while pan, zoom, and drawing tools remain usable. Added **Find in all plans**, **Find in this PDF set** for every page in the focused PDF, and **Find in this page** for the focused sheet. Every completed run is an additive, deduplicated Search marks job with independent visibility, removal, and highlight-color controls, plus Unmark/Mark all pages and Remove all actions.
+
+- Made the Find panel resizable, moved its long usage guidance into a dedicated **Help** tab, and removed the nested scrollbar from Search-mark color rows so completed searches display in full.
+
+- **Download this page** now includes the current page's visible Find-job keyword highlights in each job's selected color; the source PDF and saved project remain unchanged.
+
+- Added a native Fence Material Calculator with seven extensible, rule-driven calculators; matching isometric fence previews with live quantity context; scoped shadcn/ui components; instant validation and order rounding; user presets/favorites; active-takeoff LF/EA import; project, cloud, and `.otk` persistence; and conversion of selected results into the existing Supporting Materials estimate lines.
+
+- Simplified the empty landing page to its background and centered card. Added Open Recent shortcuts with saved author and last-modified details.
+
+- Canvas tool icons no longer appear over the landing page or plan gallery on small screens; they render only while viewing a loaded plan.
+
+- Hid project sharing controls, invitation inbox/badges, and in-app sharing instructions behind a disabled UI flag. Sharing implementation and stored data are retained.
+
+- Improved responsive layout: capped the phone toolbar height to leave canvas space, normalized control sizing, expanded Cloud and User Guide to the viewport, and stacked cloud file details on phones.
+
+- Added direct Google Drive project sharing with Google Picker, email notifications for new read permissions, a private in-app invitation inbox and Cloud badge, selective download/import, and automatic opening of the imported `.otk`. Files remain in the sender's Drive; no intermediate file-storage bucket is used. Requires the invitation migration and updated Drive function/Picker configuration.
+
+- Moved open-sheet tabs beside Report and Schedule into the Draw menu’s Measure section.
+
+- Added Blueprint, Forest, Graphite, and Classic Paper report themes, retaining custom JSON import and Reset.
+
+- The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated Estimating by Luis Garin wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
+- Theme palette control now opens logo color, effect, brightness, and speed settings, applied live to the real logo and saved locally.
+
+- Cursor theme offers Default (original grayscale), Red, Blue, Pink, Orange, Purple, Green, and Yellow. It changes immediately and saves in this browser independently of logo colors; Reset logo keeps the cursor choice. Drawing, text, pan, and resize retain their cursor roles. Busy cursors use the included static fallbacks.
+
+- Reorganized the in-app manual into 16 clickable topics with formatted instructions, relevant button references, and existing app screenshots and animation.
+
+- Added Project → Open Recent and a centered User Guide with internal scrolling and app icon/button references.
+
+- **Download this page** now keeps takeoff linework, notes, and markups while omitting automatic condition titles and SF/LF quantity labels. The full Marked Set export still includes those measurement labels.
+- Exported markup captions now use a tightly fitted translucent paper background with a colored border, keeping notes and callouts readable over dense plan linework without an offset-looking box.
+- On-canvas note and callout backgrounds use the browser's measured Inter glyph width plus even horizontal breathing room on both sides of captions.
+
+### Added
+- Whiteboard arrows are now normal selectable objects: a zoom-independent hit area covers the shaft and arrowhead, selected endpoints can be adjusted, whole arrows can be moved or deleted, and every edit participates in the existing undo/redo and save paths.
+- Added a Whiteboard rectangle tool with a transparent colored outline, live drag preview in every direction, shared selection/move/delete behavior, edge/corner resize handles, persistence, and full/selected-area PDF export.
+- Added non-destructive crop editing for pasted and imported Whiteboard images. Eight edge/corner handles, an outside-area mask, Apply/Cancel, re-cropping, undo/redo, backward-compatible crop metadata, and PDF export preserve the original embedded image while showing only the committed crop.
+- Custom browser-local Ctrl+key shortcuts for every markup tool. Assign from **Draw > Markup**, see the active binding in the menu, and clear or remap it without changing project save files.
+- Whiteboard export can now download the full board with the renamed **Export whiteboard as PDF** action or a user-drawn rectangular area. Cropped exports use the selected rectangle as page bounds and clip notes, file content and arrows without changing project save data.
+- Colored arrow markup in both whiteboard and plan drawing: drag over whiteboard references with the selected palette color, or click two points using **Draw > Markup > Arrow** on a sheet. Whiteboard arrows persist compatibly in the existing optional project data and are included in PDF exports.
+- Whiteboard arrows now layer above PDF/image cards. Whiteboard PDF exports include note titles, selected header colors and swatches, and the existing colored note body/text instead of exporting only the note-colored rectangle.
+- Per-item whiteboard header colors: choose a palette color from each file or note header. Note titles are editable inline; note-body colors remain independent. Header colors and titles persist in local, portable, and cloud project data; older projects retain their original appearance.
+- Project-aware Save and Drive organization: named `.otk` suggestions, one-click updates through retained browser file handles, explicit Save As, and stable-ID Google Drive folders named after the project with a portable archive plus on-demand `PDFs/` and `Assets/` subfolders. Cloud success now waits for every required upload.
+- Project metadata management in the existing Project menu: required name, optional submission date, Ongoing/Needs revision/Done status, ISO creation and persisted-modification timestamps, `.otk` and cloud round-tripping, and backward-compatible defaults for older projects.
+
+### Changed
+- Condition-name fields now grow with longer names, and measurement hover cards wrap long condition titles/details into a compact box. Canvas Text notes support explicit and automatic line wrapping; Enter inserts a line break and Ctrl+Enter places the note.
+- Enlarged the canvas Text note editor into a resizable multiline box for longer annotations, edit existing notes directly in place without a detached second field, and keep the editor inside the visible plan area when opened near an edge.
+- Whiteboard PDF previews now support selectable 1×–3× render detail and an explicit refresh action. Rendered canvases are capped at 8 megapixels per page to balance clarity and browser memory.
+- Local Save handles are now scoped to the project that selected them. Creating or opening another project clears the old association, so its first **Save project** opens a new named destination instead of overwriting the previous project's `.otk` file.
+- Whiteboard zoom now reaches 400% using the zoom controls, mouse wheel, or pinch gesture.
+- Drive downloads now reject malformed metadata with an actionable integrity error and recheck cancellation/account identity after the final IndexedDB write. Three new regression tests pass; local verification retains the same 14 pre-existing branding failures.
+- Completed another local Drive review: validate null begin replies, retain gateway error classifications, and recheck cancellation/account identity after response-body reads. Four new regression tests pass; the setup guide now requires a dedicated Google Cloud project for independent Drive revocation and records the latest staging-readiness checks.
+- Hardened the optional Drive client against truncated responses, changed sessions, non-progress and invalid completion acknowledgements; classify bodyless HTTP 429 responses as quota errors. Added five regression tests and independently reran local web, Edge, browser and Android compile checks. Existing branding-test failures and live acceptance requirements remain documented in the Drive guide.
+- Expanded workspace drawers by 30% at the desktop baseline, with viewport-aware growth, mobile overlays, safe-area spacing and wrapping controls. Shared drawer/toolbar condition-name inputs are 50% wider; panel tabs, filters, resize preferences and measurement handlers are retained.
+- Replaced startup artwork with SelfMadeSystem's Uiverse `warm-lion-64` pattern and Flaticon Blueprint icon 1373067. Updated web/PWA, Android splash/launcher densities and Windows Electron icons; included artwork credits and license notices.
+- Low overview zoom now switches to an idle-built preview of each completed sheet raster at 30%, returning to the retained full-resolution raster at 40%. Diagnostics provides a persisted 10–100% Preview Resolution slider (50% default), with dynamic dimensions, RGBA-memory estimate, generation timing, debounced replacement, and no PDF.js rerender. The preview shares the sheet coordinate system, and the large stage only holds `will-change: transform` for an active zoom gesture.
+- Added minimal Android PWA support: manifest metadata, branded 192px/512px home-screen icons, and a network-only service worker that never caches drawings or project data.
+- Report now layers above the canvas toolbar arrow and floating controls; its menus and dialogs retain their internal stacking order.
+- Mobile Report layout (screens up to 768px): wrapped controls, viewport-bounded menus, and labelled cards for condition totals, By Sheet, revisions, and materials. Desktop/print layout and report calculations/exports are unchanged.
+- **Download this page** positions linear measurement chips closer to their measured lines while retaining a visible gap so labels do not cover the markup.
+- Hid the original top Theme, Mode, Draw, and Edit controls and their empty separators. Side rails retain the shared actions and shortcuts; highlighter ink, size, and tip controls remain accessible in the side Draw menu.
+
+### Added
+- PDF text search from the sheet toolbar or `Ctrl+F` / `⌘F`: opens an undimmed, movable top-right cross-plan search with editable scope suggestions, scans every page in every loaded plan, highlights all matches, and navigates between results across sheets.
+- Optional private Google Drive binary provider alongside Supabase Storage, with separate server-side OAuth, encrypted refresh/session credentials, bounded resumable transfers, hash-verified local cache, owner/editor/viewer authorization per request and explicit provider selection. Includes additive migration, Android system-browser/deep-link connection, focused tests and setup/live acceptance instructions. No deployment or live cross-device acceptance performed. Cloud toolbar uses the requested colored cloud icon; takeoff/PDF rendering is unchanged.
+- Optional Supabase cloud layer: email/password accounts with email-code verification/recovery, private project browser and owner/editor/viewer sharing, stable UUIDs, version-checked saves and conflict choices. Existing local autosave, `.otk`, measurement math and PDF rendering remain in place. Content-hashed originals use private storage; oversized/failed uploads stay Local Only. Includes schema/RLS migration, public-only Vite environment validation, setup notes and local integration/security tests. Hosted deployment and physical Android verification remain required.
+- Supabase Google sign-in on localhost/HTTPS: branded Continue with Google button, local-save flush before redirect, one-time PKCE return/session restoration, preserved workspace, and safe cancellation/error messages. No Google credentials in frontend configuration. Native wrappers without a browser/deep-link return bridge keep email sign-in and explain the Google limitation.
+- **Save project** now asks for a filename and uses the browser's Save As picker to choose a location when available. Unsupported browsers use a named download. Cancelling the picker does not create a download; failed writes are reported without committing a partial archive.
+- Star bookmarks on sheet tabs and page navigation rows, with a Bookmarked section in the open-sheet dropdown. Toggling a star keeps the menu and current page unchanged. Bookmarks survive closed tabs, autosave, revisions, and portable `.otk` files; long lists scroll within the remaining viewport space.
+- **Project > Download this page** downloads the current sheet with all committed takeoff marks and markups as a one-page PDF, including sheets without marks. Reuses the marked-set renderer without its cover, schedule or sheet stamp; side-by-side exports the focused sheet only.
+- Whiteboard **Export PDF** creates one content-fitted custom page from all notes and selected PDF/image content, independent of the camera. Preserves PDF vectors where possible, uses bounded high-resolution text/annotation rendering, and reports empty/overflowing/unsupported content instead of silently dropping it. Existing save files and takeoff rendering are unchanged.
+- Project whiteboard for drag-and-drop PDFs/images and editable colored notes, with move/resize, PDF page navigation, pan/zoom, fit, and session undo/redo. Board data participates in autosave and revisions. Portable project format v2 packages original whiteboard attachments once across revisions, validates them on import, and still opens v1 files. Takeoff coordinates and plan rendering are unchanged.
+- Portable `.otk` project files from the toolbar and Plan Set header. Save embeds original PDFs, annotations, calibration, tabs, and revisions; Open validates the archive and imports atomically into a separate local workspace without replacing existing projects or changing measurement/rendering logic.
+- Optional virtual trackpad in the bottom-right controls: Trackpad Settings supplies a Show toggle plus live 50–100vw width, 40–150px height, and 35–100% opacity controls (75vw × 60px at 90% opacity by default), while relative touch/mouse aiming and tap-to-place continue through the existing canvas handlers, shared crosshair, and snapping.
+- Synchronized black-and-gray palette Theme icon below Revisions in the bottom-right canvas rail, using the toolbar theme handler and current light/dark state.
+- Icon-only Draw (pencil) and Edit menus above Finish/Pan in the canvas rail, sharing toolbar tool choices, edit actions, availability, and active tool state. Rail menus stay within the viewport and isolate canvas pointer events.
+- Conditional checkmark Finish button above Pan in the bottom-left canvas controls, sharing the toolbar completion action and visibility, with a live accessible point count and isolated pointer events.
+- Pan and Select square buttons above the bottom-left zoom controls, synchronized with toolbar MODE controls and existing keyboard shortcuts.
 
 ## 2026-07-21 — opentakeoff-mcp 0.6.0: sheet vision
 
@@ -252,3 +505,84 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 ## 2026-06-15
 - **Initial release** — open-source PDF takeoff canvas for flooring: One-Click Area, manual measure kit, per-sheet scale (auto-detect + calibrate), conditions with CAD hatches, waste %, reports with SF/SY/LF/EA and CSV/JSON export, client-only storage.
+
+### Cloud project library (unreleased)
+
+- Hide idle Local Only when Drive is connected; preserve active sync/error statuses.
+- Simplify This project, add complete-folder ZIP export, scoped folder browsing/search, persistent authors and synced-folder opening without a Drive API binary download.
+- New Drive projects use Estimate save data/Projects; retain existing stable project folder identities and legacy Supabase workflows. Updated Drive Edge Function required; no deployment included.
+
+- Selecting a local Drive folder now displays its actual contents immediately, with subfolder navigation, search and direct `.otk` opening.
+
+- Cloud Projects now starts with authentication or source-folder selection instead of automatically listing cloud projects; accessible saved folders reopen directly.
+
+- Add an Open project button beside every `.otk` in the selected-folder browser.
+
+- Put local `.otk` files first; sort project folders by newest contained-file change. Show modification dates and saved editor names, with explicit Unknown fallbacks. Preserve editor metadata on saves separately from author metadata.
+
+- Add Create New Source Folder alongside Locate, with fixed Estimate save data/Projects initialization, existing-folder reuse, cancellation/error handling, and automatic persistent selection.
+
+- Add a clickable account avatar/name beside the logo and enrich Profile with the avatar, email, editable name and logout. Saved names immediately update the header.
+
+### Custom interface accent
+- Added an automatically saved color picker and Reset accent control to the Theme panel, with contrasting button text.
+
+The hatch pattern picker opens above the canvas and stays within the window, including when used in the toolbar or docked conditions panel.
+
+After sign-in, a welcome screen replaces the automatic Drive folder prompt. Free accounts see a view-only message and Get Premium opens subscription options; active subscribers see a welcome-back message.
+
+User Guide is now in the top bar, immediately left of the profile, and stays available across toolbar tabs.
+
+Text-field styling also covers dates, times, editable labels, and text areas. Fields use compact vertical padding, gray upper/left borders, and softer lower/right borders. Light mode uses white fields; dark mode uses charcoal fields with light text.
+
+The Takeoff toolbar summary card contains the editable active condition name, multiplier, and waste allowance. The separate appearance row now contains only appearance controls. Waste still affects report order quantities only, and the docked condition editor retains its existing controls.
+
+The condition summary shows its editable name once; the totals section displays quantities without repeating that name.
+
+Drawing-tool rail menus expand upward as needed to show their full list within the available screen height; scrolling is retained only when the list exceeds the viewport.
+
+The sheet selector and previous/next controls sit in the top header immediately after Takeoff, available with either toolbar tab open or collapsed.
+
+The Sheets tab strip shows bookmarked pages when any are available, including automatic markup bookmarks, in plan order. With no bookmarks it shows open sheets. The overflow menu retains access to other open pages; bookmarking is separate from closing a tab.
+
+Plan set PDF headers show the filename in normal text with a page count. A separate **Erase** button on the right removes the PDF using the existing removal confirmation and affected-page preview.
+
+Conditions opens as a centered panel over an undimmed canvas, retaining Takeoffs, Library, Materials, and Columns. Close with ×, Escape, or outside the panel; the canvas no longer shrinks when it opens. Panel tab/filter state survives reopening.
+
+Hatch previews use independent SVG patterns so selecting a condition or hiding its toolbar does not hide matching hatch swatches elsewhere.
+
+**+ Condition** opens a centered New condition dialog instead of a browser prompt. Enter a condition name, then choose **Add condition** or press Enter. Cancel or Escape dismisses it without adding anything.
+
+The estimating toolbar, condition controls, and Markups/Stamps/RFIs drawer use solid shadcn-inspired surfaces, compact tabs, flat fields, and neutral borders in light and dark mode. Takeoff palette colors remain unchanged.
+
+**Project Data..** combines project details and the plan set. Edit the project name, submission/due date, and status at the top and choose **Save details**; manage PDFs and select pages below. The former Edit project details menu entry now opens this combined panel.
+
+- Set up Supabase subscription and license-session tables and deployed the authenticated billing endpoint. Subscription and session checks can read existing entitlements before RevenueCat checkout is configured; accounts without a record are treated as unsubscribed.
+- Added Project calendar with month navigation, project due dates, Google Calendar authorization, calendar selection, event display, and duplicate-safe manual deadline syncing.
+
+- Added a visible Sign in button to the empty workspace landing card, opening the existing account login form.
+
+- Initial Google sign-in now requests Calendar permissions and securely saves the approved connection, removing the separate Calendar sign-in step.
+
+- Fixed Google calendars disappearing after login or reopening Calendar: automatically reload connected calendars and restore per-account visibility selections.
+
+- Google Calendar events now use Google calendar colors and individual event color overrides, including text colors.
+
+
+Google Calendar editing: approve editing access in Calendar Settings. Use + Google event to create events; open an event and choose Edit to change dates, location, description, Google color, recurrence, attendees, reminders, visibility, availability, or RSVP. The editor supports duplicate, move, and confirmed deletion; recurring occurrences and the full series are separate edit choices. Drag and resize writable Google events to reschedule. Manage Google calendars in Settings provides creation, renaming, colors, quick-add, availability, preferences, sharing, and confirmed secondary-calendar deletion. Google account permissions are enforced on the server and stale event changes are rejected with version checks. Invitation/update emails are opt-in. Existing read-only authorizations continue to display events until editing permission is approved. Administrative ownership transfer, primary-calendar clearing, and webhook channel management are not exposed in the app.
+
+- Google event descriptions display readable text with paragraph breaks and links in the editor. Unchanged descriptions retain original formatting when saving other fields.
+
+- Replaced inline workspace login with separate branded sign-in and sign-up pages, including Google login, email confirmation, recovery, and view-only navigation.
+
+- Sign-in now leads to a fresh read-only plan exploration page. Opening PDFs and the sample works without editing access and does not modify saved projects.
+
+- Unified login and sign-up at /auth with in-place card switching, retaining the same animated background and email draft. Existing /sign-in and /sign-up links redirect to the unified page.
+
+Read-only workspaces display red **Read only mode** text in the top toolbar with an **Upgrade** button that opens membership plans (or sign-in for guests).
+
+Verified Pro subscriptions automatically leave read-only exploration and open the editable workspace; the toolbar avatar displays a PRO badge. Sandbox access still requires the existing development/test license policy and a granted editing session.
+
+New accounts receive a free 30-day trial from signup, without a payment card. The toolbar shows trial days remaining and Upgrade. Trial dates are server-owned and do not reset on login, reinstall, or checkout. At expiry editing is disabled unless an active subscription is verified. Existing paid subscriptions take priority; existing accounts are not backfilled.
+
+- Added local visual symbol search with reference selection, multi-page scopes, adjustable similarity and rotations, cancellable worker matching, thumbnail review, duplicate prevention, and undoable count conversion.

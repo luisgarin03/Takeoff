@@ -273,6 +273,26 @@ test("createLocalStore(folderId): PDFs and browser-global libraries stay global 
   assert.equal((await localStore.loadMaterialLibrary()).length, 1);
 });
 
+test("PDF compatibility metadata follows replacement and removal", async () => {
+  const file = { name: "plan.pdf", arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer } as any;
+  const verified = { version: 1, mode: "full", pageCount: 4, signature: "3:test" };
+  await localStore.addPdf(file, verified);
+  assert.deepEqual(await localStore.loadPdfCompatibility("plan.pdf"), verified);
+
+  await localStore.addPdf(file);
+  assert.equal(await localStore.loadPdfCompatibility("plan.pdf"), undefined);
+  await localStore.savePdfCompatibility("plan.pdf", verified);
+  await localStore.removePdf("plan.pdf");
+  assert.equal(await localStore.loadPdfCompatibility("plan.pdf"), undefined);
+});
+
+test("addPdf reuses bytes already read by compatibility validation", async () => {
+  const prepared = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]);
+  const file = { name: "prepared.pdf", arrayBuffer: async () => { throw new Error("file should not be read twice"); } } as any;
+  await localStore.addPdf(file, null, prepared);
+  assert.deepEqual(await localStore.loadPdfData("prepared.pdf"), prepared);
+});
+
 test("v1->v2 upgrade preserves pdfs + annotations, and snapshots work after", async () => {
   // Seed a v1 database exactly the way the shipped v1 code laid it out.
   const v1 = await rawOpen(1, (db) => {
@@ -306,7 +326,7 @@ test("database newer than this build surfaces as a stale-tab VersionError", asyn
   await assert.rejects(store.listSheets(), (e: any) => {
     assert.equal(e.name, "VersionError");
     assert.equal(isStaleTabError(e), true);
-    assert.match(e.message, /older OpenTakeoff/);
+    assert.match(e.message, /older Beitzell Estimating/);
     return true;
   });
   // sanity: garden-variety errors are NOT stale-tab errors
@@ -341,7 +361,7 @@ test("friendlyStoreError maps quota to actionable copy; other errors pass throug
   assert.equal(friendlyStoreError(new Error("boom")), "boom");
   // TakeoffCanvas routes its message tint on EXACT equality with this string —
   // pin the copy so an edit there can't silently turn the warning green
-  assert.equal(STALE_TAB_MESSAGE, "OpenTakeoff was updated in another tab — reload this tab to continue.");
+  assert.equal(STALE_TAB_MESSAGE, "Beitzell Estimating was updated in another tab — reload this tab to continue.");
 });
 
 test("two cloudStores over one IndexedDB scope snapshots by folderId (end-to-end)", async () => {

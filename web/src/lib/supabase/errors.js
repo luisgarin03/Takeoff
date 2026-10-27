@@ -1,0 +1,55 @@
+export class CloudError extends Error {
+  constructor(code, message) { super(message); this.code = code; }
+}
+export function cloudError(error) {
+  if (error instanceof CloudError) return error;
+  const message = String(error?.message || "");
+  const messages = {
+    OTK_SHARE_INPUT: "Choose up to 30 Google Drive files including an .otk project and a valid recipient email. You cannot invite yourself.",
+    OTK_SHARE_SETUP: "Drive sharing needs Google Picker configuration and the latest server function. Ask the app administrator to complete sharing setup.",
+    OTK_SHARE_PARTIAL: "Sharing did not finish. Some files may already have Drive permissions and email notifications. Check Sent invitations and Google Drive permissions before retrying.",
+    OTK_DRIVE_EXPORT_TYPE: "This folder contains a Google-native document or shortcut. A complete byte-for-byte ZIP cannot include it. Export it to a regular file in Drive first; nothing was omitted or downloaded.",
+    OTK_CANCELED: "Transfer canceled. Local work is safe; retry to resume remaining files.",
+    OTK_PROVIDER_LOCKED: "This project's storage provider is locked. Use Save As to create a separate copy with another provider.",
+    OTK_DRIVE_SETUP: "Drive server unavailable. Complete Google Drive setup or check your connection. Local mode and Supabase Storage remain available.",
+    OTK_DRIVE_CONNECT: "The project owner's Google Drive needs reconnection in Profile. Local copies are unchanged.",
+    OTK_DRIVE_ACCOUNT: "Reconnect the same Google account originally connected to this OpenTakeoff account.",
+    OTK_DRIVE_CONSENT: "Drive authorization was not completed. Try Connect Google Drive again and allow file access.",
+    OTK_DRIVE_RETURN: "Drive authorization expired or was canceled. Connect Google Drive again.",
+    OTK_DRIVE_PERMISSION: "Google denied file access. The owner should check the connected Drive account and reconnect.",
+    OTK_DRIVE_QUOTA: "Google Drive storage or request quota was reached. Free space or wait before retrying.",
+    OTK_DRIVE_MISSING: "A required Drive file is missing or trashed. Ask the owner to restore it in Google Drive, then retry.",
+    OTK_DRIVE_INTEGRITY: "Downloaded file identity, size, or type does not match the saved project. No replacement file was imported.",
+    OTK_DRIVE_SIZE: "Drive files are limited to 2 GiB per file in this app. Keep larger originals locally.",
+    OTK_DRIVE_BUSY: "Another transfer is using this file. Wait a few minutes, then retry.",
+    OTK_DRIVE_RETRY: "The upload session expired. Retry Save to Cloud to resume the file.",
+    OTK_DRIVE_TRANSFER: "Drive transfer was interrupted. Check your connection and retry to resume.",
+    OTK_DRIVE_UPLOAD: "Google Drive rejected the upload setup request. Check the Drive connection and app permissions; if it keeps happening, the cloud Drive function may need its latest update.",
+    OTK_DRIVE_RANGE: "Drive returned an unexpected file range. Retry the transfer.",
+    OTK_AUTH: "Sign in again to continue. Your local work is safe.",
+    OTK_ACCESS: "This project was deleted, access was removed, or it is not available to this account.",
+    OTK_READ_ONLY: "You have viewer access. Save a copy to your own account to make cloud changes.",
+    OTK_CONFLICT: "The cloud version changed since your last sync.",
+    OTK_FORMAT: "This project data is damaged, too large, or needs a newer app version.",
+    OTK_ARCHIVE_SETUP: "The cloud database does not yet support .otk project archives. Apply the latest OpenTakeoff Supabase migration, then retry Save to Cloud; your local project and files are unchanged.",
+    OTK_NAME: "Project names must be 200 characters or fewer.",
+    OTK_MEMBER: "No confirmed account was found for that email address.",
+    OTK_OWNER: "The project owner already has access.",
+    OTK_FILES_REMAIN: "Some cloud files still need removal. Refresh the list and choose Finish deletion.",
+    OTK_FILE_MISSING: "The file upload did not finish. Retry Save to Cloud; your local copy is unchanged.",
+  };
+  for (const [code, text] of Object.entries(messages)) if (message.includes(code)) return new CloudError(code, text);
+  if (["PGRST205", "PGRST202"].includes(error?.code)) return new CloudError("OTK_SETUP", "Supabase database setup is incomplete. Apply the OpenTakeoff migration in docs/SUPABASE_SETUP.md.");
+  if (error?.status === 401 || /JWT|refresh_token|session.*missing/i.test(message)) return new CloudError("OTK_AUTH", messages.OTK_AUTH);
+  if (error?.status === 403 || /row.level|permission denied/i.test(message)) return new CloudError("OTK_ACCESS", messages.OTK_ACCESS);
+  if (error?.status === 413 || /quota|exceed|too large/i.test(message)) return new CloudError("OTK_QUOTA", "Cloud storage or file limits were reached. Local files are unchanged.");
+  if (error?.code === "invalid_credentials") return new CloudError("OTK_LOGIN", "Email or password is incorrect.");
+  if (error?.code === "email_not_confirmed") return new CloudError("OTK_CONFIRM", "Confirm your email before signing in.");
+  if (/rate|too many/i.test(message)) return new CloudError("OTK_RATE", "Too many requests. Please wait before trying again.");
+  return new CloudError("OTK_NETWORK", "Cloud request failed. Check your connection and Supabase setup, then retry. Your local work is safe.");
+}
+export async function checked(request) {
+  const { data, error } = await request;
+  if (error) throw cloudError(error);
+  return data;
+}

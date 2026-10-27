@@ -10,24 +10,57 @@
 // items that flip in place (render menu). An item may carry `onHover(bool)` to
 // preview its effect while pointed at (the scale menu's plan-says item shows
 // the calibrated guide bar on the sheet behind the open menu).
-import React, { useEffect, useRef, useState } from "react";
+// Optional `accessory` controls are siblings of the action button, so a star
+// toggle can stay open without nesting buttons or triggering navigation.
+import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "../brand/icons.jsx";
+
+import { ToolbarPanelContext } from "./BeitzellToolbar.jsx";
 
 const MENU_W = 232;
 
-export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false }) {
+export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false, rail = false, railTop, railFillHeight = false, portal = false }) {
+  const toolbarActive = useContext(ToolbarPanelContext);
+  const portaled = portal || rail || toolbarActive !== null;
   const [open, setOpen] = useState(false);
   const [flip, setFlip] = useState(false);
   const rootRef = useRef(null);
+  const menuRef = useRef(null);
+  const [railPosition, setRailPosition] = useState({});
+  const stopCanvasEvent = rail ? (e) => e.stopPropagation() : undefined;
+
+  useLayoutEffect(() => {
+    if (!open || !rail || !menuRef.current || !rootRef.current) return;
+    // Lift rail menus to fit their content instead of reserving only 320px
+    // below the trigger. Scroll only when the entire viewport is too short.
+    const viewportTop = Number.isFinite(railTop) ? Math.max(12, railTop) : 12;
+    const height = Math.min(menuRef.current.scrollHeight + 2, Math.max(0, window.innerHeight - viewportTop - 12));
+    const top = railFillHeight ? viewportTop : Math.max(viewportTop, Math.min(rootRef.current.getBoundingClientRect().top, window.innerHeight - height - 12));
+    const availableHeight = Math.max(0, window.innerHeight - top - 12);
+    setRailPosition((position) => ({ ...position, top, maxHeight: availableHeight, ...(railFillHeight ? { height: availableHeight } : {}) }));
+  }, [open, rail, railTop, railFillHeight]);
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+    const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target) && !menuRef.current?.contains(e.target)) setOpen(false); };
     const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("pointerdown", onDown);
+    // Capture sees outside presses even when a canvas control stops bubbling.
+    document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
+    return () => { document.removeEventListener("pointerdown", onDown, true); document.removeEventListener("keydown", onKey); };
   }, [open]);
+
+  useEffect(() => {
+    if (toolbarActive === false) setOpen(false);
+  }, [toolbarActive]);
+  useEffect(() => {
+    if (!open || !portaled) return;
+    const close = (event) => { if (!menuRef.current?.contains(event.target)) setOpen(false); };
+    window.addEventListener("resize", close);
+    document.addEventListener("scroll", close, true);
+    return () => { window.removeEventListener("resize", close); document.removeEventListener("scroll", close, true); };
+  }, [open, portaled]);
 
   // Notify strictly in open/close PAIRS: fire true only when opening, and repay
   // it in the cleanup — which also runs if the menu unmounts while open (e.g.
@@ -47,13 +80,28 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
     if (!open && rootRef.current) {
       const r = rootRef.current.getBoundingClientRect();
       setFlip(r.left + menuW > window.innerWidth - 16);
+      if (portaled) {
+        const width = Math.min(menuW, window.innerWidth - 24);
+        const viewportTop = rail && Number.isFinite(railTop) ? Math.max(12, railTop) : 12;
+        const top = railFillHeight ? viewportTop : Math.max(viewportTop, Math.min(rail ? r.top : r.bottom + 4, window.innerHeight - (rail ? 320 : 160)));
+        const availableHeight = Math.max(0, window.innerHeight - top - 12);
+        setRailPosition({ position: "fixed", top, left: Math.max(12, Math.min(rail ? r.right + 8 : r.left, window.innerWidth - width - 12)),
+          right: "auto", width, minWidth: 0, maxHeight: availableHeight, ...(railFillHeight ? { height: availableHeight } : {}),
+          overflowY: "auto", overscrollBehavior: "contain", touchAction: "pan-y", boxSizing: "border-box", zIndex: 1000 });
+      }
     }
     setOpen((v) => !v);
   };
 
+  // A portal keeps rail menus outside the clipped canvas; React events still
+  // bubble through the rail wrapper, which isolates every menu interaction.
+  const renderMenu = (node) => portaled ? createPortal(node, document.body) : node;
+
   return (
-    <span ref={rootRef} style={{ position: "relative", display: "inline-flex" }}>
-      <button type="button" onClick={toggle} title={title} disabled={disabled}
+    <span ref={rootRef} style={{ position: "relative", display: "inline-flex" }}
+      onPointerDown={stopCanvasEvent} onPointerUp={stopCanvasEvent} onClick={stopCanvasEvent}
+      onPointerMove={stopCanvasEvent} onPointerCancel={stopCanvasEvent} onDoubleClick={stopCanvasEvent}>
+      <button type="button" onClick={toggle} title={title} aria-label={title || undefined} aria-expanded={open} disabled={disabled}
         style={{
           display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 10px", cursor: disabled ? "default" : "pointer",
           border: `1px solid ${active ? accentColor : "var(--ink-faint)"}`,
@@ -62,19 +110,22 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
           opacity: disabled ? 0.38 : 1,
           fontFamily: "var(--f-body)", fontSize: 12.5, fontWeight: 600, lineHeight: 1,
           ...faceStyle,
+          ...(rail ? { justifyContent: "center", padding: 0, width: 34, height: 34, gap: 0,
+            background: active ? accentColor : (open ? "var(--paper-shadow)" : "var(--paper-bright)") } : {}),
         }}>
         {face}
-        <span style={{ display: "inline-flex", opacity: 0.7 }}><Icon name="chevronDown" size={11} /></span>
+        {!rail && <span style={{ display: "inline-flex", opacity: 0.7 }}><Icon name="chevronDown" size={11} /></span>}
       </button>
-      {open && (
-        <div className="tool-menu-popover" style={{
+      {open && renderMenu(
+        <div ref={menuRef} className="tool-menu-popover" data-portaled={portaled || undefined} style={{
           position: "absolute", top: "calc(100% + 4px)", [flip ? "right" : "left"]: 0, zIndex: 90,
           minWidth: MENU_W, background: "var(--paper-bright)", border: "1px solid var(--ink)",
           boxShadow: "var(--shadow-2)", padding: "4px 0",
           ...menuStyle,
+          ...(portaled ? railPosition : {}),
         }}>
           {items.map((it, i) => {
-            if (it === "divider") return <div key={i} style={{ height: 1, background: "var(--ink-faint)", margin: "4px 0" }} />;
+            if (it === "divider") return <div key={i} role="separator" style={{ height: 1, background: "var(--ink-faint)", margin: "4px 0" }} />;
             if (it.section) return (
               <div key={i} style={{ padding: "6px 12px 3px", fontFamily: "var(--f-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-muted)" }}>{it.section}</div>
             );
@@ -85,24 +136,31 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
             const dis = !!it.disabled;
             const checkable = "checked" in it;
             const fg = it.danger ? "var(--c-danger)" : "var(--ink)";
-            return (
-              <button key={it.id || i} type="button" disabled={dis} title={it.title || ""}
+            const depth = Math.max(0, Number(it.depth) || 0);
+            const action = (
+              <button key={it.id || i} className="dropdown-action" data-danger={it.danger || undefined}
+                data-active={it.active || undefined} aria-current={it.active ? "true" : undefined}
+                type="button" disabled={dis} title={it.title || ""}
+                aria-expanded={it.disclosure ? it.disclosure === "expanded" : undefined}
                 onClick={() => { if (!dis) { if (!it.stayOpen) setOpen(false); it.onSelect?.(); } }}
                 style={{
-                  display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 12px",
+                  display: "flex", alignItems: "center", gap: 10, width: "100%", padding: `8px 12px 8px ${12 + depth * 18}px`,
                   border: "none", textAlign: "left", cursor: dis ? "default" : "pointer",
                   background: it.active ? "var(--paper-cream)" : "transparent",
                   borderLeft: it.active ? "2px solid var(--cobalt)" : "2px solid transparent",
                   opacity: dis ? 0.38 : 1, color: fg,
+                  ...(it.accessory ? { flex: 1, minWidth: 0 } : {}),
                 }}
                 onMouseEnter={(e) => { if (!dis && !it.active) e.currentTarget.style.background = "var(--paper-shadow)"; if (!dis) it.onHover?.(true); }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = it.active ? "var(--paper-cream)" : "transparent"; if (!dis) it.onHover?.(false); }}>
+                {it.disclosure && <span style={{ display: "inline-flex", width: 13, justifyContent: "center", color: "var(--ink-muted)" }}><Icon name={it.disclosure === "expanded" ? "chevronDown" : "chevronRight"} size={12} /></span>}
                 {checkable && <span style={{ display: "inline-flex", width: 15, justifyContent: "center", color: "var(--c-positive)", visibility: it.checked ? "visible" : "hidden" }}><Icon name="check" size={14} /></span>}
                 {it.icon && <span style={{ display: "inline-flex", width: 17, justifyContent: "center", color: it.tint || fg }}><Icon name={it.icon} size={16} /></span>}
-                <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 13, fontWeight: it.active ? 600 : 400 }}>{it.label}</span>
+                <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 13, fontWeight: it.header || it.active ? 600 : 400, ...(it.accessory ? { minWidth: 0, overflowWrap: "anywhere" } : {}) }}>{it.label}</span>
                 {it.shortcut && <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-muted)" }}>{it.shortcut}</span>}
               </button>
             );
+            return it.accessory ? <div key={it.id || i} style={{ display: "flex", alignItems: "center" }}>{action}{it.accessory}</div> : action;
           })}
         </div>
       )}

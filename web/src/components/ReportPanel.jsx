@@ -5,7 +5,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../brand/icons.jsx";
 import ToolMenu from "./ToolMenu.jsx";
+import LongTaskLoader from "./LongTaskLoader.jsx";
 import { conditionTotals, grandTotals, sheetTotals, sheetGroupedRows, labelGroupedRows, round2, totalsToCsv, downloadText, materialsSummary, reportJson, hasMultipliers, BY_SHEET_BASE_NOTE } from "../lib/totals.js";
+import { calculateChainLinkFenceFromLength } from "../lib/chainLinkFence.js";
 import { TABLE_PROFILE, CSV_PROFILE, colGetter, customColProfile, specColProfile, laborColProfile, partitionRowsBy, forceIncludeGroupCol, loadColPrefs, saveColPrefs, loadGroupBy, saveGroupBy, visibleCols, floorPerimeterLf, applyUnits } from "../lib/reportColumns.js";
 import { areaVal, areaUnit, lenVal, lenUnit } from "../lib/units";
 import { columnLabel } from "../lib/conditionColumns.js";
@@ -19,7 +21,7 @@ import { shapesDetail, shapesToCsv, shapesToJson } from "../lib/shapesExport.js"
 import { rfisToCsv, rfisToJson } from "../lib/rfi.js";
 import { reportWorkbook, buildXlsx } from "../lib/xlsx.js";
 import { buildContribution, sendContribution, isContributeConfigured } from "../lib/contribute.js";
-import { activeTheme, saveActiveThemeFile, clearActiveTheme } from "../lib/reportTheme.js";
+import { activeTheme, saveActiveThemeFile, clearActiveTheme, REPORT_THEME_PRESETS } from "../lib/reportTheme.js";
 import { normalizeLogoToPng, loadProfiles, saveProfiles, activeProfile, updateActiveProfile, addProfile, setActiveProfile, removeProfile } from "../lib/identity.js";
 import { resolveBranding, loadBrandingSelection, saveBrandingSelection } from "../lib/branding.js";
 import { projectIdFromUrl } from "../lib/store.js";
@@ -44,13 +46,14 @@ const sheetNum = (v, d = 1) => {
   return num(r, d);
 };
 
-export default function ReportPanel({ projectName, onProjectName, conditions, shapes, sheetLabel, onMarkedSet, markedSetDark, onClose, markups = [], rfis = [], scaleInfo = [], provenanceCounters = null, clientInfo = {}, onClientInfo, conditionColumns = [], shapeLabels = [], units = "imperial" }) {
+export default function ReportPanel({ projectName, onProjectName, conditions, shapes, sheetLabel, onMarkedSet, markedSetDark, onClose, markups = [], rfis = [], chainLinkFences = [], scaleInfo = [], provenanceCounters = null, clientInfo = {}, onClientInfo, conditionColumns = [], shapeLabels = [], units = "imperial" }) {
   // memoized on the source arrays: project-name/client-info keystrokes re-render
   // the panel without touching conditions/shapes, so the totaling passes skip
   // imported report theme → { vars, name, warnings }. vars are spread onto this
   // panel's root so the theme scopes to the document subtree (screen + print +
   // masthead) without touching app chrome. Held in state so an import applies live.
   const [theme, setTheme] = useState(() => activeTheme());
+  const [exportingXlsx, setExportingXlsx] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
   const themeRef = useRef(null);
   const themeFileRef = useRef(null);
@@ -77,6 +80,14 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
   const bySheet = useMemo(() => sheetTotals(conditions, shapes), [conditions, shapes]);
   const g = useMemo(() => grandTotals(rows), [rows]);
   const matSummary = useMemo(() => materialsSummary(rows), [rows]);
+  const chainRows = useMemo(() => chainLinkFences.map((fence) => {
+    const shape = shapes.find((item) => item.id === fence.shape_id);
+    if (!shape || shape.measure_role !== "linear") return null;
+    const result = calculateChainLinkFenceFromLength(fence, Number(shape.computed?.perimeter_lf) || 0);
+    if (!result.valid) return null;
+    const condition = conditions.find((item) => item.id === shape.condition_id);
+    return { fence, shape, result, condition };
+  }).filter(Boolean), [chainLinkFences, shapes, conditions]);
   const [showContribute, setShowContribute] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   // whether the Marked Set PDF carries the markups. Default on; ORTHOGONAL to the
@@ -304,9 +315,15 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
   // Excel workbook — same sources as the CSV/JSON (Conditions tab follows the
   // column picker like the CSV); buildXlsx lazy-loads fflate on first use
   const exportXlsx = async () => {
-    const sheets = reportWorkbook({ rows, bySheet, shapeRows: shapesDetail(conditions, shapes, sheetLabel), cols: csvCols, ctx, sheetLabel, units });
-    const bytes = await buildXlsx(sheets);
-    downloadText(`${baseName}.xlsx`, bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    if (exportingXlsx) return;
+    setExportingXlsx(true);
+    try {
+      const sheets = reportWorkbook({ rows, bySheet, shapeRows: shapesDetail(conditions, shapes, sheetLabel), cols: csvCols, ctx, sheetLabel, units });
+      const bytes = await buildXlsx(sheets);
+      downloadText(`${baseName}.xlsx`, bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    } finally {
+      setExportingXlsx(false);
+    }
   };
   const exportShapesCsv = () => downloadText(`${baseName}_shapes.csv`, shapesToCsv(shapesDetail(conditions, shapes, sheetLabel), projectName, brand.brandName), "text/csv");
   const exportShapesJson = () => downloadText(`${baseName}_shapes.json`,
@@ -330,12 +347,12 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
     // notes cell below). Custom and labor columns stay nowrap.
     if (col.custom || col.spec || col.labor) {
       const cell = col.spec ? { ...td, textAlign: "left", whiteSpace: "normal", maxWidth: 240 } : { ...td, textAlign: "left" };
-      return <td key={col.key} style={cell}>{v || "—"}</td>;
+      return <td className="report-wide-cell" data-label={col.header} key={col.key} style={cell}>{v || "—"}</td>;
     }
     switch (col.key) {
       case "finish":
         return (
-          <td key={col.key} style={{ ...td, textAlign: "left" }}>
+          <td data-label={col.header} key={col.key} style={{ ...td, textAlign: "left" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 12, height: 12, background: r.color, display: "inline-block", border: "1px solid var(--ink-faint)" }} />
               <strong style={{ fontFamily: "var(--f-mono)", fontWeight: 600 }}>{r.finish_tag}</strong>
@@ -344,19 +361,19 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
           </td>
         );
       case "shapes":
-        return <td key={col.key} style={td}>{v}</td>;
+        return <td data-label={col.header} key={col.key} style={td}>{v}</td>;
       case "waste_pct":
-        return <td key={col.key} style={td}>{v ? `${num(v, 0)}%` : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={td}>{v ? `${num(v, 0)}%` : "—"}</td>;
       case "ea":
-        return <td key={col.key} style={td}>{v ? num(v, 0) : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={td}>{v ? num(v, 0) : "—"}</td>;
       case "total_sf_net":
-        return <td key={col.key} style={{ ...td, fontWeight: 700, color: "var(--cobalt)" }}>{r.total_sf ? num(v) : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={{ ...td, fontWeight: 700, color: "var(--cobalt)" }}>{r.total_sf ? num(v) : "—"}</td>;
       case "sy_net":
-        return <td key={col.key} style={{ ...td, color: "var(--cobalt)" }}>{r.total_sf ? num(v) : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={{ ...td, color: "var(--cobalt)" }}>{r.total_sf ? num(v) : "—"}</td>;
       case "perimeter_ref":
-        return <td key={col.key} style={{ ...td, color: "var(--ink-muted)" }}>{v ? num(v) : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={{ ...td, color: "var(--ink-muted)" }}>{v ? num(v) : "—"}</td>;
       default: // floor_sf, wall_sf, border_sf, lf, waste_sf, waste_lf, …
-        return <td key={col.key} style={td}>{v ? num(v) : "—"}</td>;
+        return <td data-label={col.header} key={col.key} style={td}>{v ? num(v) : "—"}</td>;
     }
   };
 
@@ -374,15 +391,14 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
   );
 
   return (
-    <div className="report-panel" style={{ ...theme.vars, position: "absolute", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", background: "var(--paper-cream)" }}>
+    // Foreground app layer: canvas drawers reach 120; the toolbar toggle is 140.
+    <div className="report-panel" style={{ ...theme.vars, position: "absolute", inset: 0, zIndex: 150, display: "flex", flexDirection: "column", background: "var(--paper-cream)" }}>
+      <LongTaskLoader active={exportingXlsx} label="Building Excel workbook…" variant="fixed" />
       <div className="report-toolbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 18px", borderBottom: "1px solid var(--ink)", background: "var(--paper-bright)" }}>
-        <Icon name="takeoffs" size={18} />
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>Takeoff report</strong>
         <input name="project-name" value={projectName} onChange={(e) => onProjectName(e.target.value)} placeholder="Project name (optional)"
           className="field-input" style={{ width: 260, padding: "5px 9px", fontSize: 13 }} />
-        <div style={{ flex: 1 }} />
-        <button className="btn-ghost" onClick={() => setShowInfo(true)}
-          title="Your company identity and the client/job details for the print header and marked-set cover">Project info</button>
+        <div className="report-toolbar-spacer" style={{ flex: 1 }} />
         {/* always rendered, even with zero custom columns — Sheet grouping
             is useful on its own */}
         <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--ink)", whiteSpace: "nowrap" }}
@@ -488,7 +504,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
           )}
         </div>
         <div ref={themeRef} style={{ position: "relative" }}>
-          <button className="btn-ghost" onClick={() => setShowTheme((s) => !s)} title="Apply an imported design-token theme to the report (colors + fonts)">Theme{theme.name ? " ●" : ""}</button>
+          <button className="btn-ghost" onClick={() => setShowTheme((s) => !s)} title="Choose a report theme or import your own (colors + fonts)">Theme{theme.name ? " ●" : ""}</button>
           {showTheme && (
             <div className="report-modal" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 70, width: 292, background: "var(--paper-bright)", border: "1px solid var(--ink)", boxShadow: "var(--shadow-2)", padding: "10px 12px", fontSize: 12.5, color: "var(--ink)" }}>
               <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
@@ -498,7 +514,14 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                   style={{ border: "none", background: "transparent", color: "var(--ink-muted)", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
               </div>
               <div style={{ fontSize: 11, color: "var(--ink-muted)", lineHeight: 1.5, marginBottom: 8 }}>
-                Import a design-token file (e.g. a Claude Design <code>tokens.json</code>) to reskin this report — palette and fonts only. Your company identity stays where it is.
+                Choose a theme below, or import a JSON theme file to add your own colors and fonts.
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+                {REPORT_THEME_PRESETS.map((preset) => <button key={preset.name} aria-pressed={theme.name === preset.name}
+                  onClick={() => { saveActiveThemeFile(preset); setTheme(activeTheme()); }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 38, padding: "6px 8px", border: theme.name === preset.name ? "2px solid var(--cobalt)" : "1px solid var(--ink-faint)", borderRadius: 4, background: "var(--paper-bright)", color: "var(--ink)", cursor: "pointer", font: "inherit" }}>
+                  <span aria-hidden="true" style={{ width: 16, height: 16, flexShrink: 0, borderRadius: "50%", background: preset.color.neutral.paper.value, border: `3px solid ${preset.color.accent.blue.value}` }} />{preset.name}
+                </button>)}
               </div>
               {theme.name ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -537,7 +560,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
           items={[
             { section: "Report" },
             { id: "csv", icon: "document", label: "CSV", disabled: !rows.length, onSelect: exportCsv },
-            { id: "xlsx", icon: "document", label: "Excel", disabled: !rows.length, title: "Excel workbook — Conditions / By sheet / Materials / Shapes", onSelect: exportXlsx },
+            { id: "xlsx", icon: "document", label: "Excel", disabled: !rows.length || exportingXlsx, title: "Excel workbook — Conditions / By sheet / Materials / Shapes", onSelect: exportXlsx },
             { id: "json", icon: "document", label: "JSON", disabled: !rows.length && !markups.length && !rfis.length, title: "JSON — works markups-only / RFI-only too", onSelect: exportJson },
             { section: "Shapes" },
             { id: "shapes-csv", icon: "document", label: "Shapes CSV", disabled: !shapes.length, title: "Per-shape measured quantities — no multiplier, no waste", onSelect: exportShapesCsv },
@@ -566,10 +589,6 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
               title="RFI log as JSON"><Icon name="rfi" size={13} />RFI JSON</button>
           </>
         )}
-        <button className="btn-primary" onClick={() => setShowContribute(true)} disabled={!rows.length}
-          title="Optionally contribute this takeoff's derived data to the open flooring model">
-          <Icon name="oneClick" size={13} />Contribute
-        </button>
         <button onClick={onClose} title="Back to the canvas (Esc)"
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", fontSize: 12.5 }}>
           <Icon name="close" size={12} />Close
@@ -668,7 +687,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
               Grouped by <strong>{groupCol ? columnLabel(groupCol) : groupBy === "label" ? "label" : "sheet"}</strong>
             </p>
           )}
-          <table style={{ width: "100%", maxWidth: 980, margin: "0 auto", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+          <table className="report-data-table" style={{ width: "100%", maxWidth: 980, margin: "0 auto", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
             <thead>
               <tr>
                 {tableCols.map((c) => (
@@ -716,7 +735,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                           muted color; same foot mechanism on the group's
                           own grandTotals */}
                       {tableCols.slice(1).map((c) => (
-                        <td key={c.key} style={{ ...td, borderTop: "1px solid var(--ink-soft)", color: "var(--ink-muted)" }}>
+                        <td data-label={c.header} key={c.key} style={{ ...td, borderTop: "1px solid var(--ink-soft)", color: "var(--ink-muted)" }}>
                           {c.foot && !c.ref ? num(c.foot(sub)) : ""}
                         </td>
                       ))}
@@ -732,9 +751,9 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                     own td — footed columns render foot(g), ref columns never foot */}
                 {tableCols.slice(1).map((c) => (
                   c.foot && !c.ref ? (
-                    <td key={c.key} style={{ ...td, borderTop: "2px solid var(--ink)", borderBottom: "2px solid var(--ink)", background: "var(--paper-cream)", fontWeight: 700, ...(c.accent ? { color: "var(--cobalt)" } : {}) }}>{num(c.foot(g))}</td>
+                    <td data-label={c.header} key={c.key} style={{ ...td, borderTop: "2px solid var(--ink)", borderBottom: "2px solid var(--ink)", background: "var(--paper-cream)", fontWeight: 700, ...(c.accent ? { color: "var(--cobalt)" } : {}) }}>{num(c.foot(g))}</td>
                   ) : (
-                    <td key={c.key} style={{ ...td, borderTop: "2px solid var(--ink)", borderBottom: "2px solid var(--ink)", background: "var(--paper-cream)" }}></td>
+                    <td data-label={c.header} key={c.key} style={{ ...td, borderTop: "2px solid var(--ink)", borderBottom: "2px solid var(--ink)", background: "var(--paper-cream)" }}></td>
                   )
                 ))}
               </tr>
@@ -762,7 +781,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
             {bySheet.map((gp) => (
               <div key={gp.sheet_id} style={{ margin: "0 0 14px" }}>
                 <h3 style={{ fontFamily: "var(--f-mono)", fontSize: 11, letterSpacing: "0.06em", color: "var(--ink-muted)", margin: "0 0 6px" }}>{sheetLabel ? sheetLabel(gp.sheet_id) : gp.sheet_id}</h3>
-                <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+                <table className="report-data-table" style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
                   <thead>
                     <tr>
                       <th style={{ ...th, textAlign: "left" }}>Finish</th>
@@ -783,11 +802,11 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                             {r.multiplier > 1 && <span style={{ color: "var(--ink-muted)", fontSize: 11 }}>×{r.multiplier}</span>}
                           </span>
                         </td>
-                        <td style={td}>{sheetNum(areaVal(r.floor_sf, units))}</td>
-                        <td style={td}>{sheetNum(areaVal(r.wall_sf, units))}</td>
-                        <td style={td}>{sheetNum(areaVal(r.border_sf, units))}</td>
-                        <td style={td}>{sheetNum(lenVal(r.lf, units))}</td>
-                        <td style={td}>{sheetNum(r.ea, 0)}</td>
+                        <td data-label={`Floor ${AU}`} style={td}>{sheetNum(areaVal(r.floor_sf, units))}</td>
+                        <td data-label={`Wall ${AU}`} style={td}>{sheetNum(areaVal(r.wall_sf, units))}</td>
+                        <td data-label={`Border ${AU}`} style={td}>{sheetNum(areaVal(r.border_sf, units))}</td>
+                        <td data-label={LU} style={td}>{sheetNum(lenVal(r.lf, units))}</td>
+                        <td data-label="EA" style={td}>{sheetNum(r.ea, 0)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -803,11 +822,38 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
             </p>
           </div>
         )}
+        {chainRows.length > 0 && (
+          <div style={{ maxWidth: 980, margin: "26px auto 0" }}>
+            <h3 style={{ fontFamily: "var(--f-display)", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink)", margin: "0 0 10px", paddingBottom: 5, borderBottom: "1.25px solid var(--ink)" }}>Chain-link fence posts</h3>
+            {chainRows.map(({ fence, shape, result, condition }) => (
+              <div key={fence.id} style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, fontSize: 12 }}>
+                  <span style={{ width: 12, height: 12, background: condition?.color || "#1f3fc7", border: "1px solid var(--ink-faint)" }} />
+                  <strong style={{ fontFamily: "var(--f-mono)" }}>{condition?.finish_tag || "Chain-link fence"}</strong>
+                  <span style={{ color: "var(--ink-muted)" }}>{sheetLabel ? sheetLabel(shape.sheet_id) : shape.sheet_id}</span>
+                </div>
+                <table className="report-data-table" style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+                  <thead><tr><th style={{ ...th, textAlign: "left" }}>Item</th><th style={th}>Quantity</th><th style={{ ...th, textAlign: "left" }}>Unit</th></tr></thead>
+                  <tbody>
+                    <tr><td style={{ ...td, textAlign: "left" }}>Chain-link fence</td><td style={td}>{num(units === "metric" ? result.totalLengthFt * 0.3048 : result.totalLengthFt)}</td><td style={{ ...td, textAlign: "left" }}>{units === "metric" ? "m" : "LF"}</td></tr>
+                    <tr><td style={{ ...td, textAlign: "left" }}>Sections</td><td style={td}>{result.sections.length}</td><td style={{ ...td, textAlign: "left" }}>EA</td></tr>
+                    <tr><td style={{ ...td, textAlign: "left" }}>Corner / terminal posts</td><td style={td}>{result.cornerPostCount}</td><td style={{ ...td, textAlign: "left" }}>EA</td></tr>
+                    <tr><td style={{ ...td, textAlign: "left" }}>Line posts</td><td style={td}>{result.linePostCount}</td><td style={{ ...td, textAlign: "left" }}>EA</td></tr>
+                    <tr><td style={{ ...td, textAlign: "left", fontWeight: 700 }}>Total posts</td><td style={{ ...td, fontWeight: 700 }}>{result.totalPostCount}</td><td style={{ ...td, textAlign: "left" }}>EA</td></tr>
+                  </tbody>
+                </table>
+                <div style={{ marginTop: 6, fontSize: 11, color: "var(--ink-muted)", lineHeight: 1.5 }}>
+                  Maximum spacing {num(units === "metric" ? fence.max_spacing_ft * 0.3048 : fence.max_spacing_ft, 2)} {units === "metric" ? "m" : "ft"}. {result.sections.map((section) => `Section ${section.index + 1}: ${num(units === "metric" ? section.lengthFt * 0.3048 : section.lengthFt, 2)} ${units === "metric" ? "m" : "ft"}, ${section.intermediate} line post${section.intermediate === 1 ? "" : "s"}`).join(" · ")}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {markups.some((m) => m.type !== "svg") && (
           <div style={{ maxWidth: 980, margin: "26px auto 0" }}>
             {/* svg symbols are decorative vector stamps, not revision notes — excluded */}
             <h3 style={{ fontFamily: "var(--f-display)", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink)", margin: "0 0 10px", paddingBottom: 5, borderBottom: "1.25px solid var(--ink)" }}>Revisions noted</h3>
-            <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+            <table className="report-data-table" style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
               <thead>
                 <tr>
                   <th style={{ ...th, textAlign: "left" }}>Type</th>
@@ -823,8 +869,8 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                         {m.type === "cloud" ? "CLOUD" : m.type === "callout" ? "CALLOUT" : "NOTE"}
                       </span>
                     </td>
-                    <td style={{ ...td, textAlign: "left", fontFamily: "var(--f-mono)", fontSize: 11.5 }}>{sheetLabel ? sheetLabel(m.sheet_id) : m.sheet_id}</td>
-                    <td style={{ ...td, textAlign: "left", whiteSpace: "normal", width: "60%" }}>{m.text || "—"}</td>
+                    <td data-label="Sheet" style={{ ...td, textAlign: "left", fontFamily: "var(--f-mono)", fontSize: 11.5 }}>{sheetLabel ? sheetLabel(m.sheet_id) : m.sheet_id}</td>
+                    <td className="report-wide-cell" data-label="Note" style={{ ...td, textAlign: "left", whiteSpace: "normal", width: "60%" }}>{m.text || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -837,7 +883,7 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
         {matSummary.length > 0 && (
           <div style={{ maxWidth: 980, margin: "26px auto 0" }}>
             <h3 style={{ fontFamily: "var(--f-display)", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink)", margin: "0 0 10px", paddingBottom: 5, borderBottom: "1.25px solid var(--ink)" }}>Supporting materials — buy list</h3>
-            <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+            <table className="report-data-table" style={{ width: "100%", borderCollapse: "collapse", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
               <thead>
                 <tr>
                   <th style={{ ...th, textAlign: "left" }}>Material</th>
@@ -849,8 +895,8 @@ export default function ReportPanel({ projectName, onProjectName, conditions, sh
                 {matSummary.map((m, i) => (
                   <tr key={i}>
                     <td style={{ ...td, textAlign: "left" }}>{m.name}</td>
-                    <td style={{ ...td, fontWeight: 700 }}>{num(m.qty, 2)}</td>
-                    <td style={{ ...td, textAlign: "left", paddingLeft: 16, color: "var(--ink-muted)" }}>{m.unit || "—"}</td>
+                    <td data-label="Quantity" style={{ ...td, fontWeight: 700 }}>{num(m.qty, 2)}</td>
+                    <td data-label="Unit" style={{ ...td, textAlign: "left", paddingLeft: 16, color: "var(--ink-muted)" }}>{m.unit || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1014,7 +1060,7 @@ function ProjectInfoModal({ clientInfo = {}, onClientInfo, onSaved, onClose }) {
           </label>
           <div style={row}>
             <span className="field-label">Logo</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
+            <div className="report-logo-fields" style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
               <input name="company-logo" type="file" accept="image/*" onChange={onLogoFile} style={{ fontSize: 12, minWidth: 0 }} />
               {active.logo && (
                 <>

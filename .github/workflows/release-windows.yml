@@ -1,0 +1,45 @@
+name: Publish Windows app update
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    environment: release
+    defaults:
+      run:
+        working-directory: web
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      WINDOWS_PUBLISHER_NAME: ${{ secrets.WINDOWS_PUBLISHER_NAME }}
+      UPDATE_GITHUB_OWNER: luisgarin03
+      UPDATE_GITHUB_REPO: Takeoff
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Verify tag and signing configuration
+        shell: pwsh
+        run: |
+          $packageVersion = node -p "require('./package.json').version"
+          $tagVersion = $env:GITHUB_REF_NAME -replace '^v', ''
+          if ($packageVersion -ne $tagVersion) {
+            throw "Tag v$tagVersion does not match web/package.json version $packageVersion."
+          }
+          if (-not $env:CSC_LINK -or -not $env:CSC_KEY_PASSWORD -or -not $env:WINDOWS_PUBLISHER_NAME) {
+            throw "The Windows signing certificate, password, and publisher name must be configured in the release environment."
+          }
+      - run: npm ci
+      - run: npm run check
+      - name: Sign and publish installer plus update metadata
+        run: npm run release:win

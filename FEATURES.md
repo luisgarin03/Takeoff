@@ -39,3 +39,5 @@ The buildable map: what OpenTakeoff does and exactly where each piece lives, so 
 ## Extending it
 
 Start with [`AGENTS.md`](AGENTS.md) for the canvas mental model and conventions (coordinate spaces, imperative cursor layer, SVG color literals), then pick your row above. Typical forks: another trade's conditions and supporting materials, a new export format in `ReportPanel.jsx`, or a real model behind `server/adapters/base.py`.
+
+| **Visual symbol search** | Select a raster reference, search current page/PDF/all loaded plans, review suggestions, and convert confirmed hits to counts. Local cancellable worker; approximate ±15% sizes and optional quarter-turn rotations; duplicate-count suppression and normal undo/report integration. | `web/src/components/SymbolSearchDialog.jsx`, `web/src/lib/symbolSearch.js`, `web/src/lib/symbolSearch.worker.js`, `addSymbolCounts` in `TakeoffCanvas.jsx` |

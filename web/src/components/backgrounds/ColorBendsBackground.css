@@ -1,0 +1,3 @@
+.color-bends-background { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: #05070c; }
+.color-bends-background canvas { display: block; width: 100%; height: 100%; }
+.color-bends-background::after { content: ""; position: absolute; inset: 0; background: rgba(5, 7, 12, 0.40); }

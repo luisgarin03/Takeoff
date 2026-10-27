@@ -1,3 +1,5 @@
+import { RecentProjectsMenu } from "./WorkspaceHelp.jsx";
+import "../styles/splash.css";
 // PlanNavigator — the single, harmonized surface for choosing plans, merging the
 // former SheetGallery (working-set thumbnail grid) and DrivePicker (browse the
 // project's Drive folder) into ONE chrome with two modes: "plan" and "browse".
@@ -17,16 +19,22 @@
 // escRef below. While mounted, the navigator swallows canvas keyboard
 // shortcuts in EVERY mode via a capture-phase listener — shortcut suppression is
 // keyed on "is this mounted", never on the canvas' view/mode staying in sync.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../brand/icons.jsx";
+import { BrandText } from "../brand/marks.jsx";
 import AuthChip from "./AuthChip.jsx";
+import LongTaskLoader from "./LongTaskLoader.jsx";
 import { useGoogleAuth } from "../lib/google/AuthContext.jsx";
 import { parseSheetKey, extractSheetNumber, detectScale, RENDER_SCALE, MAX_GROUP } from "../lib/sheets";
 import { isGoogleConfigured } from "../lib/google/auth.js";
 import { projectHomeFolderId } from "../lib/projectHome.js";
 import { groupSheetsByLevel, sortGalleryGroups } from "../lib/sheetLevels.js";
+import { loadSamplePlan } from "../lib/samplePlan.js";
 
+const ColorBendsBackground = lazy(() => import("./backgrounds/ColorBendsBackground.jsx"));
+
+import ProjectDataHeader from "./ProjectDataHeader.jsx";
 const THUMB_W = 380;
 const ROOT = { id: undefined, name: "Project" };   // id undefined → cloudStore's default (project folder)
 
@@ -49,11 +57,12 @@ const ctrlBtn = { display: "inline-flex", alignItems: "center", gap: 6, padding:
 export default function PlanNavigator({
   // presentation + exit
   canClose, onExit, initialMode = "plan", cloudMode,
+  projectMetadata, onSaveProjectMetadata,
   // plan-set (gallery) data
   sheets, getDoc, scales, detectedScales, shapes, labels, onLabel, onDetect,
   thumbCacheRef, busyRef, openTabs, onOpen,
   onAddFiles, onClosePdf, onRemoveFromProject,
-  onCloseProject, onBrowseProjects,
+  onCloseProject, onBrowseProjects, onSignIn, signedIn = false, previewOnly = false,
   levels = {}, onAssignLevel,
   // browse (Drive) data
   listFolder, addSheets, onAdded,
@@ -75,6 +84,7 @@ export default function PlanNavigator({
   const escRef = useRef(() => {});
   useEffect(() => {
     const onKey = (e) => {
+      if (e.target?.closest?.('[role="dialog"]')) return; // A project-file dialog owns its own keys.
       if (e.key === "Escape") { e.stopPropagation(); escRef.current(); return; }
       const tag = e.target?.tagName;
       if (tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") e.stopPropagation();
@@ -132,10 +142,14 @@ export default function PlanNavigator({
   const [pages, setPages] = useState({});   // file -> numPages (as discovered)
   const [sel, setSel] = useState([]);
   const [sampleBusy, setSampleBusy] = useState(false);
+  const [sampleError, setSampleError] = useState("");
   const [driveBusy, setDriveBusy] = useState(false);
   const [driveErr, setDriveErr] = useState("");
   const [addMenu, setAddMenu] = useState(false);
   const [confirmClose, setConfirmClose] = useState(null);   // { file, shapeCount } | null
+  const [hoveredRemovalFile, setHoveredRemovalFile] = useState(null);
+  const [focusedRemovalFile, setFocusedRemovalFile] = useState(null);
+  const [collapsedPdfs, setCollapsedPdfs] = useState({});
   const [, bump] = useState(0);
   const seqRef = useRef(0);
   const queueRef = useRef([]);
@@ -144,16 +158,7 @@ export default function PlanNavigator({
 
   const loadSample = async () => {
     if (sampleBusy || !onAddFiles) return;
-    setSampleBusy(true);
-    try {
-      const base = import.meta.env.BASE_URL || "/";
-      const res = await fetch(`${base}demo/sample-finish-plan.pdf`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      onAddFiles([new File([blob], "sample-finish-plan.pdf", { type: "application/pdf" })]);
-    } catch {
-      setSampleBusy(false);
-    }
+    await loadSamplePlan({ baseUrl: import.meta.env.BASE_URL || "/", addFiles: onAddFiles, onBusy: setSampleBusy, onError: setSampleError });
   };
 
   const handleDriveSignIn = () => {
@@ -262,6 +267,11 @@ export default function PlanNavigator({
   // regardless of whether other groups have levels — see sortGalleryGroups's
   // comment for why this must be a PER-GROUP gate, not a whole-gallery one.
   const groups = sortGalleryGroups(groupSheetsByLevel(allKeys, levels), labelOf);
+  const orderedKeys = groups.flatMap((group) => group.keys);
+  const selectedKeys = new Set(sel);
+  const allSelected = orderedKeys.length > 0 && orderedKeys.every((key) => selectedKeys.has(key));
+  // Use the complete gallery order, not thumbnail visibility or prior click order.
+  const toggleAll = () => setSel(allSelected ? [] : orderedKeys);
   const assignLevel = () => {
     const label = window.prompt('Level for the selected sheets (e.g. "L1", "Level 2", "Garage") — empty clears:', "");
     if (label === null) return;
@@ -291,7 +301,7 @@ export default function PlanNavigator({
   }, [mode, canClose, onExit]);
 
   // ── close / remove a PDF from the working set ───────────────────────────
-  const requestClose = (file) => setConfirmClose({ file, shapeCount: pdfShapeCount(file) });
+  const requestClose = (file) => setConfirmClose({ file, shapeCount: pdfShapeCount(file), pageCount: pages[file] });
   const doClose = async () => {
     const { file } = confirmClose;
     setConfirmClose(null);
@@ -304,20 +314,20 @@ export default function PlanNavigator({
   };
 
   // ══ RENDER ════════════════════════════════════════════════════════════════
-  const title = mode === "browse" ? "Add sheets from Drive" : "Plan set";
+  const title = mode === "browse" ? "Add sheets from Drive" : "Project Data..";
   const subtitle = mode === "browse"
     ? "pick the PDFs to open — specs & as-builts stay unopened"
-    : `${allKeys.length || "…"} sheets · pick one or several — the order you pick is the left-to-right order`;
+    : `${allKeys.length || "…"} Sheets · The order you pick is the left-to-right order`;
 
   const header = (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--ink)", background: "var(--paper-bright)", flexWrap: "wrap" }}>
       {/* LEFT up-chain: back + title + (cloud) Projects crumb + (browse) breadcrumb */}
-      <button onClick={back} disabled={!canGoBack} title={mode === "browse" ? "Back" : "Back to the canvas (Esc)"}
+      {mode === "browse" && <button onClick={back} disabled={!canGoBack} title="Back"
         style={{ ...ctrlBtn, padding: "6px 8px", opacity: canGoBack ? 1 : 0.35, cursor: canGoBack ? "pointer" : "default" }}>
         <Icon name="chevronLeft" size={14} />
-      </button>
-      <Icon name="sheets" size={18} />
-      <strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>{title}</strong>
+      </button>}
+      {mode === "browse" && <><Icon name="sheets" size={18} />
+      <strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>{title}</strong></>}
       {onBrowseProjects && (
         <button onClick={onBrowseProjects} title="Back to your team's projects"
           style={{ border: "none", background: "transparent", color: "var(--cobalt)", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 12, padding: "2px 4px" }}>
@@ -337,7 +347,7 @@ export default function PlanNavigator({
           ))}
         </div>
       ) : (
-        <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--ink-muted)" }}>{subtitle}</span>
+        <span style={{ fontFamily: "var(--f-body)", fontSize: 12, color: "var(--ink)" }}>{subtitle}</span>
       )}
 
       <div style={{ flex: 1 }} />
@@ -361,6 +371,13 @@ export default function PlanNavigator({
           </select>
         </>
       )}
+      {mode === "plan" && (
+        <button type="button" onClick={toggleAll} disabled={!enumerated || !orderedKeys.length}
+          style={ctrlBtn}>
+          <Icon name={allSelected ? "close" : "check"} size={14} />
+          {allSelected ? "Clear All" : "Select All"}
+        </button>
+      )}
       {mode === "plan" && onAddFiles && (
         <div style={{ position: "relative" }}>
           <button onClick={() => (browseEnabled ? setAddMenu((v) => !v) : fileRef.current?.click())}
@@ -383,15 +400,12 @@ export default function PlanNavigator({
           )}
         </div>
       )}
-      {onAddFiles && (
-        <input name="sheet-file" ref={fileRef} type="file" accept=".pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
-          onChange={(e) => { onAddFiles(e.target.files); e.target.value = ""; }} />
-      )}
+
       <AuthChip />
       {onCloseProject && (
         <button onClick={onCloseProject} title="Close this project and return to the local canvas" style={{ ...ctrlBtn, color: "var(--ink-muted)" }}>Close project</button>
       )}
-      {canClose && (
+      {canClose && mode !== "plan" && (
         <button onClick={onExit} title="Back to the canvas (Esc)" style={ctrlBtn}>
           <Icon name="close" size={12} />Close
         </button>
@@ -472,7 +486,8 @@ export default function PlanNavigator({
   // ── PLAN body + footer ──────────────────────────────────────────────────
   const planBody = (
     <>
-      <div style={{ flex: 1, overflow: "auto", padding: 18 }}>
+      <div style={{ flex: 1, overflow: "auto", padding: 18, position: "relative", isolation: "isolate", background: !sheets.length && !canClose ? "#05070c" : undefined }}>
+        {!sheets.length && !canClose && <Suspense fallback={null}><ColorBendsBackground /></Suspense>}
         {groups.map((grp) => (
         <div key={grp.level ?? "__all"} style={{ marginBottom: grp.level !== null ? 22 : 0 }}>
         {grp.level !== null && (
@@ -481,31 +496,65 @@ export default function PlanNavigator({
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(270px, 1fr))", gap: 14 }}>
-          {grp.keys.map((key) => {
+          {grp.keys.map((key, keyIndex) => {
             const idx = sel.indexOf(key);
             const isSel = idx >= 0;
             const thumb = thumbCacheRef.current.get(key);
             const cnt = shapeCount(key);
             const isOpenTab = openTabs.includes(key);
             const parsed = parseSheetKey(key);
-            const isFirstPageOfPdf = parsed.page === 1;   // per-PDF close lives on the first card only
+            const isFirstPageOfPdf = !grp.keys.slice(0, keyIndex).some((otherKey) => parseSheetKey(otherKey).file === parsed.file);
+            const collapsed = collapsedPdfs[parsed.file] ?? true;
+            const pdfKeys = allKeys.filter((sheetKey) => parseSheetKey(sheetKey).file === parsed.file);
+            const pdfSelected = pdfKeys.length > 0 && pdfKeys.every((sheetKey) => selectedKeys.has(sheetKey));
+            const pdfPartSelected = !pdfSelected && pdfKeys.some((sheetKey) => selectedKeys.has(sheetKey));
             return (
-              <div key={key} data-sheetkey={key} ref={(el) => { if (el && !thumb) obsRef.current?.observe(el); }}
+              <React.Fragment key={key}>
+                {isFirstPageOfPdf && (
+                  <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 0, minWidth: 0, border: "1px solid var(--ink-faint)", borderRadius: 6, overflow: "hidden" }}>
+                    <input type="checkbox" aria-label={`Select all sheets in ${parsed.file}`} checked={pdfSelected}
+                      ref={(element) => { if (element) element.indeterminate = pdfPartSelected; }}
+                      disabled={!enumerated}
+                      onChange={() => setSel((current) => {
+                        const fileKeys = new Set(pdfKeys);
+                        return pdfSelected ? current.filter((sheetKey) => !fileKeys.has(sheetKey)) : [...current, ...pdfKeys.filter((sheetKey) => !current.includes(sheetKey))];
+                      })}
+                      style={{ width: 17, height: 17, margin: "0 0 0 12px", flexShrink: 0, cursor: "pointer", accentColor: "var(--cobalt)" }} />
+                    <button type="button" aria-expanded={!collapsed} aria-label={`${collapsed ? "Expand" : "Collapse"} previews for ${parsed.file}`}
+                      title={`${collapsed ? "Expand" : "Collapse"} page previews`}
+                      onClick={() => setCollapsedPdfs((current) => ({ ...current, [parsed.file]: !(current[parsed.file] ?? true) }))}
+                      style={{ flex: 1, minWidth: 0, padding: "7px 10px", border: 0, borderRadius: 0, background: "transparent", color: "var(--ink)", fontFamily: "var(--f-mono)", fontSize: 12, cursor: "pointer", textAlign: "left" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}><strong style={{ overflowWrap: "anywhere" }}>{parsed.file}</strong><Icon name={collapsed ? "chevronRight" : "chevronDown"} size={13} /></span>
+                    <small style={{ display: "block", marginTop: 3, color: "var(--ink-muted)" }}>{pages[parsed.file]} {pages[parsed.file] === 1 ? "page" : "pages"}</small>
+                    </button>
+                  {onClosePdf && (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); requestClose(parsed.file); }}
+                    aria-label={`Remove PDF ${parsed.file}`}
+                    onMouseEnter={() => setHoveredRemovalFile(parsed.file)} onMouseLeave={() => setHoveredRemovalFile(null)}
+                    onFocus={() => setFocusedRemovalFile(parsed.file)} onBlur={() => setFocusedRemovalFile(null)}
+                    title={`Remove all pages of ${parsed.file} from the plan set${cloudMode ? " (the PDF stays in Drive)" : ""}`}
+                    style={{ ...ctrlBtn, flexShrink: 0, alignSelf: "center", alignItems: "center", justifyContent: "center", boxSizing: "border-box", lineHeight: 1, padding: "0 8px", height: 26, minHeight: 26, margin: "0 7px", fontSize: 11.5, color: "var(--c-danger)", border: "1px solid var(--c-danger)", borderRadius: 6, background: "transparent" }}>
+                    <Icon name="close" size={12} /> Remove
+                  </button>
+                  )}
+                  </div>
+                )}
+              {!collapsed && <div data-sheetkey={key} ref={(el) => { if (el && !thumb) obsRef.current?.observe(el); }}
                 onClick={() => toggleSel(key)}
                 style={{ border: isSel ? "1.5px solid var(--cobalt)" : "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", position: "relative", boxShadow: isSel ? "var(--shadow-2)" : "var(--shadow-1)" }}>
                 <span style={{ position: "absolute", top: 8, left: 8, zIndex: 2, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", border: isSel ? "none" : "1.5px solid var(--ink-faint)", background: isSel ? "var(--cobalt)" : "var(--paper-bright)", color: "var(--paper-bright)", fontFamily: "var(--f-mono)", fontSize: 12, fontWeight: 700 }}>{isSel ? idx + 1 : ""}</span>
                 <div style={{ position: "absolute", top: 8, right: 8, zIndex: 2, display: "flex", gap: 6 }}>
-                  {isFirstPageOfPdf && onClosePdf && (
-                    <button onClick={(e) => { e.stopPropagation(); requestClose(parsed.file); }} title={cloudMode ? "Close this PDF — unload it from the plan set (it stays in Drive)" : "Close this PDF — remove it from the plan set (local plans aren't stored elsewhere)"}
-                      style={{ padding: "5px 8px", border: "none", background: "var(--paper-bright)", color: "var(--ink-muted)", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 11, boxShadow: "var(--shadow-1)" }}>✕</button>
-                  )}
                   <button onClick={(e) => { e.stopPropagation(); onOpen([key], false); }} title="Open just this sheet"
                     style={{ padding: "5px 12px", border: "none", background: "var(--ink)", color: "var(--paper-bright)", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase" }}>View</button>
                 </div>
-                <div style={{ height: 185, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--well)", borderBottom: "1px solid var(--ink-faint)", overflow: "hidden" }}>
+                <div style={{ position: "relative", height: 185, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--well)", borderBottom: "1px solid var(--ink-faint)", overflow: "hidden" }}>
                   {thumb
                     ? <img src={thumb} alt={labelOf(key)} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
                     : <div className="skeleton" style={{ width: "86%", height: "78%" }} />}
+                  {(hoveredRemovalFile || focusedRemovalFile) === parsed.file && <div className="pdf-removal-preview" aria-hidden="true"
+                    style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", background: "rgba(185, 28, 28, .18)", border: "2px solid #b91c1c", boxSizing: "border-box" }}>
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 58, height: 58, borderRadius: "50%", background: "#b91c1c", color: "white", boxShadow: "0 2px 8px #0006" }}><Icon name="close" size={38} /></span>
+                  </div>}
                 </div>
                 <div style={{ padding: "8px 10px", display: "flex", alignItems: "baseline", gap: 8 }}>
                   <strong style={{ fontFamily: "var(--f-mono)", fontSize: 12.5, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }} title={key}>{labelOf(key)}</strong>
@@ -516,24 +565,30 @@ export default function PlanNavigator({
                     {scales[key] ? "scale ✓" : detectedScales[key] ? `plan: ${detectedScales[key].label}` : "no scale"}
                   </span>
                 </div>
-              </div>
+
+              </div>}
+              </React.Fragment>
             );
           })}
         </div>
         </div>
         ))}
         {!allKeys.length && (
-          <div style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)", fontSize: 13.5, lineHeight: 1.7 }}>
+          <div className={!sheets.length ? "splash-landing" : undefined} style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)", fontSize: 13.5, lineHeight: 1.7 }}>
             {!sheets.length ? (
-              <div style={{ maxWidth: 560, margin: "0 auto" }}>
-                <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--cobalt)", marginBottom: 6 }}>People &amp; agents · one engine</div>
-                <div style={{ fontFamily: "var(--f-display)", fontSize: 18, color: "var(--ink)", lineHeight: 1.32, marginBottom: 5 }}>Measure a plan by hand — or point an AI&nbsp;agent at the same engine.</div>
-                <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.55, marginBottom: 20 }}>Every measurement keeps its scale and how it was made — a person, one click, or an agent.</div>
+              <>
+              {!signedIn && onSignIn && <nav className="landing-auth-links" aria-label="Account"><button type="button" onClick={onSignIn}>Sign in</button></nav>}
+              <div className="splash-content" style={{ maxWidth: 560, margin: "0 auto" }}>
+                <div className="splash-logo"><BrandText /></div>
+                <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--cobalt)", marginBottom: 6 }}>TAKEOFF · ONE WORKSPACE</div>
+                <div style={{ fontFamily: "var(--f-display)", fontSize: 18, color: "var(--ink)", lineHeight: 1.32, marginBottom: 5 }}>{previewOnly ? "Open your plans. Explore the app." : "Measure plans. Build estimates."}</div>
+                <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.55, marginBottom: 20 }}>{previewOnly ? "Read-only mode · View plans without changing your projects." : "Keep quantities, notes, and measurements together."}</div>
                 <button onClick={() => fileRef.current?.click()}
                   style={{ display: "block", width: "100%", margin: "24px auto 0", padding: "44px 24px", border: "2px dashed var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", color: "var(--ink-muted)", fontFamily: "var(--f-body)", fontSize: 13.5, lineHeight: 1.7 }}>
                   <div style={{ fontFamily: "var(--f-display)", fontSize: 20, color: "var(--ink)", marginBottom: 8 }}>Open your plans</div>
                   Drag a PDF, an image, or a whole .zip plan set here — or click to choose. Nothing leaves your browser.
                 </button>
+                <div className="landing-recents"><RecentProjectsMenu expanded /></div>
                 {isGoogleConfigured() && (!user || projectHomeFolderId()) && (
                   <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6 }}>
                     {!user ? (
@@ -559,11 +614,12 @@ export default function PlanNavigator({
                   style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "13px 22px", border: "1px solid var(--ink)", background: "var(--cobalt)", color: "var(--paper-bright)", cursor: sampleBusy ? "default" : "pointer", opacity: sampleBusy ? 0.65 : 1, fontWeight: 700, fontSize: 14, fontFamily: "var(--f-body)" }}>
                   <Icon name="takeoff" size={16} />{sampleBusy ? "Loading sample…" : "Load sample plan"}
                 </button>
+                {sampleError && <p role="alert" style={{ color: "var(--c-danger)", fontSize: 13, lineHeight: 1.5 }}>{sampleError}</p>}
                 <div style={{ fontFamily: "var(--f-body)", fontSize: 12.5, color: "var(--ink-muted)", marginTop: 11, lineHeight: 1.6 }}>
-                  A real medical-center <strong style={{ color: "var(--ink)" }}>floor finish plan</strong> — the scale auto-detects;
-                  pick a finish and trace a flooring takeoff in seconds.
+                  {previewOnly ? "Try a sample plan in read-only mode." : "Try a sample plan and start measuring."}
                 </div>
-              </div>
+                
+              </div></>
             ) : enumerated ? (
               <>
                 <div style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)", marginBottom: 6 }}>Couldn't read those PDFs</div>
@@ -575,7 +631,7 @@ export default function PlanNavigator({
       </div>
       {sheets.length > 0 && (
         <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "12px 18px", borderTop: "1px solid var(--ink)", background: "var(--paper-bright)" }}>
-          <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--ink-muted)" }}>{sel.length ? `${sel.length} selected` : "select sheets, or hover a card and hit View"}</span>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--ink-muted)" }}>{sel.length ? `${sel.length} selected` : "Select sheets, or hover a card and hit View"}</span>
           <div style={{ flex: 1 }} />
           {sel.length > 0 && (
             <>
@@ -603,6 +659,9 @@ export default function PlanNavigator({
     <div onClick={() => setConfirmClose(null)} style={{ position: "absolute", inset: 0, zIndex: 5, background: "var(--scrim)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div onClick={(e) => e.stopPropagation()} className="panel" style={{ width: 440, maxWidth: "100%", background: "var(--paper-bright)", boxShadow: "var(--shadow-2)", padding: "18px 20px" }}>
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)" }}>Close “{confirmClose.file}”?</strong>
+        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--c-danger)", margin: "10px 0" }}>
+          {confirmClose.pageCount} {confirmClose.pageCount === 1 ? "page will" : "pages will"} be removed from the plan set (entire PDF).
+        </p>
         <p style={{ fontSize: 12.5, color: "var(--ink-muted)", lineHeight: 1.6, margin: "10px 0 4px" }}>
           {cloudMode
             ? "Closing removes it from this plan set so it stops loading — the file stays in your Drive project and you can re-add it any time from Browse Drive."
@@ -634,7 +693,20 @@ export default function PlanNavigator({
       style={canClose
         ? { position: "relative", width: "min(1100px, 92vw)", height: "85vh", display: "flex", flexDirection: "column", background: "var(--paper-cream)", boxShadow: "var(--shadow-2)", overflow: "hidden" }
         : { position: "absolute", inset: 0, display: "flex", flexDirection: "column", background: "var(--paper-cream)" }}>
-      {header}
+      <LongTaskLoader
+        active={adding || sampleBusy || driveBusy || (mode === "browse" && bLoading)}
+        label={adding ? "Adding selected plans…" : sampleBusy ? "Loading sample plan…" : driveBusy ? "Signing in to Google Drive…" : "Reading plan folder…"}
+        variant="overlay"
+      />
+      {mode === "plan" && <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--ink-faint)", background: "var(--paper-bright)" }}><Icon name="sheets" size={18} /><strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>{title}</strong>
+        {canClose && <button type="button" onClick={onExit} title="Back to the canvas (Esc)" style={{ ...ctrlBtn, marginLeft: "auto" }}><Icon name="close" size={12} />Close</button>}
+      </div>}
+      {mode === "plan" && projectMetadata && onSaveProjectMetadata && <ProjectDataHeader key={projectMetadata.projectId || "project"} metadata={projectMetadata} onSave={onSaveProjectMetadata} />}
+      {(mode !== "plan" || sheets.length > 0 || canClose) && header}
+      {onAddFiles && (
+        <input name="sheet-file" ref={fileRef} type="file" accept=".otk,.pdf,application/pdf,image/*,.zip,application/zip,application/x-zip-compressed" multiple style={{ display: "none" }}
+          onChange={(e) => { onAddFiles(e.target.files); e.target.value = ""; }} />
+      )}
       {mode === "browse" ? browseBody : planBody}
       {confirmDialog}
     </div>

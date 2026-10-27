@@ -1,18 +1,40 @@
+import { BrandText } from "./brand/marks.jsx";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import "./styles/tokens.css";
+import "./styles/shadcn.css";
 import "./styles/app.css";
 import TakeoffCanvas from "./pages/TakeoffCanvas.jsx";
 import ProjectHome from "./components/ProjectHome.jsx";
 import { GoogleAuthProvider, useGoogleAuth } from "./lib/google/AuthContext.jsx";
-import { projectIdFromUrl, setActiveStore } from "./lib/store.js";
+import { projectIdFromUrl, setActiveStore, createFileProjectStore } from "./lib/store.js";
 import { isGoogleConfigured, getAccessToken } from "./lib/google/auth.js";
 import { cloudSyncEnabled } from "./lib/prefs.js";
 import { projectHomeFolderId } from "./lib/projectHome.js";
 import { initTheme } from "./lib/theme.js";
+import { CloudProvider, useCloud } from "./lib/supabase/CloudContext.jsx";
+import AuthPage from "./pages/AuthPage.jsx";
+import { createExploreStore } from "./lib/exploreStore.js";
+import { useLicenseAccess } from "./lib/licenseAccess.jsx";
+import { hasEditingMembership, sandboxLicensesAllowed } from "./lib/license.js";
+import LicenseGate from "./components/LicenseGate.jsx";
+import { AppUpdateNotice } from "./components/AppUpdates.jsx";
+import "./styles/textFields.css";
+import "./styles/workspaceUi.css";
 
 initTheme();   // index.html set data-theme pre-paint; this keeps it live
+
+// Keep the PWA installable on localhost without taking ownership of app data.
+// The worker has a pass-through fetch handler: it never caches PDFs, project
+// files, API responses, or the app shell.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {
+      // PWA support is optional; a blocked/unsupported worker must not affect the app.
+    });
+  }, { once: true });
+}
 
 // Client-only SPA. By default there is no backend: the canvas runs entirely in
 // the browser and persists to IndexedDB / localStorage (anonymous local mode).
@@ -39,7 +61,7 @@ const centered = {
 };
 const brand = (
   <strong style={{ fontFamily: "var(--f-display)", fontSize: 20, letterSpacing: "-0.02em" }}>
-    open<span style={{ fontStyle: "italic", color: "var(--cobalt)" }}>takeoff</span>
+    <BrandText />
   </strong>
 );
 
@@ -174,12 +196,50 @@ function ProjectHomeGate() {
   return <ProjectHome />;
 }
 
+function FileProjectGate({ id }) {
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    try { setActiveStore(createFileProjectStore(id)); setReady(true); }
+    catch (e) { setError(e.message); }
+    return () => setActiveStore();
+  }, [id]);
+  if (error) return <Centered title="Couldn't open this project" body={error} />;
+  if (!ready) return <Centered title="Opening project..." />;
+  return <TakeoffCanvas />;
+}
+
+function ExploreGate() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => { setActiveStore(createExploreStore()); setReady(true); return () => setActiveStore(); }, []);
+  return ready ? <TakeoffCanvas /> : <Centered title="Opening plan preview…" />;
+}
+
+function AuthAlias({ signup = false }) {
+  const location = useLocation(), query = new URLSearchParams(location.search);
+  if (signup) query.set("mode", "signup"); else query.delete("mode");
+  return <Navigate to={`/auth${query.size ? `?${query}` : ""}`} replace />;
+}
+
 function App() {
   // Subscribe to navigation: react-router bails out of re-rendering the same
   // element on navigate(), so App must watch the location itself. The store.js
   // URL helpers read window.location, which history has already updated by the
   // time this re-render runs — useLocation() is purely the re-render trigger.
-  useLocation();
+  const location = useLocation();
+  const cloud = useCloud();
+  const access = useLicenseAccess();
+  const pro = !!cloud.user && hasEditingMembership(access, sandboxLicensesAllowed());
+  const fileProjectId = new URLSearchParams(location.search).get("localProject");
+  const query = new URLSearchParams(location.search);
+  if (cloud.ready && cloud.configuration.configured && !cloud.user && !query.has("guest")) return <Navigate to={`/auth?${new URLSearchParams({ returnTo: `${location.pathname}${location.search}` })}`} replace />;
+  if (query.get("explore") === "1" && pro) {
+    query.delete("explore"); query.delete("guest"); query.set("workspace", "1");
+    return <Navigate to={`${location.pathname}?${query}`} replace />;
+  }
+  if (query.get("explore") === "1") return <ExploreGate />;
+  if (cloud.user && !fileProjectId && !projectIdFromUrl() && !query.has("guest") && !query.has("workspace")) return <Navigate to={pro ? "/?workspace=1" : "/?explore=1"} replace />;
+  if (fileProjectId) return <FileProjectGate key={fileProjectId} id={fileProjectId} />;
   const projectId = projectIdFromUrl();
   // ?project= deep link → the cloud project.
   if (projectId && isGoogleConfigured()) return <ProjectGate projectId={projectId} />;
@@ -193,12 +253,18 @@ function App() {
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <GoogleAuthProvider>
+      <CloudProvider>
+      <AppUpdateNotice />
       <BrowserRouter>
         <Routes>
-          <Route path="/projects" element={<ProjectHomeGate />} />
-          <Route path="*" element={<App />} />
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/sign-in" element={<AuthAlias />} />
+          <Route path="/sign-up" element={<AuthAlias signup />} />
+          <Route path="/projects" element={<LicenseGate><ProjectHomeGate /></LicenseGate>} />
+          <Route path="*" element={<LicenseGate><App /></LicenseGate>} />
         </Routes>
       </BrowserRouter>
+      </CloudProvider>
     </GoogleAuthProvider>
   </React.StrictMode>
 );

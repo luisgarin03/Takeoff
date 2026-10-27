@@ -5,7 +5,7 @@
 // a degraded low-res proxy (the "jagged linework" bug, 2026-07-20).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { autoRenderScale } from "../src/lib/canvasUtil.js";
+import { autoRenderScale, previewRasterDimensions } from "../src/lib/canvasUtil.js";
 import { RENDER_SCALE } from "../src/lib/sheets";
 import { MAX_PANEL_AREA, MAX_CANVAS_DIM, QUALITY_CEILING } from "../src/lib/canvasConstants.js";
 
@@ -34,4 +34,13 @@ test("an oversized 1px=1pt image page renders BELOW baseline, inside the panel b
 test("degenerate dims fall back to the baseline", () => {
   assert.equal(autoRenderScale(0, 0), RENDER_SCALE);
   assert.equal(autoRenderScale(-1, 100), RENDER_SCALE);
+});
+
+test("low-zoom preview dimensions and RGBA estimates follow the selected resolution", () => {
+  const expected = new Map([[0.10, [518, 346]], [0.25, [1296, 864]], [0.50, [2592, 1728]], [0.75, [3888, 2592]], [1.00, [5184, 3456]]]);
+  for (const [scale, [width, height]] of expected) {
+    const actual = previewRasterDimensions(5184, 3456, scale);
+    assert.deepEqual(actual, { width, height });
+    assert.equal(actual.width * actual.height * 4, width * height * 4);
+  }
 });

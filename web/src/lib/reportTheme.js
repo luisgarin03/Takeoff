@@ -103,6 +103,11 @@ export function themeToCssVars(theme) {
   for (const [role, varName] of Object.entries(COLOR_VARS)) {
     if (color[role]) out[varName] = color[role];
   }
+  if (color.ink) {
+    out["--ink-muted"] = color.ink + "B3";
+    out["--ink-faint"] = color.ink + "40";
+    out["--text-faint"] = color.ink + "80";
+  }
   // paper scale → base/raised/pressed. A lone `paper` also seeds --paper-cream
   // (the report backdrop + totals band + group heads all read --paper-cream), so
   // those surfaces recolor with the tables instead of stranding on the default.
@@ -159,3 +164,18 @@ export function saveActiveThemeFile(json) {
 export function clearActiveTheme() {
   try { localStorage.removeItem(ACTIVE_KEY); } catch { /* private mode */ }
 }
+
+// Presets use the same token-file format and persistence as imported themes.
+export const REPORT_THEME_PRESETS = [
+  ["Blueprint", "#E8F0FA", "#142237", "#192C46", "#233B59", "#8CB8FF"],
+  ["Forest", "#EAF2EC", "#192A23", "#20362B", "#2C4538", "#92D5AB"],
+  ["Graphite", "#F1F1F3", "#242529", "#2D2F34", "#3C3E45", "#B8BECE"],
+  ["Classic Paper", "#252B36", "#FFFFFF", "#F4F5F7", "#E5E8ED", "#254FA3"],
+].map(([name, ink, paper, paper2, paper3, accent]) => ({
+  name,
+  color: {
+    neutral: { ink: { value: ink }, paper: { value: paper }, "paper-2": { value: paper2 }, "paper-3": { value: paper3 } },
+    accent: { blue: { value: accent } },
+  },
+  font: { family: { web: { display: "Arial", body: "Arial", mono: "Consolas" } } },
+}));

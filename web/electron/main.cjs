@@ -1,6 +1,7 @@
 const { app, BrowserWindow, protocol, shell, session } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
+const { setupUpdater } = require("./updater.cjs");
 
 const APP_SCHEME = "opentakeoff";
 const APP_HOST = "app";
@@ -22,7 +23,7 @@ if (process.platform === "win32" && process.env.LOCALAPPDATA) {
   app.setPath("userData", path.join(process.env.LOCALAPPDATA, "OpenTakeoff"));
 }
 
-app.setName("OpenTakeoff");
+
 
 function distPath() {
   return path.join(app.getAppPath(), "dist");
@@ -118,7 +119,7 @@ function createWindow() {
     minHeight: 720,
     show: false,
     backgroundColor: "#f4efe0",
-    icon: path.join(app.getAppPath(), "build", "icon.ico"),
+    icon: path.join(distPath(), "icons", "icon-512.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -149,10 +150,13 @@ function createWindow() {
   win.loadURL(`${APP_SCHEME}://${APP_HOST}/`);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const { APP_NAME } = await import("../src/brand/appName.js");
+  app.setName(APP_NAME);
   protocol.handle(APP_SCHEME, appResponse);
   applySecurityHeaders();
   createWindow();
+  setupUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

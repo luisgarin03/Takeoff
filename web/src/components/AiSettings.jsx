@@ -1,3 +1,4 @@
+import { APP_NAME } from "../brand/appName.js";
 // AI settings — bring your own key. The single always-visible pixel of the AI
 // seam; everything else stays dormant until this is configured (ai.js).
 import { useState } from "react";
@@ -19,7 +20,7 @@ export default function AiSettings({ onClose }) {
         </div>
         <div style={{ padding: 16, fontSize: 13, lineHeight: 1.6, color: "var(--ink)" }}>
           <p style={{ marginTop: 0 }}>
-            OpenTakeoff can ask a vision model <strong>you</strong> provide to read things off the plan — starting
+            {APP_NAME} can ask a vision model <strong>you</strong> provide to read things off the plan — starting
             with the drawn scale when the sheet text doesn't state one. Point it at an OpenAI-style or
             Anthropic-style endpoint: a hosted API, or a local runtime on your own machine (most local
             runtimes speak the OpenAI style and need no key).

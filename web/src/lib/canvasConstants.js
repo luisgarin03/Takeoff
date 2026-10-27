@@ -36,6 +36,17 @@ export const GESTURE_MS = 140;      // wheel/pinch quiet window before the detai
 // region under real CPU contention took 50+ seconds and still resolved on its own.
 export const DETAIL_STALL_MS = 25000;
 
+// Overview mode keeps the full-resolution base raster intact, but displays this
+// prebuilt downsample while the whole stage is very small. The gap between enter
+// and exit prevents compositor-visible representation churn around the boundary.
+export const LOW_ZOOM_PREVIEW_MIN_SCALE = 0.10;
+export const LOW_ZOOM_PREVIEW_MAX_SCALE = 1.00;
+export const LOW_ZOOM_PREVIEW_STEP = 0.05;
+export const LOW_ZOOM_PREVIEW_DEFAULT_SCALE = 0.50;
+export const LOW_ZOOM_PREVIEW_DEBOUNCE_MS = 250;
+export const LOW_ZOOM_ENTER = 0.30;
+export const LOW_ZOOM_EXIT = 0.40;
+
 export const SNAP_CELL = 24;   // snap-grid bucket, raster px (Spline runs 12 — its budgeted raster is denser)
 
 // toolbar menus — STACK-style: the menu face shows the armed tool
@@ -53,13 +64,22 @@ export const CUT_TOOLS = [
   { id: "deduct-rect", icon: "deductRect", label: "Deduct rectangle", shortcut: "⇧D" },
 ];
 export const MARKUP_TOOLS = [
+  { id: "draw", icon: "brush", label: "Draw" },
   { id: "highlighter", icon: "highlighter", label: "Highlighter", shortcut: "H" },
   { id: "cloud", icon: "cloud", label: "Revision cloud" },
   { id: "callout", icon: "callout", label: "Callout" },
+  { id: "arrow", icon: "arrow", label: "Arrow" },
   { id: "text", icon: "textNote", label: "Text note" },
   { id: "highlight", icon: "highlight", label: "Highlight box" },
 ];
 export const MARKUP_IDS = MARKUP_TOOLS.map((t) => t.id);
+export const ARROW_COLORS = [
+  { name: "Terracotta", value: "#C96442" }, { name: "Green", value: "#2F7D54" },
+  { name: "Blue", value: "#2563EB" }, { name: "Purple", value: "#9333EA" },
+  { name: "Gold", value: "#B8860B" }, { name: "Teal", value: "#0D9488" },
+  { name: "Magenta", value: "#BE185D" }, { name: "Dark slate", value: "#1F2937" },
+  { name: "Red", value: "#DC2626" }, { name: "Cyan", value: "#0891B2" },
+];
 // highlighter inks — literal hex (SVG attrs; CSS vars don't resolve there).
 // The freehand TOOL is "highlighter" (the two-corner "highlight" box above is
 // its own tool); its strokes persist as type:"highlight" + pts, the same
@@ -73,9 +93,7 @@ export const HL_SIZES = [["F", 8], ["M", 14], ["B", 22]];   // screen px at draw
 // Expressed in TEMPLATE shape (finish_tag/waste_pct/materials, no fill — it
 // defaults from color) so seeding and the Library run the same constructor.
 export const FLOORING_DEFAULTS = [
-  { finish_tag: "perimeterWall", color: "#5b8def", hatch: "horiz", waste_pct: 0, materials: [] },
-  { finish_tag: "wallPartition", color: "#44b678", hatch: "diag", waste_pct: 0, materials: [] },
-  { finish_tag: "exteriorWall",  color: "#df6b57", hatch: "brick", waste_pct: 0, materials: [] },
-  { finish_tag: "tile",          color: "#8b5cf6", hatch: "grid",  waste_pct: 0, materials: [] },
-  { finish_tag: "ceiling",       color: "#d6a13c", hatch: "dots",  waste_pct: 0, materials: [] },
+  { finish_tag: "Chain Link Fence", color: "#5b8def", hatch: "horiz", waste_pct: 0, materials: [] },
+  { finish_tag: "Wood Fence",       color: "#44b678", hatch: "diag",  waste_pct: 0, materials: [] },
+  { finish_tag: "Aluminum Fence",   color: "#df6b57", hatch: "brick", waste_pct: 0, materials: [] },
 ];

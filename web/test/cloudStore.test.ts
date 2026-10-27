@@ -172,6 +172,15 @@ test("addSheets name-dedupe keeps the first id when a later pick reuses the name
   assert.deepEqual(files, [{ id: "X", name: "plan.pdf" }]);
 });
 
+test("reselecting the same cloud PDF refreshes its compatibility metadata without duplicating it", async () => {
+  const drive = fakeDrive();
+  const store = createCloudStore("folder1", drive as any, { local: fakeLocal() as any });
+  await store.addSheets([{ id: "X", name: "plan.pdf" }]);
+  const compatibility = { version: 1, mode: "full", pageCount: 3, signature: "10:test" };
+  const files = await store.addSheets([{ id: "X", name: "plan.pdf", compatibility }]);
+  assert.deepEqual(files, [{ id: "X", name: "plan.pdf", compatibility }]);
+});
+
 test("addPdf uploads a new file, then updates on re-add (dedupe by name), and manifests it", async () => {
   const drive = fakeDrive();
   const store = createCloudStore("folder1", drive as any, { local: fakeLocal() as any });
@@ -190,12 +199,43 @@ test("addPdf uploads a new file, then updates on re-add (dedupe by name), and ma
   assert.deepEqual(await store.listSheets(), [{ name: "plan.pdf" }]); // re-add didn't dup the manifest entry
 });
 
+test("cloud addPdf reuses bytes already read by compatibility validation", async () => {
+  const drive = fakeDrive();
+  const store = createCloudStore("folder1", drive as any, { local: fakeLocal() as any });
+  const prepared = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]);
+  const file = { name: "prepared.pdf", arrayBuffer: async () => { throw new Error("file should not be read twice"); } };
+  await store.addPdf(file as any, null, prepared);
+  assert.deepEqual(await store.loadPdfData("prepared.pdf"), prepared);
+});
+
+test("cloud sheet manifest persists compatibility metadata and clears it when bytes are replaced", async () => {
+  const drive = fakeDrive();
+  const store = createCloudStore("folder1", drive as any, { local: fakeLocal() as any });
+  const verified = { version: 1, mode: "full", pageCount: 2, signature: "3:test" };
+  await store.addPdf(fakeFile("plan.pdf", new Uint8Array([1, 2, 3])) as any, verified);
+  assert.deepEqual(await store.loadPdfCompatibility("plan.pdf"), verified);
+  assert.deepEqual(await store.listSheets(), [{ name: "plan.pdf", compatibility: verified }]);
+
+  await store.addPdf(fakeFile("plan.pdf", new Uint8Array([4, 5])) as any);
+  assert.equal(await store.loadPdfCompatibility("plan.pdf"), null);
+  assert.deepEqual(await store.listSheets(), [{ name: "plan.pdf" }]);
+});
+
 test("loadPdfData resolves by manifest id; throws when not in the working set", async () => {
   const drive = fakeDrive();
   const store = createCloudStore("folder1", drive as any, { local: fakeLocal() as any });
   await store.addPdf(fakeFile("plan.pdf", new Uint8Array([37, 80, 68, 70])) as any);
   assert.deepEqual(await store.loadPdfData("plan.pdf"), new Uint8Array([37, 80, 68, 70]));
   await assert.rejects(store.loadPdfData("missing.pdf"), /PDF not in project sheet set: missing\.pdf/);
+});
+
+test("loadPdfCandidate downloads a picker item without adding it to sheets.json", async () => {
+  const drive = fakeDrive();
+  drive._byId.set("candidate", { id: "candidate", name: "candidate.pdf", parent: "elsewhere", mimeType: PDF_MIME, bytes: new Uint8Array([9, 8, 7]) });
+  const store = createCloudStore("folder1", drive as any, { local: fakeLocal() as any });
+  assert.deepEqual(await store.loadPdfCandidate({ id: "candidate", name: "candidate.pdf" }), new Uint8Array([9, 8, 7]));
+  assert.deepEqual(await store.listSheets(), []);
+  await assert.rejects(store.loadPdfCandidate({ id: "", name: "candidate.pdf" } as any), /Invalid PDF selection/);
 });
 
 test("loadPdfData resolves a file living in a SUBFOLDER purely via the manifest id", async () => {

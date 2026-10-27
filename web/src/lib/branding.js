@@ -1,10 +1,11 @@
+import { APP_NAME } from "../brand/appName.js";
 // Branding mode — how a deliverable presents itself. Two modes:
 //   • "default"    — OpenTakeoff-branded, exactly as the parent repo ships. This
 //                    is the code default (unset ⇒ default), so an upstream clone
 //                    is unchanged.
 //   • "clearlabel" — a saved trade-name profile brands the document as the firm
 //                    presenting it; OpenTakeoff keeps a subtle plain-text credit
-//                    ("Measured with OpenTakeoff"), so the parent is still credited.
+//                    (`Measured with ${APP_NAME}`), so the parent is still credited.
 //
 // resolveBranding() is PURE — given the per-project selection + the global
 // profiles list it tells every render point (report masthead, marked-set cover,
@@ -14,7 +15,7 @@
 import { metaGet, metaPut } from "./store.js";
 import { activeProfile } from "./identity.js";
 
-export const OT_NAME = "OpenTakeoff";
+export const OT_NAME = APP_NAME;
 export const OT_CREDIT = "Measured with OpenTakeoff";
 
 /**
@@ -46,7 +47,7 @@ export function resolveBranding(sel) {
     // already OpenTakeoff-branded throughout, so a separate credit is redundant)
     credit: clear ? OT_CREDIT : null,
     // marked-set cover wordmark — carries the OpenTakeoff prefix in default mode
-    coverTitle: clear ? "Marked Set" : "OpenTakeoff · Marked Set",
+    coverTitle: clear ? "Marked Set" : `${APP_NAME} · Marked Set`,
   };
 }
 

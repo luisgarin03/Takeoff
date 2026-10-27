@@ -1,3 +1,4 @@
+import { APP_NAME } from "../brand/appName.js";
 // Storage adapter — the seam that replaces the backend.
 //
 // OpenTakeoff is client-only by default: the takeoff canvas talks to `store`,
@@ -36,7 +37,41 @@ const MATLIB_KEY = "material_library";
 // pattern as templates/materials, its own key in the keyPath-less meta store
 // (no DB version bump). Persists across projects; export/import as JSON.
 const STAMPLIB_KEY = "stamp_library";
+const pdfCompatibilityKey = (name) => `pdf_compatibility:${name}`;
 const ANN_SCHEMA = "opentakeoff.takeoff_canvas.v1";
+
+let projectWritesBlocked = false;
+const WRITE_METHODS = new Set([
+  "savePdfCompatibility", "addPdf", "addSheets", "removePdf", "removeFromProject",
+  "saveAnnotations", "saveTemplates", "saveMaterialLibrary", "saveStampLibrary",
+  "saveSnapshot", "putSnapshot", "deleteSnapshot",
+]);
+
+export class ReadOnlyLicenseError extends Error {
+  constructor() {
+    super("This workspace is read-only. Go online with an active subscription on the licensed computer to edit.");
+    this.name = "ReadOnlyLicenseError";
+    this.code = "OTK_READ_ONLY";
+  }
+}
+
+export function setProjectWritesBlocked(blocked) {
+  projectWritesBlocked = blocked === true;
+}
+
+export function projectWritesAreBlocked() {
+  return projectWritesBlocked;
+}
+
+function guardedStore(target) {
+  return new Proxy(target, {
+    get(source, property, receiver) {
+      const value = Reflect.get(source, property, receiver);
+      if (typeof value !== "function" || !WRITE_METHODS.has(String(property))) return value;
+      return (...args) => projectWritesBlocked ? Promise.reject(new ReadOnlyLicenseError()) : value.apply(source, args);
+    },
+  });
+}
 
 // The empty-project annotations shape. One definition so the local store and the
 // Drive-backed cloud store (cloudStore.js) hydrate a fresh project identically —
@@ -45,9 +80,9 @@ export function emptyAnnotations() {
   return { schema: ANN_SCHEMA, conditions: [], shapes: [], markups: [], sheets: [], sheet_group: [], last_group: [], sheet_tabs: [] };
 }
 
-function openDB() {
+function openDB(databaseName = DB_NAME) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDB.open(databaseName, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       // contains-guards make this run for both fresh creates and v1->v2 upgrades
@@ -63,7 +98,7 @@ function openDB() {
     req.onblocked = () => {
       settled = true;
       reject(Object.assign(
-        new Error("OpenTakeoff is open in another tab with older data — close it or reload."),
+        new Error(`${APP_NAME} is open in another tab with older data — close it or reload.`),
         { name: "BlockedError" },
       ));
     };
@@ -84,7 +119,7 @@ function openDB() {
       if (req.error?.name === "VersionError") {
         // This build is OLDER than the database — a stale tab after a future bump.
         reject(Object.assign(
-          new Error("This tab is running an older OpenTakeoff — reload to update."),
+          new Error(`This tab is running an older ${APP_NAME} — reload to update.`),
           { name: "VersionError" },
         ));
       } else {
@@ -104,7 +139,7 @@ export function isStaleTabError(e) {
 // The one UI copy for stale-tab failures. TakeoffCanvas routes its message
 // tint on exact equality with this string, so every surface must use the
 // constant — a local paraphrase would silently render in the success color.
-export const STALE_TAB_MESSAGE = "OpenTakeoff was updated in another tab — reload this tab to continue.";
+export const STALE_TAB_MESSAGE = `${APP_NAME} was updated in another tab — reload this tab to continue.`;
 
 // Map raw store errors to copy the user can act on; falls back to the
 // error's own message for everything unrecognized.
@@ -118,8 +153,8 @@ export function friendlyStoreError(e) {
 // Open, run, ALWAYS close — even when fn throws (a DataCloneError inside a
 // put, say). A leaked open connection blocks every future version upgrade
 // in every tab.
-async function withDb(fn) {
-  const db = await openDB();
+async function withDatabase(fn, databaseName = DB_NAME) {
+  const db = await openDB(databaseName);
   try {
     return await fn(db);
   } finally {
@@ -140,7 +175,13 @@ function tx(db, store, mode, fn) {
   });
 }
 
-export const localStore = {
+const withDb = (fn) => withDatabase(fn);
+
+// Portable projects reuse the same adapter in an isolated database. A PDF with
+// the same filename in another project must never replace this project's bytes.
+function createWorkspaceStore(databaseName = DB_NAME) {
+  const withDb = (fn) => withDatabase(fn, databaseName);
+  return {
   async listSheets() {
     const names = await withDb((db) => tx(db, PDF_STORE, "readonly", (os) => os.getAllKeys()));
     // preserve insertion order (IndexedDB getAllKeys sorts by key; we keep the
@@ -156,17 +197,34 @@ export const localStore = {
     return new Uint8Array(rec.bytes);
   },
 
-  async addPdf(file) {
+  async loadPdfCompatibility(name) {
+    return withDb((db) => tx(db, META_STORE, "readonly", (os) => os.get(pdfCompatibilityKey(name))));
+  },
+
+  async savePdfCompatibility(name, compatibility) {
+    const key = pdfCompatibilityKey(name);
+    await withDb((db) => tx(db, META_STORE, "readwrite", (os) => compatibility ? os.put(compatibility, key) : os.delete(key)));
+  },
+
+  /** @param {{name: string, arrayBuffer: () => Promise<ArrayBuffer>}} file @param {any} [compatibility] @param {Uint8Array|ArrayBuffer|null} [preparedBytes] */
+  async addPdf(file, compatibility = null, preparedBytes = null) {
     // read the bytes BEFORE opening — don't hold a connection across an
-    // unrelated (possibly slow, file-sized) await
-    const bytes = await file.arrayBuffer();
+    // unrelated (possibly slow, file-sized) await. Import validation may have
+    // already read the file, so accept those bytes instead of doing it twice.
+    const bytes = preparedBytes instanceof Uint8Array
+      ? preparedBytes.buffer.slice(preparedBytes.byteOffset, preparedBytes.byteOffset + preparedBytes.byteLength)
+      : preparedBytes instanceof ArrayBuffer ? preparedBytes.slice(0) : await file.arrayBuffer();
     // de-dupe by name: a re-dropped file replaces the old bytes
     await withDb((db) => tx(db, PDF_STORE, "readwrite", (os) => os.put({ name: file.name, bytes })));
+    await withDb((db) => tx(db, META_STORE, "readwrite", (os) => compatibility
+      ? os.put(compatibility, pdfCompatibilityKey(file.name))
+      : os.delete(pdfCompatibilityKey(file.name))));
     return { name: file.name };
   },
 
   async removePdf(name) {
     await withDb((db) => tx(db, PDF_STORE, "readwrite", (os) => os.delete(name)));
+    await withDb((db) => tx(db, META_STORE, "readwrite", (os) => os.delete(pdfCompatibilityKey(name))));
   },
 
   async loadAnnotations() {
@@ -289,7 +347,46 @@ export const localStore = {
   async deleteSnapshot(id) {
     await withDb((db) => tx(db, SNAP_STORE, "readwrite", (os) => os.delete(id)));
   },
-};
+  };
+}
+
+export const localStore = createWorkspaceStore();
+
+function fileProjectDb(id) {
+  if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error("Invalid local project ID.");
+  return `${DB_NAME}-project-${id}`;
+}
+
+export function createFileProjectStore(id) {
+  return {
+    ...createWorkspaceStore(fileProjectDb(id)),
+    // Reusable libraries remain browser-global; placed items live in annotations.
+    loadTemplates: localStore.loadTemplates, saveTemplates: localStore.saveTemplates,
+    loadMaterialLibrary: localStore.loadMaterialLibrary, saveMaterialLibrary: localStore.saveMaterialLibrary,
+    loadStampLibrary: localStore.loadStampLibrary, saveStampLibrary: localStore.saveStampLibrary,
+  };
+}
+
+export async function importFileProject({ annotations, pdfs, snapshots }) {
+  const id = crypto.randomUUID();
+  // One transaction: quota/write failures cannot leave a half-imported project.
+  // Nothing is cleared or written in the currently open workspace.
+  await withDatabase((db) => new Promise((resolve, reject) => {
+    const t = db.transaction([PDF_STORE, META_STORE, SNAP_STORE], "readwrite");
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error("Project import was cancelled."));
+    try {
+      t.objectStore(META_STORE).put({ ...annotations, schema: ANN_SCHEMA }, ANN_KEY);
+      for (const pdf of pdfs) {
+        t.objectStore(PDF_STORE).put({ name: pdf.name, bytes: pdf.bytes.slice().buffer });
+        if (pdf.compatibility) t.objectStore(META_STORE).put(pdf.compatibility, pdfCompatibilityKey(pdf.name));
+      }
+      for (const snapshot of snapshots) t.objectStore(SNAP_STORE).put({ ...snapshot, project: null });
+    } catch (error) { t.abort(); reject(error); }
+  }), fileProjectDb(id));
+  return id;
+}
 
 // A localStore instance whose ANNOTATIONS are scoped to a single project, so an
 // opted-in cloud project keeps its own local-first annotation blob instead of
@@ -365,13 +462,13 @@ export async function metaDelete(key) {
 // canvas mounts is enough. The switch is driven from the app shell (main.jsx),
 // which alone pulls in the Google/Drive modules — the anonymous bundle never
 // loads them.
-export let store = localStore;
+export let store = guardedStore(localStore);
 
 // Point the shared `store` at a cloud (or any drop-in) adapter; pass nothing to
 // fall back to the local, browser-only store. Called from the app shell once a
 // deep-linked project is signed in and its Drive-backed store is built.
 export function setActiveStore(next) {
-  store = next || localStore;
+  store = guardedStore(next || localStore);
 }
 
 // The deep-link contract with Glide: `…/?project=<driveFolderId>` selects which

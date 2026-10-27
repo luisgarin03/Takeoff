@@ -1,3 +1,4 @@
+import { BrandText } from "../brand/marks.jsx";
 // ProjectHome — the signed-in `/` screen on team-configured builds.
 //
 // A project IS a direct child of the "Projects" Shared Drive root, so this is a
@@ -11,6 +12,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthChip from "./AuthChip.jsx";
+import LongTaskLoader from "./LongTaskLoader.jsx";
 import { projectHomeFolderId, listProjectFolders, createRecents, browserStorage } from "../lib/projectHome.js";
 import { getAccessToken } from "../lib/google/auth.js";
 
@@ -57,7 +59,7 @@ export default function ProjectHome() {
       {/* header: brand + title + local-canvas escape hatch + signed-in chip */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderBottom: "1px solid var(--ink)", background: "var(--paper-bright)", flexWrap: "wrap" }}>
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 20, letterSpacing: "-0.02em" }}>
-          open<span style={{ fontStyle: "italic", color: "var(--cobalt)" }}>takeoff</span>
+          <BrandText />
         </strong>
         <strong style={{ fontFamily: "var(--f-display)", fontSize: 16, color: "var(--ink)" }}>Projects</strong>
         {/* Escape hatch sits WITH the title (top-left), matching PlanNavigator's
@@ -91,7 +93,10 @@ export default function ProjectHome() {
       {/* folder listing */}
       <div style={{ flex: 1, overflow: "auto" }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "var(--ink-muted)", fontSize: 13 }}>Reading projects…</div>
+          <div style={{ padding: 40, display: "flex", alignItems: "center", justifyContent: "center", gap: 12, color: "var(--ink-muted)", fontSize: 13 }}>
+            <LongTaskLoader active label="Reading projects…" compact />
+            <span aria-hidden="true">Reading projects…</span>
+          </div>
         ) : err ? (
           <div style={{ padding: 40, textAlign: "center", fontSize: 13 }}>
             <div style={{ color: "var(--c-danger)", marginBottom: 12 }}>Couldn't list the projects: {err}</div>

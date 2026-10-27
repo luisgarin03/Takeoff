@@ -1,0 +1,373 @@
+/* Scoped chrome: existing canvas, palettes and user theme tokens stay intact. */
+:root .tabbed-toolbar-stack { max-width: 100%; overflow: visible; max-height: none; }
+.estimating-toolbar { min-width: 0; color: var(--ink); background: var(--paper-bright); border: 1px solid var(--ink-faint); border-radius: 10px; }
+.estimating-toolbar-header { display: flex; align-items: center; gap: 12px; padding: 8px 12px; min-width: 0; border-bottom: 1px solid var(--ink-faint); }
+.estimating-toolbar-logo { flex: 0 1 auto; min-width: 0; max-width: 28%; overflow-wrap: anywhere; }
+.estimating-toolbar-logo strong { display: block; }
+.estimating-toolbar-project { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 1 auto; }
+.estimating-toolbar-project button { min-height: 40px; border-radius: 6px !important; }
+@media (max-width: 900px) {
+  .estimating-toolbar-header { flex-wrap: wrap; }
+  .estimating-toolbar-project { max-width: 100%; }
+}
+.estimating-toolbar-tabs { display: flex; flex: 0 1 auto; min-width: 0; padding: 4px; gap: 3px; overflow-x: auto; background: var(--paper-shadow); border: 1px solid var(--ink-faint); border-radius: 9px; scrollbar-width: thin; }
+.estimating-toolbar-tabs button { flex: 0 0 auto; min-height: 40px; padding: 6px 12px; border: 1px solid transparent; border-radius: 6px !important; background: transparent; color: var(--ink-muted); font: 600 12px var(--f-body); }
+.estimating-toolbar-tabs button:hover { color: var(--ink); }
+.estimating-toolbar-tabs button[aria-selected="true"] { background: var(--paper-bright); color: var(--ink); border-color: var(--ink-faint); box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.estimating-toolbar :focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+.estimating-toolbar-account { margin-left: auto; display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 0; }
+.estimating-toolbar-account button { min-height: 44px; max-width: 160px; }
+.takeoff-header-zoom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 0 8px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font: 600 11px var(--f-mono);
+  line-height: 1;
+  white-space: nowrap;
+}
+.estimating-toolbar-account .account-sign-in-button { border: 1px solid var(--ink-faint); background: transparent; color: var(--ink); padding: 6px 10px; }
+.estimating-toolbar-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; min-width: 0; max-height: 34dvh; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.estimating-toolbar-panel[hidden] { display: none; }
+.estimating-toolbar-panel > * { max-width: 100%; }
+.estimating-toolbar-panel button, .estimating-toolbar-panel select, .estimating-toolbar-panel input:not([type="range"]) { min-height: 40px; border-radius: 6px !important; }
+.estimating-toolbar-panel .toolbar-sheet-tools { border: 0; padding-left: 0; row-gap: 22px !important; }
+.takeoff-toolbar-readout {
+  flex: 1 1 360px;
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: minmax(150px, 1.25fr) minmax(130px, .75fr);
+  grid-template-areas:
+    "heading total"
+    "live total"
+    "meta total";
+  column-gap: 12px;
+  min-width: 280px;
+  max-width: 560px !important;
+  padding: 7px 10px;
+  border: 1px solid var(--ink-faint);
+  border-left: 3px solid var(--takeoff-readout-accent, var(--cobalt));
+  border-radius: 6px;
+  background: var(--paper-cream);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.takeoff-toolbar-readout-heading {
+  grid-area: heading;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.takeoff-toolbar-readout-live { grid-area: live; min-width: 0; font-size: 12px; }
+.takeoff-toolbar-readout-detail { margin-top: 1px; color: var(--ink-secondary); font-size: 11.5px; }
+.takeoff-toolbar-readout-hint { margin-top: 2px; color: var(--ink-muted); font-size: 10.5px; line-height: 1.25; }
+.takeoff-toolbar-readout-warning { margin-top: 2px; color: var(--c-danger); font-size: 11px; line-height: 1.25; }
+.takeoff-toolbar-readout-total {
+  grid-area: total;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding-left: 12px;
+  border-left: 1px solid var(--ink-faint);
+}
+.takeoff-toolbar-readout-total > span {
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.takeoff-toolbar-readout-total strong { display: flex; flex-wrap: wrap; gap: 2px 9px; margin-top: 2px; font-size: 12.5px; }
+.takeoff-toolbar-readout-total small { margin-top: 2px; color: var(--ink-muted); font-size: 10px; }
+.takeoff-toolbar-readout-meta { grid-area: meta; margin-top: 3px; color: var(--ink-muted); font-size: 9.5px; }
+.takeoff-toolbar-shape-height { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 4px; color: var(--ink-muted); font-size: 10.5px; }
+.estimating-toolbar-panel .takeoff-toolbar-shape-height input { width: 58px; min-height: 28px !important; padding: 2px 5px; border: 1px solid var(--ink-faint); background: var(--paper-bright); color: var(--ink); font-size: 11px; }
+.estimating-toolbar-panel .takeoff-toolbar-shape-height button { min-width: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; color: var(--ink-muted); cursor: pointer; }
+.estimating-toolbar-panel .toolbar-cluster { flex-wrap: wrap; max-width: 100%; }
+.estimating-toolbar-panel .toolbar-sheet-tabs { width: 100%; }
+.calibration-toolbar-prompt {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--cobalt) 55%, var(--ink-faint));
+  border-left: 4px solid var(--cobalt);
+  border-radius: 7px;
+  background: var(--paper-cream);
+  color: var(--ink);
+  font-size: 13px;
+}
+.calibration-toolbar-entry { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.calibration-toolbar-entry label { font-weight: 700; }
+.calibration-toolbar-entry input { width: 100px; padding: 5px 7px; border: 1px solid var(--ink-faint); background: var(--paper-bright); color: var(--ink); }
+.calibration-toolbar-entry button { padding: 5px 11px; border: 1px solid var(--ink-faint); background: transparent; color: var(--ink); cursor: pointer; }
+.calibration-toolbar-entry button.is-primary { border-color: var(--ink); background: var(--ink); color: var(--paper-bright); }
+.estimating-toolbar-panel .glass-toolbar-strip { width: 100%; background: var(--paper-bright) !important; box-shadow: none; }
+:root .estimating-toolbar-panel .glass-toolbar { --toolbar-control-height: 40px; }
+:root .estimating-toolbar-panel .sheet-tab { height: auto; max-width: 100% !important; }
+.estimating-toolbar-panel .sheet-tab-icon { min-width: 36px; }
+@media (max-width: 600px) {
+  .estimating-toolbar-header { gap: 6px; padding: 6px; }
+  .estimating-toolbar-logo { max-width: 25%; }
+  .estimating-toolbar-logo strong { font-size: 12px !important; }
+  .estimating-toolbar-tabs { flex: 1 1 0; }
+  .estimating-toolbar-tabs button { min-height: 44px; padding: 6px 10px; }
+  .estimating-toolbar-account .account-profile-button > span:last-child { display: none; }
+  .estimating-toolbar-account button { max-width: 74px; }
+  .estimating-toolbar-panel { padding: 10px 8px; max-height: 30dvh; }
+  .estimating-toolbar-panel button, .estimating-toolbar-panel select, .estimating-toolbar-panel input:not([type="range"]) { min-height: 44px; }
+  :root .estimating-toolbar-panel .glass-toolbar { --toolbar-control-height: 44px; }
+  .takeoff-toolbar-readout {
+    flex-basis: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "heading" "live" "total" "meta";
+    min-width: 0;
+    max-width: 100% !important;
+  }
+  .takeoff-toolbar-readout-total { margin-top: 6px; padding: 6px 0 0; border-top: 1px solid var(--ink-faint); border-left: 0; }
+}
+.estimating-toolbar { pointer-events: auto; }
+.tabbed-toolbar-stack.is-hidden .estimating-toolbar { pointer-events: none; visibility: hidden; }
+.estimating-toolbar-panel .condition-name-input { max-width: 100%; min-width: 0; }
+.estimating-toolbar-panel button[title^="#"], .estimating-toolbar-panel button[title="No fill"] { min-width: 32px; min-height: 40px; }
+@media (max-width: 600px), (pointer: coarse) {
+  .estimating-toolbar-panel button { min-width: 44px; min-height: 44px; }
+  .estimating-toolbar-panel button[title^="#"], .estimating-toolbar-panel button[title="No fill"] { min-width: 44px; min-height: 44px; }
+}
+.estimating-toolbar-account .account-sign-in-button { white-space: nowrap; max-width: none; }
+.estimating-toolbar-panel .sheet-tab-icon { align-items: center; justify-content: center; }
+:root[data-theme] .estimating-toolbar-panel .glass-toolbar-strip { background: var(--paper-bright) !important; box-shadow: none; }
+
+.takeoff-dev-panel {
+  position: fixed;
+  top: 76px;
+  right: 18px;
+  z-index: 900;
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100dvh - 94px);
+  overflow: visible;
+  border: 1px solid var(--ink-faint);
+  border-top: 3px solid var(--cobalt);
+  border-radius: 10px;
+  background: var(--paper-bright);
+  color: var(--ink);
+  box-shadow: var(--shadow-2);
+}
+.takeoff-dev-panel :focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+.takeoff-dev-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--ink-faint);
+}
+.takeoff-dev-panel-header > span { display: grid; gap: 2px; }
+.takeoff-dev-panel-header small {
+  color: var(--ink-muted);
+  font: 700 8px var(--f-mono);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+.takeoff-dev-panel-header strong { font-size: 15px; }
+.takeoff-dev-panel-header button {
+  display: grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--ink-faint);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 19px;
+  line-height: 1;
+}
+.takeoff-dev-panel-body {
+  display: grid;
+  gap: 14px;
+  max-height: calc(100dvh - 151px);
+  padding: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.takeoff-dev-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.takeoff-dev-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--ink-faint);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: 600 12.5px var(--f-body);
+  text-align: left;
+}
+.takeoff-dev-action:hover { background: var(--paper-shadow); }
+.takeoff-dev-action.is-active { border-color: var(--cobalt); background: var(--cobalt); color: var(--paper-bright); }
+.takeoff-dev-action.is-primary { border-color: var(--ink); background: var(--ink); color: var(--paper-bright); }
+.takeoff-dev-action:disabled { cursor: default; opacity: .38; }
+.takeoff-dev-action b {
+  min-width: 19px;
+  margin-left: auto;
+  padding: 2px 5px;
+  border-radius: 10px;
+  background: var(--paper-bright);
+  color: var(--cobalt);
+  font: 700 9px var(--f-mono);
+  text-align: center;
+}
+.takeoff-dev-field { display: grid; gap: 6px; }
+.takeoff-dev-field > label {
+  color: var(--ink-muted);
+  font: 700 9px var(--f-mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.takeoff-dev-field > span { width: 100%; }
+.takeoff-dev-field > span > button { min-height: 42px; }
+.takeoff-dev-field > input {
+  width: 100%;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--ink-faint);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: 11.5px var(--f-mono);
+}
+.takeoff-dev-field > small { color: var(--ink-muted); font-size: 10.5px; }
+
+@media (max-width: 600px) {
+  .takeoff-dev-panel { top: 66px; right: 8px; width: calc(100vw - 16px); max-height: calc(100dvh - 74px); }
+  .takeoff-dev-panel-body { max-height: calc(100dvh - 132px); }
+  .takeoff-dev-action, .takeoff-dev-field > span > button, .takeoff-dev-field > input { min-height: 44px; }
+}
+
+/* Active condition identity belongs to the live summary card. */
+.condition-identity-fields { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.takeoff-toolbar-readout { flex-basis: 640px; max-width: 860px !important; grid-template-columns: minmax(280px, 1fr) minmax(120px, .45fr); }
+.takeoff-toolbar-readout-heading { overflow: visible; white-space: normal; text-transform: none; letter-spacing: normal; }
+.takeoff-toolbar-readout .condition-identity-fields { gap: 6px; font-size: 11px; font-weight: 400; }
+.takeoff-toolbar-readout .condition-name-input { flex: 1 1 200px; width: 100%; min-width: 0; max-width: 100%; }
+.takeoff-toolbar-readout .condition-identity-fields > span { flex-shrink: 0; }
+@media (max-width: 600px) { .takeoff-toolbar-readout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "heading" "live" "meta" "total"; min-width: 0; } .takeoff-toolbar-readout-total { border-left: 0; border-top: 1px solid var(--ink-faint); margin-top: 6px; padding: 6px 0 0; } }
+
+.estimating-toolbar-sheet-navigation { display: flex; align-items: center; min-width: 0; flex: 0 1 auto; }
+.estimating-toolbar-sheet-navigation button { min-height: 40px; border-radius: 6px; }
+.estimating-toolbar-sheet-navigation > span { min-width: 0; }
+
+
+/* Compact top-level Sheets / Takeoff switcher. */
+.estimating-toolbar-tabs { padding: 3px; gap: 2px; border-radius: 7px; }
+.estimating-toolbar-tabs button { min-height: 32px; padding: 4px 11px; }
+
+/* Compact condition appearance controls and square palette swatches. */
+.estimating-toolbar-panel .condition-appearance-toolbar :is(button, select, input:not([type="range"])) { min-height: 28px; height: 28px; }
+.estimating-toolbar-panel .condition-appearance-toolbar button[title^="#"],
+.estimating-toolbar-panel .condition-appearance-toolbar button[title="No fill"] { min-width: 28px; width: 28px !important; height: 28px !important; padding: 0; }
+.estimating-toolbar-panel .condition-appearance-toolbar select { padding-top: 2px; padding-bottom: 2px; }
+
+.conditions-modal-scrim { position: fixed; inset: 0; z-index: 500; display: grid; place-items: center; padding: 12px 20px; box-sizing: border-box; background: transparent; }
+.conditions-modal { position: relative; height: calc(100dvh - 24px); max-width: calc(100vw - 40px); min-height: 0; overflow: hidden; border: 1px solid var(--ink-faint); border-radius: 10px; box-shadow: var(--shadow-pop); }
+.conditions-modal > div:first-child { display: none; }
+.conditions-modal .takeoffs-tabs { flex-shrink: 0; }
+@media (max-width: 600px) { .conditions-modal-scrim { padding: 8px; } .conditions-modal { max-width: calc(100vw - 16px); height: calc(100dvh - 16px); } }
+
+/* Conditions workspace fills the viewport on every screen size. */
+.conditions-modal-scrim { padding: 0; }
+.conditions-modal-scrim .conditions-modal { width: 100vw !important; max-width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+
+/* Conditions workspace keeps a uniform 12px viewport inset. */
+.conditions-modal-scrim { padding: 12px; }
+.conditions-modal-scrim .conditions-modal { width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); border: 1px solid var(--ink-faint); border-radius: 8px; box-sizing: border-box; }
+
+/* Conditions opens as a half-height bottom drawer. */
+.conditions-modal-scrim { padding: 0; align-items: end; pointer-events: none; }
+.conditions-modal-scrim .conditions-modal { pointer-events: auto; }
+.conditions-modal-scrim .conditions-modal { width: 100vw !important; max-width: 100vw; height: 50dvh; max-height: 50dvh; border: 1px solid var(--ink-faint); border-bottom: 0; border-radius: 10px 10px 0 0; box-sizing: border-box; animation: conditions-drawer-up 180ms ease-out; }
+@keyframes conditions-drawer-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .conditions-modal-scrim .conditions-modal { animation: none; } }
+
+.header-history-actions { display: inline-flex; align-items: center; gap: 3px; margin-right: 8px; }
+.estimating-toolbar-account .header-history-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; min-height: 30px; padding: 4px; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--ink-muted); cursor: pointer; }
+.estimating-toolbar-account .header-history-button:hover, .estimating-toolbar-account .header-history-button:active { color: var(--cobalt); }
+
+.condition-summary-identity { flex: 1 1 320px; min-width: 0; }
+.condition-summary-identity .condition-name-input { flex: 1 1 220px; width: 100%; min-width: 0; }
+.condition-summary-identity .condition-identity-fields > span { flex-shrink: 0; }
+
+/* Keep the selected condition name compact beside its measurement. */
+.condition-summary-identity { flex: 1 1 320px; margin-right: 40px; }
+.condition-summary-identity .condition-name-input { flex: 1 1 220px; width: 100%; max-width: 100%; }
+
+/* Match selected condition actions to the compact name field. */
+.conditions-modal .condition-summary > button { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: 28px; min-height: 28px; min-width: 28px; padding: 4px 7px !important; border-radius: 6px !important; }
+.conditions-modal .condition-summary > button svg { width: 15px; height: 15px; }
+
+/* Condition appearance dropdowns align with the 28px height/thickness fields. */
+.conditions-modal button[title="Choose a hatch pattern"],
+.conditions-modal select { box-sizing: border-box; height: 28px; min-height: 28px; padding-top: 3px !important; padding-bottom: 3px !important; }
+
+/* Condition names wrap and grow instead of clipping long descriptions. */
+textarea.condition-name-input { display: block; resize: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 16px; min-height: 28px; max-height: none; }
+
+/* Measurement and shape count sit before the editable condition name. */
+.takeoff-toolbar-readout { grid-template-columns: minmax(110px, .3fr) minmax(280px, 1fr); grid-template-areas: "total heading" "total live"; }
+.takeoff-toolbar-readout-total { border-left: 0; border-right: 1px solid var(--ink-faint); padding-left: 0; padding-right: 12px; }
+.takeoff-toolbar-readout-total strong { margin-top: 0; }
+@media (max-width: 600px) { .takeoff-toolbar-readout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "total" "heading" "live"; } .takeoff-toolbar-readout-total { border-right: 0; border-top: 0; border-bottom: 1px solid var(--ink-faint); margin-top: 0; padding: 0 0 6px; margin-bottom: 6px; } }
+
+.takeoff-toolbar-readout-total { border: 0; }
+
+
+.takeoff-toolbar-readout-total strong { font-size: 20px; font-weight: 700; line-height: 1.2; }
+
+
+/* Full-width active condition card with appearance controls before waste. */
+.takeoff-toolbar-readout { flex: 1 1 100%; width: 100%; max-width: 100% !important; grid-template-columns: 185px minmax(0, 1fr); }
+.takeoff-toolbar-readout .condition-name-input { flex: 1 1 420px; max-width: 600px; }
+.condition-card-appearance { flex: 0 1 auto; min-width: 0; }
+.condition-card-appearance > div { padding: 0 !important; }
+@media (max-width: 600px) { .takeoff-toolbar-readout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Use the entire condition card width for the editable description row. */
+.takeoff-toolbar-readout .condition-name-input { flex: 1 1 420px; max-width: none; width: auto; }
+.takeoff-toolbar-readout .condition-card-appearance { flex: 1 0 100%; width: 100%; }
+
+/* Animated imperial / metric scale switch. */
+.estimating-toolbar-panel .units-toggle { position: relative; isolation: isolate; display: inline-flex; align-items: center; width: 76px; height: 40px; min-height: 40px; padding: 3px; border: 1px solid var(--ink-faint); border-radius: 8px !important; background: var(--paper-shadow); color: var(--ink-muted); cursor: pointer; }
+.units-toggle-thumb { position: absolute; z-index: -1; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 5px; background: var(--cobalt); box-shadow: 0 1px 3px #0003; transition: transform 180ms ease; }
+.units-toggle[data-metric="true"] .units-toggle-thumb { transform: translateX(100%); }
+.units-toggle-label { flex: 1; text-align: center; font: 700 12px var(--f-mono); transition: color 180ms ease; }
+.units-toggle[data-metric="false"] .units-toggle-label:nth-child(2), .units-toggle[data-metric="true"] .units-toggle-label:last-child { color: #fff; }
+@media (prefers-reduced-motion: reduce) { .units-toggle-thumb, .units-toggle-label { transition: none; } }
+
+/* Separate the measurement block from the condition editing controls. */
+.takeoff-toolbar-readout-total { border-right: 1px solid var(--ink-faint); }
+@media (max-width: 600px) { .takeoff-toolbar-readout-total { border-right: 0; border-bottom: 1px solid var(--ink-faint); } }
+
+/* Markups, Stamps and RFIs share a half-height bottom drawer. */
+.canvas-workspace .glass-drawer-markups { position: fixed !important; inset: auto 0 0 0 !important; width: 100vw !important; max-width: 100vw !important; height: 50dvh; max-height: 50dvh; z-index: 450 !important; border: 1px solid var(--ink-faint); border-bottom: 0; border-radius: 10px 10px 0 0; box-sizing: border-box; animation: conditions-drawer-up 180ms ease-out; }
+.canvas-workspace .glass-drawer-markups > div:first-child { flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) { .canvas-workspace .glass-drawer-markups { animation: none; } }

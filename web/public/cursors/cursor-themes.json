@@ -1,0 +1,42 @@
+{
+  "default": {
+    "folder": "default",
+    "color": "original grayscale",
+    "hex": null
+  },
+  "red": {
+    "folder": "red",
+    "color": "red",
+    "hex": "#FF2D2D"
+  },
+  "blue": {
+    "folder": "blue",
+    "color": "blue",
+    "hex": "#2F80ED"
+  },
+  "pink": {
+    "folder": "pink",
+    "color": "pink",
+    "hex": "#FF4FA3"
+  },
+  "orange": {
+    "folder": "orange",
+    "color": "orange",
+    "hex": "#FF8A00"
+  },
+  "purple": {
+    "folder": "purple",
+    "color": "purple",
+    "hex": "#8B5CF6"
+  },
+  "green": {
+    "folder": "green",
+    "color": "green",
+    "hex": "#22C55E"
+  },
+  "yellow": {
+    "folder": "yellow",
+    "color": "yellow",
+    "hex": "#FFD600"
+  }
+}
