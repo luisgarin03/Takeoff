@@ -66,7 +66,10 @@ import { conditionAutoNoteArrowEnabled, measurementCallout, measurementSowText, 
 import { filterVisibleConditionContent } from "../lib/conditionVisibility.js";
 import FenceCalculatorPanel from "../features/fenceCalculator/components/FenceCalculatorPanel.jsx";
 import ChainLinkFencePanel from "../components/ChainLinkFencePanel.jsx";
+import OrnamentalFencePanel from "../components/OrnamentalFencePanel.jsx";
+import LinearFenceChooser from "../components/LinearFenceChooser.jsx";
 import { calculateChainLinkFence, createChainLinkFence, insertFenceMarker, pathMetrics, pointAtPathT, projectPointToPath, removeFenceMarker, sanitizeChainLinkFences, updateFenceMarker } from "../lib/chainLinkFence.js";
+import { calculateOrnamentalFence, createOrnamentalFence, insertOrnamentalPost, removeOrnamentalPost, sanitizeOrnamentalFences } from "../lib/ornamentalFence.js";
 import { calculationToConditionMaterials, emptyFenceCalculatorProject, fenceCalculatorProjectHasContent, getCalculatorDefinition, sanitizeFenceCalculatorProject } from "../features/fenceCalculator/index.ts";
 import ReportPanel from "../components/ReportPanel.jsx";
 import RevisionsPanel from "../components/RevisionsPanel.jsx";
@@ -762,6 +765,8 @@ export default function TakeoffCanvas() {
     setSelectedId(id); setSelectedMarkupId(null); setSelectedChainMarkerId(null);
     const fence = id ? chainLinkFences.find((item) => item.shape_id === id) : null;
     setSelectedChainFenceId(fence?.id || null);
+    const ornamentalFence = id ? ornamentalFences.find((item) => item.shape_id === id) : null;
+    setSelectedOrnamentalFenceId(ornamentalFence?.id || null);
   };
   const selectMarkup = (id) => { setSelectedMarkupId(id); setSelectedId(null); };
   const pendingFlyRef = useRef(null);   // fly-to target whose sheet is opening this tick (two-phase center once its bitmap loads)
@@ -843,6 +848,12 @@ export default function TakeoffCanvas() {
   // linear takeoffs. They never change `shapes` or its established math.
   const [chainLinkFences, setChainLinkFences] = useState([]);
   const [chainLinkOpen, setChainLinkOpen] = useState(false);
+  const [linearFenceChooserOpen, setLinearFenceChooserOpen] = useState(false);
+  const [ornamentalFences, setOrnamentalFences] = useState([]);
+  const [ornamentalOpen, setOrnamentalOpen] = useState(false);
+  const [selectedOrnamentalFenceId, setSelectedOrnamentalFenceId] = useState(null);
+  const [selectedOrnamentalPostId, setSelectedOrnamentalPostId] = useState(null);
+  const [ornamentalPostAddMode, setOrnamentalPostAddMode] = useState(false);
   const [selectedChainFenceId, setSelectedChainFenceId] = useState(null);
   const [selectedChainMarkerId, setSelectedChainMarkerId] = useState(null);
   const [chainPostAddMode, setChainPostAddMode] = useState(false);
@@ -2371,6 +2382,8 @@ export default function TakeoffCanvas() {
     // stacks — recorded inverses from the replaced project must never fire here.
     dispatchShape({ type: "replace", shapes: sanitizeShapeLabelsOnShapes(a.shapes || []) }, { reset: true });   // strip a corrupt shape.label at hydrate (identity-preserving); other shape fields untouched
     setChainLinkFences(sanitizeChainLinkFences(a.chain_link_fences, a.shapes || []));
+    setOrnamentalFences(sanitizeOrnamentalFences(a.ornamental_fences, a.shapes || []));
+    setSelectedOrnamentalFenceId(null); setOrnamentalOpen(false); setLinearFenceChooserOpen(false);
     setSelectedChainFenceId(null); setSelectedChainMarkerId(null); setChainPostAddMode(false); setChainLinkOpen(false);
     chainUndoRef.current = []; chainRedoRef.current = []; setChainHistoryEpoch((value) => value + 1);
     // normalize hydrated markups: legacy workspaces may hold markups with no id
@@ -2981,7 +2994,7 @@ export default function TakeoffCanvas() {
     // the default — omits the key, so an old imperial project's payload is
     // byte-identical on round-trip; only a metric project carries the field.
     const metadata = touch ? withProjectEditor(touchProjectMetadata(projectMetadata), cloudAccount?.user, cloudAccount?.profileName) : projectMetadata;
-    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(compactProject ? { compact_project: compactProject } : {}), ...(projectAssistant.persist && projectAssistant.messages.length ? { project_assistant: projectAssistant } : {}), ...(whiteboardHasContent(whiteboard) ? { whiteboard } : {}), ...(fenceCalculatorProjectHasContent(fenceCalculatorProject) ? { fence_calculator: fenceCalculatorProject } : {}), ...(chainLinkFences.length ? { chain_link_fences: chainLinkFences } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(fileBookmarks.length ? { file_bookmarks: fileBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
+    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(compactProject ? { compact_project: compactProject } : {}), ...(projectAssistant.persist && projectAssistant.messages.length ? { project_assistant: projectAssistant } : {}), ...(whiteboardHasContent(whiteboard) ? { whiteboard } : {}), ...(fenceCalculatorProjectHasContent(fenceCalculatorProject) ? { fence_calculator: fenceCalculatorProject } : {}), ...(chainLinkFences.length ? { chain_link_fences: chainLinkFences } : {}), ...(ornamentalFences.length ? { ornamental_fences: ornamentalFences } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(fileBookmarks.length ? { file_bookmarks: fileBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
   };
 
   function clearProjectFileAutosaveWakeup() {
@@ -3395,7 +3408,7 @@ export default function TakeoffCanvas() {
     // state it serializes, so listing buildPayload (a new identity each render)
     // would fire a save on every render instead of only on a real change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly, shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, chainLinkFences, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, fileBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard, fenceCalculatorProject, compactProject, projectAssistant]);
+  }, [readOnly, shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, chainLinkFences, ornamentalFences, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, fileBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard, fenceCalculatorProject, compactProject, projectAssistant]);
   useEffect(() => { saveStateRef.current = saveState; }, [saveState]);
 
   // Flush a pending debounced save on navigate-away (unmount), and warn before a
@@ -3765,7 +3778,7 @@ export default function TakeoffCanvas() {
         // tool's points, on-screen or hidden
         else if (tool === "calibrate") { setCalib((c) => c.slice(0, -1)); }
         else if (tool === "check") { setCheck((c) => c.slice(0, -1)); }
-      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (chainPostAddMode) { setChainPostAddMode(false); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
+      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (ornamentalPostAddMode) { setOrnamentalPostAddMode(false); setTool("select"); } else if (chainPostAddMode) { setChainPostAddMode(false); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
       // ⌘Z: the drawing context wins — mid-trace it still pops the last placed
       // point (with or without ⇧, matching the old behavior byte-for-byte);
       // only with no trace in progress does the command stack engage
@@ -3783,7 +3796,7 @@ export default function TakeoffCanvas() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tool, selectedId, selVert, selectedMarkupId, selectedChainMarkerId, textLeaderMarkupId, chainPostAddMode, chainLinkOpen, chainHistoryEpoch, chainLinkFences, showMarkups, poly, proposal, ocSel, shapes, sheetKey, groupSig, scales, focusKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tool, selectedId, selVert, selectedMarkupId, selectedChainMarkerId, textLeaderMarkupId, ornamentalPostAddMode, chainPostAddMode, chainLinkOpen, chainHistoryEpoch, chainLinkFences, showMarkups, poly, proposal, ocSel, shapes, sheetKey, groupSig, scales, focusKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The typed "drawing says" value belongs to ONE completed two-point check.
   // The moment the measurement is no longer complete — third-click restart,
@@ -3939,6 +3952,7 @@ export default function TakeoffCanvas() {
     if (scaleGuide) setScaleGuide(null);
     if (textLeaderMarkupId) placeTextLeader(p);
     else if (tool === "chain-post") addChainMarkerAt(p);
+    else if (tool === "ornamental-post") addOrnamentalPostAt(p);
     else if (tool === "calibrate") setCalib((c) => (c.length >= 2 ? [p] : [...c, p]));
     else if (tool === "check") setCheck((c) => (c.length >= 2 ? [p] : [...c, p]));
     else if (tool === "oneclick") oneClickAt(p, !!(ev && ev.altKey));
@@ -7085,15 +7099,17 @@ export default function TakeoffCanvas() {
   const activeChainFence = chainLinkFences.find((fence) => fence.id === selectedChainFenceId)
     || linkedFenceForShape(selectedId) || null;
   const activeChainCalculation = activeChainFence ? chainCalculation(activeChainFence) : null;
+  const fenceAttachConditionId = shapes.find((item) => item.id === selectedId && item.measure_role === "linear")?.condition_id || activeCond;
+  const fenceAttachShapes = shapes.filter((item) => item.condition_id === fenceAttachConditionId && item.measure_role === "linear");
   const createChainLinkForSelected = () => {
-    const shape = shapes.find((item) => item.id === selectedId);
-    if (!shape || shape.measure_role !== "linear") { setCommitMsg("Select a completed Linear takeoff first."); return; }
-    const existing = linkedFenceForShape(shape.id);
-    if (existing) { setSelectedChainFenceId(existing.id); return; }
-    if (!(uppFor(shape.sheet_id) > 0)) setCommitMsg("Set the sheet scale before relying on post spacing quantities.");
-    const fence = createChainLinkFence(shape, () => uid("clf"));
-    replaceChainFences([...chainLinkFences, fence]);
-    setSelectedChainFenceId(fence.id); setSelectedChainMarkerId(null);
+    if (!fenceAttachShapes.length) { setCommitMsg("Choose a condition with at least one completed Linear takeoff."); return; }
+    const attachedShapeIds = new Set(chainLinkFences.map((fence) => fence.shape_id));
+    const additions = fenceAttachShapes.filter((shape) => !attachedShapeIds.has(shape.id)).map((shape) => createChainLinkFence(shape, () => uid("clf"))).filter(Boolean);
+    const first = additions[0] || chainLinkFences.find((fence) => fenceAttachShapes.some((shape) => shape.id === fence.shape_id));
+    if (!fenceAttachShapes.every((shape) => uppFor(shape.sheet_id) > 0)) setCommitMsg("Set the scale on every affected sheet before relying on post spacing quantities.");
+    if (additions.length) replaceChainFences([...chainLinkFences, ...additions]);
+    if (first) setSelectedChainFenceId(first.id);
+    setSelectedChainMarkerId(null);
   };
   const patchActiveChainFence = (patch) => {
     if (!activeChainFence) return;
@@ -7158,6 +7174,92 @@ export default function TakeoffCanvas() {
       chainRedoRef.current = [];
       setChainHistoryEpoch((value) => value + 1);
     }
+  };
+
+  const linkedOrnamentalFenceForShape = (shapeId) => ornamentalFences.find((fence) => fence.shape_id === shapeId) || null;
+  const activeOrnamentalFence = ornamentalFences.find((fence) => fence.id === selectedOrnamentalFenceId)
+    || linkedOrnamentalFenceForShape(selectedId) || null;
+  const activeOrnamentalCalculation = activeOrnamentalFence ? calculateOrnamentalFence(
+    activeOrnamentalFence,
+    chainShapePoints(shapes.find((shape) => shape.id === activeOrnamentalFence.shape_id), panelByKey(activeOrnamentalFence.sheet_id)),
+    uppFor(activeOrnamentalFence.sheet_id),
+  ) : null;
+  const ornamentalConditionSummary = useMemo(() => {
+    const conditionId = activeOrnamentalFence?.condition_id || fenceAttachConditionId;
+    const rows = ornamentalFences.flatMap((fence) => {
+      const shape = shapes.find((item) => item.id === fence.shape_id);
+      if (!shape || shape.condition_id !== conditionId) return [];
+      const calculation = calculateOrnamentalFence(fence, chainShapePoints(shape, panelByKey(fence.sheet_id)), uppFor(fence.sheet_id));
+      return [{ fence, shape, calculation }];
+    });
+    const summarize = (scopedRows) => {
+      const validRows = scopedRows.filter((row) => row.calculation.valid);
+      return ({
+      lineCount: validRows.length,
+      invalidScaleCount: scopedRows.length - validRows.length,
+      totalLengthFt: validRows.reduce((sum, row) => sum + row.calculation.totalLengthFt, 0),
+      panelCount: validRows.reduce((sum, row) => sum + row.calculation.panelCount, 0),
+      postCount: validRows.reduce((sum, row) => sum + row.calculation.postCount, 0),
+      orderedPanelLf: validRows.reduce((sum, row) => sum + row.calculation.orderedPanelLf, 0),
+      cutWasteLf: validRows.reduce((sum, row) => sum + row.calculation.cutWasteLf, 0),
+      wasteItems: validRows.flatMap(({ fence, shape, calculation }) => calculation.sections.map((section) => ({
+        id: `${fence.id}-${section.id}`,
+        shapeId: shape.id,
+        sheetId: shape.sheet_id,
+        run: section.index + 1,
+        measuredFt: section.lengthFt,
+        panelWidthFt: section.panelWidthFt,
+        panels: section.panels,
+        finalCutFt: section.finalPanelWidthFt,
+        wasteFt: section.cutWasteLf,
+      }))).filter((item) => item.wasteFt > 1e-6),
+    });
+    };
+    const currentSheetId = focusPanel?.key || sheetKey;
+    return { page: summarize(rows.filter((row) => row.shape.sheet_id === currentSheetId)), all: summarize(rows), currentSheetId };
+  }, [activeOrnamentalFence, fenceAttachConditionId, ornamentalFences, shapes, panels, scales, focusPanel?.key, sheetKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const replaceOrnamentalFences = (next) => {
+    if (denyReadOnlyEdit()) return;
+    setOrnamentalFences(sanitizeOrnamentalFences(next, shapes));
+  };
+  const createOrnamentalForSelected = () => {
+    if (!fenceAttachShapes.length) { setCommitMsg("Choose a condition with at least one completed Linear takeoff."); return; }
+    const attachedShapeIds = new Set(ornamentalFences.map((fence) => fence.shape_id));
+    const additions = fenceAttachShapes.filter((shape) => !attachedShapeIds.has(shape.id)).map((shape) => createOrnamentalFence(shape, () => uid("orn"))).filter(Boolean);
+    const first = additions[0] || ornamentalFences.find((fence) => fenceAttachShapes.some((shape) => shape.id === fence.shape_id));
+    if (!fenceAttachShapes.every((shape) => uppFor(shape.sheet_id) > 0)) setCommitMsg("Set the scale on every affected sheet before relying on ornamental panel quantities.");
+    if (additions.length) replaceOrnamentalFences([...ornamentalFences, ...additions]);
+    if (first) setSelectedOrnamentalFenceId(first.id);
+  };
+  const patchActiveOrnamentalFence = (patch) => {
+    if (!activeOrnamentalFence) return;
+    const conditionShapeIds = new Set(shapes.filter((shape) => shape.condition_id === activeOrnamentalFence.condition_id && shape.measure_role === "linear").map((shape) => shape.id));
+    replaceOrnamentalFences(ornamentalFences.map((fence) => conditionShapeIds.has(fence.shape_id) ? { ...fence, ...patch } : fence));
+  };
+  const deleteActiveOrnamentalFence = () => {
+    if (!activeOrnamentalFence) return;
+    const conditionShapeIds = new Set(shapes.filter((shape) => shape.condition_id === activeOrnamentalFence.condition_id && shape.measure_role === "linear").map((shape) => shape.id));
+    replaceOrnamentalFences(ornamentalFences.filter((fence) => !conditionShapeIds.has(fence.shape_id)));
+    setSelectedOrnamentalFenceId(null);
+  };
+  const addOrnamentalPostAt = (stagePoint) => {
+    const panel = panelAt(stagePoint[0]);
+    if (!panel?.img?.w || !panel?.img?.h) return;
+    const conditionId = activeOrnamentalFence?.condition_id || fenceAttachConditionId;
+    const candidates = ornamentalFences.filter((fence) => fence.sheet_id === panel.key && fence.condition_id === conditionId);
+    const target = candidates.find((fence) => fence.id === selectedOrnamentalFenceId) || candidates[0];
+    if (!target) { setCommitMsg("This sheet has no ornamental fence attachment for the selected condition."); return; }
+    const pointNorm = [(stagePoint[0] - panel.xOffset) / panel.img.w, stagePoint[1] / panel.img.h];
+    const updated = insertOrnamentalPost(target, pointNorm, () => uid("orn-post"));
+    replaceOrnamentalFences(ornamentalFences.map((fence) => fence.id === updated.id ? updated : fence));
+    setSelectedOrnamentalFenceId(updated.id);
+    setSelectedOrnamentalPostId(updated.manual_posts.at(-1)?.id || null);
+  };
+  const deleteSelectedOrnamentalPost = () => {
+    if (!selectedOrnamentalPostId) return;
+    replaceOrnamentalFences(ornamentalFences.map((fence) => removeOrnamentalPost(fence, selectedOrnamentalPostId)));
+    setSelectedOrnamentalPostId(null);
+    setCommitMsg("Added ornamental post removed.");
   };
 
   const markupCount = markups.filter((m) => panelKeySet.has(m.sheet_id)).length;
@@ -8025,7 +8127,7 @@ export default function TakeoffCanvas() {
         </div>
         <output className="takeoff-header-zoom" aria-label={`Canvas zoom ${(tf.scale * 100).toFixed(0)} percent`} title="Current canvas zoom">Zoom {(tf.scale * 100).toFixed(0)}%</output>
         <WorkspaceHelp metadata={projectMetadata} name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
-        {cloudAccount?.user ? <button type="button" className="account-profile-button" ref={(el) => { if (el) el.parentElement.style.setProperty("--profile-button-width", `${el.getBoundingClientRect().width}px`); }} aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><span className="toolbar-profile-avatar"><AccountAvatar profile={cloudAccount.identity} />{proMembership && <span className="toolbar-pro-badge">PRO</span>}</span><span>{cloudAccount.identity.name}</span></button> : <button type="button" className="account-sign-in-button" onClick={openSignInPage} disabled={!cloudAccount?.ready} aria-label="Sign in" title="Sign in to your account">Sign in</button>}
+        {cloudAccount?.user ? <button type="button" className="account-profile-button" ref={(el) => { if (el) el.parentElement.style.setProperty("--profile-button-width", `${el.getBoundingClientRect().width}px`); }} aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><span className="toolbar-profile-avatar"><AccountAvatar profile={cloudAccount.identity} />{proMembership && <span className="toolbar-pro-badge"><span>PRO</span></span>}</span><span>{cloudAccount.identity.name}</span></button> : <button type="button" className="account-sign-in-button" onClick={openSignInPage} disabled={!cloudAccount?.ready} aria-label="Sign in" title="Sign in to your account">Sign in</button>}
         <AccountChip note={cloudMode ? "Synced to Google Drive" : "Local workspace"} onOpenChange={onMenuDepth} />
           </>}
           projectSelector={projectControls}
@@ -9032,6 +9134,37 @@ export default function TakeoffCanvas() {
                         })}
                       </g>;
                     })}
+                    {/* Ornamental fence calculators are independent linked overlays.
+                        Their panel widths and posts never alter the source LF. */}
+                    {ornamentalFences.filter((fence) => fence.sheet_id === p.key).map((fence) => {
+                      const shape = pShapes.find((item) => item.id === fence.shape_id);
+                      if (!shape) return null;
+                      const calculation = calculateOrnamentalFence(fence, chainShapePoints(shape, p), uppFor(p.key));
+                      if (!calculation.valid) return null;
+                      const color = condById[shape.condition_id]?.color || "#1f3fc7";
+                      const z = tf.scale, size = fence.marker_size / z;
+                      return <g key={fence.id}>
+                        {fence.show_posts && calculation.posts.map((post) => <path key={post.id} d={`M ${post.point[0]} ${post.point[1] - size} L ${post.point[0] + size} ${post.point[1]} L ${post.point[0]} ${post.point[1] + size} L ${post.point[0] - size} ${post.point[1]} Z`} fill={color} stroke="#fff" strokeWidth={1.25 / z} style={{ pointerEvents: "none" }} />)}
+                        {fence.show_posts && calculation.manualPosts.map((post) => {
+                          const selected = post.id === selectedOrnamentalPostId;
+                          const markerSize = Math.max(size, 7 / z);
+                          const point = post.point_norm ? [post.point_norm[0] * p.img.w, post.point_norm[1] * p.img.h] : post.point;
+                          return <g key={post.id} transform={`translate(${point[0]},${point[1]})`}
+                            style={{ pointerEvents: ornamentalOpen ? "auto" : "none", cursor: ornamentalOpen ? "pointer" : undefined }}
+                            onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); setSelectedOrnamentalFenceId(fence.id); setSelectedOrnamentalPostId(post.id); setOrnamentalPostAddMode(false); if (tool === "ornamental-post") setTool("select"); }}>
+                            <circle r={15 / z} fill="transparent" />
+                            {selected && <circle r={markerSize + 4 / z} fill="none" stroke="#1f3fc7" strokeWidth={2 / z} />}
+                            <path d={`M 0 ${-markerSize} L ${markerSize} 0 L 0 ${markerSize} L ${-markerSize} 0 Z`} fill={color} stroke="#fff" strokeWidth={2 / z} />
+                          </g>;
+                        })}
+                        {(fence.show_panel_lengths || fence.show_post_counts) && calculation.sections.map((section) => {
+                          const at = [(section.a[0] + section.b[0]) / 2, (section.a[1] + section.b[1]) / 2];
+                          const panelWidth = units === "metric" ? `${num(section.panelWidthFt * M_PER_FT, 2)} M PANEL` : `${num(section.panelWidthFt, 2)} FT PANEL`;
+                          const value = [fence.show_panel_lengths ? panelWidth : "", fence.show_post_counts ? `${section.panels} PANELS` : ""].filter(Boolean).join(" · ");
+                          return <text key={`${section.id}-label`} x={at[0]} y={at[1] - 9 / z} textAnchor="middle" fontSize={10 / z} fontWeight="700" fill={color} stroke="#fff" strokeWidth={3 / z} paintOrder="stroke" style={{ pointerEvents: "none" }}>{value}</text>;
+                        })}
+                      </g>;
+                    })}
                     {/* vertex handles for the selected shape (drag to reshape) */}
                     {selectedId && (() => {
                       const sel = pShapes.find((s) => s.id === selectedId);
@@ -9663,11 +9796,7 @@ export default function TakeoffCanvas() {
           {panelBtn(importCurrentFileToWhiteboard, "importWhiteboard", whiteboardImportBusy ? "Importing…" : "Import to Whiteboard", false, null, { "aria-label": "Import to Whiteboard", disabled: !focusPanel?.file || whiteboardImportBusy || whiteboardBusy || !!loadError })}
           {panelBtn(() => setWhiteboardOpen(true), "rectTool", "Open whiteboard", whiteboardOpen, null, { "aria-label": "Whiteboard", disabled: !hydrated.current || !!loadError })}
           {panelBtn(() => setFenceCalculatorOpen(true), "calculator", "Fence Material Calculator — import the active takeoff's LF or count", fenceCalculatorOpen, null, { "aria-label": "Fence Material Calculator", disabled: !hydrated.current || !!loadError })}
-          {panelBtn(() => {
-            setChainLinkOpen(true);
-            const fence = linkedFenceForShape(selectedId);
-            if (fence) setSelectedChainFenceId(fence.id);
-          }, "fencePosts", "Chain-Link Fence Post Calculator — attach to a selected linear takeoff", chainLinkOpen, chainLinkFences.length, { "aria-label": "Chain-Link Fence Post Calculator", disabled: !hydrated.current || !!loadError })}
+          {panelBtn(() => setLinearFenceChooserOpen(true), "fencePosts", "Linear Fence Calculator — choose Chain-Link or Ornamental Fence", chainLinkOpen || ornamentalOpen || linearFenceChooserOpen, chainLinkFences.length + ornamentalFences.length, { "aria-label": "Linear Fence Calculator", disabled: !hydrated.current || !!loadError })}
           {panelBtn(() => {
             if (!trackpadStartedRef.current) { trackpadStartedRef.current = true; setTrackpadVisible(true); }
             setSettingsOpen((v) => !v); trackpadPaintRef.current = "";
@@ -9681,13 +9810,25 @@ export default function TakeoffCanvas() {
             onDoubleClick={(e) => e.stopPropagation()}
             title="Theme settings — app appearance and animated logo"
             aria-label="Theme settings" aria-haspopup="dialog"
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 34, minHeight: 34, padding: "5px 0 4px", border: `1px solid ${theme === "dark" ? "var(--ink)" : "var(--ink-faint)"}`, background: theme === "dark" ? "var(--ink)" : "var(--paper-bright)", color: theme === "dark" ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 14, lineHeight: 1 }}>
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, width: 34, minHeight: 34, padding: "5px 0 4px", border: `1px solid ${theme === "dark" ? "var(--workspace-border)" : "var(--ink-faint)"}`, background: theme === "dark" ? "var(--workspace-muted)" : "var(--paper-bright)", color: theme === "dark" ? "var(--workspace-foreground)" : "var(--ink)", cursor: "pointer", fontWeight: 600, fontSize: 14, lineHeight: 1 }}>
             <Icon name="palette" size={18} />
           </button>
         </div>}
 
+        {linearFenceChooserOpen && <LinearFenceChooser onClose={() => setLinearFenceChooserOpen(false)} onChoose={(kind) => {
+          setLinearFenceChooserOpen(false);
+          if (kind === "chain-link") {
+            setOrnamentalOpen(false); setChainLinkOpen(true);
+            const fence = linkedFenceForShape(selectedId); if (fence) setSelectedChainFenceId(fence.id);
+          } else {
+            setChainLinkOpen(false); setOrnamentalOpen(true);
+            const fence = linkedOrnamentalFenceForShape(selectedId); if (fence) setSelectedOrnamentalFenceId(fence.id);
+          }
+        }} />}
+
         {chainLinkOpen && <ChainLinkFencePanel
           units={units} selectedShape={selShape} fence={activeChainFence} calculation={activeChainCalculation}
+          canAttach={fenceAttachShapes.length > 0} attachCount={fenceAttachShapes.length}
           selectedMarkerId={selectedChainMarkerId} addMode={chainPostAddMode}
           onCreate={createChainLinkForSelected}
           onAddMode={() => { const next = !chainPostAddMode; setChainPostAddMode(next); setTool(next ? "chain-post" : "select"); }}
@@ -9698,6 +9839,14 @@ export default function TakeoffCanvas() {
           onUndo={undoChainLink} onRedo={redoChainLink}
           canUndo={chainUndoRef.current.length > 0} canRedo={chainRedoRef.current.length > 0}
           onClose={() => { setChainLinkOpen(false); setChainPostAddMode(false); setSelectedChainMarkerId(null); if (tool === "chain-post") setTool("select"); }} />}
+
+        {ornamentalOpen && <OrnamentalFencePanel
+          units={units} selectedShape={selShape} fence={activeOrnamentalFence} calculation={activeOrnamentalCalculation}
+          canAttach={fenceAttachShapes.length > 0} attachCount={fenceAttachShapes.length}
+          conditionSummary={ornamentalConditionSummary} sheetLabel={tabLabel}
+          addMode={ornamentalPostAddMode} selectedManualPostId={selectedOrnamentalPostId} onAddMode={() => { const next = !ornamentalPostAddMode; setOrnamentalPostAddMode(next); setSelectedOrnamentalPostId(null); setTool(next ? "ornamental-post" : "select"); }} onDeleteManualPost={deleteSelectedOrnamentalPost}
+          onCreate={createOrnamentalForSelected} onPatch={patchActiveOrnamentalFence} onDeleteFence={deleteActiveOrnamentalFence}
+          onClose={() => { setOrnamentalOpen(false); setOrnamentalPostAddMode(false); setSelectedOrnamentalPostId(null); if (tool === "ornamental-post") setTool("select"); }} />}
 
        </div>
 

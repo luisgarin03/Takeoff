@@ -13,7 +13,7 @@ const fail = (message) => { throw new Error(message); };
 
 export function validateAnnotations(a) {
   if (!object(a) || a.schema !== ANN_SCHEMA) fail("Unsupported project takeoff format.");
-  for (const key of ["conditions", "shapes", "sheets", "markups", "rfis", "chain_link_fences"]) {
+  for (const key of ["conditions", "shapes", "sheets", "markups", "rfis", "chain_link_fences", "ornamental_fences"]) {
     if (a[key] !== undefined && (!Array.isArray(a[key]) || !a[key].every(object))) fail(`Invalid project ${key}.`);
   }
   if (!Array.isArray(a.conditions) || !Array.isArray(a.shapes)) fail("Project takeoff data is missing.");
@@ -138,11 +138,21 @@ export async function exportProjectFile(source, payload, { compact = false } = {
     files[path] = [bytes, { level: 0 }]; // PDFs are already compressed.
     plans.push({ name, path, size: bytes.length, sha256: await digest(bytes) });
   }
-  const compactProject = compactFiles.length ? {
+  // A compact project may be compacted again without restoring its original
+  // PDFs. Keep the original file hashes/sizes so recovery still accepts those
+  // originals, while recording the pages included by this newest copy.
+  const previousCompact = compact ? sanitizeCompactProject(annotations.compact_project) : null;
+  const previousFiles = new Map((previousCompact?.files || []).map((file) => [file.name.toLowerCase(), file]));
+  const compactNames = new Set(compactFiles.map((file) => file.name.toLowerCase()));
+  const recoveryFiles = compactFiles.map((file) => {
+    const previous = previousFiles.get(file.name.toLowerCase());
+    return previous ? { ...previous, included_pages: file.included_pages } : file;
+  }).concat((previousCompact?.files || []).filter((file) => !compactNames.has(file.name.toLowerCase())));
+  const compactProject = recoveryFiles.length ? {
     version: COMPACT_PROJECT_VERSION,
     mode: "marked-pages-only",
     created_at: new Date().toISOString(),
-    files: compactFiles,
+    files: recoveryFiles,
   } : null;
   if (compactProject) annotations = { ...annotations, compact_project: compactProject };
   const snapshots = [];

@@ -15,7 +15,7 @@ const input = { border: "1px solid var(--ink-faint)", background: "var(--paper-b
 const number = (value, digits = 1) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits });
 
 export default function ChainLinkFencePanel({
-  units = "imperial", selectedShape, fence, calculation, selectedMarkerId, addMode,
+  units = "imperial", fence, calculation, selectedMarkerId, addMode, canAttach, attachCount = 0,
   onCreate, onAddMode, onPatch, onSelectMarker, onDeleteMarker, onDeleteFence,
   onUndo, onRedo, canUndo, canRedo, onClose,
 }) {
@@ -39,11 +39,11 @@ export default function ChainLinkFencePanel({
         {!fence ? (
           <>
             <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-muted)" }}>
-              Select a completed Linear takeoff, then attach this calculator. The source line and its measured quantity stay unchanged.
+              Attach this calculator to every completed Linear takeoff in the selected condition. Source lines and measured quantities stay unchanged.
             </p>
-            <button type="button" onClick={onCreate} disabled={selectedShape?.measure_role !== "linear"}
-              style={{ ...button, background: selectedShape?.measure_role === "linear" ? "var(--cobalt)" : "var(--paper-cream)", color: selectedShape?.measure_role === "linear" ? "white" : "var(--ink-muted)", opacity: selectedShape?.measure_role === "linear" ? 1 : .6 }}>
-              Attach selected linear takeoff
+            <button type="button" onClick={onCreate} disabled={!canAttach}
+              style={{ ...button, background: canAttach ? "var(--cobalt)" : "var(--paper-cream)", color: canAttach ? "white" : "var(--ink-muted)", opacity: canAttach ? 1 : .6 }}>
+              Attach {attachCount || "all"} linear takeoff{attachCount === 1 ? "" : "s"} in condition
             </button>
           </>
         ) : (

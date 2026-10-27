@@ -22,6 +22,7 @@ export function compactPagesByFile(payloads) {
     for (const shape of Array.isArray(payload.shapes) ? payload.shapes : []) addSheetKey(byFile, shape?.sheet_id);
     for (const markup of Array.isArray(payload.markups) ? payload.markups : []) addSheetKey(byFile, markup?.sheet_id);
     for (const fence of Array.isArray(payload.chain_link_fences) ? payload.chain_link_fences : []) addSheetKey(byFile, fence?.sheet_id);
+    for (const fence of Array.isArray(payload.ornamental_fences) ? payload.ornamental_fences : []) addSheetKey(byFile, fence?.sheet_id);
     for (const rfi of Array.isArray(payload.rfis) ? payload.rfis : []) addSheetKey(byFile, rfi?.sheet_id);
     for (const key of Array.isArray(payload.sheet_bookmarks) ? payload.sheet_bookmarks : []) addSheetKey(byFile, key);
   }

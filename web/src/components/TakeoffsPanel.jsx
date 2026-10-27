@@ -673,7 +673,7 @@ function TakeoffsPanel({
             title={takeoffVisible
               ? "Hide this condition's takeoff markup from the plan and PDF/Whiteboard exports"
               : "Show this condition's takeoff markup on the plan and in PDF/Whiteboard exports"}
-            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 22, padding: 0, borderRadius: 0, border: `1px solid ${takeoffVisible ? "var(--cobalt)" : "var(--ink-faint)"}`, background: takeoffVisible ? "var(--tint-select)" : "transparent", color: takeoffVisible ? "var(--cobalt)" : "var(--ink-muted)", cursor: "pointer", lineHeight: 0 }}>
+            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 22, padding: 0, borderRadius: 0, border: "1px solid var(--ink-faint)", background: takeoffVisible ? "var(--tint-select)" : "transparent", color: "#fff", cursor: "pointer", lineHeight: 0 }}>
             <Icon name={takeoffVisible ? "eye" : "eyeOff"} size={13} />
           </button>
           <button type="button"
@@ -687,14 +687,14 @@ function TakeoffsPanel({
             title={autoNoteArrow
               ? "Automatic note + arrow is on — click to stop creating it for new measurements"
               : "Automatic note + arrow is off — click to create it for new measurements"}
-            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 3, width: 50, height: 22, padding: 0, borderRadius: 0, border: `1px solid ${autoNoteArrow ? "var(--c-positive)" : "var(--ink-faint)"}`, background: autoNoteArrow ? "var(--tint-active)" : "transparent", color: autoNoteArrow ? "var(--c-positive)" : "var(--ink-muted)", cursor: "pointer", fontSize: 9.5, fontWeight: 700 }}>
-            <Icon name="callout" size={12} /><span>Auto</span>
+            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 22, padding: 0, borderRadius: 0, border: "1px solid var(--ink-faint)", background: autoNoteArrow ? "var(--tint-active)" : "transparent", color: "#fff", cursor: "pointer", lineHeight: 0 }}>
+            <Icon name="callout" size={12} />
           </button>
           <span draggable={false} onDragStart={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
             <ToolMenu portal disabled={!usedPages.length}
               title={usedPages.length ? `Open a page where ${c.finish_tag} is used` : `${c.finish_tag} has not been used on any page`}
               face={<Icon name="pin" size={12} />}
-              faceStyle={{ flexShrink: 0, justifyContent: "center", gap: 3, width: 39, height: 22, padding: 0, borderRadius: 0, color: "var(--ink-muted)", fontSize: 11 }}
+              faceStyle={{ flexShrink: 0, justifyContent: "center", gap: 3, width: 39, height: 28, minHeight: 28, padding: 0, borderRadius: 6, color: "var(--ink-muted)", fontSize: 11 }}
               menuStyle={{ minWidth: 260, maxWidth: 380 }}
               items={[
                 { section: `Used on ${usedPages.length} page${usedPages.length === 1 ? "" : "s"}` },

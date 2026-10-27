@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — Linear fence calculators
+
+- Renamed the canvas-rail chain-link launcher to **Linear Fence Calculator** and added a chooser for independent **Chain-Link Fence** and **Ornamental Fence** attachments. One action attaches the chosen calculator to every completed Linear takeoff in the selected condition, skipping existing attachments. Existing chain-link calculation behavior remains unchanged. Ornamental attachments derive posts from selectable 6 ft or 8 ft standard panels and support individually added special-area posts placed anywhere on a sheet as condition-colored diamond markers that remain selectable and removable. The panel defaults to focused-page totals and can toggle to all added pages; panels, posts, stock, total waste, and the per-run reusable-offcut list all follow that scope while keeping separate settings and persistence without changing source takeoffs or LF.
+- Enabled **Marked pages only** when resaving an already compact project. Missing original imports are ignored, currently available marked pages are copied, and the original recovery hashes remain available for a later exact-file restoration.
+
+## Unreleased — Dark theme control
+
+- Matched the theme-settings icon button to the other dark workspace controls instead of rendering it on a light surface in dark mode.
+
+## Unreleased — Pro badge accent
+
+- Matched the signed-in toolbar's **PRO** badge to the selected accent color and added a reduced-motion-aware shimmer limited to the **PRO** lettering.
+
 ## Unreleased — Per-condition takeoff visibility
 
 - Added an eye toggle to every Takeoffs condition row. Hidden conditions keep all measurements and totals but remove their plan graphics, linked automatic callouts, and linked chain-link post overlays from the live canvas, downloaded pages, printed plans, Marked Set PDFs, and Whiteboard page imports. Visibility persists with the project and defaults on for existing projects.
@@ -7,6 +20,7 @@
 ## Unreleased — Per-condition automatic callouts
 
 - Added an **Auto** callout toggle to every Takeoffs condition row. It defaults on and controls whether newly committed measurements for that condition create the automatic condition-colored text box and leader arrow. Turning it off leaves existing callouts intact and continues updating the combined Whiteboard SOW total. The choice persists with projects and reusable condition templates.
+- Simplified the condition-row visibility and automatic-callout controls to white icons with the standard action-button borders, removing the visible **Auto** label while retaining the control's accessible name and tooltip.
 
 ## Unreleased — Visible scale requirement
 
@@ -24,6 +38,7 @@
 ## Unreleased — Condition page navigation
 
 - Added a page-pin dropdown to every Takeoffs condition row. It deduplicates and lists all named pages containing that condition in loaded PDF/page order, opens a selected page directly, and remains disabled when the condition has not been used.
+- Matched the page-pin dropdown trigger height to the adjacent condition-row action buttons.
 
 ## Unreleased — Freehand Draw markup
 

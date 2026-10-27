@@ -17,7 +17,17 @@
 .toolbar-readonly-status button { padding: 7px 14px; font-size: 12px; font-weight: 600; }
 
 .toolbar-profile-avatar { position: relative; display: inline-flex; margin-right: 4px; }
-.toolbar-pro-badge { position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%); padding: 2px 4px; border: 1px solid var(--paper-bright); border-radius: 4px; background: #18181b; color: #fff; font: 700 8px var(--f-body); letter-spacing: .05em; line-height: 1.2; }
+.toolbar-pro-badge { position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%); padding: 2px 4px; border: 1px solid var(--paper-bright); border-radius: 4px; background: var(--cobalt); color: var(--accent-contrast); font: 700 8px var(--f-body); letter-spacing: .05em; line-height: 1.2; }
+.toolbar-pro-badge > span { display: block; background: linear-gradient(105deg, var(--accent-contrast) 0 45%, var(--paper-bright) 49% 51%, var(--accent-contrast) 55% 100%); background-size: 500% 100%; background-position: 100% 0; background-clip: text; -webkit-background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: toolbar-pro-letter-shimmer 2.2s linear infinite; }
+
+@keyframes toolbar-pro-letter-shimmer {
+  0%, 20% { background-position: 100% 0; }
+  80%, 100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-pro-badge > span { animation: none; background: none; color: var(--accent-contrast); -webkit-text-fill-color: currentColor; }
+}
 
 .toolbar-trial-status { display: inline-flex; align-items: center; gap: 12px; white-space: nowrap; font-size: 12px; color: var(--ink); }
 .toolbar-trial-status button { padding: 7px 14px; font-size: 12px; font-weight: 600; }

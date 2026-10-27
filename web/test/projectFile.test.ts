@@ -179,4 +179,16 @@ test("marked-pages-only projects preserve page numbering, revision marks and exa
   assert.match(reopened.annotations.compact_project.files[0].sha256, /^[a-f0-9]{64}$/);
   assert.equal(reopened.snapshots[0].payload.compact_project.files.length, 2, "restoring a revision retains the missing-file warning");
   assert.equal((await PDFDocument.load(reopened.pdfs[0].bytes)).getPageCount(), 4, "placeholder pages retain original page numbers");
+
+  const compactPlan = reopened.pdfs[0];
+  const compactSource = {
+    async listSheets() { return [{ name: compactPlan.name }]; },
+    async loadPdfData() { return compactPlan.bytes; },
+    async listSnapshots() { return []; },
+    async getSnapshot() { return null; },
+  };
+  const recompacted = await readProjectFile(await exportProjectFile(compactSource, reopened.annotations, { compact: true }));
+  assert.deepEqual(recompacted.annotations.compact_project.files.map((file: any) => file.name), ["Plan.pdf", "Unmarked.pdf"], "missing source imports remain recoverable after recompacting");
+  assert.equal(recompacted.annotations.compact_project.files[0].sha256, reopened.annotations.compact_project.files[0].sha256, "recompacting preserves the original source hash");
+  assert.equal(recompacted.annotations.compact_project.files[1].sha256, reopened.annotations.compact_project.files[1].sha256, "metadata-only missing PDFs remain recoverable");
 });
