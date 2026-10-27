@@ -1,3 +1,4 @@
+import { trialEntitlement } from "../_shared/trial-entitlement.js";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 
 const env = (key: string) => Deno.env.get(key) || "";
@@ -132,6 +133,7 @@ function subscriptionIsActive(record: Json | null, allowSandbox = allowSandboxLi
   if (!record) return false;
   if (String(record.environment || "production") === "sandbox" && !allowSandbox) return false;
   const status = String(record.status || "");
+  if (record.provider === "trial") return status === "trialing" && Date.parse(String(record.current_period_end || "")) > Date.now();
   if (["active", "trialing", "grace"].includes(status)) return true;
   if (!["canceled", "billing_issue"].includes(status)) return false;
   const periodEnd = Date.parse(String(record.current_period_end || ""));
@@ -184,7 +186,7 @@ Deno.serve(async (req: Request) => {
       // Webhooks keep existing entitlements current. A brand-new account has
       // no row yet, so perform one authoritative RevenueCat lookup to seed it;
       // heartbeats thereafter remain a small database-only request.
-      const subscription = savedSubscription || (entitlementId && revenueCatKey ? await refresh(data.user.id) : null);
+      let subscription = savedSubscription || (entitlementId && revenueCatKey ? await refresh(data.user.id) : null);
       // getUser() above verified the JWT signature. Prefer its server-issued
       // auth session id over the browser's installation id so a caller cannot
       // bypass the one-computer lease by editing local storage.
@@ -192,6 +194,11 @@ Deno.serve(async (req: Request) => {
       const deviceName = String(requestBody.device_name || "Computer").trim().slice(0, 120);
       if (!deviceId) return json({ code: "OTK_LICENSE_DEVICE" }, 400);
       const localSandboxTest = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin) && /^(sk|rk)_test_/.test(env("STRIPE_TEST_SECRET_KEY"));
+      if (!subscriptionIsActive(subscription, allowSandboxLicenses || localSandboxTest)) {
+        const { data: trial, error: trialError } = await db.from("otk_user_trials").select("user_id,started_at,ends_at").eq("user_id", data.user.id).maybeSingle();
+        if (trialError) throw trialError;
+        subscription = trialEntitlement(data.user.id, trial) || subscription;
+      }
       if (!subscriptionIsActive(subscription, allowSandboxLicenses || localSandboxTest)) {
         return json({ subscription, session: { granted: false, reason: "subscription" } });
       }

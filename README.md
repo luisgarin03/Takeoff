@@ -213,3 +213,15 @@ Google Calendar imports preserve each event's background and foreground assignme
 Google Calendar editing: approve editing access in Calendar Settings. Use + Google event to create events; open an event and choose Edit to change dates, location, description, Google color from a visible swatch palette, recurrence, attendees, reminders, visibility, availability, or RSVP. Saving sends the selected event color to Google Calendar; Calendar default removes the event override. The editor supports duplicate, move, and confirmed deletion; recurring occurrences and the full series are separate edit choices. Drag and resize writable Google events to reschedule. Manage Google calendars in Settings provides creation, renaming, colors, quick-add, availability, preferences, sharing, and confirmed secondary-calendar deletion. Google account permissions are enforced on the server and stale event changes are rejected with version checks. Invitation/update emails are opt-in. Existing read-only authorizations continue to display events until editing permission is approved. Administrative ownership transfer, primary-calendar clearing, and webhook channel management are not exposed in the app.
 
 Google event descriptions are edited as readable text rather than HTML source.
+
+Login and sign-up switch between cards on one /auth page, sharing the branded card and animated background. Guests can continue in view-only mode.
+
+Signed-out users start on the unified authentication page. Successful sign-in opens the plan landing screen in read-only exploration mode; PDFs and the sample open in a temporary in-memory workspace.
+
+Read-only workspaces display red **Read only mode** text in the top toolbar with an **Upgrade** button that opens membership plans (or sign-in for guests).
+
+Verified Pro subscriptions automatically leave read-only exploration and open the editable workspace; the toolbar avatar displays a PRO badge. Sandbox access still requires the existing development/test license policy and a granted editing session.
+
+New accounts receive a free 30-day trial from signup, without a payment card. The toolbar shows trial days remaining and Upgrade. Trial dates are server-owned and do not reset on login, reinstall, or checkout. At expiry editing is disabled unless an active subscription is verified. Existing paid subscriptions take priority; existing accounts are not backfilled.
+
+**Visual symbol search:** Select a reference symbol in the plan preview, search the current page/PDF/all loaded plans locally, review thumbnail suggestions, and add selected matches as an undoable count batch. Includes similarity adjustment, quarter-turn rotations, preview zoom, and duplicate-count protection.

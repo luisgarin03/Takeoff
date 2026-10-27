@@ -13,7 +13,11 @@ import { isGoogleConfigured, getAccessToken } from "./lib/google/auth.js";
 import { cloudSyncEnabled } from "./lib/prefs.js";
 import { projectHomeFolderId } from "./lib/projectHome.js";
 import { initTheme } from "./lib/theme.js";
-import { CloudProvider } from "./lib/supabase/CloudContext.jsx";
+import { CloudProvider, useCloud } from "./lib/supabase/CloudContext.jsx";
+import AuthPage from "./pages/AuthPage.jsx";
+import { createExploreStore } from "./lib/exploreStore.js";
+import { useLicenseAccess } from "./lib/licenseAccess.jsx";
+import { hasEditingMembership, sandboxLicensesAllowed } from "./lib/license.js";
 import LicenseGate from "./components/LicenseGate.jsx";
 import { AppUpdateNotice } from "./components/AppUpdates.jsx";
 import "./styles/textFields.css";
@@ -205,13 +209,36 @@ function FileProjectGate({ id }) {
   return <TakeoffCanvas />;
 }
 
+function ExploreGate() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => { setActiveStore(createExploreStore()); setReady(true); return () => setActiveStore(); }, []);
+  return ready ? <TakeoffCanvas /> : <Centered title="Opening plan preview…" />;
+}
+
+function AuthAlias({ signup = false }) {
+  const location = useLocation(), query = new URLSearchParams(location.search);
+  if (signup) query.set("mode", "signup"); else query.delete("mode");
+  return <Navigate to={`/auth${query.size ? `?${query}` : ""}`} replace />;
+}
+
 function App() {
   // Subscribe to navigation: react-router bails out of re-rendering the same
   // element on navigate(), so App must watch the location itself. The store.js
   // URL helpers read window.location, which history has already updated by the
   // time this re-render runs — useLocation() is purely the re-render trigger.
   const location = useLocation();
+  const cloud = useCloud();
+  const access = useLicenseAccess();
+  const pro = !!cloud.user && hasEditingMembership(access, sandboxLicensesAllowed());
   const fileProjectId = new URLSearchParams(location.search).get("localProject");
+  const query = new URLSearchParams(location.search);
+  if (cloud.ready && cloud.configuration.configured && !cloud.user && !query.has("guest")) return <Navigate to={`/auth?${new URLSearchParams({ returnTo: `${location.pathname}${location.search}` })}`} replace />;
+  if (query.get("explore") === "1" && pro) {
+    query.delete("explore"); query.delete("guest"); query.set("workspace", "1");
+    return <Navigate to={`${location.pathname}?${query}`} replace />;
+  }
+  if (query.get("explore") === "1") return <ExploreGate />;
+  if (cloud.user && !fileProjectId && !projectIdFromUrl() && !query.has("guest") && !query.has("workspace")) return <Navigate to={pro ? "/?workspace=1" : "/?explore=1"} replace />;
   if (fileProjectId) return <FileProjectGate key={fileProjectId} id={fileProjectId} />;
   const projectId = projectIdFromUrl();
   // ?project= deep link → the cloud project.
@@ -228,14 +255,15 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <GoogleAuthProvider>
       <CloudProvider>
       <AppUpdateNotice />
-      <LicenseGate>
       <BrowserRouter>
         <Routes>
-          <Route path="/projects" element={<ProjectHomeGate />} />
-          <Route path="*" element={<App />} />
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/sign-in" element={<AuthAlias />} />
+          <Route path="/sign-up" element={<AuthAlias signup />} />
+          <Route path="/projects" element={<LicenseGate><ProjectHomeGate /></LicenseGate>} />
+          <Route path="*" element={<LicenseGate><App /></LicenseGate>} />
         </Routes>
       </BrowserRouter>
-      </LicenseGate>
       </CloudProvider>
     </GoogleAuthProvider>
   </React.StrictMode>

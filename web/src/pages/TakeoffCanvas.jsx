@@ -1,3 +1,6 @@
+import SymbolSearchDialog from "../components/SymbolSearchDialog.jsx";
+import { symbolCountShapes } from "../lib/symbolSearch.js";
+import { hasEditingMembership, sandboxLicensesAllowed, trialDaysRemaining } from "../lib/license.js";
 import { SHARING_UI_ENABLED } from "../lib/sharingVisibility.js";
 import { usePinchZoom } from "../lib/usePinchZoom.js";
 import { APP_NAME } from "../brand/appName.js";
@@ -236,8 +239,12 @@ const PALETTE_MAX = 9;
 export default function TakeoffCanvas() {
   const licenseAccess = useLicenseAccess();
   const cloudAccount = useCloud();
-  const readOnly = licenseAccess.readOnly || !cloudAccount.user;
-  const readOnlyMessage = !cloudAccount.user ? "Log in to edit. You can view and navigate this project while logged out." : licenseAccess.message;
+  const explore = new URLSearchParams(window.location.search).get("explore") === "1";
+  const editingMembership = !!cloudAccount.user && hasEditingMembership(licenseAccess, sandboxLicensesAllowed());
+  const proMembership = editingMembership && licenseAccess.subscription?.subscriptionProvider !== "trial";
+  const trialDays = trialDaysRemaining(licenseAccess.subscription);
+  const readOnly = explore || licenseAccess.readOnly || !cloudAccount.user;
+  const readOnlyMessage = explore ? "Read-only exploration. Open plans or the sample PDF to view, zoom, and navigate without changing your projects." : !cloudAccount.user ? "Log in to edit. You can view and navigate this project while logged out." : licenseAccess.message;
   // Client-only: a single local workspace in this browser (no project id, no backend).
   const [sheets, setSheets] = useState([]);
   const [active, setActive] = useState("");      // active source PDF file name
@@ -250,6 +257,7 @@ export default function TakeoffCanvas() {
   const [sheetPickerExpandedFiles, setSheetPickerExpandedFiles] = useState(() => new Set());
   const [sheetPickerPageCounts, setSheetPickerPageCounts] = useState({});
   const [findOpen, setFindOpen] = useState(false);
+  const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
   const [findPanelTab, setFindPanelTab] = useState("find");
   const [findQuery, setFindQuery] = useState("");
   const [findSuggestions, setFindSuggestions] = useState(() => {
@@ -857,7 +865,7 @@ export default function TakeoffCanvas() {
   const [missingImportBusy, setMissingImportBusy] = useState("");
   const [missingImportError, setMissingImportError] = useState("");
   const [cloudView, setCloudView] = useState(() => SHARING_UI_ENABLED && new URLSearchParams(window.location.search).has("sharedProject") ? "projects" : null);
-  useEffect(() => { if (cloudAccount.authReturn && !calendarReturnPending.current) setCloudView(cloudAccount.authReturn.error ? "account" : "welcome"); }, [cloudAccount.authReturn]);
+  useEffect(() => { if (cloudAccount.authReturn && !calendarReturnPending.current) { if (explore && !cloudAccount.authReturn.error) cloudAccount.clearAuthReturn(); else setCloudView(cloudAccount.authReturn.error ? "account" : "welcome"); } }, [cloudAccount.authReturn, explore, cloudAccount.clearAuthReturn]);
   useEffect(() => { if (!cloudAccount.driveReturn) return; if (cloudAccount.driveReturn.calendar || calendarReturnPending.current) { setCloudView(null); setProjectCalendarOpen(true); calendarReturnPending.current = false; cloudAccount.clearDriveReturn(); } else setCloudView("account"); }, [cloudAccount.driveReturn, cloudAccount.clearDriveReturn]);
   const portableProjectId = useRef(crypto.randomUUID());
   const projectFileLock = useRef(false);
@@ -2125,10 +2133,11 @@ export default function TakeoffCanvas() {
   // open dropped/picked files of any kind: PDFs, images, and .zip plan sets all
   // get turned into PDF sheets (in-browser) by ingestFiles, then stashed locally
   async function handleFiles(fileList) {
-    if (denyReadOnlyEdit()) return false;
+    if (!explore && denyReadOnlyEdit()) return false;
     const incoming = Array.from(fileList || []);
     if (!incoming.length) return;
     if (incoming.some((file) => /\.otk$/i.test(file.name))) {
+      if (explore) { setCommitMsg("Choose a PDF, image, or ZIP plan set for read-only exploration."); return false; }
       if (incoming.length !== 1) setProjectFileError("Open one project file at a time, separately from plan files.");
       else setProjectFilePrompt(incoming[0]);
       return;
@@ -2158,7 +2167,8 @@ export default function TakeoffCanvas() {
         try {
           if (sheets.some((sheet) => sheet.name === file.name)) discardPdfDocument(file.name);
           const compatibility = pdfCompatibilityRecord(result);
-          await store.addPdf(file, compatibility, bytes);
+          if (explore) await store.openViewPdf(file, compatibility, bytes);
+          else await store.addPdf(file, compatibility, bytes);
           pdfExcludedNamesRef.current.delete(file.name);
           accepted.push(file);
           if (compatibility) pdfCompatibilityCacheRef.current.set(file.name, compatibility);
@@ -2186,6 +2196,7 @@ export default function TakeoffCanvas() {
         setView("gallery");   // a plan set → land in the gallery to pick sheets
       }
       setCommitMsg(`Opened ${names.length} sheet${names.length === 1 ? "" : "s"}${tail}.`);
+      if (explore) { setCommitMsg("Read-only preview · Pan, zoom, and browse your plans. Editing is disabled."); return true; }
       const cloudWorkspace = new URLSearchParams(window.location.search).has("project");
       const destination = projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current);
       if (!cloudWorkspace && projectName.trim() && !destination) {
@@ -2946,6 +2957,12 @@ export default function TakeoffCanvas() {
   // ── autosave (debounced) ──────────────────────────────────────────────────
   // buildPayload is the single serializer — autosave and snapshots must write
   // identical records for the same state (byte-stability matters downstream).
+  async function openSignInPage() {
+    try {
+      if (!readOnly) await store.saveAnnotations(buildPayload());
+      navigate(`/auth?${new URLSearchParams({ returnTo: window.location.pathname + window.location.search })}`);
+    } catch (error) { setCommitMsg(`Could not save before sign-in: ${error.message}`); }
+  }
   const buildPayload = ({ touch = false } = {}) => {
     // palette holds condition ids; drop any that no longer resolve (defensive —
     // delete already prunes) and omit the key entirely when nothing survives,
@@ -4819,6 +4836,17 @@ export default function TakeoffCanvas() {
       ...(activeLabel ? { label: activeLabel } : {}),
       origin: { method: "manual" },
     }] }, { documentMeasurement: true });
+  }
+  function addSymbolCounts(matches, conditionId, newName) {
+    if (denyReadOnlyEdit()) return false;
+    if (conditionId && !conditions.some((item) => item.id === conditionId)) throw new Error("Choose an existing condition or create a new one.");
+    const target = conditionId || mintCondition(newName || "Symbol count").id;
+    const additions = symbolCountShapes(matches, target, shapes);
+    if (additions.length) {
+      dispatchShape({ type: "add", shapes: additions }, { documentMeasurement: true });
+      setActiveCond(target); setCommitMsg(`${additions.length} reviewed symbol counts added. Undo removes the batch.`);
+    }
+    return { added: additions.length, conditionId: target };
   }
   function commitCount(p) {
     if (!activeCond) { setCommitMsg("Pick or add a condition first."); return; }
@@ -7761,7 +7789,7 @@ export default function TakeoffCanvas() {
     <div
       className={`app-shell${readOnly ? " is-license-readonly" : ""}`}
       onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => { e.preventDefault(); if (!denyReadOnlyEdit()) handleFiles(e.dataTransfer?.files); }}
+      onDrop={(e) => { e.preventDefault(); if (explore || !denyReadOnlyEdit()) handleFiles(e.dataTransfer?.files); }}
       style={{ "--workspace-toolbar-height": `${toolbarHidden ? 0 : toolbarHeight}px`, position: "relative", display: "flex", flexDirection: "column", height: "100vh" }}>
       <input ref={projectInputRef} type="file" accept=".otk" aria-label="Open project file" style={{ display: "none" }}
         onChange={(e) => { setProjectFilePrompt(e.target.files?.[0] || null); e.target.value = ""; }} />
@@ -7893,6 +7921,9 @@ export default function TakeoffCanvas() {
         activeCondition={aCond}
         onAddToEstimate={addFenceCalculationToEstimate}
         onClose={() => setFenceCalculatorOpen(false)} />}
+      {symbolSearchOpen && focusPanel?.file && <SymbolSearchDialog source={{ key: focusPanel.key, file: focusPanel.file, page: focusPanel.page }} sheets={sheets} docFor={docFor}
+        conditions={conditions} activeCondition={activeCond} readOnly={readOnly} onAddCounts={addSymbolCounts}
+        onClose={() => setSymbolSearchOpen(false)} onOpenChange={onMenuDepth} />}
       {addConditionOpen && <AddConditionDialog onAdd={confirmAddCondition} onClose={() => setAddConditionOpen(false)} />}
       {saveSettingsOpen && <SaveSettingsDialog filename={projectFilename(projectName || "Untitled project")} compactProject={compactProject}
         hasDestination={!!projectFileHandleFor(projectFileHandleRef.current, projectFileHandleProjectIdRef.current, portableProjectId.current)}
@@ -7936,10 +7967,18 @@ export default function TakeoffCanvas() {
           logo={<strong onClick={handleDevLogoGesture} onMouseDown={(event) => { if (event.detail > 1) event.preventDefault(); }} onDoubleClick={(event) => event.preventDefault()}
             style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}><BrandText /></strong>}
           account={<>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>
+        {readOnly && <div className="toolbar-readonly-status">
+          <strong>Read only mode</strong>
+          <button type="button" onClick={() => cloudAccount.user ? setCloudView("membership") : openSignInPage()}>Upgrade</button>
+        </div>}
+        {!readOnly && trialDays !== null && <div className="toolbar-trial-status" role="status">
+          <strong>Free trial · {trialDays} {trialDays === 1 ? "day" : "days"} left</strong>
+          <button type="button" onClick={() => setCloudView("membership")}>Upgrade</button>
+        </div>}
+        {!readOnly && trialDays === null && <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>
           <LongTaskLoader active={saveState === "saving"} label="Saving project…" compact delay={500} />
           {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved ✓" : ""}
-        </span>
+        </span>}
         {view === "canvas" && sheets.length > 0 && <button type="button" className="header-history-button"
           onClick={() => setToolbarHidden(true)} title="Hide toolbar" aria-label="Hide toolbar">
           <Icon name="eye" size={16} />
@@ -7959,7 +7998,7 @@ export default function TakeoffCanvas() {
         </div>
         <output className="takeoff-header-zoom" aria-label={`Canvas zoom ${(tf.scale * 100).toFixed(0)} percent`} title="Current canvas zoom">Zoom {(tf.scale * 100).toFixed(0)}%</output>
         <WorkspaceHelp metadata={projectMetadata} name={projectName || sheets[0]?.name} hasWorkspace={!!(sheets.length || projectName)} ready={hydrated.current} onMenuDepth={onMenuDepth} />
-        {cloudAccount?.user ? <button type="button" className="account-profile-button" ref={(el) => { if (el) el.parentElement.style.setProperty("--profile-button-width", `${el.getBoundingClientRect().width}px`); }} aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><AccountAvatar profile={cloudAccount.identity} /><span>{cloudAccount.identity.name}</span></button> : <button type="button" className="account-sign-in-button" onClick={() => setCloudView("projects")} disabled={!cloudAccount?.ready} aria-label="Sign in" title="Sign in to your account">Sign in</button>}
+        {cloudAccount?.user ? <button type="button" className="account-profile-button" ref={(el) => { if (el) el.parentElement.style.setProperty("--profile-button-width", `${el.getBoundingClientRect().width}px`); }} aria-label={`Open profile: ${cloudAccount.identity.name}`} title={cloudAccount.identity.email} onClick={() => setCloudView("account")}><span className="toolbar-profile-avatar"><AccountAvatar profile={cloudAccount.identity} />{proMembership && <span className="toolbar-pro-badge">PRO</span>}</span><span>{cloudAccount.identity.name}</span></button> : <button type="button" className="account-sign-in-button" onClick={openSignInPage} disabled={!cloudAccount?.ready} aria-label="Sign in" title="Sign in to your account">Sign in</button>}
         <AccountChip note={cloudMode ? "Synced to Google Drive" : "Local workspace"} onOpenChange={onMenuDepth} />
           </>}
           projectSelector={projectControls}
@@ -8501,7 +8540,7 @@ export default function TakeoffCanvas() {
             </header>
             <div className="takeoff-dev-panel-body">
               <div className="takeoff-dev-actions" aria-label="Experimental actions">
-                <button type="button" className="takeoff-dev-action" onClick={() => { setDevPanelOpen(false); setCloudView("account"); }} title="Open login">
+                <button type="button" className="takeoff-dev-action" onClick={() => { setDevPanelOpen(false); if (cloudAccount.user) setCloudView("account"); else openSignInPage(); }} title="Open login">
                   <Icon name="userGuide" size={17} /><span>Login</span>
                 </button>
                 <button type="button" className="takeoff-dev-action is-primary" onClick={() => { setDevPanelOpen(false); setShowReport(true); }}
@@ -9474,6 +9513,7 @@ export default function TakeoffCanvas() {
             {sheets.length > 0 && <div style={{ display: "flex" }}>
               {panelBtn(() => findOpen ? closeFind() : openFind(), "search", "Find and mark text in all loaded plans (Ctrl+F)", findOpen, null, { "aria-label": "Find text in all loaded plans", "aria-expanded": findOpen })}
             </div>}
+            {focusPanel?.file && sheets.length > 0 && panelBtn(() => setSymbolSearchOpen(true), "count", "Symbol search — select a reference symbol and find similar symbols", symbolSearchOpen, null, { "aria-label": "Symbol search", "aria-expanded": symbolSearchOpen })}
             <ToolMenu rail title="Draw — measurement, cut out, and markup tools"
               face={<Icon name="pencil" size={15} />}
               active={measureActive || tool === "schedule" || tool === "deduct" || MARKUP_IDS.includes(tool)}
@@ -9722,7 +9762,8 @@ export default function TakeoffCanvas() {
           openTabs={openTabs} onOpen={openSheets}
           onAddFiles={handleFiles}
           signedIn={!!cloudAccount.user}
-          onSignIn={() => setCloudView("account")}
+          onSignIn={openSignInPage}
+          previewOnly={explore}
           levels={sheetLevels}
           onAssignLevel={(keys, label) => { if (denyReadOnlyEdit()) return; setSheetLevels((m) => {
             const next = { ...m };

@@ -572,3 +572,17 @@ The estimating toolbar, condition controls, and Markups/Stamps/RFIs drawer use s
 Google Calendar editing: approve editing access in Calendar Settings. Use + Google event to create events; open an event and choose Edit to change dates, location, description, Google color, recurrence, attendees, reminders, visibility, availability, or RSVP. The editor supports duplicate, move, and confirmed deletion; recurring occurrences and the full series are separate edit choices. Drag and resize writable Google events to reschedule. Manage Google calendars in Settings provides creation, renaming, colors, quick-add, availability, preferences, sharing, and confirmed secondary-calendar deletion. Google account permissions are enforced on the server and stale event changes are rejected with version checks. Invitation/update emails are opt-in. Existing read-only authorizations continue to display events until editing permission is approved. Administrative ownership transfer, primary-calendar clearing, and webhook channel management are not exposed in the app.
 
 - Google event descriptions display readable text with paragraph breaks and links in the editor. Unchanged descriptions retain original formatting when saving other fields.
+
+- Replaced inline workspace login with separate branded sign-in and sign-up pages, including Google login, email confirmation, recovery, and view-only navigation.
+
+- Sign-in now leads to a fresh read-only plan exploration page. Opening PDFs and the sample works without editing access and does not modify saved projects.
+
+- Unified login and sign-up at /auth with in-place card switching, retaining the same animated background and email draft. Existing /sign-in and /sign-up links redirect to the unified page.
+
+Read-only workspaces display red **Read only mode** text in the top toolbar with an **Upgrade** button that opens membership plans (or sign-in for guests).
+
+Verified Pro subscriptions automatically leave read-only exploration and open the editable workspace; the toolbar avatar displays a PRO badge. Sandbox access still requires the existing development/test license policy and a granted editing session.
+
+New accounts receive a free 30-day trial from signup, without a payment card. The toolbar shows trial days remaining and Upgrade. Trial dates are server-owned and do not reset on login, reinstall, or checkout. At expiry editing is disabled unless an active subscription is verified. Existing paid subscriptions take priority; existing accounts are not backfilled.
+
+- Added local visual symbol search with reference selection, multi-page scopes, adjustable similarity and rotations, cancellable worker matching, thumbnail review, duplicate prevention, and undoable count conversion.

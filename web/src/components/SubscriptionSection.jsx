@@ -13,7 +13,7 @@ function SubscriptionPlanCard({ plan, current, disabled, onChoose }) {
   </article>;
 }
 
-export default function SubscriptionSection({ user, offline, client, service: suppliedService, initiallyOpen = false }) {
+export default function SubscriptionSection({ user, offline, client, service: suppliedService, initiallyOpen = false, onOpenWorkspace }) {
   const configuredService = useMemo(() => client ? createBillingService(createAppBillingAdapter(client)) : billingService, [client]);
   const service = suppliedService || configuredService;
   const [open, setOpen] = useState(initiallyOpen);
@@ -60,6 +60,7 @@ export default function SubscriptionSection({ user, offline, client, service: su
           {record.subscriptionCurrentPeriodEnd && Number.isFinite(Date.parse(record.subscriptionCurrentPeriodEnd)) && <p>Current period ends {new Date(record.subscriptionCurrentPeriodEnd).toLocaleDateString()}</p>}
         </> : <p>Current plan: <strong>Free</strong> <span className="profile-muted">/ No active subscription</span></p>}
     </div>
+    {current && onOpenWorkspace && <button type="button" className="btn-primary" onClick={onOpenWorkspace}>Open full workspace</button>}
     {current && service.canManage && <button type="button" disabled={busy || offline} onClick={() => action()}>Manage Subscription</button>}
     {service.canRestore && <button type="button" disabled={busy || offline} onClick={async () => {
       setBusy(true); setMessage("");

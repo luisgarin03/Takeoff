@@ -1,6 +1,8 @@
 import { SHARING_UI_ENABLED } from "../lib/sharingVisibility.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Navigate, useNavigate } from "react-router-dom";
+import { signInPath } from "../lib/authNavigation.js";
 import { Icon } from "../brand/icons.jsx";
 import googleLogo from "../brand/google-g.png";
 import googleDriveLogo from "../brand/google-drive.png";
@@ -21,6 +23,7 @@ import { downloadDriveFolder } from "../lib/supabase/driveLibrary.js";
 import { openLocalDriveProject, localDriveUnavailable, readLocalProjectHandle, SOURCE_FOLDER_NAME, findLocalSourceFolder, createLocalSourceFolder, localSourceFolderView } from "../lib/localDriveProject.js";
 import { jsonHash } from "../lib/supabase/projectState.js";
 import CloudFileBrowser from "./CloudFileBrowser.jsx";
+import SubscriptionSection from "./SubscriptionSection.jsx";
 import ProfileAccountSection from "./ProfileAccountSection.jsx";
 import AccountAvatar from "./AccountAvatar.jsx";
 import LocalFolderBrowser from "./LocalFolderBrowser.jsx";
@@ -35,6 +38,7 @@ const workspace = () => new URLSearchParams(window.location.search).get("localPr
 const meta = { get: metaGet, put: metaPut };
 
 export default function CloudProjects({ initialView = "projects", source, getPayload, onPersisted, onClose, onOpenChange }) {
+  const navigate = useNavigate();
   const cloud = useCloud(), root = useRef(null), callbacks = useRef(null);
   const [view, setView] = useState(initialView), [filter, setFilter] = useState("mine");
   const [busy, setBusy] = useState(""), [error, setError] = useState(""), [notice, setNotice] = useState("");
@@ -342,13 +346,14 @@ export default function CloudProjects({ initialView = "projects", source, getPay
     {p.role === "owner" && <button disabled={!!busy || cloud.offline} onClick={() => ask("delete", p)}>{p.deleted_at ? "Finish deletion" : "Delete"}</button>}
   </>;
   const authentication = !cloud.user || authMode === "password";
+  if (cloud.ready && cloud.configuration.configured && !cloud.user) return <Navigate to={signInPath(window.location.pathname + window.location.search)} replace />;
   const storageOptions = <><option value="supabase">Supabase Storage</option><option value="google_drive" disabled={!drive?.connected}>Google Drive{!drive?.connected ? " (connect in Profile)" : ""}</option></>;
   const longTaskLabel = busy || (restoringSource ? "Loading saved source folder…" : cloud.configuration.configured && (!cloud.ready || !auth) ? "Restoring cloud account…" : "");
   return createPortal(<div className="cloud-shade" onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); }}>
     <LongTaskLoader active={!!longTaskLabel} label={longTaskLabel} variant="fixed" />
-    <section ref={root} className="cloud-dialog" role="dialog" aria-modal="true" aria-label={view === "welcome" ? "Welcome" : view === "account" ? "Profile" : "Cloud projects"} tabIndex={-1}>
-      <header><h2>{view === "welcome" ? "Welcome" : view === "account" ? "Profile" : "Cloud projects"}</h2>{cloud.user && view !== "account" && view !== "welcome" && <div className="cloud-header-account"><AccountAvatar profile={cloud.identity} size={28} /><span title={cloud.user.email}>{cloud.user.email}</span></div>}{view !== "welcome" && <span className="cloud-status">{cloud.displayStatus}</span>}
-        <button type="button" title={view === "account" ? "Close profile" : "Close cloud projects"} aria-label={view === "account" ? "Close profile" : "Close cloud projects"} disabled={!!busy} onClick={onClose}><Icon name="close" size={18} /></button></header>
+    <section ref={root} className="cloud-dialog" role="dialog" aria-modal="true" aria-label={view === "welcome" ? "Welcome" : view === "account" ? "Profile" : view === "membership" ? "Upgrade membership" : "Cloud projects"} tabIndex={-1}>
+      <header><h2>{view === "welcome" ? "Welcome" : view === "account" ? "Profile" : view === "membership" ? "Upgrade membership" : "Cloud projects"}</h2>{cloud.user && view !== "account" && view !== "welcome" && <div className="cloud-header-account"><AccountAvatar profile={cloud.identity} size={28} /><span title={cloud.user.email}>{cloud.user.email}</span></div>}{view !== "welcome" && <span className="cloud-status">{cloud.displayStatus}</span>}
+        <button type="button" title={view === "account" ? "Close profile" : view === "membership" ? "Close membership" : "Close cloud projects"} aria-label={view === "account" ? "Close profile" : view === "membership" ? "Close membership" : "Close cloud projects"} disabled={!!busy} onClick={onClose}><Icon name="close" size={18} /></button></header>
       <div className="cloud-content">
         {!cloud.configuration.configured ? <p role="status">{cloud.configuration.error || "Cloud is not configured. Local saving remains available."}</p> : !cloud.ready || !auth ? <p>Restoring account...</p> : <>
           {authentication ? <form onSubmit={authenticate} className="cloud-auth">
@@ -364,6 +369,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
             <button className="btn-primary" disabled={!!busy || cloud.offline} type="submit">{authMode === "signin" ? "Sign in" : "Continue"}</button>
             <div className="cloud-actions">{["signin", "signup", "forgot"].filter((m) => m !== authMode).map((m) => <button key={m} type="button" disabled={!!busy} onClick={() => { setAuthMode(m); setError(""); setPassword(""); }}>{m === "signup" ? "Create account" : m === "forgot" ? "Forgot password" : "Sign in"}</button>)}</div>
           </form> : <>
+            {view === "membership" && <SubscriptionSection user={cloud.user} offline={cloud.offline} client={cloud.client} initiallyOpen onOpenWorkspace={() => { onClose(); navigate("/?workspace=1"); }} />}
             {view === "welcome" && <SignInWelcome key={userId} cloud={cloud} onClose={onClose} />}
             {view === "account" && <ProfileAccountSection cloud={cloud} displayName={displayName} busy={!!busy}
               onNameChange={(value) => { profileDraft.current.edited = true; setDisplayName(value); }}

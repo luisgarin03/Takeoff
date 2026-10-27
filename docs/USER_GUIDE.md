@@ -1176,3 +1176,23 @@ Google events display their Google Calendar background and foreground assignment
 Google Calendar editing: approve editing access in Calendar Settings. Use + Google event to create events; open an event and choose Edit to change dates, location, description, Google color from the visible swatch palette, recurrence, attendees, reminders, visibility, availability, or RSVP. Select Calendar default to remove the event override, or select a named color and save to apply it in Google Calendar. The editor supports duplicate, move, and confirmed deletion; recurring occurrences and the full series are separate edit choices. Drag and resize writable Google events to reschedule. Manage Google calendars in Settings provides creation, renaming, colors, quick-add, availability, preferences, sharing, and confirmed secondary-calendar deletion. Google account permissions are enforced on the server and stale event changes are rejected with version checks. Invitation/update emails are opt-in. Existing read-only authorizations continue to display events until editing permission is approved. Administrative ownership transfer, primary-calendar clearing, and webhook channel management are not exposed in the app.
 
 The Google event Description field displays normal text, preserving paragraph breaks and link destinations. Saving other fields leaves the original description formatting intact.
+
+Account page: /auth switches between Login and Sign up cards in place. It supports Google or email/password sign-in, password recovery, account creation, and email-code confirmation. The account card uses the same animated background and logo as the plan landing screen. Continue in view-only mode returns to the workspace, and successful sign-in opens the plan landing page in read-only exploration mode.
+
+After sign-in, choose Open your plans or Load sample plan to explore in read-only mode. Preview PDFs remain in this tab's memory and do not replace saved projects. Pan, zoom, and browse sheets; editing and project saving are disabled.
+
+Read-only workspaces display red **Read only mode** text in the top toolbar with an **Upgrade** button that opens membership plans (or sign-in for guests).
+
+Verified Pro subscriptions automatically leave read-only exploration and open the editable workspace; the toolbar avatar displays a PRO badge. Sandbox access still requires the existing development/test license policy and a granted editing session.
+
+New accounts receive a free 30-day trial from signup, without a payment card. The toolbar shows trial days remaining and Upgrade. Trial dates are server-owned and do not reset on login, reinstall, or checkout. At expiry editing is disabled unless an active subscription is verified. Existing paid subscriptions take priority; existing accounts are not backfilled.
+
+## Visual symbol search
+
+Open a plan and choose **Symbol search** (the four-square icon below text search in the left rail). Drag a tight box around one symbol in the reference preview, leaving a small white border and excluding adjacent text or linework. Use Preview zoom for small symbols.
+
+Choose **Current page**, **Current PDF set**, or **All loaded plans**, then **Search symbols**. Search runs locally in a worker; use Cancel search to stop it. Similarity defaults to 92%; raise it to reject lookalikes or lower it for imperfect scans. Optional rotations search 0°, 90°, 180°, and 270°. Size variations of approximately ±15% are searched; substantially different detail scales need a new reference.
+
+Review the suggestion thumbnails and check the matches to count. Nothing is selected or added automatically. Choose an existing condition or create a named condition, then **Add selected counts**. Matches become normal count measurements on their original sheets, appear in totals/exports, and can be removed together with one Undo. Reaccepting matching locations in the same condition skips existing counts. Search remains available in read-only mode, but adding counts is disabled.
+
+Matching is approximate and may miss distorted, faint, differently sized, or arbitrarily rotated symbols. Similarity is a matching score, not a probability. Review before accepting. Results are capped at 250 per page and 1,000 overall; narrow the scope or raise similarity if a limit is reached.

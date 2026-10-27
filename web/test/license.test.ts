@@ -76,3 +76,14 @@ test("read-only enforcement rejects persistence below the UI", async () => {
   assert.equal(projectWritesAreBlocked(), false);
 });
 
+
+test('editing membership requires a verified lease and permits sandbox only when allowed', async () => {
+  const { hasEditingMembership } = await import('../src/lib/license.js');
+  const access = { readOnly: false, subscription: { subscriptionStatus: 'active', subscriptionEnvironment: 'sandbox' }, session: { granted: true } };
+  assert.equal(hasEditingMembership(access, true), true);
+  assert.equal(hasEditingMembership(access, false), false);
+  assert.equal(hasEditingMembership({ ...access, subscription: null }, true), false);
+  assert.equal(hasEditingMembership({ ...access, session: { granted: false } }, true), false);
+  assert.equal(hasEditingMembership({ ...access, readOnly: true }, true), false);
+  assert.equal(hasEditingMembership({ ...access, subscription: { ...access.subscription, subscriptionStatus: 'expired' } }, true), false);
+});

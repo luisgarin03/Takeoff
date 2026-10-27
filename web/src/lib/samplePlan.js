@@ -6,7 +6,7 @@ export async function loadSamplePlan({ baseUrl = '/', fetcher = fetch, addFiles,
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (new TextDecoder().decode(bytes.subarray(0, 5)) !== '%PDF-') throw new Error('The sample PDF is unavailable. Reload the app and try again.');
     const opened = await addFiles([new File([bytes], 'sample-finish-plan.pdf', { type: 'application/pdf' })]);
-    if (opened === false) throw new Error('The sample could not be opened. Sign in with editing access and try again, or check the import message.');
+    if (opened === false) throw new Error('The sample could not be opened. Check the import message and try again.');
     return true;
   } catch (error) {
     onError(error?.name === 'TimeoutError' ? 'The sample download timed out. Please try again.' : error?.message || 'Could not load the sample plan. Please try again.');

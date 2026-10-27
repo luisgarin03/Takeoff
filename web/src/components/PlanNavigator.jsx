@@ -62,7 +62,7 @@ export default function PlanNavigator({
   sheets, getDoc, scales, detectedScales, shapes, labels, onLabel, onDetect,
   thumbCacheRef, busyRef, openTabs, onOpen,
   onAddFiles, onClosePdf, onRemoveFromProject,
-  onCloseProject, onBrowseProjects, onSignIn, signedIn = false,
+  onCloseProject, onBrowseProjects, onSignIn, signedIn = false, previewOnly = false,
   levels = {}, onAssignLevel,
   // browse (Drive) data
   listFolder, addSheets, onAdded,
@@ -577,20 +577,12 @@ export default function PlanNavigator({
           <div className={!sheets.length ? "splash-landing" : undefined} style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)", fontSize: 13.5, lineHeight: 1.7 }}>
             {!sheets.length ? (
               <>
+              {!signedIn && onSignIn && <nav className="landing-auth-links" aria-label="Account"><button type="button" onClick={onSignIn}>Sign in</button></nav>}
               <div className="splash-content" style={{ maxWidth: 560, margin: "0 auto" }}>
                 <div className="splash-logo"><BrandText /></div>
                 <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--cobalt)", marginBottom: 6 }}>TAKEOFF · ONE WORKSPACE</div>
-                <div style={{ fontFamily: "var(--f-display)", fontSize: 18, color: "var(--ink)", lineHeight: 1.32, marginBottom: 5 }}>Measure plans. Build estimates.</div>
-                <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.55, marginBottom: 20 }}>Keep quantities, notes, and measurements together.</div>
-                {!signedIn && onSignIn && (
-                  <div style={{ margin: "18px 0 22px" }}>
-                    <button type="button" onClick={onSignIn}
-                      style={{ padding: "12px 28px", border: "1px solid var(--ink)", background: "var(--paper-bright)", color: "var(--ink)", fontFamily: "var(--f-body)", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-                      Sign in
-                    </button>
-                    <div style={{ marginTop: 7, fontSize: 12.5 }}>Sign in to use your subscription and edit plans.</div>
-                  </div>
-                )}
+                <div style={{ fontFamily: "var(--f-display)", fontSize: 18, color: "var(--ink)", lineHeight: 1.32, marginBottom: 5 }}>{previewOnly ? "Open your plans. Explore the app." : "Measure plans. Build estimates."}</div>
+                <div style={{ fontSize: 13, color: "var(--ink-muted)", lineHeight: 1.55, marginBottom: 20 }}>{previewOnly ? "Read-only mode · View plans without changing your projects." : "Keep quantities, notes, and measurements together."}</div>
                 <button onClick={() => fileRef.current?.click()}
                   style={{ display: "block", width: "100%", margin: "24px auto 0", padding: "44px 24px", border: "2px dashed var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", color: "var(--ink-muted)", fontFamily: "var(--f-body)", fontSize: 13.5, lineHeight: 1.7 }}>
                   <div style={{ fontFamily: "var(--f-display)", fontSize: 20, color: "var(--ink)", marginBottom: 8 }}>Open your plans</div>
@@ -624,7 +616,7 @@ export default function PlanNavigator({
                 </button>
                 {sampleError && <p role="alert" style={{ color: "var(--c-danger)", fontSize: 13, lineHeight: 1.5 }}>{sampleError}</p>}
                 <div style={{ fontFamily: "var(--f-body)", fontSize: 12.5, color: "var(--ink-muted)", marginTop: 11, lineHeight: 1.6 }}>
-                  Try a sample plan and start measuring.
+                  {previewOnly ? "Try a sample plan in read-only mode." : "Try a sample plan and start measuring."}
                 </div>
                 
               </div></>
