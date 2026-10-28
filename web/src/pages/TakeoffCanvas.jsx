@@ -29,7 +29,7 @@ import { Link, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { store, emptyAnnotations, isStaleTabError, STALE_TAB_MESSAGE, projectIdFromUrl, importFileProject, metaGet, metaPut } from "../lib/store.js";
-import { digest, exportProjectFile, readProjectFile, projectFilename, MAX_PROJECT_FILE_BYTES } from "../lib/projectFile.js";
+import { digest, exportProjectFile, readProjectFile, projectFilename, MAX_PROJECT_FILE_BYTES, MAX_PROJECT_FILE_LABEL } from "../lib/projectFile.js";
 import { removeRestoredCompactFiles, sanitizeCompactProject } from "../lib/compactProject.js";
 import { projectFileHandleFor, saveProjectArchive } from "../lib/saveProjectFile.js";
 import { canAutosaveProjectFile, projectFileAutosaveDelay, projectFileHandleStorageKey } from "../lib/projectFileAutosave.js";
@@ -531,6 +531,7 @@ export default function TakeoffCanvas() {
   const [ocHover, setOcHover] = useState(-1);      // proposal region under the cursor — handles reveal on hover
   const [selectedId, setSelectedId] = useState(null);   // selected shape (Select tool)
   const [selVert, setSelVert] = useState(null);         // selected vertex index of the selected shape — Delete removes just that point
+  const [shapeContinuation, setShapeContinuation] = useState(null); // { shapeId, atStart, tool, prev } — extend an existing open run in place
   const [selectedMarkupId, setSelectedMarkupId] = useState(null); // selected markup — mutually exclusive with selectedId
   const markupPanelRowRefs = useRef(new Map());
   useEffect(() => {
@@ -3189,7 +3190,7 @@ export default function TakeoffCanvas() {
     projectFileLock.current = true;
     setProjectFileBusy("Opening project file..."); setProjectFileError("");
     try {
-      if (file.size > MAX_PROJECT_FILE_BYTES) throw new Error("Project file exceeds the 512 MB limit.");
+      if (file.size > MAX_PROJECT_FILE_BYTES) throw new Error(`Project file exceeds the ${MAX_PROJECT_FILE_LABEL} limit.`);
       const project = await readProjectFile(new Uint8Array(await file.arrayBuffer()));
       const compatiblePdfs = [];
       const excluded = [];
@@ -3733,6 +3734,13 @@ export default function TakeoffCanvas() {
 
   // remember the last armed measure tool — the Measure menu face shows it
   useEffect(() => { if (MEASURE_TOOLS.some((t) => t.id === tool)) lastMeasureRef.current = tool; }, [tool]);
+  // Choosing another tool abandons only the live extrusion; the committed
+  // source geometry is untouched until Finish dispatches its single edit.
+  useEffect(() => {
+    if (shapeContinuation && tool !== shapeContinuation.tool) {
+      setShapeContinuation(null); setPoly([]);
+    }
+  }, [tool, shapeContinuation]);
 
   // Number keys 1–9 switch the active condition (material) fast — through
   // activateCondition with reassign:false: a digit press has no visual
@@ -3766,7 +3774,8 @@ export default function TakeoffCanvas() {
       if (e.key === "Backspace" || e.key === "Delete") {
         e.preventDefault();
         if (chainLinkOpen && selectedChainMarkerId) { deleteSelectedChainMarker(); }
-        else if (poly.length) { setPoly((q) => q.slice(0, -1)); }
+        else if (poly.length && !shapeContinuation) { setPoly((q) => q.slice(0, -1)); }
+        else if (shapeContinuation && poly.length > 1) { setPoly((q) => q.slice(0, -1)); }
         else if (ocSel && proposal) { deleteSelectedOcVertex(); }
         else if (proposal?.regions.length) { setProposal((pr) => { const rg = pr.regions.slice(0, -1); return rg.length ? { ...pr, regions: rg } : null; }); }
         else if (selVert != null && selectedId) { deleteSelectedShapeVertex(); }
@@ -3778,14 +3787,15 @@ export default function TakeoffCanvas() {
         // tool's points, on-screen or hidden
         else if (tool === "calibrate") { setCalib((c) => c.slice(0, -1)); }
         else if (tool === "check") { setCheck((c) => c.slice(0, -1)); }
-      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (ornamentalPostAddMode) { setOrnamentalPostAddMode(false); setTool("select"); } else if (chainPostAddMode) { setChainPostAddMode(false); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
+      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (shapeContinuation) { cancelShapeContinuation(); } else if (ornamentalPostAddMode) { setOrnamentalPostAddMode(false); setTool("select"); } else if (chainPostAddMode) { setChainPostAddMode(false); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
       // ⌘Z: the drawing context wins — mid-trace it still pops the last placed
       // point (with or without ⇧, matching the old behavior byte-for-byte);
       // only with no trace in progress does the command stack engage
       // (⌘Z = undo, ⇧⌘Z = redo).
       else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        if (poly.length) setPoly((q) => q.slice(0, -1));
+        if (poly.length && !shapeContinuation) setPoly((q) => q.slice(0, -1));
+        else if (shapeContinuation && poly.length > 1) setPoly((q) => q.slice(0, -1));
         else if (chainLinkOpen && (chainUndoRef.current.length || chainRedoRef.current.length)) { if (e.shiftKey) redoChainLink(); else undoChainLink(); }
         else if (e.shiftKey) redoShapeCommand();
         else undoShapeCommand();
@@ -3796,7 +3806,7 @@ export default function TakeoffCanvas() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tool, selectedId, selVert, selectedMarkupId, selectedChainMarkerId, textLeaderMarkupId, ornamentalPostAddMode, chainPostAddMode, chainLinkOpen, chainHistoryEpoch, chainLinkFences, showMarkups, poly, proposal, ocSel, shapes, sheetKey, groupSig, scales, focusKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tool, selectedId, selVert, selectedMarkupId, selectedChainMarkerId, textLeaderMarkupId, ornamentalPostAddMode, chainPostAddMode, chainLinkOpen, chainHistoryEpoch, chainLinkFences, showMarkups, poly, proposal, ocSel, shapes, sheetKey, groupSig, scales, focusKey, shapeContinuation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The typed "drawing says" value belongs to ONE completed two-point check.
   // The moment the measurement is no longer complete — third-click restart,
@@ -3956,7 +3966,11 @@ export default function TakeoffCanvas() {
     else if (tool === "calibrate") setCalib((c) => (c.length >= 2 ? [p] : [...c, p]));
     else if (tool === "check") setCheck((c) => (c.length >= 2 ? [p] : [...c, p]));
     else if (tool === "oneclick") oneClickAt(p, !!(ev && ev.altKey));
-    else if (tool === "area" || tool === "deduct" || tool === "linear" || tool === "curve" || tool === "surface" || tool === "zone") setPoly((q) => [...q, p]);
+    else if (tool === "area" || tool === "deduct" || tool === "linear" || tool === "curve" || tool === "surface" || tool === "zone") {
+      if (shapeContinuation && panelAt(p[0]).key !== shapes.find((s) => s.id === shapeContinuation.shapeId)?.sheet_id) {
+        setCommitMsg("Continue the measurement on its original sheet.");
+      } else setPoly((q) => [...q, p]);
+    }
     else if (tool === "count") commitCount(p);
     else if (tool === "rect" || tool === "deduct-rect") {
       if (poly.length === 0) setPoly([p]);
@@ -4256,6 +4270,51 @@ export default function TakeoffCanvas() {
     }
     const met = closedMetrics(pts);
     return { area_sf: +(met.area * u * u).toFixed(2), perimeter_lf: +(met.perim * u).toFixed(2) };
+  }
+  function beginShapeContinuation() {
+    const shape = shapes.find((s) => s.id === selectedId);
+    if (!shape || (shape.measure_role !== "linear" && shape.measure_role !== "surface_area")) {
+      setCommitMsg("Select the end of a Linear or Surface Area measurement first."); return;
+    }
+    const last = shape.verts_norm.length - 1;
+    if (selVert !== 0 && selVert !== last) {
+      setCommitMsg("Select either end diamond, then choose Continue from this end."); return;
+    }
+    const sp = panelByKey(shape.sheet_id);
+    if (!sp?.img.w) return;
+    const atStart = selVert === 0;
+    const endpoint = shape.verts_norm[atStart ? 0 : last];
+    const nextTool = shape.measure_role === "surface_area" ? "surface" : (shape.curved ? "curve" : "linear");
+    setShapeContinuation({ shapeId: shape.id, atStart, tool: nextTool, prev: geomSnapshot(shape) });
+    setPoly([[endpoint[0] * sp.img.w + sp.xOffset, endpoint[1] * sp.img.h]]);
+    setActiveCond(shape.condition_id);
+    setTool(nextTool);
+    setCommitMsg("Continue the measurement from the selected end. Press Enter or double-click to finish; Esc cancels.");
+  }
+  function cancelShapeContinuation() {
+    setShapeContinuation(null); setPoly([]); setTool("select");
+    setCommitMsg("Measurement continuation cancelled.");
+  }
+  function finishShapeContinuation() {
+    const continuation = shapeContinuation;
+    const shape = continuation && shapes.find((s) => s.id === continuation.shapeId);
+    if (!shape || poly.length < 2) return false;
+    const sp = panelByKey(shape.sheet_id);
+    if (!sp?.img.w || poly.some((point) => panelAt(point[0]).key !== shape.sheet_id)) {
+      setCommitMsg("Continue the measurement on its original sheet."); return true;
+    }
+    const added = poly.slice(1).map(([x, y]) => [(x - sp.xOffset) / sp.img.w, y / sp.img.h]);
+    const verts_norm = continuation.atStart
+      ? [...added.reverse(), ...shape.verts_norm]
+      : [...shape.verts_norm, ...added];
+    dispatchShape({
+      type: "geom", id: shape.id, editKind: "vertex",
+      verts_norm, computed: recomputeShape({ ...shape, verts_norm }), prev: continuation.prev,
+    });
+    setShapeContinuation(null); setPoly([]); setTool("select"); selectShape(shape.id);
+    setSelVert(continuation.atStart ? 0 : verts_norm.length - 1);
+    setCommitMsg(`Extended ${shape.measure_role === "surface_area" ? "Surface Area" : "Linear"} measurement from the selected end.`);
+    return true;
   }
   function moveCrosshair(e) {
     if (editingRef.current) return;   // inline editor open — no aim crosshair (ref check, never per-mousemove state)
@@ -5895,6 +5954,7 @@ export default function TakeoffCanvas() {
   }
 
   function finishShape() {
+    if (shapeContinuation && finishShapeContinuation()) return;
     if (tool === "zone") {
       // ephemeral: classify, show, never save. Belongs to the panel of its first point.
       // Cross-panel span — the UI hides the Finish affordance (finishOk), but
@@ -7730,6 +7790,7 @@ export default function TakeoffCanvas() {
       const count = sheetPickerPageCounts[name] || (name === active ? pageCount : 0);
       sheetMenuItems.push({
         id: `f-${name}`, label: name, header: true, active: name === active,
+        fullWidth: true, dividerBelow: true,
         disclosure: expanded ? "expanded" : "collapsed", stayOpen: true,
         shortcut: count ? `${count} page${count === 1 ? "" : "s"}` : "",
         title: `${expanded ? "Collapse" : "Expand"} ${name}`,
@@ -7745,27 +7806,32 @@ export default function TakeoffCanvas() {
       });
       if (!expanded) continue;
       if (!count) {
-        sheetMenuItems.push({ id: `loading-${name}`, label: "Loading pages…", depth: 1, disabled: true });
+        sheetMenuItems.push({ id: `loading-${name}`, label: "Loading pages…", depth: 1, disabled: true, fullWidth: true });
         continue;
       }
-      for (let n = 1; n <= count; n++) {
-        const key = n > 1 ? `${name}#${n}` : name;
-        const level = sheetLevels[key] ? `${sheetLevels[key]} · ` : "";
-        const knownLabel = name === active ? pageLabels[n] : galleryLabels[key];
-        sheetMenuItems.push({
-          id: `pg-${name}-${n}`, label: `${level}${knownLabel || `Sheet ${n}`}`,
-          shortcut: `${n}/${count}`, depth: 1,
-          active: name === active && n === page,
-          onSelect: () => goToSheet(key), accessory: bookmarkButton(key),
-        });
+      const sheetsPerColumn = Math.ceil(count / 4);
+      for (let row = 1; row <= sheetsPerColumn; row++) {
+        for (const [columnIndex, n] of [row, row + sheetsPerColumn, row + sheetsPerColumn * 2, row + sheetsPerColumn * 3].entries()) {
+          if (n > count) continue;
+          const key = n > 1 ? `${name}#${n}` : name;
+          const level = sheetLevels[key] ? `${sheetLevels[key]} · ` : "";
+          const knownLabel = name === active ? pageLabels[n] : galleryLabels[key];
+          sheetMenuItems.push({
+            id: `pg-${name}-${n}`, label: `${level}${knownLabel || `Sheet ${n}`}`,
+            shortcut: `${n}/${count}`, depth: 1,
+            gridColumn: columnIndex + 1,
+            active: name === active && n === page,
+            onSelect: () => goToSheet(key), accessory: bookmarkButton(key),
+          });
+        }
       }
     }
   }
   if (sheetMenuItems.length && (sheetGroup.length || lastGroup.length >= 2)) sheetMenuItems.push("divider");
-  if (sheetGroup.length) sheetMenuItems.push({ id: "ungroup", label: "Ungroup — back to one sheet", title: "Back to one sheet — you land on the sheet you were last working; every sheet keeps its takeoffs and markups", onSelect: ungroup });
-  if (!sheetGroup.length && lastGroup.length >= 2) sheetMenuItems.push({ id: "regroup", label: `Regroup (${lastGroup.length})`, title: `Side-by-side again with the same ${lastGroup.length} sheets — each keeps its own scale, takeoffs and markups`, onSelect: regroup });
+  if (sheetGroup.length) sheetMenuItems.push({ id: "ungroup", label: "Ungroup — back to one sheet", title: "Back to one sheet — you land on the sheet you were last working; every sheet keeps its takeoffs and markups", onSelect: ungroup, fullWidth: true });
+  if (!sheetGroup.length && lastGroup.length >= 2) sheetMenuItems.push({ id: "regroup", label: `Regroup (${lastGroup.length})`, title: `Side-by-side again with the same ${lastGroup.length} sheets — each keeps its own scale, takeoffs and markups`, onSelect: regroup, fullWidth: true });
   if (sheetMenuItems.length) sheetMenuItems.push("divider");
-  sheetMenuItems.push({ id: "gallery", icon: "sheets", label: "Open gallery…", shortcut: "G", onSelect: () => setView("gallery") });
+  sheetMenuItems.push({ id: "gallery", icon: "sheets", label: "Open gallery…", shortcut: "G", onSelect: () => setView("gallery"), fullWidth: true });
 
   // deck-2 scale chip — the four scale controls collapsed to one status face:
   // red dashed = unset ("you can't trace yet"), green = set, warning = the
@@ -8171,7 +8237,7 @@ export default function TakeoffCanvas() {
               onOpenChange={onMenuDepth}
               face={<span style={{ display: "inline-block", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sheetChipLabel}</span>}
               faceStyle={{ fontFamily: "var(--f-mono)", fontSize: 12, fontWeight: 400, padding: "6px 8px" }}
-              menuStyle={{ minWidth: 260, maxHeight: "min(480px, 60vh)", overflowY: "auto" }}
+              menuStyle={{ minWidth: 920, maxWidth: "calc(100vw - 24px)", maxHeight: "min(480px, 60vh)", overflowY: "auto", display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", alignItems: "start", columnGap: 4 }}
               items={sheetMenuItems}
             />
             <button type="button" onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={!!sheetGroup.length || page >= pageCount} title="Next sheet (Right Arrow)"
@@ -8340,6 +8406,15 @@ export default function TakeoffCanvas() {
                 {condH > 0 && Number(selShape.height_ft) !== condH && <button onClick={clearShapeHeight} title="Set this wall to the condition height">↺</button>}
               </div>
             )}
+            {tool === "select" && selShape && (selShape.measure_role === "linear" || selShape.measure_role === "surface_area")
+              && (selVert === 0 || selVert === selShape.verts_norm.length - 1) && (
+              <button type="button" onClick={beginShapeContinuation}
+                title="Extend this same measurement and condition from the selected endpoint"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: "1px solid var(--cobalt)", background: "var(--cobalt)", color: "var(--paper-bright)", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>
+                Continue from this end
+              </button>
+            )}
+            {shapeContinuation && <div className="takeoff-toolbar-readout-hint">Extending the selected measurement · Enter/double-click finishes · Esc cancels</div>}
           </div>
           <div className="takeoff-toolbar-readout-total">
             <strong>
@@ -9658,7 +9733,12 @@ export default function TakeoffCanvas() {
           {(status === "empty" || status === "error") && (
             <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-muted)", fontSize: 15 }}>
               {status === "empty" && "No PDFs yet — click “Open PDF” or drag a plan onto the canvas."}
-              {status === "error" && <span style={{ color: "var(--c-danger)" }}>Error: {err}</span>}
+              {status === "error" && <div style={{ display: "grid", gap: 8, justifyItems: "center", maxWidth: "min(680px, calc(100% - 40px))", textAlign: "center" }}>
+                <span style={{ color: "var(--c-danger)" }}>Error: {err}</span>
+                {/PDF not found in local store:/i.test(err) && <span style={{ color: "var(--ink)", fontWeight: 700 }}>
+                  To restore it, drag that PDF back into this page.
+                </span>}
+              </div>}
             </div>
           )}
 

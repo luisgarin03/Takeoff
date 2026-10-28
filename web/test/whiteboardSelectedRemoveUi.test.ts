@@ -9,7 +9,7 @@ test("selected Whiteboard objects show a red Remove action on the object instead
   assert.doesNotMatch(source, /label="Delete selected object"/);
   assert.match(source, /className="wb-selected-remove"[\s\S]*?aria-label="Remove selected object"[\s\S]*?>Remove<\/button>/);
   assert.match(source, /if \(activeItem\)[\s\S]*?if \(activeArrow\)[\s\S]*?if \(activeRectangle\)/);
-  assert.match(source, /onClick=\{\(event\) => \{ event\.stopPropagation\(\); removeSelected\(\); \}\}/);
+  assert.match(source, /onPointerDown=\{\(event\) => \{ event\.preventDefault\(\); event\.stopPropagation\(\); removeSelected\(active\?\.id\); \}\}/);
   assert.match(css, /\.wb \.wb-selected-remove \{[^}]*position: absolute;[^}]*z-index: 22;[^}]*background: #dc2626;[^}]*color: #fff !important;[^}]*-webkit-text-fill-color: #fff !important;/);
 });
 

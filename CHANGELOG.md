@@ -2,8 +2,19 @@
 
 ## Unreleased — Linear fence calculators
 
+- Added an inline recovery instruction when a referenced plan PDF is missing from browser storage, directing the user to drag the original PDF back onto the Takeoff page so existing sheet references can reconnect.
+- Added a multipage local-PDF Whiteboard import choice: place every PDF page as a separate card or keep all pages in one navigable card. One-page PDFs and images import directly without the dialog, and Takeoff-to-Whiteboard plan imports retain their existing single-card behavior.
+- Increased the portable `.otk` project save/open limit from 512 MB to 1 GB, including full and marked-pages-only archive validation and user-facing guidance.
+- Restyled text-entry fields with an opaque white rounded background and black lettering in both themes so text-box editing stays readable over the plan and dark workspace panels.
+- Added endpoint continuation for completed **Linear**, **Curved Line**, and **Surface Area** takeoffs. In Select mode, click either end diamond and choose **Continue from this end**; the new segments extend the original measurement in place, retain its condition and wall settings, recompute its quantity, and commit as one undoable geometry edit.
 - Renamed the canvas-rail chain-link launcher to **Linear Fence Calculator** and added a chooser for independent **Chain-Link Fence** and **Ornamental Fence** attachments. One action attaches the chosen calculator to every completed Linear takeoff in the selected condition, skipping existing attachments. Existing chain-link calculation behavior remains unchanged. Ornamental attachments derive posts from selectable 6 ft or 8 ft standard panels and support individually added special-area posts placed anywhere on a sheet as condition-colored diamond markers that remain selectable and removable. The panel defaults to focused-page totals and can toggle to all added pages; panels, posts, stock, total waste, and the per-run reusable-offcut list all follow that scope while keeping separate settings and persistence without changing source takeoffs or LF.
 - Enabled **Marked pages only** when resaving an already compact project. Missing original imports are ignored, currently available marked pages are copied, and the original recovery hashes remain available for a later exact-file restoration.
+- Increased the top sheet/PDF-set dropdown to 920 px wide so long plan-set names and four-column page labels are easier to read.
+- Expanded PDF sheet lists now split into quarters across four columns, while PDF headers and common actions span the full width.
+- Added a full-width divider beneath each PDF title in the sheet selector to separate file headers from their page lists.
+- Pinned each sheet to its calculated selector column so incomplete final rows no longer shift a sheet into the wrong quarter.
+- Added three vertical dividers between the four sheet columns in expanded PDF sets.
+- Fixed the Whiteboard's floating **Remove** button so PDF cards and other selected objects delete on pointer press before canvas gesture handling can move the action.
 
 ## Unreleased — Dark theme control
 

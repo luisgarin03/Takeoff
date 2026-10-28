@@ -261,7 +261,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
   const [imageCrop, setImageCrop] = useState(null);
   const imageCropRef = useRef(imageCrop); imageCropRef.current = imageCrop;
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const importLock = useRef(false), alive = useRef(true);
+  const [pendingLocalImport, setPendingLocalImport] = useState(null); // { files: File[], at } — waits for PDF page grouping choice
+  const importLock = useRef(false), localImportProbeLock = useRef(false), alive = useRef(true);
   const exportTask = useRef(null);
   const [exportMode, setExportMode] = useState(null);
   const [exportRequest, setExportRequest] = useState(null);
@@ -303,9 +304,9 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
     if (current?.url) URL.revokeObjectURL(current.url);
     imageCropRef.current = null; setImageCrop(null);
   }, []);
-  const removeSelected = useCallback(() => {
+  const removeSelected = useCallback((selectedId = selectedRef.current) => {
     if (denyReadOnlyEdit()) return;
-    const id = selectedRef.current;
+    const id = selectedId;
     if (!id) return;
     const current = boardRef.current;
     let next = current;
@@ -579,11 +580,45 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
     commit(next); setSelected(item.id);
     setCamera(fitWhiteboard(next, viewport.current.clientWidth, viewport.current.clientHeight));
   }
+  async function queueLocalFiles(list, at = null) {
+    if (denyReadOnlyEdit()) return;
+    const files = Array.from(list || []);
+    if (!files.length) return;
+    const pdfs = files.filter((file) => whiteboardFileType(file) === "application/pdf");
+    if (!pdfs.length) { await addFiles(files, at); return; }
+    if (localImportProbeLock.current || importLock.current) return;
+    localImportProbeLock.current = true; setBusy(true); setError(""); callbacks.current.onBusyChange(true);
+    let hasMultipagePdf = false;
+    try {
+      for (const file of pdfs) {
+        let loading;
+        try {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          loading = pdfjsLib.getDocument({ data: bytes, isEvalSupported: false });
+          const doc = await loading.promise;
+          if (doc.numPages > 1) { hasMultipagePdf = true; break; }
+        } catch {
+          // Let addFiles produce the normal file-specific validation error.
+        } finally { await loading?.destroy().catch(() => {}); }
+      }
+    } finally {
+      localImportProbeLock.current = false; callbacks.current.onBusyChange(false); if (alive.current) setBusy(false);
+    }
+    if (!alive.current) return;
+    if (hasMultipagePdf) setPendingLocalImport({ files, at });
+    else await addFiles(files, at);
+  }
+  function finishLocalPdfChoice(pdfPageMode) {
+    const request = pendingLocalImport;
+    setPendingLocalImport(null);
+    if (request) addFiles(request.files, request.at, { pdfPageMode });
+  }
   async function addFiles(list, at = null, options = {}) {
     if (denyReadOnlyEdit()) return;
     if (importLock.current || !list?.length) return;
     const focusAdded = options.focusAdded === true;
     const importAsPlan = options.importAsPlan === true;
+    const pdfPageMode = options.pdfPageMode === "separate" ? "separate" : "combined";
     importLock.current = true; setBusy(true); setError(""); callbacks.current.onBusyChange(true);
     const v = viewRef.current, existing = boardRef.current.items, p = at || center();
     const origin = !at && existing.length ? { x: Math.max(...existing.map((i) => i.x + i.w)) + 32, y: Math.min(...existing.map((i) => i.y)) } : { x: (p.x - v.x) / v.scale, y: (p.y - v.y) / v.scale };
@@ -598,10 +633,23 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
           if (total + file.size > WHITEBOARD_TOTAL_LIMIT) throw new Error("Whiteboard attachment limit is 75 MB.");
           if (boardRef.current.assets.length + assets.length >= 500 || boardRef.current.items.length + items.length >= 2000) throw new Error("Whiteboard item limit reached.");
           const bytes = new Uint8Array(await file.arrayBuffer());
-          let ratio;
+          let ratio, pdfPageRatios = [];
           if (type === "application/pdf") {
             const loading = pdfjsLib.getDocument({ data: bytes.slice(), isEvalSupported: false });
-            try { const doc = await loading.promise; const page = await doc.getPage(1); const size = page.getViewport({ scale: 1 }); ratio = size.width / size.height; }
+            try {
+              const doc = await loading.promise;
+              const pageNumbers = pdfPageMode === "separate" && !importAsPlan
+                ? Array.from({ length: doc.numPages }, (_, index) => index + 1)
+                : [1];
+              if (boardRef.current.items.length + items.length + pageNumbers.length > 2000) throw new Error("Whiteboard item limit reached.");
+              for (const pageNumber of pageNumbers) {
+                const page = await doc.getPage(pageNumber);
+                const size = page.getViewport({ scale: 1 });
+                pdfPageRatios.push(size.width / size.height);
+                page.cleanup();
+              }
+              ratio = pdfPageRatios[0];
+            }
             finally { await loading.destroy(); }
           } else {
             const bitmap = await createImageBitmap(new Blob([bytes], { type }));
@@ -613,11 +661,16 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
           // Give it a plan-scale board footprint so the 400% camera limit still
           // leaves useful room for close detail inspection. Ordinary attachments
           // keep their compact card size.
-          const i = items.length, w = importAsPlan && type === "application/pdf" ? 960 : 360;
-          const h = Math.max(180, Math.min(importAsPlan ? 1600 : 560, w / ratio + 78));
           assets.push(asset); total += bytes.length;
-          items.push({ id: crypto.randomUUID(), kind: "file", assetId: asset.id, page: 1,
-            x: origin.x + (i % 3) * (w + 30), y: origin.y + Math.floor(i / 3) * (h + 30), w, h });
+          const pages = type === "application/pdf" && pdfPageMode === "separate" && !importAsPlan
+            ? pdfPageRatios.map((pageRatio, index) => ({ page: index + 1, ratio: pageRatio }))
+            : [{ page: 1, ratio }];
+          for (const pageInfo of pages) {
+            const i = items.length, w = importAsPlan && type === "application/pdf" ? 960 : 360;
+            const h = Math.max(180, Math.min(importAsPlan ? 1600 : 560, w / pageInfo.ratio + 78));
+            items.push({ id: crypto.randomUUID(), kind: "file", assetId: asset.id, page: pageInfo.page,
+              x: origin.x + (i % 3) * (w + 30), y: origin.y + Math.floor(i / 3) * 590, w, h });
+          }
         } catch (e) { errors.push(`${file.name}: ${e.message || "Couldn't read file."}`); }
       }
       if (alive.current) {
@@ -647,7 +700,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
     if (!content.files.length && !content.text) return;
     e.preventDefault(); e.stopPropagation(); setError("");
     const at = pastePoint.current || center();
-    if (content.files.length) addFiles(content.files, at);
+    if (content.files.length) queueLocalFiles(content.files, at);
     else addNote(content.text, at);
   }
   async function beginImageCrop() {
@@ -767,6 +820,21 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
       <header><strong>PDF export preview</strong><button type="button" onClick={() => setPdfPreviewUrl("")} aria-label="Close PDF preview">×</button></header>
       <iframe src={pdfPreviewUrl} title="Whiteboard PDF export preview" />
     </div>}
+    {pendingLocalImport && <div className="wb-import-choice-shade" role="presentation" onPointerDown={(event) => event.stopPropagation()}>
+      <section className="wb-import-choice" role="dialog" aria-modal="true" aria-labelledby="wb-import-choice-title">
+        <header><div><small>LOCAL PDF</small><h2 id="wb-import-choice-title">How should the PDF pages be added?</h2></div>
+          <button type="button" aria-label="Cancel PDF import" onClick={() => setPendingLocalImport(null)}>×</button></header>
+        <p><strong>Separate pages</strong> creates an individual Whiteboard card for every PDF page. <strong>All pages in one</strong> creates one card with page controls.</p>
+        <div className="wb-import-choice-actions">
+          <button type="button" className="is-primary" onClick={() => finishLocalPdfChoice("separate")}>
+            <Icon name="document" size={17} />Separate pages
+          </button>
+          <button type="button" onClick={() => finishLocalPdfChoice("combined")}>
+            <Icon name="document" size={17} />All pages in one
+          </button>
+        </div>
+      </section>
+    </div>}
     {exportRequest && <PdfExportDialog title={exportRequest.title} scopeLabel={exportRequest.scopeLabel}
       defaultQuality={exportQuality} busy={exporting}
       estimateFor={(quality) => estimateWhiteboardSize(boardRef.current, exportRequest, quality)}
@@ -815,7 +883,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
       <input ref={cameraInput} type="file" accept="image/*" capture="environment" aria-label="Take a work photo" hidden
         onChange={(event) => { if (event.target.files?.length) addFiles(event.target.files); event.target.value = ""; }} />
       <input ref={input} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp" aria-label="Whiteboard files" hidden
-        onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+        onChange={(e) => { queueLocalFiles(e.target.files); e.target.value = ""; }} />
     </header>
     <div className="wb-tools">
       {imageCrop && <div className="wb-crop-actions" role="group" aria-label="Image crop actions">
@@ -838,7 +906,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
     <div ref={viewport} {...touchZoom} className={`wb-viewport${mode === "pan" ? " is-pan" : ""}${mode === "arrow" ? " is-arrow" : ""}${mode === "rectangle" ? " is-rectangle" : ""}${mode === "export-area" ? " is-crop" : ""}${mode === "export-page" ? " is-export-page" : ""}${imageCrop ? " is-image-crop" : ""}`} aria-label="Whiteboard canvas"
       style={{ backgroundSize: `${24 * view.scale}px ${24 * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
       onPointerDown={(e) => { pastePoint.current = point(e); start(e); }} onPointerMove={(e) => { pastePoint.current = point(e); move(e); }} onPointerUp={(e) => end(e)} onPointerCancel={(e) => end(e, true)}
-      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); addFiles(e.dataTransfer.files, point(e)); }}>
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); queueLocalFiles(e.dataTransfer.files, point(e)); }}>
       {!board.items.length && !drawingCount && <div className="wb-empty"><Icon name="document" size={36} /><strong>No notes yet</strong><span>Paste text, images or supported files, or add them manually.</span><button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => input.current.click()} disabled={busy || readOnly}><Icon name="plus" size={16} />Add PDFs or images</button></div>}
       {board.items.map((saved) => {
         const item = preview?.id === saved.id ? { ...saved, ...preview } : saved;
@@ -896,8 +964,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
       {selectedRemoveAnchor && !imageCrop && <button type="button" className="wb-selected-remove"
         aria-label="Remove selected object" disabled={busy || readOnly}
         style={{ left: selectedRemoveAnchor.x, top: selectedRemoveAnchor.y }}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={(event) => { event.stopPropagation(); removeSelected(); }}>Remove</button>}
+        onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); removeSelected(active?.id); }}
+        onClick={(event) => event.stopPropagation()}>Remove</button>}
       {imageCrop && <div className="wb-image-crop-overlay" aria-label="Crop image" style={{
         left: view.x + imageCrop.base.x * view.scale, top: view.y + imageCrop.base.y * view.scale,
         width: imageCrop.base.w * view.scale, height: imageCrop.base.h * view.scale,

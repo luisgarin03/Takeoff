@@ -125,9 +125,9 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
           ...(portaled ? railPosition : {}),
         }}>
           {items.map((it, i) => {
-            if (it === "divider") return <div key={i} role="separator" style={{ height: 1, background: "var(--ink-faint)", margin: "4px 0" }} />;
+            if (it === "divider") return <div key={i} role="separator" style={{ height: 1, background: "var(--ink-faint)", margin: "4px 0", ...(menuStyle?.display === "grid" ? { gridColumn: "1 / -1" } : {}) }} />;
             if (it.section) return (
-              <div key={i} style={{ padding: "6px 12px 3px", fontFamily: "var(--f-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-muted)" }}>{it.section}</div>
+              <div key={i} style={{ padding: "6px 12px 3px", fontFamily: "var(--f-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-muted)", ...(menuStyle?.display === "grid" ? { gridColumn: "1 / -1" } : {}) }}>{it.section}</div>
             );
             if (it.note) return (
               <div key={i} style={{ padding: "6px 12px 8px", fontSize: 11, color: "var(--ink-muted)", lineHeight: 1.4 }}>{it.note}</div>
@@ -149,6 +149,8 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
                   background: it.active ? "var(--paper-cream)" : "transparent",
                   borderLeft: it.active ? "2px solid var(--cobalt)" : "2px solid transparent",
                   opacity: dis ? 0.38 : 1, color: fg,
+                  ...(it.fullWidth ? { gridColumn: "1 / -1" } : it.gridColumn ? { gridColumn: it.gridColumn } : {}),
+                  ...(!it.accessory && it.dividerBelow ? { borderBottom: "1px solid var(--ink-faint)", marginBottom: 3 } : {}),
                   ...(it.accessory ? { flex: 1, minWidth: 0 } : {}),
                 }}
                 onMouseEnter={(e) => { if (!dis && !it.active) e.currentTarget.style.background = "var(--paper-shadow)"; if (!dis) it.onHover?.(true); }}
@@ -160,7 +162,7 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
                 {it.shortcut && <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-muted)" }}>{it.shortcut}</span>}
               </button>
             );
-            return it.accessory ? <div key={it.id || i} style={{ display: "flex", alignItems: "center" }}>{action}{it.accessory}</div> : action;
+            return it.accessory ? <div key={it.id || i} style={{ display: "flex", alignItems: "center", minWidth: 0, ...(it.fullWidth ? { gridColumn: "1 / -1" } : it.gridColumn ? { gridColumn: it.gridColumn } : {}), ...(Number(it.gridColumn) > 1 ? { borderLeft: "1px solid var(--ink-faint)", paddingLeft: 4 } : {}), ...(it.dividerBelow ? { borderBottom: "1px solid var(--ink-faint)", marginBottom: 3, paddingBottom: 3 } : {}) }}>{action}{it.accessory}</div> : action;
           })}
         </div>
       )}

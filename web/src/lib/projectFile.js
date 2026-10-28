@@ -5,7 +5,8 @@ import { sanitizeProjectAssistant } from "./projectAssistant.js";
 
 const FORMAT = "opentakeoff.project";
 const VERSION = 2;
-export const MAX_PROJECT_FILE_BYTES = 512 * 1024 * 1024;
+export const MAX_PROJECT_FILE_BYTES = 1024 * 1024 * 1024;
+export const MAX_PROJECT_FILE_LABEL = "1 GB";
 const MAX_MANIFEST_BYTES = 32 * 1024 * 1024;
 const MAX_ENTRIES = 10_000;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -96,7 +97,7 @@ export async function exportProjectFile(source, payload, { compact = false } = {
       // Revisions share immutable attachments; store each original only once.
       if (!attachments.has(path)) {
         total += bytes.length;
-        if (total > MAX_PROJECT_FILE_BYTES) fail("Project exceeds the 512 MB portable file limit.");
+        if (total > MAX_PROJECT_FILE_BYTES) fail(`Project exceeds the ${MAX_PROJECT_FILE_LABEL} portable file limit.`);
         files[path] = [bytes, { level: 0 }];
         attachments.set(path, { path, size: bytes.length, sha256 });
       }
@@ -132,8 +133,8 @@ export async function exportProjectFile(source, payload, { compact = false } = {
     }
     total += bytes.byteLength;
     if (total > MAX_PROJECT_FILE_BYTES) fail(compact
-      ? "The marked and bookmarked pages still exceed the 512 MB portable file limit. Remove unnecessary page marks/bookmarks or split the project."
-      : "Project exceeds the 512 MB portable file limit. Use “Save project with marked pages only…” instead.");
+      ? `The marked and bookmarked pages still exceed the ${MAX_PROJECT_FILE_LABEL} portable file limit. Remove unnecessary page marks/bookmarks or split the project.`
+      : `Project exceeds the ${MAX_PROJECT_FILE_LABEL} portable file limit. Use “Save project with marked pages only…” instead.`);
     const path = `plans/${plans.length}.pdf`;
     files[path] = [bytes, { level: 0 }]; // PDFs are already compressed.
     plans.push({ name, path, size: bytes.length, sha256: await digest(bytes) });
@@ -171,13 +172,13 @@ export async function exportProjectFile(source, payload, { compact = false } = {
   files["project.json"] = manifest;
   const bytes = await new Promise((resolve, reject) => zip(files, { level: 6 }, (err, data) => err ? reject(err) : resolve(data)));
   if (bytes.length > MAX_PROJECT_FILE_BYTES) fail(compact
-    ? "The marked-pages-only project still exceeds the 512 MB portable file limit."
-    : "Project exceeds the 512 MB portable file limit. Use “Save project with marked pages only…” instead.");
+    ? `The marked-pages-only project still exceeds the ${MAX_PROJECT_FILE_LABEL} portable file limit.`
+    : `Project exceeds the ${MAX_PROJECT_FILE_LABEL} portable file limit. Use “Save project with marked pages only…” instead.`);
   return bytes;
 }
 
 export async function readProjectFile(bytes) {
-  if (bytes.byteLength > MAX_PROJECT_FILE_BYTES) fail("Project file exceeds the 512 MB limit.");
+  if (bytes.byteLength > MAX_PROJECT_FILE_BYTES) fail(`Project file exceeds the ${MAX_PROJECT_FILE_LABEL} limit.`);
   const { unzip, strFromU8 } = await import("fflate");
   let budget = MAX_PROJECT_FILE_BYTES;
   const names = new Set();

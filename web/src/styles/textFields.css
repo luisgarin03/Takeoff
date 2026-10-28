@@ -1,12 +1,13 @@
 /* App-wide editing surface, intentionally identical in every theme.
+   Keep typed content high-contrast and opaque over plans, panels, and dark UI.
    Specificity intentionally clears legacy toolbar, table and dialog rules. */
 @media screen {
   :root {
-    --field-bg: transparent;
-    --field-ink: #f4f4f5;
-    --field-border: #71717a #3f3f46 #3f3f46 #71717a;
-    --field-scheme: dark;
-    --field-placeholder: #a1a1aa;
+    --field-bg: #fff;
+    --field-ink: #000;
+    --field-border: #a1a1aa;
+    --field-scheme: light;
+    --field-placeholder: #52525b;
   }
   .wb .wb-note,
   .wb .wb-sow-takeoff-title {

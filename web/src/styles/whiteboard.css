@@ -32,6 +32,17 @@
 .wb button:disabled { opacity: .4; cursor: default; }
 .wb button[aria-pressed="true"] { border-color: var(--cobalt); box-shadow: inset 0 0 0 1px var(--cobalt); }
 .wb button:focus-visible, .wb textarea:focus-visible, .wb input:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+.wb-import-choice-shade { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; background: #0009; }
+.wb-import-choice { width: min(520px, 100%); padding: 0; overflow: hidden; border: 1px solid var(--ink-faint); border-radius: 12px; background: var(--paper-bright); color: var(--ink); box-shadow: 0 24px 70px #0008; }
+.wb-import-choice > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px 12px; border-bottom: 1px solid var(--ink-faint); }
+.wb-import-choice > header small { color: var(--cobalt); font: 700 10px var(--f-mono); letter-spacing: .12em; }
+.wb-import-choice h2 { margin: 4px 0 0; font: 700 20px/1.2 var(--f-display); }
+.wb-import-choice > header button { min-width: 32px; padding: 4px; font-size: 20px; line-height: 1; }
+.wb-import-choice > p { margin: 0; padding: 18px 20px 6px; color: var(--ink-muted); line-height: 1.55; }
+.wb-import-choice-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 18px 20px 20px; }
+.wb .wb-import-choice-actions button { min-height: 48px; padding: 10px 14px; }
+.wb .wb-import-choice-actions .is-primary { border-color: var(--cobalt); background: var(--cobalt); color: #fff; }
+@media (max-width: 520px) { .wb-import-choice-actions { grid-template-columns: 1fr; } }
 .wb-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-height: 58px; padding: 8px 12px; background: var(--paper-bright); border: 1px solid var(--workspace-border, var(--ink-faint)); box-shadow: none; margin: 5px 5px 0; border-radius: 10px 10px 0 0; flex-shrink: 0; }
 @media (min-width: 601px) {
   .wb-toolbar-overlay > .wb-header { height: 58px; }

@@ -48,7 +48,9 @@ Cloud Projects now provides scoped folder navigation, persistent project authors
 
 Portable projects: **Project > Save project** asks for a filename and opens a Save As location picker in supported browsers (otherwise a named download). Once a supported browser grants a retained file handle, background portable saves update that same `.otk` without reopening the picker or interrupting drawing. The handle is retained per project and reused after reopening when write permission remains granted; background work never triggers a permission prompt. The single file contains the plan PDFs, takeoff data, scales, markups, RFIs, tabs, and revisions. **Project > Open project** restores it into a separate local workspace without replacing the currently saved project.
 
-Projects whose full plan set exceeds the 512 MB portable limit can use **Project > Save.. > Marked pages only**. The compact `.otk` keeps full-quality PDF content for measured pages, pages with markups/notes, and page bookmarks—including pages referenced by saved revisions—while omitted pages become tiny placeholders that preserve the original page numbers. Reopening shows a clear compact-project notice. **Import missing files** accepts the original folder, PDFs, or a ZIP and restores only exact filename/size/hash matches, so existing measurements cannot be attached to a different drawing revision.
+Projects whose full plan set exceeds the 1 GB portable limit can use **Project > Save.. > Marked pages only**. The compact `.otk` keeps full-quality PDF content for measured pages, pages with markups/notes, and page bookmarks—including pages referenced by saved revisions—while omitted pages become tiny placeholders that preserve the original page numbers. Reopening shows a clear compact-project notice. **Import missing files** accepts the original folder, PDFs, or a ZIP and restores only exact filename/size/hash matches, so existing measurements cannot be attached to a different drawing revision.
+
+When a local multipage PDF is added to the Whiteboard, choose **Separate pages** to place every PDF page as its own card, or **All pages in one** to keep a single card with page navigation. A one-page PDF imports immediately without showing the choice.
 
 Longer plan loads and renders, Find scans, exports, and project saves share a white four-bar loading indicator, so work in progress is visible until the operation finishes.
 
@@ -59,6 +61,8 @@ Longer plan loads and renders, Find scans, exports, and project saves share a wh
 Use the keyboard **Left Arrow** and **Right Arrow** keys to run the same previous/next page actions shown around the current-page selector in the Sheets toolbar. Navigation stays within the active PDF and pauses while typing, using a menu or dialog, drawing an unfinished measurement, or viewing sheets side by side.
 
 In **Select** mode, takeoff markups render and hit-test above the PDF's selectable text. Clicking an overlapping note, callout, cloud, arrow, or highlight selects the markup first; PDF text remains selectable anywhere no markup occupies the pointer location.
+
+Completed **Linear**, **Curved Line**, and **Surface Area** measurements can be extended in place: select either endpoint diamond, choose **Continue from this end**, and trace the added segments. Finishing preserves the original condition and wall settings, recalculates the same measurement, and records the extension as one undoable edit.
 
 The Markup menu includes **Draw** for opaque freehand plan ink. Click its disclosure row to expand the color-and-brush widget directly beneath Draw, choose from the shared ten-color construction palette, set the brush from 1–24 px, then press and drag on the sheet. The selected color and size are remembered in the browser. Draw strokes scale with the plan, can be selected and moved like other markups, participate in Undo/Redo and project saves, and are included in downloaded pages, Marked Set PDFs, and pages imported to Whiteboard.
 
