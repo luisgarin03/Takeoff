@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — RunPod test deployment
+
+- Added an experimental RunPod container that serves the OpenTakeoff web app
+  and provides an opt-in, token-protected file API on a persistent `/workspace`
+  volume. Production Netlify deployment and default browser storage are unchanged.
+
 ## Unreleased — Linear fence calculators
 
 - Added an inline recovery instruction when a referenced plan PDF is missing from browser storage, directing the user to drag the original PDF back onto the Takeoff page so existing sheet references can reconnect.

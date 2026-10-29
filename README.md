@@ -4,6 +4,10 @@ The empty Plan Set landing page uses React Bits Color Bends behind the onboardin
 
 A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF.md), [feature map](FEATURES.md), and [user guide](docs/USER_GUIDE.md).
 
+An experimental RunPod container for deployment and persistent-file testing is
+documented in [`runpod/README.md`](runpod/README.md). It does not change the
+default local-first application or the production Netlify deployment.
+
 ## Features
 
 - Centered landing card with Open Recent project shortcuts, including saved author and last-modified details.
