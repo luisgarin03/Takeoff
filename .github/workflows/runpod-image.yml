@@ -27,6 +27,8 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Build web application
         working-directory: web
+        env:
+          VITE_RUNPOD_MODE: "1"
         run: |
           npm ci
           npm run build

@@ -23,6 +23,7 @@ termination and redeployment. A regular container disk is not a backup.
 | `PORT` | no | `8000` | HTTP listen port |
 | `OPENTAKEOFF_DATA_DIR` | no | `/workspace/opentakeoff-data` | Persistent file directory |
 | `OPENTAKEOFF_STORAGE_TOKEN` | for storage | empty | Enables and protects the file API |
+| `OPENTAKEOFF_STORAGE_PUBLIC` | no | empty | Enables unauthenticated test storage; never use for production |
 | `OPENTAKEOFF_MAX_UPLOAD_BYTES` | no | `2147483648` | Maximum stored file size |
 
 When the token is empty, the application still runs but every storage request
@@ -52,6 +53,12 @@ All requests use `Authorization: Bearer <token>`.
 - `PUT /runpod/api/files/{name}` with the raw file body
 - `GET /runpod/api/files/{name}`
 
-The first test deployment does not automatically replace IndexedDB with the
-remote API. That client integration should follow after the Pod, volume, and
-security configuration have been verified.
+RunPod builds use this API for uploaded PDFs and project annotations. Those
+files survive browser reloads and Pod resets when `/workspace` is backed by a
+persistent volume. Personal libraries and recovery snapshots remain local to
+the browser.
+
+The test image currently sets `OPENTAKEOFF_STORAGE_PUBLIC=1`. Anyone who knows
+the Pod proxy URL can access its workspace, so use it only for temporary
+testing. Disable public mode and configure authenticated storage before a
+production deployment.

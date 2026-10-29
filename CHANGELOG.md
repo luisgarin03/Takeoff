@@ -5,6 +5,8 @@
 - Added an experimental RunPod container that serves the OpenTakeoff web app
   and provides an opt-in, token-protected file API on a persistent `/workspace`
   volume. Production Netlify deployment and default browser storage are unchanged.
+- RunPod test builds now open as writable workspaces and persist uploaded PDFs
+  and project annotations on the mounted `/workspace` volume.
 
 ## Unreleased — Linear fence calculators
 

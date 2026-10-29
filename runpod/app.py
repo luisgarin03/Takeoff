@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse
 DATA_DIR = Path(os.environ.get("OPENTAKEOFF_DATA_DIR", "/workspace/opentakeoff-data")).resolve()
 STATIC_DIR = Path(__file__).with_name("static").resolve()
 TOKEN = os.environ.get("OPENTAKEOFF_STORAGE_TOKEN", "").strip()
+PUBLIC_STORAGE = os.environ.get("OPENTAKEOFF_STORAGE_PUBLIC", "").strip().lower() in {"1", "true", "yes"}
 MAX_UPLOAD_BYTES = int(os.environ.get("OPENTAKEOFF_MAX_UPLOAD_BYTES", str(2 * 1024**3)))
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ ()-]{0,199}$")
 ALLOWED_SUFFIXES = {".pdf", ".otk", ".json", ".png", ".jpg", ".jpeg", ".webp"}
@@ -29,6 +30,8 @@ app = FastAPI(title="OpenTakeoff RunPod test host", version="0.1.0")
 
 
 def authorize(value: str | None) -> None:
+    if PUBLIC_STORAGE:
+        return
     if not TOKEN:
         raise HTTPException(status_code=503, detail="RunPod storage is not configured.")
     supplied = value.removeprefix("Bearer ").strip() if value else ""
@@ -47,7 +50,12 @@ def file_path(name: str) -> Path:
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "service": "opentakeoff-runpod", "storage_configured": bool(TOKEN)}
+    return {
+        "ok": True,
+        "service": "opentakeoff-runpod",
+        "storage_configured": bool(TOKEN) or PUBLIC_STORAGE,
+        "storage_mode": "public-test" if PUBLIC_STORAGE else "token" if TOKEN else "disabled",
+    }
 
 
 @app.get("/runpod/api/files")
@@ -97,6 +105,15 @@ def get_file(name: str, authorization: str | None = Header(default=None)) -> Fil
     if not target.is_file():
         raise HTTPException(status_code=404, detail="File not found.")
     return FileResponse(target, filename=target.name)
+
+
+@app.delete("/runpod/api/files/{name}")
+def delete_file(name: str, authorization: str | None = Header(default=None)) -> dict:
+    authorize(authorization)
+    target = file_path(name)
+    if target.is_file():
+        target.unlink()
+    return {"deleted": target.name}
 
 
 @app.get("/{path:path}")

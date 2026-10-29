@@ -247,7 +247,8 @@ export default function TakeoffCanvas() {
   const editingMembership = !!cloudAccount.user && hasEditingMembership(licenseAccess, sandboxLicensesAllowed());
   const proMembership = editingMembership && licenseAccess.subscription?.subscriptionProvider !== "trial";
   const trialDays = trialDaysRemaining(licenseAccess.subscription);
-  const readOnly = explore || licenseAccess.readOnly || !cloudAccount.user;
+  const runpodMode = import.meta.env.VITE_RUNPOD_MODE === "1";
+  const readOnly = explore || licenseAccess.readOnly || (!cloudAccount.user && !runpodMode);
   const readOnlyMessage = explore ? "Read-only exploration. Open plans or the sample PDF to view, zoom, and navigate without changing your projects." : !cloudAccount.user ? "Log in to edit. You can view and navigate this project while logged out." : licenseAccess.message;
   // Client-only: a single local workspace in this browser (no project id, no backend).
   const [sheets, setSheets] = useState([]);

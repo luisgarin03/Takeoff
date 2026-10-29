@@ -9,9 +9,11 @@ import { LicenseAccessProvider } from "../lib/licenseAccess.jsx";
 import { setProjectWritesBlocked } from "../lib/store.js";
 import "../styles/cloud.css";
 
+const RUNPOD_MODE = import.meta.env.VITE_RUNPOD_MODE === "1";
+
 export default function LicenseGate({ children }) {
   const cloud = useCloud();
-  const required = licenseRequired() || cloud.configuration.configured;
+  const required = !RUNPOD_MODE && (licenseRequired() || cloud.configuration.configured);
   const service = useMemo(() => createBillingService(createAppBillingAdapter(cloud.client)), [cloud.client]);
   const device = useMemo(() => currentLicenseDevice(), []);
   const [state, setState] = useState({ userId: "", loading: true, record: null, session: null, error: "" });

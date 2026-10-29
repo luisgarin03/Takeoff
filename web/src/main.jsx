@@ -23,6 +23,8 @@ import { AppUpdateNotice } from "./components/AppUpdates.jsx";
 import "./styles/textFields.css";
 import "./styles/workspaceUi.css";
 
+const RUNPOD_MODE = import.meta.env.VITE_RUNPOD_MODE === "1";
+
 initTheme();   // index.html set data-theme pre-paint; this keeps it live
 
 // Keep the PWA installable on localhost without taking ownership of app data.
@@ -232,7 +234,19 @@ function App() {
   const pro = !!cloud.user && hasEditingMembership(access, sandboxLicensesAllowed());
   const fileProjectId = new URLSearchParams(location.search).get("localProject");
   const query = new URLSearchParams(location.search);
-  if (cloud.ready && cloud.configuration.configured && !cloud.user && !query.has("guest")) return <Navigate to={`/auth?${new URLSearchParams({ returnTo: `${location.pathname}${location.search}` })}`} replace />;
+  const [runpodReady, setRunpodReady] = useState(!RUNPOD_MODE);
+  useEffect(() => {
+    if (!RUNPOD_MODE) return undefined;
+    let live = true;
+    import("./lib/runpodStore.js").then(({ createRunpodStore }) => {
+      if (!live) return;
+      setActiveStore(createRunpodStore());
+      setRunpodReady(true);
+    });
+    return () => { live = false; setActiveStore(); };
+  }, []);
+  if (!runpodReady) return <Centered title="Connecting RunPod storage…" />;
+  if (!RUNPOD_MODE && cloud.ready && cloud.configuration.configured && !cloud.user && !query.has("guest")) return <Navigate to={`/auth?${new URLSearchParams({ returnTo: `${location.pathname}${location.search}` })}`} replace />;
   if (query.get("explore") === "1" && pro) {
     query.delete("explore"); query.delete("guest"); query.set("workspace", "1");
     return <Navigate to={`${location.pathname}?${query}`} replace />;
