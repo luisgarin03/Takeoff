@@ -7,6 +7,8 @@
   volume. Production Netlify deployment and default browser storage are unchanged.
 - RunPod test builds now open as writable workspaces and persist uploaded PDFs
   and project annotations on the mounted `/workspace` volume.
+- RunPod file-project links now migrate their browser project into a namespaced
+  volume workspace and use a lower-memory first raster for faster large-plan loading.
 
 ## Unreleased — Linear fence calculators
 

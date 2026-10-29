@@ -202,13 +202,26 @@ function FileProjectGate({ id }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    try { setActiveStore(createFileProjectStore(id)); setReady(true); }
-    catch (e) { setError(e.message); }
-    return () => setActiveStore();
+    let live = true;
+    (async () => {
+      try {
+        const local = createFileProjectStore(id);
+        const next = RUNPOD_MODE
+          ? createRunpodStoreForProject(await import("./lib/runpodStore.js"), id, local)
+          : local;
+        await next.prepare?.();
+        if (live) { setActiveStore(next); setReady(true); }
+      } catch (e) { if (live) setError(e.message); }
+    })();
+    return () => { live = false; setActiveStore(); };
   }, [id]);
   if (error) return <Centered title="Couldn't open this project" body={error} />;
   if (!ready) return <Centered title="Opening project..." />;
   return <TakeoffCanvas />;
+}
+
+function createRunpodStoreForProject(module, id, sourceStore) {
+  return module.createRunpodStore({ namespace: id, sourceStore });
 }
 
 function ExploreGate() {
@@ -242,7 +255,7 @@ function App() {
       if (!live) return;
       setActiveStore(createRunpodStore());
       setRunpodReady(true);
-    });
+    }).catch(() => { if (live) setRunpodReady(true); });
     return () => { live = false; setActiveStore(); };
   }, []);
   if (!runpodReady) return <Centered title="Connecting RunPod storage…" />;
