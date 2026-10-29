@@ -101,6 +101,9 @@ def health() -> dict:
         "gpu_available": gpu_available,
         "compute_device": "cuda" if gpu_available else "cpu",
         "gpu_name": torch.cuda.get_device_name(0) if gpu_available else None,
+        "gpu_capability": list(torch.cuda.get_device_capability(0)) if gpu_available else None,
+        "torch_version": torch.__version__,
+        "cuda_version": torch.version.cuda,
     }
 
 
@@ -397,14 +400,19 @@ def search_pdf_symbols(payload: SymbolSearchRequest, authorization: str | None =
     target_image, target_scale = render_binary_page(pdf_path(payload.target.file), payload.target.page)
     template = crop_symbol_tensor(source_image, payload.box)
     relative_scales = [max(0.25, min(4, value * target_scale / source_scale)) for value in payload.scales]
-    matches, limited, device, elapsed_ms = gpu_symbol_match(
-        target_image,
-        template,
-        payload.threshold,
-        relative_scales,
-        rotations,
-        payload.limit,
-    )
+    try:
+        matches, limited, device, elapsed_ms = gpu_symbol_match(
+            target_image,
+            template,
+            payload.threshold,
+            relative_scales,
+            rotations,
+            payload.limit,
+        )
+    except RuntimeError as error:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        raise HTTPException(status_code=503, detail=f"RunPod symbol compute failed: {error}") from error
     return {
         "matches": matches,
         "limited": limited,

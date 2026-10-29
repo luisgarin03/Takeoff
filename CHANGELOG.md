@@ -14,7 +14,8 @@
   instead of performing those two expensive jobs locally.
 - RunPod visual symbol search now performs batched template matching with PyTorch
   CUDA on the pod GPU, reports the active GPU and elapsed compute time, and falls
-  back to CPU only when CUDA is unavailable.
+  back to CPU only when CUDA is unavailable. The runtime uses CUDA 12.8 so
+  Blackwell RTX PRO pods can execute the matching kernels.
 
 ## Unreleased — Linear fence calculators
 
