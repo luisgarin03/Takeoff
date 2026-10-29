@@ -5,7 +5,7 @@ The empty Plan Set landing page uses React Bits Color Bends behind the onboardin
 A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF.md), [feature map](FEATURES.md), and [user guide](docs/USER_GUIDE.md).
 
 An experimental RunPod container for deployment, persistent storage, server-side
-PDF rasterization, and server-side cross-plan text search is documented in
+PDF rasterization, cross-plan text search, and CUDA-accelerated visual symbol matching is documented in
 [`runpod/README.md`](runpod/README.md). It does not change the default local-first
 application or the production Netlify deployment.
 
@@ -235,4 +235,4 @@ Verified Pro subscriptions automatically leave read-only exploration and open th
 
 New accounts receive a free 30-day trial from signup, without a payment card. The toolbar shows trial days remaining and Upgrade. Trial dates are server-owned and do not reset on login, reinstall, or checkout. At expiry editing is disabled unless an active subscription is verified. Existing paid subscriptions take priority; existing accounts are not backfilled.
 
-**Visual symbol search:** Select a reference symbol in the plan preview, search the current page/PDF/all loaded plans locally, review thumbnail suggestions, and add selected matches as an undoable count batch. Includes similarity adjustment, quarter-turn rotations, preview zoom, and duplicate-count protection.
+**Visual symbol search:** Select a reference symbol in the plan preview, search the current page/PDF/all loaded plans, review thumbnail suggestions, and add selected matches as an undoable count batch. RunPod builds execute the matching convolution on the pod GPU and report the GPU model and compute time; ordinary builds use the local browser worker. Includes similarity adjustment, quarter-turn rotations, preview zoom, and duplicate-count protection.

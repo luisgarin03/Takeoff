@@ -8171,7 +8171,7 @@ export default function TakeoffCanvas() {
         activeCondition={aCond}
         onAddToEstimate={addFenceCalculationToEstimate}
         onClose={() => setFenceCalculatorOpen(false)} />}
-      {symbolSearchOpen && focusPanel?.file && <SymbolSearchDialog source={{ key: focusPanel.key, file: focusPanel.file, page: focusPanel.page }} sheets={sheets} docFor={docFor}
+      {symbolSearchOpen && focusPanel?.file && <SymbolSearchDialog source={{ key: focusPanel.key, file: focusPanel.file, page: focusPanel.page }} sheets={sheets} docFor={docFor} store={store} runpodMode={runpodMode}
         conditions={conditions} activeCondition={activeCond} readOnly={readOnly} onAddCounts={addSymbolCounts}
         onClose={() => setSymbolSearchOpen(false)} onOpenChange={onMenuDepth} />}
       {addConditionOpen && <AddConditionDialog onAdd={confirmAddCondition} onClose={() => setAddConditionOpen(false)} />}

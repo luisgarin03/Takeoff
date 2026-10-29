@@ -245,8 +245,10 @@ In the gallery, select sheets and hit **Assign level…** (`"L1"`, `"Level 2"`, 
 ### Find text in a PDF
 
 In the experimental RunPod build, base PDF page rasterization and selectable-text
-search run on the RunPod server. Search completion messages identify RunPod as the
-compute source. The normal local and Netlify builds retain browser-side processing.
+search run on the RunPod server. Visual symbol matching runs as batched CUDA
+convolutions when the pod exposes an NVIDIA GPU, with an automatic CPU fallback.
+Search completion messages identify RunPod as the compute source. The normal local
+and Netlify builds retain browser-side processing.
 
 Click **Find** in the top sheet toolbar (or press `Ctrl+F`, `⌘F` on Mac) to open the movable cross-plan search panel at the top-right, above the plans. Opening the panel does not start a scan. It begins with common scope terms such as fence, fencing, gate, enclosure, dumpster, trash, board-on-board, privacy, chain-link, ornamental, bollard, backstop, and netting. Click a suggestion to include or exclude it, use its × button to remove it from the suggestion list, or add your own suggestions. These suggestion changes are kept in this browser. You can also enter comma-separated words and phrases directly. Choose **Find in all plans** (or press Enter in the search field) to scan selectable text on every page of every loaded plan. Choose **Find in this PDF set** to scan every page in the currently focused PDF file, or **Find in this page** to scan only the focused sheet; in side-by-side view, click the desired sheet first. The shared white four-bar loading indicator remains visible while a longer scan runs.
 
@@ -1204,7 +1206,7 @@ New accounts receive a free 30-day trial from signup, without a payment card. Th
 
 Open a plan and choose **Symbol search** (the four-square icon below text search in the left rail). Drag a tight box around one symbol in the reference preview, leaving a small white border and excluding adjacent text or linework. Use Preview zoom for small symbols.
 
-Choose **Current page**, **Current PDF set**, or **All loaded plans**, then **Search symbols**. Search runs locally in a worker; use Cancel search to stop it. Similarity defaults to 92%; raise it to reject lookalikes or lower it for imperfect scans. Optional rotations search 0°, 90°, 180°, and 270°. Size variations of approximately ±15% are searched; substantially different detail scales need a new reference.
+Choose **Current page**, **Current PDF set**, or **All loaded plans**, then **Search symbols**. In the RunPod build the similarity scan runs on CUDA and the completion message reports the GPU and compute time; ordinary builds run locally in a worker. Use Cancel search to stop it. Similarity defaults to 92%; raise it to reject lookalikes or lower it for imperfect scans. Optional rotations search 0°, 90°, 180°, and 270°. Size variations of approximately ±15% are searched; substantially different detail scales need a new reference.
 
 Review the suggestion thumbnails and check the matches to count. Nothing is selected or added automatically. Choose an existing condition or create a named condition, then **Add selected counts**. Matches become normal count measurements on their original sheets, appear in totals/exports, and can be removed together with one Undo. Reaccepting matching locations in the same condition skips existing counts. Search remains available in read-only mode, but adding counts is disabled.
 

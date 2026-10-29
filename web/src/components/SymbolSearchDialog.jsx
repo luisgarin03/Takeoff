@@ -27,7 +27,7 @@ function thumbnail(canvas, box) {
   context.strokeRect((180 - box.w / w * 180) / 2, (110 - box.h / h * 110) / 2, box.w / w * 180, box.h / h * 110);
   return crop.toDataURL('image/png');
 }
-export default function SymbolSearchDialog({ source: initialSource, sheets, docFor, conditions, activeCondition, readOnly, onAddCounts, onClose, onOpenChange }) {
+export default function SymbolSearchDialog({ source: initialSource, sheets, docFor, store, runpodMode = false, conditions, activeCondition, readOnly, onAddCounts, onClose, onOpenChange }) {
   const [source] = useState(initialSource);
   const [zoom, setZoom] = useState(100);
   const [pageImage, setPageImage] = useState(null), [box, setBox] = useState(null), [template, setTemplate] = useState(null);
@@ -73,7 +73,7 @@ export default function SymbolSearchDialog({ source: initialSource, sheets, docF
     if (!template || busy) return;
     const controller = new AbortController(); operation.current = controller;
     resetResults(); setBusy(true);
-    const allMatches = []; let skipped = 0, limited = false, searched = 0;
+    const allMatches = []; let skipped = 0, limited = false, searched = 0, gpuName = '', gpuElapsed = 0, usedRunpod = false;
     try {
       const targets = findSearchTargets(sheets, scope, source);
       for (const target of targets) {
@@ -86,27 +86,43 @@ export default function SymbolSearchDialog({ source: initialSource, sheets, docF
           try {
             const image = await renderSearchPage(docFor, target.file, page, controller.signal, renderTask);
             if (controller.signal.aborted) return;
-            const result = await new Promise((resolve, reject) => {
-              const task = new Worker(new URL('../lib/symbolSearch.worker.js', import.meta.url), { type: 'module' }); worker.current = task;
-              const abort = () => { task.terminate(); reject(new DOMException('Cancelled', 'AbortError')); };
-              controller.signal.addEventListener('abort', abort, { once: true });
-              const finish = () => { task.terminate(); worker.current = null; controller.signal.removeEventListener('abort', abort); };
-              task.onmessage = ({ data }) => { finish(); data.error ? reject(new Error(data.error)) : resolve(data); };
-              task.onerror = () => { finish(); reject(new Error('Symbol matching failed on this page.')); };
-              const ratio = image.scale / pageImage.scale;
-              task.postMessage({ image: image.raster, template, options: { threshold, scales: [.85, 1, 1.15].map((value) => value * ratio), rotations: rotated ? [0, 90, 180, 270] : [0], limit: 250 } });
-            });
+            const result = runpodMode && typeof store?.searchPdfSymbols === 'function'
+              ? await store.searchPdfSymbols({
+                source: { file: source.file, page: source.page || 1 },
+                box: { x: box.x / pageImage.raster.width, y: box.y / pageImage.raster.height, w: box.w / pageImage.raster.width, h: box.h / pageImage.raster.height },
+                target: { file: target.file, page },
+                threshold,
+                scales: [.85, 1, 1.15],
+                rotations: rotated ? [0, 90, 180, 270] : [0],
+                limit: 250,
+              })
+              : await new Promise((resolve, reject) => {
+                const task = new Worker(new URL('../lib/symbolSearch.worker.js', import.meta.url), { type: 'module' }); worker.current = task;
+                const abort = () => { task.terminate(); reject(new DOMException('Cancelled', 'AbortError')); };
+                controller.signal.addEventListener('abort', abort, { once: true });
+                const finish = () => { task.terminate(); worker.current = null; controller.signal.removeEventListener('abort', abort); };
+                task.onmessage = ({ data }) => { finish(); data.error ? reject(new Error(data.error)) : resolve(data); };
+                task.onerror = () => { finish(); reject(new Error('Symbol matching failed on this page.')); };
+                const ratio = image.scale / pageImage.scale;
+                task.postMessage({ image: image.raster, template, options: { threshold, scales: [.85, 1, 1.15].map((value) => value * ratio), rotations: rotated ? [0, 90, 180, 270] : [0], limit: 250 } });
+              });
             if (controller.signal.aborted) return;
+            if (result.compute === 'runpod') { usedRunpod = true; gpuName = result.gpu_name || ''; gpuElapsed += Number(result.elapsed_ms) || 0; }
             searched++; limited ||= result.limited;
             const key = page > 1 ? `${target.file}#${page}` : target.file;
-            for (const hit of result.matches) allMatches.push({ id: `${key}:${allMatches.length}`, key, file: target.file, page, score: hit.score, x: hit.x / image.raster.width, y: hit.y / image.raster.height, w: hit.w / image.raster.width, h: hit.h / image.raster.height, thumbnail: thumbnail(image.canvas, hit) });
+            for (const hit of result.matches) {
+              const normalized = result.compute === 'runpod' ? hit : { ...hit, x: hit.x / image.raster.width, y: hit.y / image.raster.height, w: hit.w / image.raster.width, h: hit.h / image.raster.height };
+              const previewBox = result.compute === 'runpod' ? { x: hit.x * image.raster.width, y: hit.y * image.raster.height, w: hit.w * image.raster.width, h: hit.h * image.raster.height } : hit;
+              allMatches.push({ id: `${key}:${allMatches.length}`, key, file: target.file, page, score: hit.score, x: normalized.x, y: normalized.y, w: normalized.w, h: normalized.h, thumbnail: thumbnail(image.canvas, previewBox) });
+            }
             setMatches(allMatches.slice(0, 1000));
             if (allMatches.length >= 1000) { limited = true; break; }
           } catch { if (controller.signal.aborted) return; skipped++; }
         }
         if (allMatches.length >= 1000) break;
       }
-      setMessage(`${Math.min(allMatches.length, 1000)} suggestions on ${searched} searched page${searched === 1 ? '' : 's'}.${skipped ? ` ${skipped} pages/files could not be searched.` : ''}${limited ? ' Result limit reached; narrow the scope or raise similarity.' : ''} Review each suggestion before adding counts. Similar symbols and nearby linework can produce false matches.`);
+      const compute = usedRunpod ? ` Matched on RunPod ${gpuName ? `GPU (${gpuName})` : 'compute'}${gpuElapsed ? ` in ${(gpuElapsed / 1000).toFixed(2)}s` : ''}.` : '';
+      setMessage(`${Math.min(allMatches.length, 1000)} suggestions on ${searched} searched page${searched === 1 ? '' : 's'}.${compute}${skipped ? ` ${skipped} pages/files could not be searched.` : ''}${limited ? ' Result limit reached; narrow the scope or raise similarity.' : ''} Review each suggestion before adding counts. Similar symbols and nearby linework can produce false matches.`);
     } catch (error) { if (!controller.signal.aborted) setMessage(error.message || 'Symbol search failed.'); }
     finally { if (operation.current === controller) setBusy(false); }
   }

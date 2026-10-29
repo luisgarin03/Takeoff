@@ -12,6 +12,9 @@
 - RunPod mode now rasterizes base PDF pages and scans selectable PDF text on the
   RunPod server. The browser receives cached PNG pages and normalized search hits
   instead of performing those two expensive jobs locally.
+- RunPod visual symbol search now performs batched template matching with PyTorch
+  CUDA on the pod GPU, reports the active GPU and elapsed compute time, and falls
+  back to CPU only when CUDA is unavailable.
 
 ## Unreleased — Linear fence calculators
 

@@ -90,6 +90,22 @@ export function createRunpodStore({ namespace = "", sourceStore = null } = {}) {
       }));
       return response.json();
     },
+    async searchPdfSymbols({ source, box, target, threshold, rotations, scales, limit = 250 }) {
+      const response = await checked(await fetch("/runpod/api/symbol-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: { file: storedName(source.file), display_name: source.file, page: source.page },
+          box,
+          target: { file: storedName(target.file), display_name: target.file, page: target.page },
+          threshold,
+          rotations,
+          scales,
+          limit,
+        }),
+      }));
+      return response.json();
+    },
     async addPdf(file, compatibility = null, preparedBytes = null) {
       const body = preparedBytes instanceof Uint8Array
         ? preparedBytes
