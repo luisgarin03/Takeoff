@@ -15,23 +15,26 @@ test("RunPod project storage namespaces and migrates a browser project once", as
       return Response.json({ name });
     }
     const bytes = files.get(name);
-    return bytes ? new Response(bytes) : new Response("missing", { status: 404 });
+    return bytes ? new Response(bytes as BodyInit) : new Response("missing", { status: 404 });
   }) as typeof fetch;
   try {
-    let migrations = 0;
+    let annotationMigrations = 0;
     const source = {
-      async listSheets() { migrations++; return [{ name: "plans.pdf" }]; },
+      async listSheets() { return [{ name: "plans.pdf" }]; },
       async loadPdfData() { return new Uint8Array([37, 80, 68, 70]); },
-      async loadAnnotations() { return { schema: "test", shapes: [{ id: "one" }] }; },
+      async loadAnnotations() { annotationMigrations++; return { schema: "test", shapes: [{ id: "one" }] }; },
     };
     const store = createRunpodStore({ namespace: "abc", sourceStore: source as never });
     await store.prepare();
+    for (let attempt = 0; attempt < 20 && !files.has("rp-abc--plans.pdf"); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
     assert.deepEqual(await store.listSheets(), [{ name: "plans.pdf", size: 4, modified: 1 }]);
     assert.equal((await store.loadAnnotations()).shapes[0].id, "one");
     assert.ok(files.has("rp-abc--plans.pdf"));
     assert.ok(files.has("rp-abc--workspace-annotations.json"));
     await store.prepare();
-    assert.equal(migrations, 1);
+    assert.equal(annotationMigrations, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }

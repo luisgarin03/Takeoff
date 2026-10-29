@@ -34,24 +34,36 @@ export function createRunpodStore({ namespace = "", sourceStore = null } = {}) {
       const remote = await listRemote();
       if (remote.some((file) => file.name === annotationsName)) return;
       const sheets = await sourceStore.listSheets();
-      for (const sheet of sheets) {
-        const bytes = await sourceStore.loadPdfData(sheet.name);
-        await checked(await fetch(fileUrl(storedName(sheet.name)), {
-          method: "PUT", headers: { "Content-Type": "application/pdf" }, body: bytes,
-        }));
-      }
       const annotations = await sourceStore.loadAnnotations();
       await checked(await fetch(fileUrl(annotationsName), {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(annotations),
       }));
+      const remoteNames = new Set(remote.map((file) => file.name));
+      void (async () => {
+        for (const sheet of sheets) {
+          if (remoteNames.has(storedName(sheet.name))) continue;
+          const bytes = await sourceStore.loadPdfData(sheet.name);
+          await checked(await fetch(fileUrl(storedName(sheet.name)), {
+            method: "PUT", headers: { "Content-Type": "application/pdf" }, body: bytes,
+          }));
+        }
+      })().catch((error) => console.warn("RunPod background migration paused:", error));
     },
     async listSheets() {
-      return (await listRemote())
+      const remoteSheets = (await listRemote())
         .filter((file) => (!prefix || file.name.startsWith(prefix)) && file.name.toLowerCase().endsWith(".pdf"))
         .map((file) => ({ name: prefix ? file.name.slice(prefix.length) : file.name, size: file.size, modified: file.modified }));
+      if (!sourceStore) return remoteSheets;
+      const byName = new Map(remoteSheets.map((sheet) => [sheet.name, sheet]));
+      for (const sheet of await sourceStore.listSheets()) {
+        if (!byName.has(sheet.name)) byName.set(sheet.name, sheet);
+      }
+      return [...byName.values()];
     },
     async loadPdfData(name) {
-      const response = await checked(await fetch(fileUrl(storedName(name)), { cache: "no-store" }));
+      const response = await fetch(fileUrl(storedName(name)), { cache: "no-store" });
+      if (response.status === 404 && sourceStore) return sourceStore.loadPdfData(name);
+      await checked(response);
       return new Uint8Array(await response.arrayBuffer());
     },
     async addPdf(file, compatibility = null, preparedBytes = null) {
