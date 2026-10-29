@@ -40,6 +40,10 @@ docker run --rm -p 8000:8000 \
 
 Open <http://localhost:8000> and check <http://localhost:8000/health>.
 
+GitHub Actions builds the web application first, then packages the result with
+`Dockerfile.runpod.runtime`. Keeping the CI build outside BuildKit produces
+clearer diagnostics and a smaller runtime-image build context.
+
 ## Storage API
 
 All requests use `Authorization: Bearer <token>`.
