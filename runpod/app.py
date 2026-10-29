@@ -100,7 +100,7 @@ def get_file(name: str, authorization: str | None = Header(default=None)) -> Fil
 
 
 @app.get("/{path:path}")
-def web(path: str) -> FileResponse | JSONResponse:
+def web(path: str):
     candidate = (STATIC_DIR / path).resolve()
     if candidate == STATIC_DIR or STATIC_DIR in candidate.parents:
         if candidate.is_file():
