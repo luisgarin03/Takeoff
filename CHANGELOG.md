@@ -9,6 +9,9 @@
   and project annotations on the mounted `/workspace` volume.
 - RunPod file-project links now migrate their browser project into a namespaced
   volume workspace and use a lower-memory first raster for faster large-plan loading.
+- RunPod mode now rasterizes base PDF pages and scans selectable PDF text on the
+  RunPod server. The browser receives cached PNG pages and normalized search hits
+  instead of performing those two expensive jobs locally.
 
 ## Unreleased — Linear fence calculators
 

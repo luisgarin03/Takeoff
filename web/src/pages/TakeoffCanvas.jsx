@@ -1641,6 +1641,43 @@ export default function TakeoffCanvas() {
     setFindBusy(true);
     setFindBusyScope(scope);
     try {
+      if (runpodMode && typeof store.searchPdfText === "function") {
+        setFindMessage(scope === "page" ? "RunPod is searching this page…" : scope === "file" ? "RunPod is searching this PDF set…" : "RunPod is searching all loaded plans…");
+        const cloudResult = await store.searchPdfText({ targets, terms });
+        if (request !== findRequestRef.current) return;
+        const matches = Array.isArray(cloudResult?.matches) ? cloudResult.matches : [];
+        const searchedDocuments = Array.isArray(cloudResult?.documents) ? cloudResult.documents : [];
+        const sequence = findJobSequenceRef.current++;
+        const completedSearch = {
+          id: `find-${Date.now()}-${sequence}`,
+          scope,
+          query,
+          searchTerms: terms,
+          targetKey: currentPage?.key || "",
+          targetFile: currentPage?.file || "",
+          completedAt: new Date().toISOString(),
+          documents: searchedDocuments,
+          matches,
+          compute: "runpod",
+        };
+        setFindExportJob(completedSearch);
+        if (matches.length) {
+          const matchingPages = groupFindMatchesByPage(matches);
+          const job = { ...completedSearch, color: FIND_HIGHLIGHT_COLORS[sequence % FIND_HIGHLIGHT_COLORS.length], visible: true };
+          const previousResults = findVisibleMatches(findJobsRef.current);
+          const nextJobs = commitFindJobs([...findJobsRef.current, job]);
+          const addedCount = findVisibleMatches(nextJobs).length - previousResults.length;
+          setActiveFindPageKey(matchingPages[0].key);
+          const pdfCount = new Set(matchingPages.map((resultPage) => resultPage.file)).size;
+          const scopeSummary = scope === "page" ? `on ${matchingPages[0].key}` : scope === "file" ? `in ${currentPage.file}` : `across ${pdfCount.toLocaleString()} PDF${pdfCount === 1 ? "" : "s"}`;
+          setFindMessage(`${matches.length.toLocaleString()} matches on ${matchingPages.length.toLocaleString()} page${matchingPages.length === 1 ? "" : "s"} ${scopeSummary} · searched on RunPod${addedCount ? ` · ${addedCount.toLocaleString()} new mark${addedCount === 1 ? "" : "s"}` : " · already marked"}.`);
+          if (scope !== "page") showFindPage(matchingPages[0]);
+        } else {
+          const emptyScope = scope === "page" ? currentPage.key : scope === "file" ? `this PDF set (${currentPage.file})` : "the loaded plans";
+          setFindMessage(`No matches in ${emptyScope}. Search completed on RunPod.`);
+        }
+        return;
+      }
       const matches = [];
       const searchedDocuments = [];
       const skippedFiles = new Set();
@@ -1807,7 +1844,7 @@ export default function TakeoffCanvas() {
         setFindBusyScope("");
       }
     }
-  }, [commitFindJobs, docFor, findQuery, focusPanel, requestFindOcr, sheets, showFindPage, textContentForPage]);
+  }, [commitFindJobs, docFor, findQuery, focusPanel, requestFindOcr, runpodMode, sheets, showFindPage, textContentForPage]);
   const downloadLatestFindResults = useCallback(async () => {
     if (!findExportJob?.matches?.length || findBusy || findJsonBusy) return;
     setFindJsonBusy(true);
@@ -2698,7 +2735,21 @@ export default function TakeoffCanvas() {
         // dark: pdf.js paints light pixels progressively — keep the canvas hidden
         // and reveal it already-inverted, or every render flashes white-on-dark
         canvas.style.visibility = darkModeRef.current ? "hidden" : "";
-        const rt = m.pageObj.render({ canvasContext: canvas.getContext("2d"), viewport: m.viewport });
+        const rt = runpodMode && typeof store.renderPdfPage === "function"
+          ? (() => {
+              const controller = new AbortController();
+              return {
+                cancel: () => controller.abort(),
+                promise: (async () => {
+                  const blob = await store.renderPdfPage(m.file, m.pageNum, renderScalesRef.current.get(m.key));
+                  if (controller.signal.aborted) throw new DOMException("Rendering cancelled", "AbortError");
+                  const bitmap = await createImageBitmap(blob);
+                  try { canvas.getContext("2d").drawImage(bitmap, 0, 0, m.w, m.h); }
+                  finally { bitmap.close?.(); }
+                })(),
+              };
+            })()
+          : m.pageObj.render({ canvasContext: canvas.getContext("2d"), viewport: m.viewport });
         diagnosticsRenderStart(rt, `base ${m.key}`, renderScalesRef.current.get(m.key));
         renderTasksRef.current.set(m.key, rt);
         try { await rt.promise; diagnosticsRenderComplete(rt); } catch (e) { diagnosticsRenderError(rt, e); throw e; } if (stale()) return;

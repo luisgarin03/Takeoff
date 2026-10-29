@@ -13,9 +13,12 @@ import os
 import re
 import tempfile
 from pathlib import Path
+from typing import Literal
 
+import fitz
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
+from pydantic import BaseModel, Field
 
 DATA_DIR = Path(os.environ.get("OPENTAKEOFF_DATA_DIR", "/workspace/opentakeoff-data")).resolve()
 STATIC_DIR = Path(__file__).with_name("static").resolve()
@@ -27,6 +30,18 @@ ALLOWED_SUFFIXES = {".pdf", ".otk", ".json", ".png", ".jpg", ".jpeg", ".webp"}
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="OpenTakeoff RunPod test host", version="0.1.0")
+
+
+class SearchTarget(BaseModel):
+    file: str
+    display_name: str
+    page: int | None = Field(default=None, ge=1)
+
+
+class SearchRequest(BaseModel):
+    terms: list[str] = Field(min_length=1, max_length=40)
+    targets: list[SearchTarget] = Field(min_length=1, max_length=100)
+    mode: Literal["text"] = "text"
 
 
 def authorize(value: str | None) -> None:
@@ -114,6 +129,114 @@ def delete_file(name: str, authorization: str | None = Header(default=None)) -> 
     if target.is_file():
         target.unlink()
     return {"deleted": target.name}
+
+
+def pdf_path(name: str) -> Path:
+    target = file_path(name)
+    if target.suffix.lower() != ".pdf" or not target.is_file():
+        raise HTTPException(status_code=404, detail="PDF not found.")
+    return target
+
+
+@app.get("/runpod/api/pdf/{name}/metadata")
+def pdf_metadata(name: str, authorization: str | None = Header(default=None)) -> dict:
+    authorize(authorization)
+    target = pdf_path(name)
+    with fitz.open(target) as document:
+        return {"name": target.name, "pages": document.page_count}
+
+
+@app.get("/runpod/api/pdf/{name}/pages/{page}/render")
+def render_pdf_page(
+    name: str,
+    page: int,
+    scale: float = 1.0,
+    authorization: str | None = Header(default=None),
+) -> Response:
+    authorize(authorization)
+    target = pdf_path(name)
+    safe_scale = max(0.25, min(float(scale), 4.0))
+    with fitz.open(target) as document:
+        if page < 1 or page > document.page_count:
+            raise HTTPException(status_code=404, detail="PDF page not found.")
+        pixmap = document.load_page(page - 1).get_pixmap(matrix=fitz.Matrix(safe_scale, safe_scale), alpha=False)
+        png = pixmap.tobytes("png")
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=31536000, immutable", "X-OpenTakeoff-Compute": "runpod"},
+    )
+
+
+def term_occurrences(text: str, term: str):
+    lower_text, lower_term = text.casefold(), term.casefold()
+    start = 0
+    while lower_term and (index := lower_text.find(lower_term, start)) >= 0:
+        before = lower_text[index - 1] if index else ""
+        after_index = index + len(lower_term)
+        after = lower_text[after_index] if after_index < len(lower_text) else ""
+        if (not before or not before.isalnum()) and (not after or not after.isalnum()):
+            yield index
+        start = index + max(1, len(lower_term))
+
+
+@app.post("/runpod/api/search")
+def search_pdf_text(payload: SearchRequest, authorization: str | None = Header(default=None)) -> dict:
+    authorize(authorization)
+    terms = [term.strip()[:200] for term in payload.terms if term.strip()]
+    matches: list[dict] = []
+    documents: list[dict] = []
+    for target_index, requested in enumerate(payload.targets):
+        target = pdf_path(requested.file)
+        searched = {
+            "documentKey": f"runpod-{target_index}-{target.stat().st_mtime_ns}",
+            "fileName": requested.display_name,
+            "documentId": None,
+            "totalPagesSearched": 0,
+            "searchStatus": "searched",
+        }
+        documents.append(searched)
+        with fitz.open(target) as document:
+            pages = [requested.page] if requested.page else range(1, document.page_count + 1)
+            for page_number in pages:
+                if page_number is None or page_number < 1 or page_number > document.page_count:
+                    continue
+                page = document.load_page(page_number - 1)
+                searched["totalPagesSearched"] += 1
+                width, height = max(1.0, page.rect.width), max(1.0, page.rect.height)
+                for block in page.get_text("dict", flags=fitz.TEXTFLAGS_TEXT).get("blocks", []):
+                    for line in block.get("lines", []):
+                        for span in line.get("spans", []):
+                            text = span.get("text", "")
+                            if not text:
+                                continue
+                            x0, y0, x1, y1 = span.get("bbox", (0, 0, 0, 0))
+                            char_width = max(1.0, x1 - x0) / max(1, len(text))
+                            for term in terms:
+                                for start in term_occurrences(text, term):
+                                    match_width = max(char_width, char_width * len(term))
+                                    context_start, context_end = max(0, start - 75), min(len(text), start + len(term) + 75)
+                                    matches.append({
+                                        "key": requested.display_name if page_number == 1 else f"{requested.display_name}#{page_number}",
+                                        "file": requested.display_name,
+                                        "page": page_number,
+                                        "term": term,
+                                        "start": start,
+                                        "length": len(term),
+                                        "context": text[context_start:context_end],
+                                        "textBefore": text[context_start:start],
+                                        "matchedText": text[start:start + len(term)],
+                                        "textAfter": text[start + len(term):context_end],
+                                        "documentId": None,
+                                        "documentKey": searched["documentKey"],
+                                        "pageDimensions": {"width": width, "height": height, "unit": "pdf_points"},
+                                        "source": "runpod_pdf_text",
+                                        "x": (x0 + char_width * start) / width,
+                                        "y": y0 / height,
+                                        "w": match_width / width,
+                                        "h": max(1.0, y1 - y0) / height,
+                                    })
+    return {"matches": matches, "documents": documents, "compute": "runpod"}
 
 
 @app.get("/{path:path}")

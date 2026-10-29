@@ -66,6 +66,30 @@ export function createRunpodStore({ namespace = "", sourceStore = null } = {}) {
       await checked(response);
       return new Uint8Array(await response.arrayBuffer());
     },
+    async renderPdfPage(name, page, scale = 1) {
+      const safePage = Math.max(1, Math.trunc(Number(page) || 1));
+      const safeScale = Math.max(0.25, Math.min(4, Number(scale) || 1));
+      const response = await checked(await fetch(
+        `/runpod/api/pdf/${encodeURIComponent(storedName(name))}/pages/${safePage}/render?scale=${encodeURIComponent(safeScale)}`,
+        { cache: "force-cache" },
+      ));
+      return response.blob();
+    },
+    async searchPdfText({ targets, terms }) {
+      const response = await checked(await fetch("/runpod/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          terms,
+          targets: targets.map((target) => ({
+            file: storedName(target.file),
+            display_name: target.file,
+            page: target.page ?? null,
+          })),
+        }),
+      }));
+      return response.json();
+    },
     async addPdf(file, compatibility = null, preparedBytes = null) {
       const body = preparedBytes instanceof Uint8Array
         ? preparedBytes
