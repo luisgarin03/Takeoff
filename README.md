@@ -6,6 +6,16 @@ A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF
 
 ## Features
 
+New users start with the black/dark interface; an explicit light or dark choice remains saved in the browser. Windows desktop installs register `.otk` project files with the OpenTakeoff blueprint icon.
+
+The star beside the top page selector opens a compact quick-access list of bookmarked pages. It includes manual page stars and pages automatically bookmarked by saved markups, and reopens closed bookmarked pages directly.
+
+After plans are first added to a newly created project, OpenTakeoff starts one background all-plans search using the built-in default scope keywords. It adds the resulting marks without opening the Find panel or changing the current page. Reopening an existing project does not restart this automatic search.
+
+PDF Find search jobs—including highlight rectangles, colors, and shown/hidden state—autosave with the project and return after a browser refresh or project reopen.
+
+**Text selection:** choose the **Select text** rail tool or press `Shift+T`. PDFs with embedded text support ordinary drag selection and copying. On flattened, scanned, or image-only sheets, activating the tool runs local full-page OCR and builds a selectable text layer over the drawing. If no readable full-page text is found, drag a box around the desired text to use the editable **Text extractor** and its **Copy text** action.
+
 - Centered landing card with Open Recent project shortcuts, including saved author and last-modified details.
 
 Project sharing is currently hidden in the app. Its implementation is retained behind `SHARING_UI_ENABLED` for future use.
@@ -34,6 +44,10 @@ Fresh workspaces start with **Chain Link Fence**, **Wood Fence**, and **Aluminum
 
 The live Takeoff summary uses the active condition's line color on its left edge, so the current measurement color stays visible while drawing and reviewing totals.
 
+While tracing a Linear measurement, every new vertex receives a brief drafting-marker confirmation and the connected segment draws into place. The effect stays lightweight and is disabled when reduced motion is requested.
+
+Drawing tools use thin dark-cobalt full-page crosshair guides so the active horizontal and vertical alignment remains visible over bright plan sheets.
+
 Each condition row in the Takeoffs panel includes a page-pin dropdown. It lists every distinct page where that condition has measurements in loaded PDF/page order, using the known sheet name, and opens the selected page directly. The control is disabled until the condition is used.
 
 Each condition row also includes an **eye** button. Turn it off to hide that condition's measurement graphics, linked automatic callouts, and linked chain-link post overlay from the live plan, downloaded page, printed plan, Marked Set PDF, and page imported to Whiteboard. The condition, quantities, and Report totals stay intact; turn the eye back on to restore the graphics. Existing projects default every condition to visible.
@@ -53,6 +67,10 @@ Projects whose full plan set exceeds the 1 GB portable limit can use **Project >
 When a local multipage PDF is added to the Whiteboard, choose **Separate pages** to place every PDF page as its own card, or **All pages in one** to keep a single card with page navigation. A one-page PDF imports immediately without showing the choice.
 
 Longer plan loads and renders, Find scans, exports, and project saves share a white four-bar loading indicator, so work in progress is visible until the operation finishes.
+
+Transient canvas and desktop-update notifications use one compact, rounded toast surface in light and dark themes. Loading toasts include the animated four-bar app loader, with the saved theme accent applied to the loader and toast edge.
+
+Takeoff-to-Whiteboard imports replace their loading notification with a clear success or failure result after the Whiteboard finishes ingesting the generated plan file, including when the board was already open.
 
 **Project > Download this page** exports the complete current sheet as a lightweight one-page PDF with its takeoff lines, notes, and markups, without the automatic condition/quantity labels or a report cover. Before downloading, choose **Compact**, **Balanced**, or **HD** and compare the estimated file-size range. Compact and Balanced retain readable construction-plan text with progressively lighter compression; HD preserves the smallest callouts at the largest safe resolution. Oversized HD sheets are fitted automatically to the browser-safe 16-megapixel raster ceiling instead of failing. The completed size is reported after export. The visible plan is flattened to a bounded page image, leaving source OCR/search text, hidden text, fonts, forms, annotations, metadata, and complex resources behind. Long markup captions wrap into bounded 12-point multi-line boxes with a translucent paper background, so they stay readable instead of running across or beyond the page. The estimating canvas uses those same sheet-relative text, box, stroke, and arrowhead dimensions: zoom enlarges the plan and its markup together, making the live placement an honest preview of the downloaded PDF. Visible Find jobs are included as keyword highlights in their selected colors. In side-by-side view, it uses the last-clicked sheet.
 

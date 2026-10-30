@@ -7,6 +7,7 @@ export default function LongTaskLoader({
   variant = "inline",
   compact = false,
   className = "",
+  announce = true,
 }) {
   if (!active) return null;
 
@@ -22,9 +23,10 @@ export default function LongTaskLoader({
   return (
     <div
       className={classes}
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
+      role={announce ? "status" : undefined}
+      aria-live={announce ? "polite" : undefined}
+      aria-atomic={announce ? "true" : undefined}
+      aria-hidden={announce ? undefined : "true"}
       style={{ "--long-task-loader-delay": `${safeDelay}ms` }}
     >
       <span className="long-task-loader__label">{label || "Working…"}</span>

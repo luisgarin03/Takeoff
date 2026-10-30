@@ -2042,3 +2042,40 @@ select {
 /* Portaled hatch menus must clear the conditions drawer; the generic menu rule uses !important. */
 .tool-menu-popover.condition-hatch-popover { z-index: 1000 !important; }
 .tool-menu-popover[data-portaled="true"] { z-index: 1000 !important; }
+
+/* Linear drafting feedback: the new run draws from its prior point, then the
+   endpoint settles with a small survey-marker confirmation. SVG pathLength=1
+   keeps the timing independent of the measured segment's actual length. */
+.takeoff-linear-segment-enter {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: takeoff-linear-segment-draw 260ms var(--ease) forwards;
+}
+.takeoff-linear-point-enter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: takeoff-linear-point-pop 280ms cubic-bezier(.2, .85, .3, 1.35) both;
+}
+.takeoff-linear-point-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: takeoff-linear-point-ring 420ms ease-out both;
+  pointer-events: none;
+}
+@keyframes takeoff-linear-segment-draw { to { stroke-dashoffset: 0; } }
+@keyframes takeoff-linear-point-pop {
+  0% { opacity: .25; transform: scale(.35); }
+  70% { opacity: 1; transform: scale(1.22); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes takeoff-linear-point-ring {
+  0% { opacity: .65; transform: scale(.35); }
+  100% { opacity: 0; transform: scale(1.45); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .takeoff-linear-segment-enter,
+  .takeoff-linear-point-enter,
+  .takeoff-linear-point-ring { animation: none; }
+  .takeoff-linear-segment-enter { stroke-dashoffset: 0; }
+  .takeoff-linear-point-ring { display: none; }
+}

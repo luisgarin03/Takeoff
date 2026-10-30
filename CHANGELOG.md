@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — October 30 checkpoint
+
+- Darkened the full-page drawing crosshair guides for clearer contrast against bright construction plans without increasing their line weight.
+- Added lightweight drafting feedback to Linear measurements: each newly placed vertex pops into position with a brief expanding ring while its connected segment draws on from the previous point. Reduced-motion users receive the finished geometry without animation.
+- Fixed Takeoff-to-Whiteboard imports so the loading toast changes to a completed or failed result after ingestion, and additional imports are processed when the Whiteboard is already open.
+- Restyled canvas and desktop-update toasts as compact shadcn-style notification cards in light and dark themes, added dismiss controls, and placed the accent-colored four-bar app loader in progress toasts such as OCR scanning, imports, saves, and updates.
+- Added a dedicated **Select text** canvas mode (`Shift+T`): embedded PDF text supports normal drag selection and copying, while scanned/image-only pages accept a Snipping Tool-style rectangle and run local in-browser OCR with an editable Copy text result.
+- Registered `.otk` as an **OpenTakeoff Project** in the Windows installer using the blueprint application icon, and made the black/dark interface the default when a user has no saved theme choice. Existing explicit light or dark preferences remain unchanged.
+- Added a star menu immediately to the right of the top page selector for quick access to every bookmarked page, including markup-derived bookmarks and bookmarked pages that are not currently open as tabs.
+- Newly created projects now run one background all-plans Find job with the built-in default scope keywords after their first plans are added. The scan does not open the Find panel or navigate away from the user's current page, and existing projects do not rescan when reopened.
+- Select text now scans the focused flattened/image-only page with local OCR when the I-beam tool is activated, builds an invisible selectable text layer over the drawing, and supports normal drag-to-select and copy. The existing region extractor remains available when the page scan finds no readable text.
+- Persist PDF Find search jobs, highlight rectangles, colors, and visibility in browser recovery, cloud, revision, and portable project saves so search marks survive refresh and project reopen.
 ## Unreleased — Linear fence calculators
 
 - Added an inline recovery instruction when a referenced plan PDF is missing from browser storage, directing the user to drag the original PDF back onto the Takeoff page so existing sheet references can reconnect.

@@ -35,6 +35,22 @@ async function getWorker() {
   return workerPromise;
 }
 
+export async function recognizeImageText(image, { onProgress } = {}) {
+  if (!image || typeof document === "undefined") return "";
+  progressListener = onProgress || null;
+  try {
+    const worker = await getWorker();
+    const result = await worker.recognize(image, {}, {
+      text: true, blocks: false, layoutBlocks: false, hocr: false, tsv: false,
+      box: false, unlv: false, osd: false, pdf: false, imageColor: false,
+      imageGrey: false, imageBinary: false, debug: false,
+    });
+    return String(result?.data?.text || "").replace(/\r\n?/g, "\n").trim();
+  } finally {
+    progressListener = null;
+  }
+}
+
 export function ocrLinesFromBlocks(blocks) {
   const lines = [];
   for (const block of blocks || []) {
@@ -53,6 +69,25 @@ export function ocrLinesFromBlocks(blocks) {
     }
   }
   return lines;
+}
+
+export function ocrWordsFromBlocks(blocks) {
+  const words = [];
+  for (const block of blocks || []) {
+    for (const paragraph of block?.paragraphs || []) {
+      for (const line of paragraph?.lines || []) {
+        for (const word of line?.words || []) {
+          const text = String(word?.text || "").replace(/\s+/g, " ").trim();
+          const bbox = word?.bbox;
+          if (!text || !bbox || (Number(word?.confidence) || 0) < OCR_MIN_CONFIDENCE) continue;
+          const x0 = Number(bbox.x0), y0 = Number(bbox.y0), x1 = Number(bbox.x1), y1 = Number(bbox.y1);
+          if (![x0, y0, x1, y1].every(Number.isFinite) || x1 <= x0 || y1 <= y0) continue;
+          words.push({ str: `${text} `, x0, y0, x1, y1 });
+        }
+      }
+    }
+  }
+  return words;
 }
 
 export function findOcrLineMatches(lines, terms, imageWidth, imageHeight) {
@@ -110,6 +145,7 @@ async function recognizePageLines(pageObject, onProgress) {
     });
     return {
       lines: ocrLinesFromBlocks(result?.data?.blocks),
+      words: ocrWordsFromBlocks(result?.data?.blocks),
       width: canvas.width,
       height: canvas.height,
     };
@@ -132,6 +168,19 @@ export async function recognizePdfPageForFind(pageObject, terms, { onProgress } 
   }
   const { lines, width, height } = await pageLines;
   return findOcrLineMatches(lines, terms, width, height);
+}
+
+export async function recognizePdfPageText(pageObject, { onProgress } = {}) {
+  if (!pageObject || typeof document === "undefined") return { lines: [], width: 1, height: 1 };
+  let pageLines = pageLinesCache.get(pageObject);
+  if (!pageLines) {
+    pageLines = recognizePageLines(pageObject, onProgress).catch((error) => {
+      if (pageLinesCache.get(pageObject) === pageLines) pageLinesCache.delete(pageObject);
+      throw error;
+    });
+    pageLinesCache.set(pageObject, pageLines);
+  }
+  return pageLines;
 }
 
 export async function disposeFindOcr() {

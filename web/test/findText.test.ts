@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addFindSuggestions, DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, findHighlightsForPageExport, findMatchContext, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, hideSingleMatchFindPages, mergeFindMatches, normalizeFindSuggestions, parseFindTerms, rankFindPages, removeFindSuggestion, stepFindPageIndex } from "../src/lib/findText.js";
+import { addFindSuggestions, DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, findHighlightsForPageExport, findMatchContext, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, hideSingleMatchFindPages, mergeFindMatches, normalizeFindSuggestions, parseFindTerms, rankFindPages, removeFindSuggestion, sanitizeFindJobs, stepFindPageIndex } from "../src/lib/findText.js";
 
 test("scope suggestions include the requested estimating terms", () => {
   assert.deepEqual(DEFAULT_SCOPE_TERMS, [
@@ -147,4 +147,14 @@ test("page export snapshots only visible, valid Find highlights for the current 
   ]);
   assert.deepEqual(findHighlightsForPageExport(hits, "A.pdf#2", false, "A.pdf#2"), []);
   assert.deepEqual(hits, before);
+});
+
+test("saved find jobs restore valid highlights and reject malformed hits", () => {
+  const hit = { key: "A.pdf#2", file: "A.pdf", page: 2, term: "Fence", itemIndex: 4, start: 1, length: 5, x: .1, y: .2, w: .3, h: .04 };
+  const [job] = sanitizeFindJobs([{ id: "find-1", scope: "page", query: "fence", searchTerms: ["fence"], visible: false, color: "#123456", matches: [hit, { ...hit, w: 0 }] }]);
+  assert.equal(job.id, "find-1");
+  assert.equal(job.visible, false);
+  assert.equal(job.color, "#123456");
+  assert.deepEqual(job.matches, [hit]);
+  assert.deepEqual(sanitizeFindJobs([{ matches: [{ ...hit, x: Number.NaN }] }, null]), []);
 });

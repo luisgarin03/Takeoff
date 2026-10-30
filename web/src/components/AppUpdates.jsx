@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { APP_VERSION, desktopUpdateApi, formatUpdateBytes, normalizeDesktopUpdateState } from "../lib/appUpdates.js";
+import AppToast from "./AppToast.jsx";
 
 function useDesktopUpdates() {
   const api = useMemo(() => desktopUpdateApi(globalThis), []);
@@ -33,15 +34,15 @@ export function AppUpdateNotice() {
   const { state, actionError, invoke } = useDesktopUpdates();
   if (!state.supported || !["available", "downloading", "ready", "installing"].includes(state.phase)) return null;
   const version = state.availableVersion ? ` ${state.availableVersion}` : "";
-  return <aside className="app-update-notice" aria-live="polite" aria-label="Application update">
-    <strong>{state.phase === "ready" ? "Update ready" : state.phase === "downloading" ? "Downloading update" : state.phase === "installing" ? "Installing update" : `Update${version} available`}</strong>
+  const title = state.phase === "ready" ? "Update ready" : state.phase === "downloading" ? "Downloading update" : state.phase === "installing" ? "Installing update" : `Update${version} available`;
+  return <AppToast className="app-update-notice" title={title} loading={["downloading", "installing"].includes(state.phase)} danger={!!actionError}>
     {state.phase === "downloading" && <><progress value={state.percent} max="100" /><span>{progressText(state)}</span></>}
     {state.phase === "available" && <button type="button" onClick={() => invoke("download")}>Download update</button>}
     {state.phase === "ready" && <button type="button" className="btn-primary" onClick={() => {
       if (window.confirm("Save your current project before restarting. Restart now and install the update?")) invoke("install");
     }}>Restart and install</button>}
-    {actionError && <span role="alert">{actionError}</span>}
-  </aside>;
+    {actionError && <span>{actionError}</span>}
+  </AppToast>;
 }
 
 export function UpdateSection() {

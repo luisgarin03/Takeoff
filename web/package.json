@@ -107,6 +107,15 @@
       ],
       "icon": "assets/icon.ico"
     },
+    "fileAssociations": [
+      {
+        "ext": "otk",
+        "name": "OpenTakeoff Project",
+        "description": "OpenTakeoff project file",
+        "icon": "assets/icon.ico",
+        "role": "Editor"
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "perMachine": false,

@@ -9,6 +9,34 @@ export const FIND_HIGHLIGHT_COLORS = Object.freeze([
   "#8b5cf6", "#ef4444", "#3b82f6", "#84cc16",
 ]);
 
+const FIND_SCOPES = new Set(["all", "file", "page"]);
+const boundedString = (value, limit = 500) => typeof value === "string" ? value.slice(0, limit) : "";
+
+// Find results are project data: retaining normalized hit rectangles avoids a
+// PDF rescan on reload while this gate keeps malformed imported data away from
+// the SVG overlay and result exporter.
+export function sanitizeFindJobs(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 100).flatMap((job, jobIndex) => {
+    if (!job || typeof job !== "object" || !Array.isArray(job.matches)) return [];
+    const matches = job.matches.slice(0, 100_000).flatMap((hit) => {
+      if (!hit || typeof hit !== "object") return [];
+      const x = Number(hit.x), y = Number(hit.y), w = Number(hit.w), h = Number(hit.h);
+      const page = Math.trunc(Number(hit.page));
+      const key = boundedString(hit.key), file = boundedString(hit.file), term = boundedString(hit.term, 200);
+      if (!key || !file || !term || !Number.isInteger(page) || page < 1 || ![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) return [];
+      return [{ ...hit, key, file, term, page, x, y, w, h }];
+    });
+    if (!matches.length) return [];
+    const color = /^#[0-9a-f]{6}$/i.test(String(job.color || "")) ? job.color : FIND_HIGHLIGHT_COLORS[jobIndex % FIND_HIGHLIGHT_COLORS.length];
+    return [{ ...job, id: boundedString(job.id, 200) || `saved-find-${jobIndex}`,
+      scope: FIND_SCOPES.has(job.scope) ? job.scope : "all", query: boundedString(job.query, 2_000),
+      searchTerms: parseFindTerms(job.searchTerms).slice(0, 100), targetKey: boundedString(job.targetKey),
+      targetFile: boundedString(job.targetFile), completedAt: boundedString(job.completedAt, 100),
+      documents: Array.isArray(job.documents) ? job.documents.slice(0, 10_000) : [], matches, color, visible: job.visible !== false }];
+  });
+}
+
 const FIND_WORD_CHARACTER = /[\p{L}\p{N}_]/u;
 
 function edgeCharacter(value, edge) {

@@ -74,7 +74,7 @@ export function metadataPayload(metadata) {
 const KNOWN_PROJECT_KEYS = new Set([
   "schema", "project_id", "project_name", "project_metadata", "units", "client_info", "whiteboard", "sheets", "conditions",
   "condition_columns", "shape_labels", "palette", "shapes", "markups", "rfis", "sheet_group",
-  "last_group", "sheet_tabs", "sheet_bookmarks", "file_bookmarks", "sheet_levels", "provenance_counters", "pinned", "fence_calculator", "chain_link_fences", "ornamental_fences", "compact_project", "project_assistant",
+  "last_group", "sheet_tabs", "sheet_bookmarks", "file_bookmarks", "sheet_levels", "provenance_counters", "pinned", "fence_calculator", "chain_link_fences", "ornamental_fences", "compact_project", "project_assistant", "find_jobs",
 ]);
 
 export function preserveUnknownProjectFields(payload) {
