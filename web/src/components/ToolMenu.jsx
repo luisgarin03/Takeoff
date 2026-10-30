@@ -20,7 +20,7 @@ import { ToolbarPanelContext } from "./BeitzellToolbar.jsx";
 
 const MENU_W = 232;
 
-export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false, rail = false, railTop, railFillHeight = false, portal = false }) {
+export default function ToolMenu({ face, active = false, accent = "cobalt", title = "", items, onOpenChange, faceStyle, menuStyle, disabled = false, rail = false, railTop, railFillHeight = false, portal = false, hideChevron = false }) {
   const toolbarActive = useContext(ToolbarPanelContext);
   const portaled = portal || rail || toolbarActive !== null;
   const [open, setOpen] = useState(false);
@@ -114,7 +114,7 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
             background: active ? accentColor : (open ? "var(--paper-shadow)" : "var(--paper-bright)") } : {}),
         }}>
         {face}
-        {!rail && <span style={{ display: "inline-flex", opacity: 0.7 }}><Icon name="chevronDown" size={11} /></span>}
+        {!rail && !hideChevron && <span style={{ display: "inline-flex", opacity: 0.7 }}><Icon name="chevronDown" size={11} /></span>}
       </button>
       {open && renderMenu(
         <div ref={menuRef} className="tool-menu-popover" data-portaled={portaled || undefined} style={{

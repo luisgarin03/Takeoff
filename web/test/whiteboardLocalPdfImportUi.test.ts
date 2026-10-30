@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("../src/components/Whiteboard.jsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const canvasSource = readFileSync(new URL("../src/pages/TakeoffCanvas.jsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const css = readFileSync(new URL("../src/styles/whiteboard.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 test("only multipage local Whiteboard PDFs ask whether to split pages or keep one navigable card", () => {
@@ -23,4 +24,12 @@ test("local picker, paste, and drop use the PDF choice while Takeoff imports sta
   assert.match(source, /if \(content\.files\.length\) queueLocalFiles\(content\.files, at\)/);
   assert.match(source, /addFiles\(initialFiles, null, \{ focusAdded: true, importAsPlan: true \}\)/);
   assert.match(css, /\.wb-import-choice-shade \{[^}]*position: fixed;[^}]*z-index: 80;/);
+});
+
+test("Takeoff imports finish their toast and can run while Whiteboard remains open", () => {
+  assert.match(source, /return \{ addedFiles: assets\.length, addedItems: items\.length, errors \}/);
+  assert.match(source, /onInitialFilesHandled\?\.\(result\)/);
+  assert.match(source, /\}, \[initialFiles\]\)/);
+  assert.match(canvasSource, /if \(result\?\.addedFiles > 0\) setCommitMsg\(`Imported \$\{importedName\} to the whiteboard\.`\)/);
+  assert.match(canvasSource, /else setCommitMsg\(`Couldn't import \$\{importedName\} to the whiteboard/);
 });

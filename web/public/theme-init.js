@@ -1,7 +1,6 @@
 // Set the theme before first paint (no flash of the wrong theme). Stored choice
-// wins; otherwise follow the OS. matchMedia sits outside the try so private mode
-// still gets OS-matched theming. lib/theme.js keeps this in sync after load
-// (toggle, OS changes, other tabs).
+// wins; otherwise the app starts in its black/dark theme. lib/theme.js keeps
+// explicit choices in sync after load (toggle and other tabs).
 //
 // This lives as a same-origin file rather than an inline <script> ON PURPOSE:
 // it lets the deployed app ship a strict Content-Security-Policy with
@@ -11,8 +10,7 @@
 (function () {
   var t = null;
   try { t = localStorage.getItem("opentakeoff_theme"); } catch (e) {}
-  if (t !== "light" && t !== "dark")
-    t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  if (t !== "light" && t !== "dark") t = "dark";
   document.documentElement.setAttribute("data-theme", t);
   document.querySelector('meta[name="theme-color"]')
     .setAttribute("content", t === "dark" ? "#121c2c" : "#f4efe0");

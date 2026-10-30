@@ -614,8 +614,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
     if (request) addFiles(request.files, request.at, { pdfPageMode });
   }
   async function addFiles(list, at = null, options = {}) {
-    if (denyReadOnlyEdit()) return;
-    if (importLock.current || !list?.length) return;
+    if (denyReadOnlyEdit()) return { addedFiles: 0, addedItems: 0, errors: [readOnlyMessage || "This workspace is read-only."] };
+    if (importLock.current || !list?.length) return { addedFiles: 0, addedItems: 0, errors: [] };
     const focusAdded = options.focusAdded === true;
     const importAsPlan = options.importAsPlan === true;
     const pdfPageMode = options.pdfPageMode === "separate" ? "separate" : "combined";
@@ -655,7 +655,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
             const bitmap = await createImageBitmap(new Blob([bytes], { type }));
             ratio = bitmap.width / bitmap.height; bitmap.close();
           }
-          if (!alive.current) return;
+          if (!alive.current) return { addedFiles: 0, addedItems: 0, errors: [] };
           const asset = { id: crypto.randomUUID(), name: whiteboardClipboardFileName(file, fileIndex), type, size: bytes.length, data: bytesToBase64(bytes) };
           // A page sent from Takeoff is a primary plan sheet, not a thumbnail.
           // Give it a plan-scale board footprint so the 400% camera limit still
@@ -683,16 +683,17 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
         }
         setError(errors.join("\n"));
       }
+      return { addedFiles: assets.length, addedItems: items.length, errors };
     } finally { importLock.current = false; callbacks.current.onBusyChange(false); if (alive.current) setBusy(false); }
   }
   useEffect(() => {
     if (!initialFiles?.length) return;
     let cancelled = false;
-    addFiles(initialFiles, null, { focusAdded: true, importAsPlan: true }).finally(() => {
-      if (!cancelled) callbacks.current.onInitialFilesHandled?.();
-    });
+    addFiles(initialFiles, null, { focusAdded: true, importAsPlan: true })
+      .then((result) => { if (!cancelled) callbacks.current.onInitialFilesHandled?.(result); })
+      .catch((error) => { if (!cancelled) callbacks.current.onInitialFilesHandled?.({ addedFiles: 0, addedItems: 0, errors: [error?.message || "Couldn't add the file."] }); });
     return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- initialFiles are a mount-only import request.
+  }, [initialFiles]); // eslint-disable-line react-hooks/exhaustive-deps -- request identity triggers each Takeoff import; addFiles intentionally reads live refs.
   function paste(e) {
     if (readOnly) { e.preventDefault(); denyReadOnlyEdit(); return; }
     if (busy || importLock.current || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;

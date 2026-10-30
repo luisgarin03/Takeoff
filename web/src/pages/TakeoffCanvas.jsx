@@ -38,6 +38,7 @@ import SaveSettingsDialog from "../components/SaveSettingsDialog.jsx";
 import AddConditionDialog from "../components/AddConditionDialog.jsx";
 import PdfExportDialog from "../components/PdfExportDialog.jsx";
 import LongTaskLoader from "../components/LongTaskLoader.jsx";
+import AppToast, { isLoadingToastMessage } from "../components/AppToast.jsx";
 import ProjectMetadataModal from "../components/ProjectMetadataModal.jsx";
 import { EMPTY_PROJECT_METADATA, withProjectEditor, withProjectAuthor, createProjectMetadata, metadataPayload, normalizeProjectMetadata, preserveUnknownProjectFields, touchProjectMetadata } from "../lib/projectMetadata.js";
 import CloudProjects from "../components/CloudProjects.jsx";
@@ -83,9 +84,9 @@ import { normalizeLoadedGroups } from "../lib/sheetGroups";
 import { isCanvasBusy } from "../lib/canvasBusy";
 import { parseSchedule, rowToSeed } from "../lib/scheduleParse";
 import { normalizeScanRows, postScanWithRetry, SCAN_ENDPOINT, scanRasterScale } from "../lib/scheduleScan";
-import { DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, addFindSuggestions, findHighlightsForPageExport, findMatchContext, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, hideSingleMatchFindPages, normalizeFindSuggestions, parseFindTerms, rankFindPages, removeFindSuggestion, stepFindPageIndex } from "../lib/findText.js";
+import { DEFAULT_SCOPE_TERMS, FIND_HIGHLIGHT_COLORS, addFindSuggestions, findHighlightsForPageExport, findMatchContext, findSearchTargets, findTextItemMatches, findVisibleMatches, groupFindMatchesByPage, hideSingleMatchFindPages, normalizeFindSuggestions, parseFindTerms, rankFindPages, removeFindSuggestion, sanitizeFindJobs, stepFindPageIndex } from "../lib/findText.js";
 import { buildFindResultsExport, findResultsFilename } from "../lib/findResultsExport.js";
-import { disposeFindOcr, recognizePdfPageForFind } from "../lib/findOcr.js";
+import { disposeFindOcr, recognizeImageText, recognizePdfPageForFind, recognizePdfPageText } from "../lib/findOcr.js";
 import { MARKUP_SHORTCUTS_KEY, assignMarkupShortcut, clearMarkupShortcut, normalizeMarkupShortcutMap } from "../lib/markupShortcuts.js";
 import { normalizeTag } from "../lib/scheduleEdit";
 import { isGoogleConfigured, isSignedIn, isAllowedDomain, getAccessToken, orgDomainHint } from "../lib/google/auth.js";
@@ -292,6 +293,7 @@ export default function TakeoffCanvas() {
   const findRequestRef = useRef(0);
   const findJobSequenceRef = useRef(0);
   const findJobsRef = useRef([]);
+  const autoFindDefaultsPendingRef = useRef(false); // armed only by New project; consumed after its first plans arrive
   const [findRanked, setFindRanked] = useState(false);
   const [findHideSingleMatchPages, setFindHideSingleMatchPages] = useState(false);
   const findResults = useMemo(() => findVisibleMatches(findJobs), [findJobs]);
@@ -384,6 +386,7 @@ export default function TakeoffCanvas() {
   const [err, setErr] = useState("");
 
   const [tool, setTool] = useState("pan");
+  const [textExtract, setTextExtract] = useState(null);
   const [markupShortcuts, setMarkupShortcuts] = useState(storedMarkupShortcuts);
   const [mappingMarkupShortcut, setMappingMarkupShortcut] = useState(null);
   const [toolbarHidden, setToolbarHidden] = useState(false);
@@ -943,6 +946,10 @@ export default function TakeoffCanvas() {
   const panelTextLayerRefs = useRef(new Map()); // sheetKey → selectable PDF.js text layer
   const panelTextLayerTasksRef = useRef(new Map()); // sheetKey → TextLayer render task
   const panelTextContentRef = useRef(new Map()); // open sheetKey → Promise<TextContent>
+  const panelTextAvailableRef = useRef(new Map()); // sheetKey → meaningful selectable PDF text exists
+  const panelOcrTextRef = useRef(new Map()); // sheetKey → full-page OCR text-layer result or in-flight promise
+  const textSnipRef = useRef(null); // image-only text-extractor marquee (DOM-direct while dragging)
+  const textSnipBoxRef = useRef(null);
   const previewCanvasRefs = useRef(new Map()); // sheetKey → low-zoom canvas in the same stage space
   const previewReadyRef = useRef(new Map());   // sheetKey → base-render generation that produced it
   const previewBaseGenerationsRef = useRef(new Map()); // sheetKey → completed base-render generation
@@ -983,6 +990,12 @@ export default function TakeoffCanvas() {
   const highlightRef = useRef(null);   // live highlight-box preview (first corner → cursor; own translucent fill, NOT rectRef's condition fill)
   const arrowLineRef = useRef(null), arrowHeadRef = useRef(null);
   const [arrowColor, setArrowColor] = useState(ARROW_COLORS[0].value);
+  useEffect(() => {
+    if (tool !== "text-select") return;
+    for (const ref of [crossVRef, crossHRef, rubberRef, rectRef, snapMarkRef, aimMarkRef, aimChipRef]) {
+      if (ref.current) ref.current.style.display = "none";
+    }
+  }, [tool]);
   const hlRef = useRef(null);          // in-progress freehand stroke {type, style, pts (stage px), key}
   const hlPathRef = useRef(null);      // live freehand preview path (imperative, WYSIWYG ink)
   const [hlStyle, setHlStyle] = useState(() => {
@@ -1205,6 +1218,16 @@ export default function TakeoffCanvas() {
     ? [{ section: "Bookmarked" }, ...bookmarkGroups.bookmarked.map(sheetJumpItem),
       ...(bookmarkGroups.other.length ? ["divider", { section: "Open sheets" }, ...bookmarkGroups.other.map(sheetJumpItem)] : [])]
     : openTabs.map(sheetJumpItem);
+  const bookmarkQuickItems = bookmarkGroups.bookmarked.length
+    ? [{ section: "Bookmarked pages" }, ...bookmarkGroups.bookmarked.map((key) => ({
+      id: `quick-${key}`,
+      icon: bookmarkedKeys.has(key) ? "starFilled" : "pencil",
+      tint: bookmarkedKeys.has(key) ? "#b8860b" : "var(--cobalt)",
+      label: tabLabel(key),
+      active: sheetGroup.length ? sheetGroup.includes(key) : key === sheetKey,
+      onSelect: () => openSheets([key], false),
+    }))]
+    : [{ note: "No bookmarked pages yet. Use the star beside a page to add one." }];
 
   // ── panels: the ONE rendering model — single-sheet mode is a group of one ──
   // Every coordinate on screen lives in "stage space": panel i's image px plus
@@ -1575,6 +1598,65 @@ export default function TakeoffCanvas() {
     return content;
   }, []);
 
+  useEffect(() => {
+    const key = focusPanel?.key;
+    if (tool !== "text-select" || !key || panelTextAvailableRef.current.get(key)) return;
+    const pageObject = pageObjsRef.current.get(key);
+    const textLayer = panelTextLayerRefs.current.get(key);
+    const dims = panelImgs[key];
+    if (!pageObject || !textLayer || !dims?.w || !dims?.h) return;
+    let cancelled = false;
+    const renderOcrLayer = ({ lines = [], words = [], width = 1, height = 1 }) => {
+      const runs = words.length ? words : lines;
+      if (cancelled || !runs.length) return;
+      const fragment = document.createDocumentFragment();
+      for (const line of runs) {
+        const x0 = Math.max(0, Math.min(width, line.x0));
+        const y0 = Math.max(0, Math.min(height, line.y0));
+        const x1 = Math.max(x0, Math.min(width, line.x1));
+        const y1 = Math.max(y0, Math.min(height, line.y1));
+        if (x1 <= x0 || y1 <= y0) continue;
+        const span = document.createElement("span");
+        span.textContent = line.str;
+        span.dataset.ocrText = "true";
+        span.style.left = `${(x0 / width) * 100}%`;
+        span.style.top = `${(y0 / height) * 100}%`;
+        span.style.width = `${Math.max(0.05, ((x1 - x0) / width) * 100)}%`;
+        span.style.height = `${Math.max(0.05, ((y1 - y0) / height) * 100)}%`;
+        span.style.fontSize = `${Math.max(4, ((y1 - y0) / height) * dims.h * 0.78)}px`;
+        span.style.lineHeight = "1";
+        span.style.fontFamily = "sans-serif";
+        span.style.display = "block";
+        span.style.overflow = "hidden";
+        span.style.contain = "strict";
+        fragment.appendChild(span);
+      }
+      textLayer.replaceChildren(fragment);
+      panelTextAvailableRef.current.set(key, true);
+      setCommitMsg(`Selectable text is ready on ${tabLabel(key)}.`);
+    };
+    const cached = panelOcrTextRef.current.get(key);
+    if (cached && typeof cached.then !== "function") {
+      renderOcrLayer(cached);
+      return () => { cancelled = true; };
+    }
+    const pending = cached || recognizePdfPageText(pageObject, { onProgress: ({ status: ocrStatus, progress }) => {
+      if (cancelled || ocrStatus !== "recognizing text") return;
+      const percent = Math.max(0, Math.min(100, Math.round((Number(progress) || 0) * 100)));
+      setCommitMsg(`Scanning flattened page for selectable text · ${percent}%`);
+    } });
+    panelOcrTextRef.current.set(key, pending);
+    pending.then((result) => {
+      panelOcrTextRef.current.set(key, result);
+      if (!result.lines.length) setCommitMsg("No readable text was found. Drag a box around text to use the extractor.");
+      renderOcrLayer(result);
+    }).catch((error) => {
+      if (panelOcrTextRef.current.get(key) === pending) panelOcrTextRef.current.delete(key);
+      if (!cancelled) setCommitMsg(`Couldn't scan this page for text: ${error?.message || error}`);
+    });
+    return () => { cancelled = true; };
+  }, [focusPanel?.key, panelImgs, tool]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => () => {
     importAbortRef.current?.abort();
     pdfPasswordResolverRef.current?.(null);
@@ -1621,7 +1703,7 @@ export default function TakeoffCanvas() {
     setActive(target.file); setPage(target.page); setSheetGroup([]);
     if (resultPage.firstMatch) setPendingFind({ ...resultPage.firstMatch, request: findRequestRef.current });
   }, []);
-  const runFind = useCallback(async (scope = "all", rawQuery = findQuery) => {
+  const runFind = useCallback(async (scope = "all", rawQuery = findQuery, { background = false } = {}) => {
     const query = rawQuery.trim();
     const terms = parseFindTerms(query);
     const currentPage = (scope === "file" || scope === "page") && focusPanel
@@ -1815,16 +1897,16 @@ export default function TakeoffCanvas() {
         const combined = findVisibleMatches(nextJobs);
         const addedCount = combined.length - previousResults.length;
         if (scope === "page") {
-          setActiveFindPageKey(matchingPages[0].key);
+          if (!background) setActiveFindPageKey(matchingPages[0].key);
           setFindMessage(`${matches.length.toLocaleString()} match${matches.length === 1 ? "" : "es"} found on ${matchingPages[0].key}${addedCount ? ` · ${addedCount.toLocaleString()} new mark${addedCount === 1 ? "" : "s"}` : " · already marked"}. Existing highlighted pages remain marked.${skippedSuffix}`);
         } else {
           const pdfCount = new Set(matchingPages.map((resultPage) => resultPage.file)).size;
-          setActiveFindPageKey(matchingPages[0].key);
+          if (!background) setActiveFindPageKey(matchingPages[0].key);
           const scopeSummary = scope === "file"
             ? `in ${currentPage.file}`
             : `across ${pdfCount.toLocaleString()} PDF${pdfCount === 1 ? "" : "s"}`;
           setFindMessage(`${matches.length.toLocaleString()} matches on ${matchingPages.length.toLocaleString()} page${matchingPages.length === 1 ? "" : "s"} ${scopeSummary}${ocrPages ? ` · OCR read ${ocrPages.toLocaleString()} scanned page${ocrPages === 1 ? "" : "s"}` : ""}${addedCount ? ` · ${addedCount.toLocaleString()} new mark${addedCount === 1 ? "" : "s"}` : " · already marked"}.${skippedSuffix}`);
-          showFindPage(matchingPages[0]);
+          if (!background) showFindPage(matchingPages[0]);
         }
       } else if (scope === "page") {
         const ocrSuffix = ocrSkipped && !ocrAttempted ? " OCR was skipped." : "";
@@ -1845,6 +1927,12 @@ export default function TakeoffCanvas() {
       }
     }
   }, [commitFindJobs, docFor, findQuery, focusPanel, requestFindOcr, runpodMode, sheets, showFindPage, textContentForPage]);
+  useEffect(() => {
+    if (!autoFindDefaultsPendingRef.current || !hydrated.current || !sheets.length || findBusy) return;
+    autoFindDefaultsPendingRef.current = false;
+    const defaultQuery = DEFAULT_SCOPE_TERMS.join(", ");
+    runFind("all", defaultQuery, { background: true });
+  }, [findBusy, runFind, sheets.length]);
   const downloadLatestFindResults = useCallback(async () => {
     if (!findExportJob?.matches?.length || findBusy || findJsonBusy) return;
     setFindJsonBusy(true);
@@ -2430,6 +2518,12 @@ export default function TakeoffCanvas() {
     // select / edit / delete / move / RFI-link flows (all keyed on m.id) work on them.
     setMarkups(Array.isArray(a.markups) ? a.markups.map((m) => ({ ...m, id: m.id || uid("mk"), rfi_id: m.rfi_id || "" })) : []);
     setRfis(Array.isArray(a.rfis) ? a.rfis : []);   // additive — old saves without rfis load as []
+    const savedFindJobs = sanitizeFindJobs(a.find_jobs);
+    findJobsRef.current = savedFindJobs;
+    setFindJobs(savedFindJobs);
+    setFindExportJob(savedFindJobs.at(-1) || null);
+    setActiveFindPageKey("");
+    setPendingFind(null);
     // additive provenance_counters — unconditional set (the else-clear rule: a
     // snapshot load must not inherit the replaced project's deletion tallies).
     // Object gate mirrors client_info; number filter keeps the counts trustable.
@@ -2673,6 +2767,8 @@ export default function TakeoffCanvas() {
     const stale = () => seq !== renderSeqRef.current;
     setStatus("rendering"); setErr(""); setPoly([]); setCalib([]); setPendingLen(""); setCheck([]); setCheckStated(""); setScaleGuide(null); setPrevScale(null); selectShape(null); setProposal(null); resetZone();
     cancelPreviewJobs();
+    panelOcrTextRef.current.clear();
+    panelTextAvailableRef.current.clear();
     previewReadyRef.current.clear();
     previewBaseGenerationsRef.current.clear();
     for (const [, preview] of previewCanvasRefs.current) {
@@ -2770,6 +2866,8 @@ export default function TakeoffCanvas() {
           try {
             const content = await textContentForPage(m.key, m.pageObj);
             if (stale()) return;
+            const searchableChars = (content.items || []).reduce((sum, item) => sum + (typeof item?.str === "string" ? item.str.trim().length : 0), 0);
+            panelTextAvailableRef.current.set(m.key, searchableChars >= 200);
             textLayer.replaceChildren();
             textLayer.style.setProperty("--scale-factor", String(m.viewport.scale));
             layerTask = new pdfjsLib.TextLayer({ textContentSource: content, container: textLayer, viewport: m.viewport });
@@ -3050,7 +3148,7 @@ export default function TakeoffCanvas() {
     // the default — omits the key, so an old imperial project's payload is
     // byte-identical on round-trip; only a metric project carries the field.
     const metadata = touch ? withProjectEditor(touchProjectMetadata(projectMetadata), cloudAccount?.user, cloudAccount?.profileName) : projectMetadata;
-    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(compactProject ? { compact_project: compactProject } : {}), ...(projectAssistant.persist && projectAssistant.messages.length ? { project_assistant: projectAssistant } : {}), ...(whiteboardHasContent(whiteboard) ? { whiteboard } : {}), ...(fenceCalculatorProjectHasContent(fenceCalculatorProject) ? { fence_calculator: fenceCalculatorProject } : {}), ...(chainLinkFences.length ? { chain_link_fences: chainLinkFences } : {}), ...(ornamentalFences.length ? { ornamental_fences: ornamentalFences } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(fileBookmarks.length ? { file_bookmarks: fileBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
+    return { ...unknownProjectFieldsRef.current, project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(compactProject ? { compact_project: compactProject } : {}), ...(projectAssistant.persist && projectAssistant.messages.length ? { project_assistant: projectAssistant } : {}), ...(findJobs.length ? { find_jobs: findJobs } : {}), ...(whiteboardHasContent(whiteboard) ? { whiteboard } : {}), ...(fenceCalculatorProjectHasContent(fenceCalculatorProject) ? { fence_calculator: fenceCalculatorProject } : {}), ...(chainLinkFences.length ? { chain_link_fences: chainLinkFences } : {}), ...(ornamentalFences.length ? { ornamental_fences: ornamentalFences } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(fileBookmarks.length ? { file_bookmarks: fileBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
   };
 
   function clearProjectFileAutosaveWakeup() {
@@ -3155,6 +3253,7 @@ export default function TakeoffCanvas() {
       portableProjectId.current = payload.project_id;
       suppressNextSave.current = true;
       hydrate(payload);
+      autoFindDefaultsPendingRef.current = true;
       setSheets([]); setActive(""); setPage(1); setPageCount(1); setStatus("empty"); setView("gallery");
       setProjectMetadataModal(null);
       setCommitMsg(`Created project “${metadata.name}”.`);
@@ -3464,7 +3563,7 @@ export default function TakeoffCanvas() {
     // state it serializes, so listing buildPayload (a new identity each render)
     // would fire a save on every render instead of only on a real change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly, shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, chainLinkFences, ornamentalFences, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, fileBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard, fenceCalculatorProject, compactProject, projectAssistant]);
+  }, [readOnly, shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, findJobs, chainLinkFences, ornamentalFences, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, fileBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard, fenceCalculatorProject, compactProject, projectAssistant]);
   useEffect(() => { saveStateRef.current = saveState; }, [saveState]);
 
   // Flush a pending debounced save on navigate-away (unmount), and warn before a
@@ -3727,6 +3826,7 @@ export default function TakeoffCanvas() {
       if (viewRef.current === "gallery") return;
       if (lower === "g") { setView("gallery"); return; }
       if (e.key === "D" && e.shiftKey) { setTool("deduct-rect"); return; }
+      if (e.key === "T" && e.shiftKey) { setTool("text-select"); return; }
       const map = { p: "pan", v: "select", a: "area", r: "rect", l: "linear", q: "curve", s: "surface", c: "count", d: "deduct", o: "oneclick", k: "check", h: "highlighter" };
       const t = map[lower];
       if (t) setTool(t);
@@ -3954,6 +4054,23 @@ export default function TakeoffCanvas() {
       return;
     }
     if (e.button !== 0) return;   // only left-click places points
+    if (tool === "text-select") {
+      const start = toImage(e.clientX, e.clientY);
+      const textPanel = panelAt(start[0]);
+      if (textPanel?.key && textPanel.key !== focusKey) setFocusKey(textPanel.key);
+      if (panelTextAvailableRef.current.get(textPanel?.key)) return;
+      textSnipRef.current = { start, end: start, key: textPanel?.key, pointerId: e.pointerId };
+      if (textSnipBoxRef.current) {
+        const bounds = containerRef.current.getBoundingClientRect();
+        textSnipBoxRef.current.style.display = "block";
+        textSnipBoxRef.current.style.left = `${e.clientX - bounds.left}px`;
+        textSnipBoxRef.current.style.top = `${e.clientY - bounds.top}px`;
+        textSnipBoxRef.current.style.width = "0px";
+        textSnipBoxRef.current.style.height = "0px";
+      }
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
     // snapRef/angleRef are drawing-tool aids maintained by moveCrosshair, which
     // bails for the Select tool (:1577) — so in Select they'd be STALE. Select
     // does its own endpoint snap (ocSnap) on drop, so it always uses the raw
@@ -4374,6 +4491,10 @@ export default function TakeoffCanvas() {
   function moveCrosshair(e) {
     if (editingRef.current) return;   // inline editor open — no aim crosshair (ref check, never per-mousemove state)
     if (status !== "ready" || !containerRef.current) return;
+    if (tool === "text-select") {
+      hideCrosshair();
+      return;
+    }
     if (tool === "pan" || (tool === "select" && !textLeaderMarkupId)) {
       if (trackpadVisible && aimMarkRef.current) {
         const r = containerRef.current.getBoundingClientRect();
@@ -4594,6 +4715,21 @@ export default function TakeoffCanvas() {
     if (trackpadVisible) trackpadPointRef.current = [e.clientX, e.clientY];
     lastPtrRef.current = [e.clientX, e.clientY];   // paste targets the sheet under the cursor
     aimSeqRef.current++;                           // deixis freshness tick — see getAimSeed
+    if (textSnipRef.current) {
+      const snip = textSnipRef.current;
+      snip.end = toImage(e.clientX, e.clientY);
+      const t = tfRef.current;
+      const x0 = Math.min(snip.start[0], snip.end[0]) * t.scale + t.x;
+      const y0 = Math.min(snip.start[1], snip.end[1]) * t.scale + t.y;
+      const x1 = Math.max(snip.start[0], snip.end[0]) * t.scale + t.x;
+      const y1 = Math.max(snip.start[1], snip.end[1]) * t.scale + t.y;
+      const box = textSnipBoxRef.current;
+      if (box) {
+        box.style.left = `${x0}px`; box.style.top = `${y0}px`;
+        box.style.width = `${x1 - x0}px`; box.style.height = `${y1 - y0}px`;
+      }
+      return;
+    }
     if (hlRef.current) {
       // paint: distance-thin at capture, live preview via DOM (no React render per move)
       const st = hlRef.current;
@@ -4726,6 +4862,14 @@ export default function TakeoffCanvas() {
     });
   }
   function onPointerUp(e) {
+    if (textSnipRef.current) {
+      const snip = textSnipRef.current;
+      textSnipRef.current = null;
+      if (textSnipBoxRef.current) textSnipBoxRef.current.style.display = "none";
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* gone */ }
+      extractTextSnip(snip);
+      return;
+    }
     if (hlRef.current) {
       const st = hlRef.current;
       hlRef.current = null;
@@ -4795,6 +4939,34 @@ export default function TakeoffCanvas() {
   // dismissed by the next action. `preview` marks a HOVER preview of a scale
   // that was never accepted — it must additionally die with the hover/menu
   // (clearPreviewGuide), while an accepted bar rides out its 8 s.
+  async function extractTextSnip(snip) {
+    const panel = panelByKey(snip.key);
+    const pageObj = pageObjsRef.current.get(snip.key);
+    const rs = renderScalesRef.current.get(snip.key);
+    if (!panel || !pageObj || !rs) { setCommitMsg("That sheet is not ready for text extraction."); return; }
+    const x0 = Math.max(0, Math.min(snip.start[0], snip.end[0]) - panel.xOffset);
+    const y0 = Math.max(0, Math.min(snip.start[1], snip.end[1]));
+    const x1 = Math.min(panel.img.w, Math.max(snip.start[0], snip.end[0]) - panel.xOffset);
+    const y1 = Math.min(panel.img.h, Math.max(snip.start[1], snip.end[1]));
+    if (x1 - x0 < 8 || y1 - y0 < 8) { setCommitMsg("Drag a box around the text to extract."); return; }
+    setTextExtract({ status: "reading", text: "", key: snip.key, progress: 0 });
+    try {
+      const factor = Math.min(3, Math.max(1.5, 2400 / Math.max(x1 - x0, y1 - y0)));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round((x1 - x0) * factor));
+      canvas.height = Math.max(1, Math.round((y1 - y0) * factor));
+      const viewport = pageObj.getViewport({ scale: rs * factor });
+      await pageObj.render({ canvasContext: canvas.getContext("2d", { alpha: false }), viewport, transform: [1, 0, 0, 1, -x0 * factor, -y0 * factor], background: "white" }).promise;
+      const text = await recognizeImageText(canvas, { onProgress: (progress) => {
+        if (progress?.status === "recognizing text") setTextExtract((current) => current ? { ...current, progress: Math.round((progress.progress || 0) * 100) } : current);
+      } });
+      canvas.width = 1; canvas.height = 1;
+      setTextExtract({ status: "done", text, key: snip.key });
+    } catch (error) {
+      setTextExtract({ status: "error", text: "", key: snip.key, error: error?.message || "Text extraction failed." });
+    }
+  }
+
   function showScaleGuide(key, uppStored, label, preview = false) {
     const p = panelByKey(key);
     if (!p?.img.w || !containerRef.current) return;
@@ -8163,7 +8335,12 @@ export default function TakeoffCanvas() {
       {whiteboardOpen && <Whiteboard board={whiteboard} onChange={setWhiteboard} readOnly={readOnly} readOnlyMessage={readOnlyMessage}
         onClose={() => { setWhiteboardOpen(false); setWhiteboardImportRequest(null); }}
         onSave={() => saveProjectFile(false)} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState}
-        initialFiles={whiteboardImportRequest?.files} onInitialFilesHandled={() => setWhiteboardImportRequest(null)} />}
+        initialFiles={whiteboardImportRequest?.files} onInitialFilesHandled={(result) => {
+          const importedName = whiteboardImportRequest?.files?.[0]?.name || "plan";
+          setWhiteboardImportRequest(null);
+          if (result?.addedFiles > 0) setCommitMsg(`Imported ${importedName} to the whiteboard.`);
+          else setCommitMsg(`Couldn't import ${importedName} to the whiteboard${result?.errors?.[0] ? `: ${result.errors[0]}` : "."}`);
+        }} />}
       {fenceCalculatorOpen && <FenceCalculatorPanel
         projectState={fenceCalculatorProject}
         onProjectStateChange={(next) => { if (!denyReadOnlyEdit()) setFenceCalculatorProject(next); }}
@@ -8297,6 +8474,15 @@ export default function TakeoffCanvas() {
             />
             <button type="button" onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={!!sheetGroup.length || page >= pageCount} title="Next sheet (Right Arrow)"
               style={{ padding: "5px 8px", border: "1px solid var(--ink-faint)", background: "transparent", color: "var(--ink)", cursor: "pointer", opacity: (!!sheetGroup.length || page >= pageCount) ? 0.4 : 1 }}><Icon name="chevronRight" size={12} /></button>
+            <ToolMenu
+              title="Bookmarked pages — quick access"
+              onOpenChange={onMenuDepth}
+              hideChevron
+              face={<Icon name="star" size={17} />}
+              faceStyle={{ padding: "6px 3px", border: "none", borderRadius: 0, background: "transparent", color: "var(--ink)", boxShadow: "none" }}
+              menuStyle={{ minWidth: 280, maxWidth: "min(420px, calc(100vw - 24px))", maxHeight: "min(480px, 60vh)", overflowY: "auto" }}
+              items={bookmarkQuickItems}
+            />
           </span>
         )}</>}
           sheets={<>
@@ -9108,8 +9294,8 @@ export default function TakeoffCanvas() {
        )}
        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         <div ref={containerRef} {...touchZoom} onPointerDown={(event) => {
-          if (readOnly && tool !== "pan") { denyReadOnlyEdit(); return; }
-          if (tool === "select" && !textLeaderMarkupId && event.target?.closest?.(".takeoff-pdf-text-layer")) {
+          if (readOnly && tool !== "pan" && tool !== "text-select") { denyReadOnlyEdit(); return; }
+          if ((tool === "select" || tool === "text-select") && !textLeaderMarkupId && event.target?.closest?.(".takeoff-pdf-text-layer")) {
             const point = toImage(event.clientX, event.clientY);
             if (!markupAt(point, 8 / tfRef.current.scale)) return;
           }
@@ -9117,15 +9303,16 @@ export default function TakeoffCanvas() {
         }} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp} onPointerLeave={leaveCanvas} onContextMenu={(e) => e.preventDefault()}
           onDoubleClick={(e) => { if (readOnly) { denyReadOnlyEdit(); return; } if (tool === "select" && e.target?.closest?.(".takeoff-pdf-text-layer") && !markupAt(toImage(e.clientX, e.clientY), 8 / tfRef.current.scale)) return; if (tool === "oneclick") { if (proposal?.regions.length) createProposal(); } else if (tool === "area" || tool === "deduct" || tool === "linear" || tool === "curve" || tool === "surface" || tool === "zone") finishShape(); else if (tool === "select") editMarkupAt(e); }}
-          style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--canvas-light-bg, var(--paper-cream))", "--canvas-tool-cursor": tool === "pan" ? "var(--cursor-grab, grab)" : tool === "select" && !textLeaderMarkupId ? "var(--cursor-default, default)" : tool === "text" ? "var(--cursor-text, text)" : "var(--cursor-crosshair, crosshair)", cursor: "var(--canvas-tool-cursor)", touchAction: "none" }}>
+          style={{ position: "absolute", inset: 0, background: darkMode ? "#0b0e14" : "var(--canvas-light-bg, var(--paper-cream))", "--canvas-tool-cursor": tool === "pan" ? "var(--cursor-grab, grab)" : tool === "select" && !textLeaderMarkupId ? "var(--cursor-default, default)" : tool === "text" || (tool === "text-select" && panelTextAvailableRef.current.get(focusKey)) ? "var(--cursor-text, text)" : "var(--cursor-crosshair, crosshair)", cursor: "var(--canvas-tool-cursor)", touchAction: "none" }}>
+          <div ref={textSnipBoxRef} aria-hidden="true" style={{ position: "absolute", display: "none", zIndex: 10, pointerEvents: "none", border: "2px solid #1f3fc7", background: "rgba(31,63,199,.10)", boxShadow: "0 0 0 9999px rgba(14,26,46,.18)" }} />
           {/* aim crosshair (draw modes): retain the precision overlay alongside the themed cursor. Two crisp full-page hairlines riding the
               EFFECTIVE point (angle-locked / endpoint-snapped), the SPLINE STAR at
               the crossing, and a small readout chip in the house style. The 45°
               lock reads as a quiet state change (hairlines brighten, star swells
               cobalt, rubber band thickens) — no extra chrome on the sheet. All
               positioned imperatively in moveCrosshair. */}
-          <div ref={crossVRef} style={{ position: "absolute", top: 0, bottom: 0, width: 1.5, background: "rgba(31,63,199,.55)", boxShadow: "0 0 0 0.5px rgba(255,255,255,.55), 0 0 4px rgba(31,63,199,.3)", pointerEvents: "none", display: "none", zIndex: 5 }} />
-          <div ref={crossHRef} style={{ position: "absolute", left: 0, right: 0, height: 1.5, background: "rgba(31,63,199,.55)", boxShadow: "0 0 0 0.5px rgba(255,255,255,.55), 0 0 4px rgba(31,63,199,.3)", pointerEvents: "none", display: "none", zIndex: 5 }} />
+          <div ref={crossVRef} style={{ position: "absolute", top: 0, bottom: 0, width: 1.5, background: "rgba(10,27,92,.88)", boxShadow: "0 0 0 0.5px rgba(255,255,255,.38), 0 0 4px rgba(10,27,92,.38)", pointerEvents: "none", display: "none", zIndex: 5 }} />
+          <div ref={crossHRef} style={{ position: "absolute", left: 0, right: 0, height: 1.5, background: "rgba(10,27,92,.88)", boxShadow: "0 0 0 0.5px rgba(255,255,255,.38), 0 0 4px rgba(10,27,92,.38)", pointerEvents: "none", display: "none", zIndex: 5 }} />
           <div ref={aimMarkRef} style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, pointerEvents: "none", display: "none", zIndex: 6, willChange: "transform" }}>
             {/* the SPLINE STAR at the crossing — the house vertex mark IS the cursor;
                 it swells and glows cobalt while the 45° lock holds */}
@@ -9160,7 +9347,7 @@ export default function TakeoffCanvas() {
                 <canvas data-diagnostics-id={`preview-${p.key}`} ref={(el) => { if (el) previewCanvasRefs.current.set(p.key, el); else previewCanvasRefs.current.delete(p.key); }}
                   aria-hidden="true" style={{ position: "absolute", left: p.xOffset, top: 0, width: p.img.w || undefined, height: p.img.h || undefined, display: "none", boxShadow: "0 2px 20px rgba(0,0,0,.18)", pointerEvents: "none" }} />
                 <div ref={(el) => { if (el) panelTextLayerRefs.current.set(p.key, el); else panelTextLayerRefs.current.delete(p.key); }}
-                  className={`takeoff-pdf-text-layer${tool === "select" ? " is-selectable" : ""}`}
+                  className={`takeoff-pdf-text-layer${tool === "text-select" ? " is-selectable" : ""}`}
                   aria-label={`Selectable PDF text on ${labelFor(p)}`}
                   style={{ left: p.xOffset, width: p.img.w || undefined, height: p.img.h || undefined, zIndex: 3, pointerEvents: "none" }} />
               </React.Fragment>
@@ -9721,17 +9908,23 @@ export default function TakeoffCanvas() {
               <path ref={arrowHeadRef} fill={arrowColor} style={{ display: "none", pointerEvents: "none" }} />
               <path ref={hlPathRef} style={{ display: "none" }} />
               {poly.length >= 2 && (tool === "linear" || tool === "curve" || tool === "surface"
-                ? <polyline points={(tool === "curve" ? flattenCurve(poly) : poly).map((p) => p.join(",")).join(" ")} fill="none" stroke={tool === "surface" ? activeColor : "#1f3fc7"} strokeWidth={(tool === "surface" ? 3.5 : 2.5) / tf.scale} strokeDasharray={tool === "surface" ? `${10 / tf.scale} ${3 / tf.scale} ${2 / tf.scale} ${3 / tf.scale}` : undefined} strokeLinecap="round" strokeLinejoin="round" />
+                ? <polyline points={(tool === "curve" ? flattenCurve(poly) : tool === "linear" ? poly.slice(0, -1) : poly).map((p) => p.join(",")).join(" ")} fill="none" stroke={tool === "surface" ? activeColor : "#1f3fc7"} strokeWidth={(tool === "surface" ? 3.5 : 2.5) / tf.scale} strokeDasharray={tool === "surface" ? `${10 / tf.scale} ${3 / tf.scale} ${2 / tf.scale} ${3 / tf.scale}` : undefined} strokeLinecap="round" strokeLinejoin="round" />
                 : <polygon points={poly.map((p) => p.join(",")).join(" ")} fill={poly.length >= 3 ? (tool === "deduct" ? "rgba(176,58,38,.22)" : tool === "zone" ? "rgba(31,63,199,.06)" : shapeFill(aCond)) : "none"} stroke={tool === "deduct" ? "#b03a26" : "#1f3fc7"} strokeWidth={2 / tf.scale} strokeDasharray={tool === "zone" ? `${7 / tf.scale} ${5 / tf.scale}` : undefined} />)}
               {/* bold the most recent segment so you see where you just clicked */}
               {poly.length >= 2 && (
-                <line x1={poly[poly.length - 2][0]} y1={poly[poly.length - 2][1]} x2={poly[poly.length - 1][0]} y2={poly[poly.length - 1][1]}
+                <line key={`draft-segment-${poly.length}`} className={tool === "linear" ? "takeoff-linear-segment-enter" : undefined} pathLength={tool === "linear" ? 1 : undefined}
+                  x1={poly[poly.length - 2][0]} y1={poly[poly.length - 2][1]} x2={poly[poly.length - 1][0]} y2={poly[poly.length - 1][1]}
                   stroke={tool === "deduct" ? "#b03a26" : "#1f3fc7"} strokeWidth={3.5 / tf.scale} strokeLinecap="round" />
               )}
               {poly.map((p, i) => {
                 const isLast = i === poly.length - 1;
-                return <path key={i} d={starPath(p[0], p[1], (isLast ? 4.5 : 3) / tf.scale)}
-                  fill={isLast ? "#fff" : "#1f3fc7"} stroke="#1f3fc7" strokeWidth={(isLast ? 2 : 1) / tf.scale} />;
+                return <g key={i}>
+                  {tool === "linear" && isLast && <circle key={`draft-point-ring-${poly.length}`} className="takeoff-linear-point-ring"
+                    cx={p[0]} cy={p[1]} r={10 / tf.scale} fill="none" stroke="#1f3fc7" strokeWidth={1.5 / tf.scale} />}
+                  <path className={tool === "linear" && isLast ? "takeoff-linear-point-enter" : undefined}
+                    d={starPath(p[0], p[1], (isLast ? 4.5 : 3) / tf.scale)}
+                    fill={isLast ? "#fff" : "#1f3fc7"} stroke="#1f3fc7" strokeWidth={(isLast ? 2 : 1) / tf.scale} />
+                </g>;
               })}
               {calib.length === 2 && <line x1={calib[0][0]} y1={calib[0][1]} x2={calib[1][0]} y2={calib[1][1]} stroke="#1f3fc7" strokeWidth={2 / tf.scale} />}
               {calib.map((p, i) => <path key={i} d={starPath(p[0], p[1], 3.5 / tf.scale)} fill="#1f3fc7" />)}
@@ -9830,6 +10023,7 @@ export default function TakeoffCanvas() {
             )}
             {segBtn("pan", "pan", "Pan (P) — or hold right-click / Space mid-measure", false, true)}
             {segBtn("select", "select", "Select (V) — pick a takeoff, drag points", false, true)}
+            {segBtn("text-select", "textSelect", "Select text (Shift+T) — drag PDF text to copy; drag a box on scanned sheets to extract it", false, true)}
             {[["+", 1.25], ["−", 0.8]].map(([lbl, f]) => (
               <button key={lbl} onClick={() => { const r = containerRef.current.getBoundingClientRect(); zoomAround(r.width / 2, r.height / 2, f); }}
                 style={{ width: 34, height: 34, borderRadius: 0, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", fontSize: 18, fontWeight: 700 }}>{lbl}</button>
@@ -9841,11 +10035,27 @@ export default function TakeoffCanvas() {
           </div>
         </div>
 
-        {/* status line — the transient message bar (was the right end of the old
-            conditions bar): floats bottom-center over the canvas, never blocks input */}
+        {/* Shared notification toast. Loading messages retain their message while
+            the accent-colored app loader communicates ongoing work. */}
         {commitMsg && (
-          <div style={{ position: "absolute", left: "50%", bottom: 14, transform: "translateX(-50%)", maxWidth: "70%", zIndex: 6, pointerEvents: "none", padding: "6px 12px", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)", boxShadow: "var(--shadow-1)", fontSize: 12, color: isDangerMsg(commitMsg) ? "var(--c-danger)" : "var(--c-positive)" }}>
-            {commitMsg}
+          <AppToast
+            className="canvas-app-toast"
+            message={commitMsg}
+            loading={isLoadingToastMessage(commitMsg)}
+            danger={isDangerMsg(commitMsg)}
+            onDismiss={() => setCommitMsg("")}
+          />
+        )}
+        {textExtract && (
+          <div role="dialog" aria-modal="true" aria-label="Extracted text" style={{ position: "absolute", inset: 0, zIndex: 180, display: "grid", placeItems: "center", background: "rgba(14,26,46,.34)", padding: 20 }} onPointerDown={(event) => event.stopPropagation()}>
+            <div style={{ width: "min(620px, 100%)", background: "var(--paper-bright)", color: "var(--ink)", border: "1px solid var(--ink)", boxShadow: "var(--shadow-3)", padding: 16, display: "grid", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}><strong>Text extractor</strong><button type="button" onClick={() => setTextExtract(null)} aria-label="Close text extractor">×</button></div>
+              {textExtract.status === "reading" ? <div>Reading text locally… {textExtract.progress || 0}%</div> : textExtract.status === "error" ? <div style={{ color: "var(--c-danger)" }}>{textExtract.error}</div> : <>
+                <textarea aria-label="Extracted text" value={textExtract.text} onChange={(event) => setTextExtract((current) => ({ ...current, text: event.target.value }))} rows={10} autoFocus style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} />
+                {!textExtract.text && <small>No readable text was found. Try a tighter box around larger text.</small>}
+              </>}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><button type="button" onClick={() => setTextExtract(null)}>Close</button><button type="button" className="primary" disabled={textExtract.status !== "done" || !textExtract.text} onClick={async () => { await navigator.clipboard.writeText(textExtract.text); setCommitMsg("Extracted text copied to the clipboard."); }}>Copy text</button></div>
+            </div>
           </div>
         )}
 

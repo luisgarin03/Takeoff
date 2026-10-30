@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findOcrLineMatches, ocrLinesFromBlocks } from "../src/lib/findOcr.js";
+import { findOcrLineMatches, ocrLinesFromBlocks, ocrWordsFromBlocks } from "../src/lib/findOcr.js";
 
 test("OCR block lines are filtered and normalized", () => {
   const lines = ocrLinesFromBlocks([{ paragraphs: [{ lines: [
@@ -8,6 +8,18 @@ test("OCR block lines are filtered and normalized", () => {
     { text: "noise", confidence: 3, bbox: { x0: 0, y0: 0, x1: 20, y1: 10 } },
   ] }] }]);
   assert.deepEqual(lines, [{ str: "TRANSFORMER FENCE", x0: 100, y0: 20, x1: 500, y1: 60 }]);
+});
+
+test("OCR words retain tight selectable boxes and reading-order spaces", () => {
+  const words = ocrWordsFromBlocks([{ paragraphs: [{ lines: [{ words: [
+    { text: "OVERALL", confidence: 94, bbox: { x0: 10, y0: 20, x1: 80, y1: 40 } },
+    { text: "PLAN", confidence: 92, bbox: { x0: 86, y0: 20, x1: 126, y1: 40 } },
+    { text: "noise", confidence: 2, bbox: { x0: 130, y0: 20, x1: 145, y1: 40 } },
+  ] }] }] }]);
+  assert.deepEqual(words, [
+    { str: "OVERALL ", x0: 10, y0: 20, x1: 80, y1: 40 },
+    { str: "PLAN ", x0: 86, y0: 20, x1: 126, y1: 40 },
+  ]);
 });
 
 test("OCR matches retain page-normalized highlight boxes", () => {
