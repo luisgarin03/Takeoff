@@ -1,0 +1,22 @@
+:root button.membership-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 3px 9px;
+  border: 1px solid #454545;
+  border-radius: 6px;
+  background: #1c1c1c;
+  color: #ededed;
+  box-shadow: none;
+  font: 600 12px var(--f-mono);
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+}
+:root button.membership-action:hover:not(:disabled) { background: #2b2b2b; border-color: #666; }
+:root button.membership-action:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+:root button.membership-action:disabled { opacity: .55; cursor: default; }
+:root:not([data-theme="dark"]) button.membership-action { background: #fff; color: #27272a; border-color: #b4b4b8; }
+:root:not([data-theme="dark"]) button.membership-action:hover:not(:disabled) { background: #eee; border-color: #888; }

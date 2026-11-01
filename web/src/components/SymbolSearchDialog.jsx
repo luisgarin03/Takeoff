@@ -1,6 +1,9 @@
+import { Button } from './ui/button.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { binaryRaster, cropSymbol } from '../lib/symbolSearch.js';
+import { binaryRaster } from '../lib/symbolSearch.js';
+import { OPS } from 'pdfjs-dist';
+import { vectorObjects, selectVectorReference, pickVectorObject, matchVectorObjects } from '../lib/vectorSymbolSearch.js';
 import { findSearchTargets } from '../lib/findText.js';
 import '../styles/symbolSearch.css';
 
@@ -16,7 +19,9 @@ async function renderSearchPage(docFor, file, pageNumber, signal, renderTask) {
   finally { signal.removeEventListener('abort', cancel); if (renderTask.current === task) renderTask.current = null; }
   if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
   const raster = binaryRaster(canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height));
-  return { canvas, raster, scale, pages: pdf.numPages };
+  const operators = await page.getOperatorList();
+  if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+  return { canvas, raster, scale, objects: vectorObjects(operators, OPS, viewport), pages: pdf.numPages };
 }
 function thumbnail(canvas, box) {
   const crop = document.createElement('canvas'); crop.width = 180; crop.height = 110;
@@ -27,19 +32,35 @@ function thumbnail(canvas, box) {
   context.strokeRect((180 - box.w / w * 180) / 2, (110 - box.h / h * 110) / 2, box.w / w * 180, box.h / h * 110);
   return crop.toDataURL('image/png');
 }
-export default function SymbolSearchDialog({ source: initialSource, sheets, docFor, conditions, activeCondition, readOnly, onAddCounts, onClose, onOpenChange }) {
+export default function SymbolSearchDialog({ source: initialSource, sheets, docFor, readOnly, onOutlineMatches, onClearSearch, onClose, onOpenChange, selectionFromCanvas, referenceToScreen, onViewGesture, searchGroups = [], hiddenSearches = new Set(), onToggleSearch, onDeleteSearch }) {
+  const spaceHeld = useRef(false), panAnchor = useRef(null);
+  useEffect(() => {
+    const down = (e) => { if (e.code === 'Space' && !/INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target.tagName)) { e.preventDefault(); spaceHeld.current = true; } };
+    const up = (e) => { if (e.code === 'Space') spaceHeld.current = false; };
+    const reset = () => { spaceHeld.current = false; panAnchor.current = null; };
+    window.addEventListener('keydown', down, true); window.addEventListener('keyup', up); window.addEventListener('blur', reset);
+    return () => { window.removeEventListener('keydown', down, true); window.removeEventListener('keyup', up); window.removeEventListener('blur', reset); };
+  }, []);
   const [source] = useState(initialSource);
-  const [zoom, setZoom] = useState(100);
+  const [picking, setPicking] = useState(true);
+  const [drawerTab, setDrawerTab] = useState("search");
+  const [drawerHeight, setDrawerHeight] = useState(200);
+  useEffect(() => { const drawer = root.current; if (!drawer) return; const observer = new ResizeObserver(() => setDrawerHeight(drawer.getBoundingClientRect().height)); observer.observe(drawer); return () => observer.disconnect(); }, []);
+  const [selectionMode, setSelectionMode] = useState("click");
+  const hoverPreview = useRef(null);
+  const clearHoverPreview = () => { if (hoverPreview.current) hoverPreview.current.style.display = "none"; };
+
+  const [canvasBox, setCanvasBox] = useState(null);
   const [pageImage, setPageImage] = useState(null), [box, setBox] = useState(null), [template, setTemplate] = useState(null);
   const [scope, setScope] = useState('page'), [threshold, setThreshold] = useState(.92), [rotated, setRotated] = useState(false);
-  const [matches, setMatches] = useState([]), [selected, setSelected] = useState(new Set());
-  const [condition, setCondition] = useState(activeCondition || ''), [newName, setNewName] = useState('Symbol count');
-  const [busy, setBusy] = useState(false), [message, setMessage] = useState('Loading the current page…');
-  const root = useRef(null), canvasRef = useRef(null), anchor = useRef(null), operation = useRef(null), worker = useRef(null), renderTask = useRef(null);
-  const callbacks = useRef({ onClose, onOpenChange }); callbacks.current = { onClose, onOpenChange };
+  const [, setMatches] = useState([]), [, setSelected] = useState(new Set());
+
+  const [busy, setBusy] = useState(false), [message, setMessage] = useState('Loading the current pageÃ¢â‚¬Â¦');
+  const root = useRef(null), anchor = useRef(null), operation = useRef(null), worker = useRef(null), renderTask = useRef(null);
+  const callbacks = useRef({ onClose, onOpenChange, selectionFromCanvas }); callbacks.current = { onClose, onOpenChange };
   useEffect(() => {
-    const previous = document.activeElement; callbacks.current.onOpenChange?.(true); root.current?.focus();
-    return () => { operation.current?.abort(); worker.current?.terminate(); renderTask.current?.cancel(); callbacks.current.onOpenChange?.(false); previous?.focus?.(); };
+    const previous = document.activeElement; root.current?.focus();
+    return () => { operation.current?.abort(); worker.current?.terminate(); renderTask.current?.cancel(); previous?.focus?.(); };
   }, []);
   useEffect(() => {
     const controller = new AbortController(); operation.current = controller;
@@ -48,30 +69,13 @@ export default function SymbolSearchDialog({ source: initialSource, sheets, docF
     }).catch((error) => { if (!controller.signal.aborted) setMessage(error.message || 'This page could not be rendered.'); });
     return () => controller.abort();
   }, [docFor, source]);
-  useEffect(() => {
-    if (!pageImage || !canvasRef.current) return;
-    const canvas = canvasRef.current; canvas.width = pageImage.canvas.width; canvas.height = pageImage.canvas.height;
-    canvas.getContext('2d').drawImage(pageImage.canvas, 0, 0);
-  }, [pageImage]);
   const resetResults = () => { setMatches([]); setSelected(new Set()); };
-  function point(event) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return { x: Math.max(0, Math.min(pageImage.raster.width - 1, (event.clientX - rect.left) / rect.width * pageImage.raster.width)), y: Math.max(0, Math.min(pageImage.raster.height - 1, (event.clientY - rect.top) / rect.height * pageImage.raster.height)) };
-  }
-  function selection(event, finish = false) {
-    if (!anchor.current || !pageImage || busy) return;
-    const current = point(event), rect = { x: Math.min(current.x, anchor.current.x), y: Math.min(current.y, anchor.current.y), w: Math.abs(current.x - anchor.current.x), h: Math.abs(current.y - anchor.current.y) };
-    setBox(rect);
-    if (finish) {
-      anchor.current = null; resetResults();
-      try { setTemplate(cropSymbol(pageImage.raster, rect)); setMessage('Symbol selected. Choose a scope, then search.'); }
-      catch (error) { setTemplate(null); setMessage(error.message); }
-    }
-  }
   function cancel() { operation.current?.abort(); worker.current?.terminate(); worker.current = null; renderTask.current?.cancel(); setBusy(false); setMessage('Search cancelled. Completed-page results remain available.'); }
+  const searchId = useRef(crypto.randomUUID());
   async function search() {
     if (!template || busy) return;
     const controller = new AbortController(); operation.current = controller;
+    searchId.current = crypto.randomUUID();
     resetResults(); setBusy(true);
     const allMatches = []; let skipped = 0, limited = false, searched = 0;
     try {
@@ -82,72 +86,98 @@ export default function SymbolSearchDialog({ source: initialSource, sheets, docF
         const pages = target.page == null ? Array.from({ length: pdf.numPages }, (_, i) => i + 1) : [target.page];
         for (const page of pages) {
           if (controller.signal.aborted) return;
-          setMessage(`Searching ${target.file} · page ${page} of ${pdf.numPages} · ${allMatches.length} suggestions`);
+          setMessage(`Searching ${target.file} Ã‚Â· page ${page} of ${pdf.numPages} Ã‚Â· ${allMatches.length} suggestions`);
           try {
             const image = await renderSearchPage(docFor, target.file, page, controller.signal, renderTask);
             if (controller.signal.aborted) return;
-            const result = await new Promise((resolve, reject) => {
-              const task = new Worker(new URL('../lib/symbolSearch.worker.js', import.meta.url), { type: 'module' }); worker.current = task;
-              const abort = () => { task.terminate(); reject(new DOMException('Cancelled', 'AbortError')); };
-              controller.signal.addEventListener('abort', abort, { once: true });
-              const finish = () => { task.terminate(); worker.current = null; controller.signal.removeEventListener('abort', abort); };
-              task.onmessage = ({ data }) => { finish(); data.error ? reject(new Error(data.error)) : resolve(data); };
-              task.onerror = () => { finish(); reject(new Error('Symbol matching failed on this page.')); };
-              const ratio = image.scale / pageImage.scale;
-              task.postMessage({ image: image.raster, template, options: { threshold, scales: [.85, 1, 1.15].map((value) => value * ratio), rotations: rotated ? [0, 90, 180, 270] : [0], limit: 250 } });
-            });
+            const result = matchVectorObjects(image.objects, template, { threshold, ratio: image.scale / pageImage.scale, rotated });
             if (controller.signal.aborted) return;
             searched++; limited ||= result.limited;
             const key = page > 1 ? `${target.file}#${page}` : target.file;
-            for (const hit of result.matches) allMatches.push({ id: `${key}:${allMatches.length}`, key, file: target.file, page, score: hit.score, x: hit.x / image.raster.width, y: hit.y / image.raster.height, w: hit.w / image.raster.width, h: hit.h / image.raster.height, thumbnail: thumbnail(image.canvas, hit) });
+            for (const hit of result.matches) allMatches.push({ id: `${key}:${allMatches.length}`, key, file: target.file, page, score: hit.score, pageAspect: image.raster.width / image.raster.height, x: hit.x / image.raster.width, y: hit.y / image.raster.height, w: hit.w / image.raster.width, h: hit.h / image.raster.height, thumbnail: thumbnail(image.canvas, hit) });
             setMatches(allMatches.slice(0, 1000));
             if (allMatches.length >= 1000) { limited = true; break; }
           } catch { if (controller.signal.aborted) return; skipped++; }
         }
         if (allMatches.length >= 1000) break;
       }
-      setMessage(`${Math.min(allMatches.length, 1000)} suggestions on ${searched} searched page${searched === 1 ? '' : 's'}.${skipped ? ` ${skipped} pages/files could not be searched.` : ''}${limited ? ' Result limit reached; narrow the scope or raise similarity.' : ''} Review each suggestion before adding counts. Similar symbols and nearby linework can produce false matches.`);
+      if (controller.signal.aborted) return;
+      const result = onOutlineMatches(allMatches.slice(0, 1000), searchId.current, { scope, file: source.file, page: source.page || 1, similarity: Math.round(threshold * 100), referenceMode: selectionMode });
+      if (result === false) return;
+      setMatches([]); setSelected(new Set()); setTemplate(null); setCanvasBox(null); setPicking(true);
+      setMessage(`${result.added} matches outlined on ${searched} searched page${searched === 1 ? '' : 's'}.${skipped ? ` ${skipped} pages could not be searched.` : ''}${limited ? ' Result limit reached.' : ''} Click an outline with Select, then press Delete to remove it.`);
     } catch (error) { if (!controller.signal.aborted) setMessage(error.message || 'Symbol search failed.'); }
     finally { if (operation.current === controller) setBusy(false); }
   }
-  const chosen = matches.filter((hit) => selected.has(hit.id));
-  return createPortal(<div className="symbol-search-shade" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); }}>
-    <section className="symbol-search-dialog" role="dialog" aria-modal="true" aria-labelledby="symbol-search-title" ref={root} tabIndex={-1} onKeyDown={(event) => {
+  useEffect(() => {
+    root.current?.focus();
+    if (!pageImage || !canvasBox) return;
+    try {
+      const reference = canvasBox.click ? pickVectorObject(pageImage.objects, { x: canvasBox.x * pageImage.raster.width, y: canvasBox.y * pageImage.raster.height }) : selectVectorReference(pageImage.objects, { x: canvasBox.x * pageImage.raster.width, y: canvasBox.y * pageImage.raster.height, w: canvasBox.w * pageImage.raster.width, h: canvasBox.h * pageImage.raster.height });
+      if (!reference) throw new Error("No complete vector shape found inside the box. Include the entire symbol and a small border. This PDF may store it as separate segments or an image.");
+      setTemplate(reference);
+      setMessage('');
+    } catch (error) { setTemplate(null); setMessage(error.message); }
+  }, [pageImage, canvasBox, picking]);
+  function previewShape(event) {
+    const node = hoverPreview.current;
+    if (!node || !pageImage || selectionMode !== "click" || panAnchor.current || spaceHeld.current) { clearHoverPreview(); return; }
+    const point = selectionFromCanvas({ x: event.clientX, y: event.clientY }, { x: event.clientX, y: event.clientY });
+    const hit = point && pickVectorObject(pageImage.objects, { x: point.x * pageImage.raster.width, y: point.y * pageImage.raster.height });
+    if (!hit) { clearHoverPreview(); return; }
+    const screen = referenceToScreen({ x: hit.x / pageImage.raster.width, y: hit.y / pageImage.raster.height, w: hit.w / pageImage.raster.width, h: hit.h / pageImage.raster.height });
+    Object.assign(node.style, { display: "block", left: `${screen.left}px`, top: `${screen.top}px`, width: `${screen.width}px`, height: `${screen.height}px` });
+  }
+  const picker = picking ? <div ref={root} tabIndex={-1} className="symbol-canvas-picker" style={{ bottom: drawerHeight }} role="dialog" aria-modal="false" aria-label="Select symbol on PDF"
+    onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); setPicking(false); } }}
+    onWheel={(e) => { clearHoverPreview(); e.preventDefault(); anchor.current = null; setBox(null); onViewGesture({ x: e.clientX, y: e.clientY, zoom: e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1) }); }}
+    onPointerDown={(e) => { clearHoverPreview(); if (e.target.closest('button') || ![0, 1].includes(e.button)) return; e.preventDefault(); e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId); setBox(null); if (e.button === 1 || spaceHeld.current) { panAnchor.current = { x: e.clientX, y: e.clientY }; anchor.current = null; } else anchor.current = { x: e.clientX, y: e.clientY }; }}
+    onPointerLeave={clearHoverPreview}
+    onPointerMove={(e) => { previewShape(e); if (panAnchor.current) { onViewGesture({ dx: e.clientX - panAnchor.current.x, dy: e.clientY - panAnchor.current.y }); panAnchor.current = { x: e.clientX, y: e.clientY }; } else if (anchor.current && selectionMode === "box") setBox({ x: Math.min(anchor.current.x, e.clientX), y: Math.min(anchor.current.y, e.clientY), w: Math.abs(e.clientX - anchor.current.x), h: Math.abs(e.clientY - anchor.current.y) }); }}
+    onPointerCancel={() => { panAnchor.current = null; anchor.current = null; setBox(null); }}
+    onPointerUp={(e) => { if (panAnchor.current) { panAnchor.current = null; return; } if (!anchor.current) return; const start = anchor.current; anchor.current = null; setBox(null); const rect = selectionFromCanvas(selectionMode === "click" ? { x: e.clientX, y: e.clientY } : start, { x: e.clientX, y: e.clientY }); if (!rect || (selectionMode === "box" && (rect.w <= 0 || rect.h <= 0))) return; rect.click = selectionMode === "click"; resetResults(); setCanvasBox(rect); }}>
+    {box && <div className="symbol-canvas-picker-box" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} />}
+  </div> : null;
+  const highlight = template && pageImage ? referenceToScreen({ x: template.x / pageImage.raster.width, y: template.y / pageImage.raster.height, w: template.w / pageImage.raster.width, h: template.h / pageImage.raster.height }) : null;
+  return createPortal(<>{picking && selectionMode === "click" && <div ref={hoverPreview} className="symbol-hover-highlight" aria-hidden="true" />}{highlight && <div className="symbol-reference-highlight" style={highlight} aria-label="Selected PDF shape" />}{picker}<div className="symbol-search-shade" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+    <section className="symbol-search-dialog" role="dialog" aria-modal="false" aria-labelledby="symbol-search-title" ref={root} tabIndex={-1} onKeyDown={(event) => {
       event.stopPropagation();
       if (event.key === 'Escape') { event.preventDefault(); onClose(); }
-      if (event.key === 'Tab') {
-        const nodes = [...root.current.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), canvas[tabindex]')];
-        if (event.shiftKey && (document.activeElement === nodes[0] || document.activeElement === root.current)) { event.preventDefault(); nodes.at(-1)?.focus(); }
-        else if (!event.shiftKey && (document.activeElement === nodes.at(-1) || document.activeElement === root.current)) { event.preventDefault(); nodes[0]?.focus(); }
-      }
     }}>
-      <header><div><h2 id="symbol-search-title">Symbol search</h2><p>Select a symbol → find similar symbols → review → count</p></div><button type="button" aria-label="Close symbol search" onClick={onClose}>×</button></header>
-      <div className="symbol-search-controls">
+      <header><div><h2 id="symbol-search-title">Symbol search</h2><p>Select a symbol Ã¢â€ â€™ search Ã¢â€ â€™ outline automatically</p></div><div className="symbol-search-header-actions"><div className="symbol-search-tabs" role="tablist" aria-label="Symbol search tabs">{["search", "help"].map((tab) => <button key={tab} id={`symbol-tab-${tab}`} type="button" role="tab" aria-selected={drawerTab === tab} aria-controls={`symbol-panel-${tab}`} tabIndex={drawerTab === tab ? 0 : -1} onClick={() => { setDrawerTab(tab); if (tab === "help") setPicking(false); }} onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) { event.preventDefault(); const next = event.key === "Home" ? "search" : event.key === "End" ? "help" : drawerTab === "search" ? "help" : "search"; setDrawerTab(next); if (next === "help") setPicking(false); document.getElementById(`symbol-tab-${next}`)?.focus(); } }}>{tab === "search" ? "Search" : "Help"}</button>)}</div><Button variant="ghost" size="icon" type="button" aria-label="Close symbol search" onClick={onClose}>Ãƒâ€”</Button></div></header>
+      <div id="symbol-panel-search" role="tabpanel" aria-labelledby="symbol-tab-search" hidden={drawerTab !== "search"} className="symbol-search-tab-panel">
+      <div className="symbol-search-controls"><div className="symbol-reference-control"><span id="symbol-reference-label">Select reference</span><div className="symbol-reference-toggle" role="group" aria-labelledby="symbol-reference-label">{[["click", "Click shape"], ["box", "Drag box"]].map(([mode, label]) => <button key={mode} type="button" disabled={busy} aria-pressed={selectionMode === mode} onClick={() => { setSelectionMode(mode); setPicking(true); }}>{label}</button>)}</div></div>
         <label>Search scope<select value={scope} disabled={busy} onChange={(event) => { setScope(event.target.value); resetResults(); }}><option value="page">Current page</option><option value="file">Current PDF set</option><option value="all">All loaded plans</option></select></label>
-        <label>Minimum similarity: {Math.round(threshold * 100)}%<input type="range" min="75" max="99" step="1" value={Math.round(threshold * 100)} disabled={busy} onChange={(event) => { setThreshold(Number(event.target.value) / 100); resetResults(); }} /></label>
+        <label>Vector similarity: {Math.round(threshold * 100)}%<input type="range" min="75" max="99" step="1" value={Math.round(threshold * 100)} disabled={busy} onChange={(event) => { setThreshold(Number(event.target.value) / 100); resetResults(); }} /></label>
         <label className="symbol-search-check"><input type="checkbox" checked={rotated} disabled={busy} onChange={(event) => { setRotated(event.target.checked); resetResults(); }} />Include quarter-turn rotations</label>
-        {busy ? <button type="button" onClick={cancel}>Cancel search</button> : <button className="btn-primary" type="button" disabled={!template} onClick={search}>Search symbols</button>}
+        {busy ? <Button variant="outline" size="sm" type="button" onClick={cancel}>Cancel search</Button> : <Button variant="default" size="sm" type="button" disabled={!template || readOnly} onClick={search}>Search symbols</Button>}
+        <div className="symbol-search-manage-column">
+        <section className="symbol-search-groups symbol-search-marks" aria-label="Search marks">
+          <div className="symbol-search-marks-heading"><strong>Search marks</strong><button type="button" disabled={readOnly || !searchGroups.length} onClick={() => { if (busy) cancel(); resetResults(); onClearSearch(); setPicking(true); }}>Remove all</button></div>
+          <div className="symbol-search-marks-list">{searchGroups.map((group) => <div className="symbol-search-mark-row" key={group.id}>
+            <Button variant="outline" size="sm" className="symbol-search-mark-toggle" aria-pressed={!hiddenSearches.has(group.id)} title={hiddenSearches.has(group.id) ? 'Show outlines' : 'Hide outlines'} onClick={() => onToggleSearch(group.id)}>{hiddenSearches.has(group.id) ? 'Unmarked' : 'Ã¢Å“â€œ Marked'}</Button>
+            <span className="symbol-search-mark-color" style={{ backgroundColor: group.color }} title={group.name} aria-hidden="true" />
+
+            <span className="symbol-search-mark-total">{group.count} matches Ã‚Â· {group.pages} {group.pages === 1 ? 'page' : 'pages'}</span>
+            <Button variant="ghost" size="icon" className="symbol-search-delete" title="Remove search" aria-label={`Remove ${group.name}`} disabled={readOnly} onClick={() => onDeleteSearch(group.id)}>Ãƒâ€”</Button>
+          </div>)}</div>
+        </section></div>
+
       </div>
-      <p className="symbol-search-message" role="status">{message}</p>
-      <div className="symbol-search-body">
-        <div className="symbol-search-source"><h3>Reference · {source.file} · page {source.page || 1}</h3><p>Search includes symbols approximately the same size (±15%). Use a tight selection for better results. Drag on the preview to choose a different reference.</p>
-          <label className="symbol-search-preview-zoom">Preview zoom: {zoom}%<input type="range" min="100" max="300" step="25" value={zoom} disabled={busy} onChange={(event) => setZoom(Number(event.target.value))} /></label>
-          <div className="symbol-search-preview-scroll"><div className="symbol-search-preview" style={{ width: `${zoom}%` }}>
-            <canvas ref={canvasRef} aria-label="Plan preview: drag to select the reference symbol" onPointerDown={(event) => { if (!pageImage || busy || event.button !== 0) return; anchor.current = point(event); event.currentTarget.setPointerCapture(event.pointerId); setBox(null); setTemplate(null); resetResults(); }} onPointerMove={(event) => selection(event)} onPointerUp={(event) => selection(event, true)} onPointerCancel={() => { anchor.current = null; setBox(null); setTemplate(null); }} />
-            {box && pageImage && <div className="symbol-search-selection" style={{ left: `${box.x / pageImage.raster.width * 100}%`, top: `${box.y / pageImage.raster.height * 100}%`, width: `${box.w / pageImage.raster.width * 100}%`, height: `${box.h / pageImage.raster.height * 100}%` }} />}
-          </div></div>
-        </div>
-        <div className="symbol-search-results"><div className="symbol-search-results-heading"><h3>Review suggestions ({matches.length})</h3><button type="button" disabled={!matches.length || busy} onClick={() => setSelected(new Set(matches.map((hit) => hit.id)))}>Select all</button><button type="button" disabled={!selected.size || busy} onClick={() => setSelected(new Set())}>Clear selection</button></div>
-          <div className="symbol-search-matches">{matches.map((hit) => <label className="symbol-search-match" key={hit.id}><input type="checkbox" checked={selected.has(hit.id)} disabled={busy} onChange={(event) => setSelected((previous) => { const next = new Set(previous); if (event.target.checked) next.add(hit.id); else next.delete(hit.id); return next; })} /><img src={hit.thumbnail} alt={`Suggested symbol on page ${hit.page}`} /><span title={hit.file}>{hit.file} · p{hit.page}<small>{Math.round(hit.score * 100)}% similarity</small></span></label>)}</div>
-        </div>
+      {message && <p className="symbol-search-message" role="status">{message}</p>}
+
+
       </div>
-      <footer><div><label>Count condition<select value={condition} disabled={busy || readOnly} onChange={(event) => setCondition(event.target.value)}><option value="">Create a new condition</option>{conditions.map((item) => <option key={item.id} value={item.id}>{item.finish_tag}</option>)}</select></label>{!condition && <label>New condition name<input value={newName} maxLength={120} disabled={busy || readOnly} onChange={(event) => setNewName(event.target.value)} /></label>}</div>
-        <span>{readOnly ? 'Read only mode · Upgrade to add counts.' : `${chosen.length} selected · nothing added until you confirm`}</span>
-        <button className="btn-primary" type="button" disabled={readOnly || busy || !chosen.length || (!condition && !newName.trim())} onClick={() => {
-          try { const result = onAddCounts(chosen, condition, newName.trim()); if (result === false) return; const added = result.added; setCondition(result.conditionId); setSelected(new Set()); root.current?.focus(); setMessage(`${added} counts added. Overlapping counts already in this condition were skipped. Use Undo on the plan to remove this batch.`); }
-          catch (error) { setMessage(error.message || 'Counts could not be added.'); }
-        }}>Add selected counts</button>
-      </footer>
+      <div id="symbol-panel-help" role="tabpanel" aria-labelledby="symbol-tab-help" hidden={drawerTab !== "help"} className="symbol-search-help">
+        <h3>Select a reference</h3>
+        <p>Select a symbol directly on the PDF canvas. Matches individual painted vector objects of approximately the same size (Ã‚Â±15%), excluding overlapping objects and text.</p>
+        <p>Choose <strong>Click a shape</strong> to preview shapes in amber and select one in blue, or <strong>Drag a box</strong> to enclose a complete symbol. Opening the drawer activates selection automatically. Click either reference toggle to select another shape.</p>
+        <h3>Navigate and search</h3>
+        <p>Scroll to zoom. Hold Space and drag, or use the middle mouse button, to pan. Choose a search scope and similarity, enable quarter-turn rotations if needed, then select <strong>Search symbols</strong>.</p>
+        <h3>Review and manage matches</h3>
+        <p>Search automatically outlines matches on the PDF. Use the Select tool to click an outline, then press Delete or Backspace to remove it. Each search has its own color and Hide/Show and Delete controls. <strong>Clear all searches</strong> removes all groups; Undo restores deleted outlines.</p>
+        <p>Matching depends on how the PDF stores its graphics. Scans and symbols split across unrelated objects may not be selectable as one shape.</p>
+      </div>
     </section>
-  </div>, document.body);
+  </div></>, document.body);
 }

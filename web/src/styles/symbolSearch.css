@@ -20,3 +20,132 @@
 
 .symbol-search-preview-scroll { overflow: auto; max-height: 54dvh; background: var(--paper); border: 1px solid var(--ink-faint); }
 .symbol-search-preview-zoom { width: 180px; margin: 12px 0; font-size: 12px; }
+.symbol-canvas-picker { position: fixed; inset: 0; z-index: 3400; cursor: crosshair; touch-action: none; outline: none; }
+.symbol-canvas-picker-help { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); padding: 12px 16px; border: 1px solid var(--ink-faint); border-radius: 8px; background: var(--paper-bright); color: var(--ink); font-size: 13px; pointer-events: none; }
+.symbol-canvas-picker-help button { pointer-events: auto; margin-left: 12px; }
+.symbol-canvas-picker-box { position: absolute; border: 2px solid #d54b36; background: #d54b3620; pointer-events: none; box-sizing: border-box; }
+/* Bottom drawer: the PDF remains visible and interactive above it. */
+.symbol-search-shade { padding: 0; background: transparent; place-items: end stretch; pointer-events: none; }
+.symbol-search-dialog { width: 100%; height: min(40dvh, 420px); max-height: 60dvh; border-radius: 12px 12px 0 0; pointer-events: auto; animation: symbol-drawer-open .18s ease-out; }
+.symbol-search-dialog header { padding: 8px 16px; }
+.symbol-search-dialog header h2 { font-size: 16px; }
+.symbol-search-dialog header p { margin: 3px 0 0; }
+.symbol-search-controls { padding: 8px 16px; }
+.symbol-search-message { margin: 0; padding: 4px 16px; }
+.symbol-search-body { min-height: 0; overflow: auto; padding: 8px 16px; grid-template-columns: minmax(180px, 1fr) minmax(0, 3fr); }
+.symbol-search-matches { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.symbol-search-dialog footer { padding: 8px 16px; }
+.symbol-canvas-picker { z-index: 3399; bottom: min(40dvh, 420px); }
+.symbol-canvas-picker-help { top: 75px; }
+@keyframes symbol-drawer-open { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .symbol-search-dialog { animation: none; } }
+@media (max-width: 650px) { .symbol-search-dialog { height: 45dvh; } .symbol-canvas-picker { bottom: 45dvh; } .symbol-search-body { grid-template-columns: 1fr; } }
+.symbol-search-groups { display: flex; gap: 8px; overflow: auto; flex-shrink: 0; padding: 4px 16px; }.symbol-search-groups > div { display: flex; align-items: center; gap: 8px; white-space: nowrap; border: 1px solid var(--ink-faint); border-radius: 6px; padding: 4px 8px; }
+.symbol-reference-highlight { position: fixed; z-index: 3398; border: 2px solid #1f6feb; background: #1f6feb18; pointer-events: none; box-sizing: border-box; outline: 1px solid #fff; }
+.symbol-hover-highlight { display: none; position: fixed; z-index: 3400; border: 2px solid #f59e0b; background: #f59e0b28; outline: 1px solid #fff; pointer-events: none; box-sizing: border-box; }
+/* Neutral shadcn-style drawer controls, scoped to symbol search. */
+.symbol-search-dialog { --symbol-bg: #fff; --symbol-fg: #18181b; --symbol-muted: #71717a; --symbol-border: #e4e4e7; --symbol-hover: #f4f4f5; background: var(--symbol-bg); color: var(--symbol-fg); border-color: var(--symbol-border); font-family: var(--f-body); }
+[data-theme="dark"] .symbol-search-dialog { --symbol-bg: #09090b; --symbol-fg: #fafafa; --symbol-muted: #a1a1aa; --symbol-border: #27272a; --symbol-hover: #18181b; }
+:root .symbol-search-dialog .ui-button, :root .symbol-canvas-picker-help .ui-button { min-height: 30px; height: 30px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--symbol-border, #3f3f46); background: transparent; color: var(--symbol-fg, var(--ink)); box-shadow: 0 1px 2px #0000000d; font: 500 12px var(--f-body); letter-spacing: normal; text-transform: none; }
+:root .symbol-search-dialog .ui-button:hover:not(:disabled) { background: var(--symbol-hover); }
+:root .symbol-search-dialog .ui-button--default { background: var(--symbol-fg); color: var(--symbol-bg); border-color: var(--symbol-fg); }
+:root .symbol-search-dialog .ui-button--default:hover:not(:disabled) { opacity: .85; background: var(--symbol-fg); }
+:root .symbol-search-dialog .ui-button--ghost { border-color: transparent; box-shadow: none; }
+:root .symbol-search-dialog .ui-button--icon { width: 30px; padding: 0; }
+:root .symbol-search-dialog .ui-button:disabled { opacity: .4; cursor: not-allowed; }
+:root .symbol-search-dialog .ui-button:focus-visible { outline: 2px solid var(--symbol-muted); outline-offset: 2px; box-shadow: none; }
+:root .symbol-search-dialog select { height: 32px; min-height: 32px; border: 1px solid var(--symbol-border); border-radius: 7px; background: var(--symbol-bg); color: var(--symbol-fg); padding: 0 28px 0 10px; font: 400 12px var(--f-body); box-shadow: 0 1px 2px #0000000d; }
+.symbol-search-dialog input[type="range"], .symbol-search-dialog input[type="checkbox"] { accent-color: var(--symbol-fg); }
+.symbol-search-dialog header, .symbol-search-dialog footer { border-color: var(--symbol-border); }
+.symbol-search-dialog header p, .symbol-search-source p, .symbol-search-dialog footer > span { color: var(--symbol-muted); font-size: 12px; }
+.symbol-search-groups > div { background: var(--symbol-hover); border-color: var(--symbol-border); border-radius: 8px; padding: 5px 8px; gap: 8px; }
+.symbol-search-groups > div > span { font-size: 12px; }
+.symbol-search-dialog .symbol-search-match { background: var(--symbol-bg); border-color: var(--symbol-border); border-radius: 8px; }
+.symbol-search-dialog .symbol-search-match:hover { background: var(--symbol-hover); }
+.symbol-search-controls { gap: 14px; }
+.symbol-search-controls label { font-size: 12px; font-weight: 500; }
+.symbol-search-dialog .symbol-search-message { color: var(--symbol-muted); font-size: 12px; line-height: 1.5; }
+.symbol-search-header-actions { display: flex; align-items: center; gap: 8px; }
+.symbol-search-tabs { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--symbol-border); border-radius: 8px; background: var(--symbol-hover); }
+:root .symbol-search-tabs button { border: 0; border-radius: 5px; padding: 5px 10px; background: transparent; color: var(--symbol-muted); font: 500 12px var(--f-body); cursor: pointer; }
+:root .symbol-search-tabs button[aria-selected="true"] { background: var(--symbol-bg); color: var(--symbol-fg); box-shadow: 0 1px 3px #0002; }
+.symbol-search-tab-panel { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: hidden; }
+.symbol-search-tab-panel[hidden], .symbol-search-help[hidden] { display: none; }
+.symbol-search-dialog .symbol-search-body { grid-template-columns: 1fr; flex: 1; }
+.symbol-search-help { padding: 16px 20px; overflow: auto; color: var(--symbol-muted); font-size: 12px; line-height: 1.6; }
+.symbol-search-help h3 { color: var(--symbol-fg); margin: 0 0 6px; font-size: 13px; }
+.symbol-search-help p { margin: 0 0 14px; }
+.symbol-reference-control { display: grid; gap: 6px; font-size: 12px; font-weight: 500; }
+.symbol-reference-toggle { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--symbol-border); border-radius: 8px; background: var(--symbol-hover); }
+:root .symbol-reference-toggle button { min-height: 24px; padding: 3px 10px; border: 0; border-radius: 5px; background: transparent; color: var(--symbol-muted); font: 500 12px var(--f-body); cursor: pointer; }
+:root .symbol-reference-toggle button[aria-pressed="true"] { background: var(--symbol-bg); color: var(--symbol-fg); box-shadow: 0 1px 3px #0002; }
+:root .symbol-reference-toggle button:focus-visible { outline: 2px solid var(--symbol-muted); outline-offset: 2px; }
+:root .symbol-reference-toggle button:disabled { opacity: .4; cursor: not-allowed; }
+
+:root .symbol-search-dialog .symbol-search-controls > .ui-button { box-sizing: border-box; height: 36px; min-height: 36px; padding-block: 0; align-self: center; }
+:root .symbol-search-dialog .ui-button.symbol-search-delete { color: #ef4444; }:root .symbol-search-dialog .ui-button.symbol-search-delete:hover:not(:disabled) { color: #dc2626; background: #ef444418; }
+.symbol-search-manage-column { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+:root .symbol-search-dialog .symbol-search-manage-column > .ui-button { height: 36px; min-height: 36px; flex-shrink: 0; }
+.symbol-search-manage-column .symbol-search-groups { flex-direction: column; max-height: 180px; overflow-y: auto; overflow-x: hidden; padding: 0; gap: 6px; }
+.symbol-search-manage-column .symbol-search-groups > div { flex-shrink: 0; }
+.symbol-search-manage-column .symbol-search-groups > div > strong { margin-right: auto; }
+.symbol-search-manage-column .symbol-search-marks { display: block; width: min(520px, 42vw); max-height: 210px; padding: 0; overflow: auto; }
+.symbol-search-marks .symbol-search-marks-heading { display: flex; justify-content: space-between; align-items: center; padding: 0 2px 6px; border: 0; background: transparent; }
+.symbol-search-marks-heading > strong { font: 600 10px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--symbol-muted); }
+:root .symbol-search-marks-heading > button { padding: 0; border: 0; background: none; color: #ef735e; text-decoration: underline; font: 11px var(--f-body); cursor: pointer; }
+.symbol-search-marks-list { display: grid; gap: 5px; }
+.symbol-search-mark-row { display: flex; align-items: center; gap: 7px; border: 1px solid var(--symbol-border); border-radius: 7px; padding: 5px; min-width: 0; }
+:root .symbol-search-dialog .symbol-search-mark-toggle { padding: 0 7px; font-size: 11px; white-space: nowrap; }
+:root .symbol-search-dialog .symbol-search-mark-toggle[aria-pressed="true"] { background: #8b9dff20; color: var(--symbol-fg); border-color: #8b9dff; }
+.symbol-search-mark-color { display: block; flex: 0 0 18px; height: 18px; border: 4px solid var(--symbol-hover); outline: 1px solid var(--symbol-border); border-radius: 2px; }
+.symbol-search-mark-details { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.symbol-search-mark-details > strong, .symbol-search-mark-details > small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.symbol-search-mark-details > strong { font-size: 11px; }
+.symbol-search-mark-details > small { color: var(--symbol-muted); font-size: 10px; }
+.symbol-search-mark-total { color: var(--symbol-muted); font: 10px var(--f-mono); white-space: nowrap; }
+@media (max-width: 850px) { .symbol-search-manage-column .symbol-search-marks { width: min(520px, 85vw); } }
+.symbol-search-marks > .symbol-search-marks-list { display: grid; border: 0; padding: 0; background: transparent; white-space: normal; }
+.symbol-search-mark-row .symbol-search-mark-total { margin-left: auto; }
+/* Fit the drawer to its controls instead of reserving unused viewport space. */
+.symbol-search-dialog { height: auto; max-height: 42dvh; }
+.symbol-search-tab-panel { flex: 0 1 auto; overflow: auto; padding-bottom: 8px; }
+.symbol-search-manage-column .symbol-search-marks { max-height: 150px; }
+.symbol-search-controls { align-items: flex-end; }
+.symbol-search-help { max-height: 30dvh; }
+@media (max-width: 650px) { .symbol-search-dialog { height: auto; max-height: 50dvh; } }
+/* Balanced compact layout: controls align independently of the marks list. */
+.symbol-search-dialog { border-radius: 10px 10px 0 0; box-shadow: 0 -4px 24px #0002; }
+.symbol-search-dialog header { padding: 10px 16px; }
+.symbol-search-controls { display: grid; grid-template-columns: auto 145px 150px auto auto minmax(260px, 1fr); gap: 16px; align-items: start; padding: 14px 16px 10px; }
+.symbol-search-controls > label, .symbol-reference-control { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.symbol-search-controls > label > select, .symbol-reference-toggle { box-sizing: border-box; height: 34px; }
+.symbol-search-controls > label > input[type="range"] { width: 100%; height: 34px; margin: 0; }
+.symbol-search-controls > .symbol-search-check { display: flex; align-items: center; gap: 7px; margin-top: 24px; min-height: 34px; font-weight: 400; white-space: nowrap; }
+:root .symbol-search-dialog .symbol-search-controls > .ui-button { margin-top: 24px; height: 34px; min-height: 34px; }
+.symbol-search-manage-column { display: block; align-self: start; min-width: 0; padding-left: 16px; border-left: 1px solid var(--symbol-border); }
+.symbol-search-manage-column .symbol-search-marks { width: 100%; max-height: 142px; }
+.symbol-search-marks-heading { min-height: 16px; margin-bottom: 3px; }
+.symbol-search-mark-row { padding: 3px 5px; gap: 8px; }
+:root .symbol-search-dialog .symbol-search-mark-toggle { height: 27px; min-height: 27px; }
+:root .symbol-search-dialog .symbol-search-mark-row .ui-button--icon { height: 27px; min-height: 27px; width: 27px; }
+.symbol-search-dialog .symbol-search-message { margin: 0; padding: 2px 16px 8px; }
+.symbol-search-tab-panel { padding-bottom: 0; }
+@media (max-width: 1250px) {
+ .symbol-search-controls { grid-template-columns: auto 145px 150px 1fr auto; gap: 12px; }
+ .symbol-search-manage-column { grid-column: 1 / -1; padding: 10px 0 0; border-left: 0; border-top: 1px solid var(--symbol-border); }
+ .symbol-search-manage-column .symbol-search-marks { max-width: 460px; max-height: 110px; }
+}
+@media (max-width: 760px) {
+ .symbol-search-controls { grid-template-columns: 1fr 1fr; }
+ .symbol-search-controls > .symbol-search-check, :root .symbol-search-dialog .symbol-search-controls > .ui-button { margin-top: 0; }
+ .symbol-search-manage-column { grid-column: 1 / -1; }
+}
+:root .symbol-search-dialog .symbol-search-controls > .ui-button { align-self: start; margin-top: 24px; height: 34px; min-height: 34px; }
+@media (max-width: 760px) { :root .symbol-search-dialog .symbol-search-controls > .ui-button { margin-top: 0; } }
+.symbol-search-mark-row .symbol-search-mark-total { margin-left: 0; }
+.symbol-search-manage-column .symbol-search-marks { width: fit-content; max-width: 100%; }
+.symbol-search-marks .symbol-search-mark-row { justify-content: flex-start; }
+.symbol-search-marks .symbol-search-marks-heading { gap: 20px; }
+.symbol-search-manage-column { justify-self: end; }
+.symbol-search-manage-column .symbol-search-marks { margin-left: auto; }
+.symbol-search-manage-column .symbol-search-marks { padding-right: 10px; scrollbar-gutter: stable; box-sizing: border-box; }

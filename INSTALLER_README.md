@@ -51,7 +51,7 @@ GitHub token in the installed app.
 The installer is generated at:
 
 ```text
-C:\Apps\OpenTakeoff\release\Beitzell Estimating-Setup-x64.exe
+C:\Apps\OpenTakeoff\release\ESTIMATING-Setup-x64.exe
 ```
 
 The unpacked packaged application for local verification may also be created with:
@@ -63,7 +63,7 @@ npm run pack:win
 
 ## Installed App Behavior
 
-- Product name: `Beitzell Estimating`
+- Product name: `ESTIMATING`
 - Windows target: x64 Windows 10/11
 - Installer technology: NSIS through electron-builder
 - Default install scope: per-user, using the standard Windows per-user application install location

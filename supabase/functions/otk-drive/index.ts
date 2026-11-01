@@ -5,7 +5,7 @@ import { createDriveGoogle } from "../_shared/drive-google.js";
 import { createDriveService } from "../_shared/drive-service.js";
 
 const env = (key: string) => Deno.env.get(key) || "";
-const origins = env("OTK_DRIVE_ALLOWED_ORIGINS").split(",").map((s) => s.trim()).filter(Boolean);
+const origins = (env("OTK_DRIVE_ALLOWED_ORIGINS") + "," + env("OTK_DEPLOYMENT_ALLOWED_ORIGINS")).split(",").map((s) => s.trim()).filter(Boolean);
 const configured = ["OTK_DRIVE_CLIENT_ID", "OTK_DRIVE_CLIENT_SECRET", "OTK_DRIVE_TOKEN_KEY", "OTK_DRIVE_CALLBACK_URL"].every((key) => !!env(key));
 const db = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } });
 const encryption = configured ? cipher(env("OTK_DRIVE_TOKEN_KEY")).catch(() => null) : Promise.resolve(null);

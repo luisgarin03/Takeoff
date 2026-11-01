@@ -294,7 +294,7 @@ and lint passed. Build retains the existing >500 kB chunk-size warning. `npx cap
 completed and registered App/Browser/StatusBar; that is not a physical-device test.
 The full suite ran **1009 tests: 995 passed, 14 failed**. Those 14 existing branding
 expectations still expect `OpenTakeoff` while the configured display name is
-`Estimating by Luis Garin` (brand/CSV/golden export/store error text). They were not
+`ESTIMATING` (brand/CSV/golden export/store error text). They were not
 changed or hidden. Detailed local log: `output/drive-full-tests.log` (gitignored).
 
 The actual account dialog was inspected at desktop and 390x844 mobile sizes,
@@ -350,7 +350,7 @@ assertions were removed, skipped, or weakened to hide the reported failures.
 The exact set of 14 full-suite failures was compared before/after and is
 unchanged. They are existing app-branding expectations in branding, report/CSV,
 RFI, shape/sheet export, and store tests (`OpenTakeoff` versus the configured
-`Estimating by Luis Garin` name). Those tests and the branding were left intact.
+`ESTIMATING` name). Those tests and the branding were left intact.
 Consequently the complete `npm run check` gate is still not green; build was
 also run independently so those failures could not mask a build error.
 

@@ -1,0 +1,11 @@
+{
+  "source": "User supplied logo images",
+  "processing": "Built-in imagegen: remove white background; preserve typography, colors and logo shapes. LiftMaster retains red rectangle and white lettering.",
+  "files": [
+    "ameristar-provided.png",
+    "stephens-provided.png",
+    "master-halco-provided.png",
+    "gibraltar-provided.png",
+    "liftmaster-provided.png"
+  ]
+}

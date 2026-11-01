@@ -31,6 +31,7 @@ export function resolveLicenseAccess({ required = true, offline = false, serverE
   if (!required) return { readOnly: false, reason: "", message: "", subscription: record, session };
   if (offline) return { readOnly: true, reason: "offline", message: "No internet connection. You can view and export this project, but editing is disabled.", subscription: record, session: null };
   if (serverError) return { readOnly: true, reason: "server", message: "The license server is unavailable. Editing stays disabled until the connection is verified.", subscription: record, session: null };
+  if (session?.reason === "trial_available") return { readOnly: true, reason: "trial_available", message: "Start your free 30-day trial to unlock editing. No card required.", subscription: record, session };
   if (record?.subscriptionProvider === "trial" && !hasActiveLicense(record, now, allowSandbox)) {
     return { readOnly: true, reason: "trial_expired", message: "Your 30-day free trial has ended. Upgrade your membership to unlock all tools.", subscription: record, session };
   }
@@ -55,4 +56,14 @@ export function trialDaysRemaining(record, now = Date.now()) {
   if (record?.subscriptionProvider !== 'trial') return null;
   const end = Date.parse(record.subscriptionCurrentPeriodEnd || '');
   return Number.isFinite(end) ? Math.max(0, Math.ceil((end - now) / 86400000)) : 0;
+}
+
+export function trialTimeRemaining(record, now = Date.now()) {
+  if (record?.subscriptionProvider !== 'trial') return null;
+  const end = Date.parse(record.subscriptionCurrentPeriodEnd || '');
+  if (!Number.isFinite(end)) return null;
+  const total = Math.max(0, Math.ceil((end - now) / 1000));
+  return { expired: total === 0, days: Math.floor(total / 86400),
+    hours: Math.floor(total / 3600) % 24, minutes: Math.floor(total / 60) % 60,
+    seconds: total % 60 };
 }

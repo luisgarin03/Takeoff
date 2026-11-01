@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createBillingService, billingService, monthlyPrice, SUBSCRIPTION_PLANS } from "../lib/subscriptions.js";
 import { createAppBillingAdapter } from "../lib/stripeBilling.js";
+import { useLicenseAccess } from "../lib/licenseAccess.jsx";
+import TrialCountdown from "./TrialCountdown.jsx";
+import StartTrialButton from "./StartTrialButton.jsx";
 
 function SubscriptionPlanCard({ plan, current, disabled, onChoose }) {
   return <article className="subscription-plan">
@@ -13,10 +16,10 @@ function SubscriptionPlanCard({ plan, current, disabled, onChoose }) {
   </article>;
 }
 
-export default function SubscriptionSection({ user, offline, client, service: suppliedService, initiallyOpen = false, onOpenWorkspace }) {
+export default function SubscriptionSection({ user, offline, client, service: suppliedService, onOpenWorkspace }) {
+  const license = useLicenseAccess();
   const configuredService = useMemo(() => client ? createBillingService(createAppBillingAdapter(client)) : billingService, [client]);
   const service = suppliedService || configuredService;
-  const [open, setOpen] = useState(initiallyOpen);
   const [state, setState] = useState({ loading: true, record: null, plans: SUBSCRIPTION_PLANS, error: "" });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -36,7 +39,7 @@ export default function SubscriptionSection({ user, offline, client, service: su
     document.addEventListener("visibilitychange", refresh);
     return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, []);
-  const record = state.record;
+  const record = license.subscription?.subscriptionProvider === 'trial' ? license.subscription : state.record;
   const current = record && ["active", "trialing"].includes(record.subscriptionStatus);
   const plan = SUBSCRIPTION_PLANS.find((item) => item.id === record?.subscriptionPlan);
   async function action(planId) {
@@ -50,25 +53,26 @@ export default function SubscriptionSection({ user, offline, client, service: su
     finally { setBusy(false); }
   }
   return <section className="profile-card" aria-labelledby="subscription-heading">
+    <StartTrialButton />
     <div className="profile-card-heading"><h3 id="subscription-heading">Subscription</h3>
-      <button type="button" aria-expanded={open} aria-controls="subscription-plans" onClick={() => setOpen((value) => !value)}>{open ? "Hide plans" : "Subscription"}</button>
     </div>
     <div aria-live="polite">
       {state.loading ? <p>Loading subscription…</p> : state.error ? <p role="alert">{state.error} <button type="button" onClick={() => setRetry((value) => value + 1)}>Retry</button></p>
-        : record ? <><p>Current plan: <strong>{plan?.name || record.subscriptionPlan || "Unknown plan"}</strong> <span className="subscription-badge">{record.subscriptionEnvironment === "sandbox" ? "Test · " : ""}{record.subscriptionStatus || "Unknown status"}</span></p>
+        : record ? <><p>Current plan: <strong>{record.subscriptionProvider === 'trial' ? '30-day free trial' : plan?.name || record.subscriptionPlan || "Unknown plan"}</strong> {record.subscriptionProvider !== "trial" && <span className="subscription-badge">{record.subscriptionEnvironment === "sandbox" ? "Test · " : ""}{record.subscriptionStatus || "Unknown status"}</span>}</p>
+          {record.subscriptionProvider === 'trial' && <p><TrialCountdown subscription={record} /></p>}
           {Number.isFinite(record.subscriptionPrice) && <p>{monthlyPrice(record.subscriptionPrice)} / {record.subscriptionInterval || "month"}</p>}
           {record.subscriptionCurrentPeriodEnd && Number.isFinite(Date.parse(record.subscriptionCurrentPeriodEnd)) && <p>Current period ends {new Date(record.subscriptionCurrentPeriodEnd).toLocaleDateString()}</p>}
         </> : <p>Current plan: <strong>Free</strong> <span className="profile-muted">/ No active subscription</span></p>}
     </div>
     {current && onOpenWorkspace && <button type="button" className="btn-primary" onClick={onOpenWorkspace}>Open full workspace</button>}
-    {current && service.canManage && <button type="button" disabled={busy || offline} onClick={() => action()}>Manage Subscription</button>}
+    {current && record.subscriptionProvider !== 'trial' && service.canManage && <button type="button" disabled={busy || offline} onClick={() => action()}>Manage Subscription</button>}
     {service.canRestore && <button type="button" disabled={busy || offline} onClick={async () => {
       setBusy(true); setMessage("");
       try { await service.restorePurchases(user); setMessage("Purchases restored."); setRetry((value) => value + 1); }
       catch (error) { setMessage(error.message || "Purchases could not be restored."); }
       finally { setBusy(false); }
     }}>Restore Purchases</button>}
-    <div id="subscription-plans" hidden={!open}>
+    <div id="subscription-plans">
       {(!service.configured || state.plans.every((plan) => plan.checkoutAvailable === false)) && <p className="profile-muted">Stripe sandbox checkout is not configured on the server yet.</p>}
       {state.plans.some((plan) => plan.testMode) && <p className="profile-muted">Test mode · Use Stripe test cards. No real payment will be collected.</p>}
       <div className="subscription-plans">{state.plans.map((item) => <SubscriptionPlanCard key={item.id} plan={item}

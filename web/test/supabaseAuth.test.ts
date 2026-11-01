@@ -8,7 +8,7 @@ import { cloudError } from "../src/lib/supabase/errors.js";
 test("auth adapter supports password accounts, email-code recovery, sessions and local sign-out", async () => {
   const calls: any[] = []; let listener: any, unsubscribed = false;
   const operation = (name: string) => async (...args: any[]) => { calls.push([name, ...args]); return { data: { session: { user: { id: "user" } } }, error: null }; };
-  const auth = createAuth({ auth: {
+  const auth = createAuth({ functions: { invoke: async () => ({ error: null }) }, auth: {
     getSession: operation("session"), signInWithPassword: operation("signin"), signUp: operation("signup"),
     signOut: operation("signout"), resetPasswordForEmail: operation("forgot"), verifyOtp: operation("code"), updateUser: operation("password"),
     onAuthStateChange(fn: any) { listener = fn; return { data: { subscription: { unsubscribe() { unsubscribed = true; } } } }; },
@@ -20,7 +20,7 @@ test("auth adapter supports password accounts, email-code recovery, sessions and
   await auth.verifyCode("user@example.com", "123456", "recovery");
   await auth.updatePassword("replacement"); await auth.signOut();
   assert.deepEqual(calls.at(-1), ["signout", { scope: "local" }]);
-  assert.deepEqual(calls[4], ["code", { email: "user@example.com", token: "123456", type: "recovery" }]);
+  assert.deepEqual(calls.find(c => c[0] === "code"), ["code", { email: "user@example.com", token: "123456", type: "recovery" }]);
   let observed; const off = auth.subscribe((s: any) => { observed = s; });
   listener("SIGNED_IN", { user: "account" }); assert.deepEqual(observed, { user: "account" });
   off(); assert.equal(unsubscribed, true);
@@ -71,7 +71,7 @@ test("Google auth requests Calendar during initial Supabase sign-in, with safe i
 test("OAuth callback exchanges once across concurrent/remounted consumers and scrubs its URL", async () => {
   let exchanges = 0, finish: any;
   const cleaned: string[] = [];
-  const client = { auth: { exchangeCodeForSession: async (code: string) => {
+  const client = { functions: { invoke: async () => ({ error: null }) }, auth: { signOut: async () => ({ error: null }), exchangeCodeForSession: async (code: string) => {
     assert.equal(code, "one-use-code"); exchanges++;
     return new Promise((resolve) => { finish = resolve; });
   } } };
@@ -127,7 +127,7 @@ test("real Supabase SDK completes PKCE after reload and persists/restores the sa
   const user = { id: "12345678-1234-4234-8234-123456789abc", email: "google@example.com", aud: "authenticated", app_metadata: { provider: "google" }, user_metadata: { full_name: "Test User" }, created_at: new Date().toISOString() };
   const jwt = [ { alg: "HS256", typ: "JWT" }, { sub: user.id, exp: Math.floor(Date.now() / 1000) + 3600, aud: "authenticated" } ].map((part) => Buffer.from(JSON.stringify(part)).toString("base64url")).concat("signature").join(".");
   const options = { auth: { storage, persistSession: true, autoRefreshToken: false, detectSessionInUrl: false, flowType: "pkce" as const }, global: { fetch: async (url: any, init: any) => {
-    requests.push({ url: String(url), body: JSON.parse(init.body) });
+    requests.push({ url: String(url), body: init.body ? JSON.parse(init.body) : null });
     return new Response(JSON.stringify({ access_token: jwt, refresh_token: "test-refresh", expires_in: 3600, token_type: "bearer", user }), { status: 200, headers: { "Content-Type": "application/json" } });
   } } };
   const before = createClient("https://unit-test.supabase.co", "sb_publishable_test", options);
@@ -140,7 +140,9 @@ test("real Supabase SDK completes PKCE after reload and persists/restores the sa
   const events: string[] = [];
   const off = createAuth(after).subscribe((session: any) => { if (session?.user) events.push(session.user.id); });
   assert.equal((await restoreGoogleReturn(after, `${authorize.searchParams.get("redirect_to")}&code=single-code`, () => {})).error, "");
-  assert.equal(requests.length, 1);
+  assert.equal(requests.length, 3);
+  assert.ok(requests[1].url.includes("/logout?scope=others"));
+  assert.ok(requests[2].url.endsWith("/functions/v1/otk-billing"));
   assert.ok(requests[0].url.endsWith("/auth/v1/token?grant_type=pkce"));
   assert.equal(requests[0].body.auth_code, "single-code");
   assert.ok(requests[0].body.code_verifier);
@@ -153,8 +155,9 @@ test("real Supabase SDK completes PKCE after reload and persists/restores the sa
 
 test("initial Google callback saves Calendar grant once without another OAuth redirect", async () => {
   let saves = 0;
-  const client = { auth: { exchangeCodeForSession: async () => ({ data: { session: { access_token: "app-session", provider_refresh_token: "google-refresh" } } }) },
+  const client = { auth: { signOut: async () => ({ error: null }), exchangeCodeForSession: async () => ({ data: { session: { access_token: "app-session", provider_refresh_token: "google-refresh" } } }) },
     functions: { invoke: async (name: string, input: any) => {
+      if(name === "otk-billing") return { error: null };
       saves++; assert.equal(name, "otk-drive?action=calendar-signin");
       assert.deepEqual(input, { body: { refreshToken: "google-refresh" }, headers: { Authorization: "Bearer app-session" } });
       return { data: { connected: true } };

@@ -2,7 +2,7 @@ import Stripe from 'npm:stripe@23.0.1';
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
 import { BillingError, createStripeBilling, STRIPE_PLANS } from '../_shared/stripe-billing.js';
 const env = (name: string) => Deno.env.get(name) || '';
-const origins = env('OTK_BILLING_ALLOWED_ORIGINS').split(',').map(s=>s.trim()).filter(Boolean);
+const origins = (env('OTK_BILLING_ALLOWED_ORIGINS') + ',' + env('OTK_DEPLOYMENT_ALLOWED_ORIGINS')).split(',').map(s=>s.trim()).filter(Boolean);
 const key = env('STRIPE_TEST_SECRET_KEY'), webhookSecret = env('STRIPE_TEST_WEBHOOK_SECRET');
 // This endpoint intentionally cannot charge live cards, even if misconfigured.
 const configured = /^(sk|rk)_test_/.test(key);

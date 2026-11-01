@@ -11,7 +11,11 @@
 .landing-auth-links { position: absolute; top: 14px; right: 20px; z-index: 3; }
 .landing-auth-links button { padding: 9px 18px; color: var(--ink); background: var(--paper-bright); border: 1px solid var(--ink-faint); border-radius: 8px; cursor: pointer; font-weight: 600; }
 
-.toolbar-readonly-status { display: inline-flex; align-items: center; gap: 12px; white-space: nowrap; }
+.toolbar-readonly-status { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; white-space: nowrap; }
+.toolbar-license-message { display: block; min-width: 0; max-width: clamp(100px, 16vw, 250px); overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+.toolbar-license-message[hidden] { display: none; }
+.toolbar-readonly-status > strong, .toolbar-readonly-status > button { flex-shrink: 0; }
+@media (max-width: 1100px) { .toolbar-readonly-status .toolbar-license-message { display: none; } }
 :root .toolbar-readonly-status strong { color: #e85648; font-size: 13px; font-weight: 700; }
 :root[data-theme="light"] .toolbar-readonly-status strong { color: #b42318; }
 .toolbar-readonly-status button { padding: 7px 14px; font-size: 12px; font-weight: 600; }

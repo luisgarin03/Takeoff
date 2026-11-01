@@ -6,6 +6,29 @@ export const GOOGLE_CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar.
 const GOOGLE_RETURN = "otkGoogle";
 const callbackFields = [GOOGLE_RETURN, "code", "error", "error_code", "error_description", "access_token", "refresh_token", "provider_token", "provider_refresh_token", "expires_in", "expires_at", "token_type", "type"];
 const oauthReturns = new WeakMap();
+const loginActivations = new WeakMap();
+export async function waitForLatestLogin(client) {
+  await loginActivations.get(client);
+}
+function freshLogin(client, operation) {
+  const pending = checked(operation).then((result) => activateLatestLogin(client, result));
+  loginActivations.set(client, pending);
+  void pending.finally(() => {
+    if (loginActivations.get(client) === pending) loginActivations.delete(client);
+  }).catch(() => {});
+  return pending;
+}
+
+export async function activateLatestLogin(client, result) {
+  if (!result?.session) return result;
+  // Run only after a fresh login, never on token refresh or restored sessions.
+  await checked(client.auth.signOut({ scope: "others" }));
+  const { error } = await client.functions.invoke("otk-billing", {
+    body: { action: "session", take_over: true, device_name: "Current login" },
+  });
+  if (error) throw error;
+  return result;
+}
 
 export function googleSignInUnavailable(href = globalThis.location?.href || "", native = Capacitor.isNativePlatform()) {
   // This wrapper has no system-browser/deep-link bridge. Google blocks embedded WebViews.
@@ -46,8 +69,8 @@ export function restoreGoogleReturn(client, href = window.location.href, replace
     if (hasError) return { error: denied === "access_denied" ? "Google sign-in was canceled. You can try again or use email and password." : "Google sign-in failed. Please try again or use email and password." };
     if (!code) return { error: "Google sign-in did not return a code. Check the Supabase redirect URL settings and try again." };
     try {
-      const { data, error } = await client.auth.exchangeCodeForSession(code);
-      if (error || !data?.session) throw new Error("No OAuth session");
+      const data = await freshLogin(client, client.auth.exchangeCodeForSession(code));
+      if (!data?.session) throw new Error("No OAuth session");
       let calendarError = "";
       try {
         if (!data.session.provider_refresh_token) throw new Error("Missing Google grant");
@@ -73,12 +96,12 @@ export function createAuth(client) {
   return {
     session: () => checked(client.auth.getSession()),
     subscribe: (fn) => { const { data } = client.auth.onAuthStateChange((_event, session) => fn(session)); return () => data.subscription.unsubscribe(); },
-    signIn: (email, password) => checked(client.auth.signInWithPassword({ email, password })),
+    signIn: (email, password) => freshLogin(client, client.auth.signInWithPassword({ email, password })),
     signInWithGoogle: (href = window.location.href) => checked(client.auth.signInWithOAuth({ provider: "google", options: { redirectTo: googleRedirectUrl(href), scopes: GOOGLE_CALENDAR_SCOPES, queryParams: { access_type: "offline", prompt: "consent", include_granted_scopes: "true" } } })),
-    signUp: (email, password, displayName) => checked(client.auth.signUp({ email, password, options: { data: { display_name: displayName } } })),
+    signUp: (email, password, displayName) => freshLogin(client, client.auth.signUp({ email, password, options: { data: { display_name: displayName } } })),
     signOut: () => checked(client.auth.signOut({ scope: "local" })),
     forgotPassword: (email) => checked(client.auth.resetPasswordForEmail(email)),
-    verifyCode: (email, token, type) => checked(client.auth.verifyOtp({ email, token, type })),
+    verifyCode: (email, token, type) => freshLogin(client, client.auth.verifyOtp({ email, token, type })),
     updatePassword: (password) => checked(client.auth.updateUser({ password })),
     async saveProfile(id, displayName) {
       const display_name = displayName.trim().slice(0, 120);

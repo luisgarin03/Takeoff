@@ -52,3 +52,9 @@ web/android/app/build/
 web/android/build/
 
 /tmp/pdfs/
+
+# Local verification artifacts and CLI cache
+.playwright-cli/
+tmp/
+supabase/.temp/
+.wrangler/

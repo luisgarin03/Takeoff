@@ -2,7 +2,7 @@
 
 The black/dark interface is the default until you choose and save another theme. On Windows desktop installs, `.otk` project files use the OpenTakeoff blueprint icon.
 
-The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated Estimating by Luis Garin wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
+The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated ESTIMATING wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
 
 The in-app guide's Contents index selects the main workflow topics. Each topic includes its detailed instructions and relevant visual control references; the schedule, One-Click, and report topics also include images from the app documentation.
 
@@ -828,7 +828,7 @@ The same engine speaks [MCP](https://modelcontextprotocol.io), one command away:
 
 ## ChatGPT Project Assistant
 
-Quickly click or tap the unchanged Beitzell Estimating logo three times to open **Experimental tools**, then choose **AI** to access both ChatGPT choices inside the Agent drawer. **Open ChatGPT ↗** opens the regular `chatgpt.com` website in a new browser tab using your existing ChatGPT account and does not use the OpenTakeoff API integration. **Project Assistant** closes the Agent drawer and opens the separate API-powered project-analysis assistant in a familiar browser-style chat. Type in **Message ChatGPT**, use the prompt suggestions when starting a chat, drag the panel edge to resize it, or use ⇆ to dock it left or right. The regular ChatGPT link is also available in the project-assistant header.
+Quickly click or tap the unchanged ESTIMATING logo three times to open **Experimental tools**, then choose **AI** to access both ChatGPT choices inside the Agent drawer. **Open ChatGPT ↗** opens the regular `chatgpt.com` website in a new browser tab using your existing ChatGPT account and does not use the OpenTakeoff API integration. **Project Assistant** closes the Agent drawer and opens the separate API-powered project-analysis assistant in a familiar browser-style chat. Type in **Message ChatGPT**, use the prompt suggestions when starting a chat, drag the panel edge to resize it, or use ⇆ to dock it left or right. The regular ChatGPT link is also available in the project-assistant header.
 
 This assistant is different from the canvas Agent in The Agent panel. The canvas Agent proposes drawing geometry using a browser-configured endpoint. ChatGPT Project Assistant reviews project information through a secure server endpoint and a centralized set of OpenTakeoff tools. Its OpenAI key is never delivered to the browser.
 
@@ -1219,3 +1219,71 @@ Choose **Current page**, **Current PDF set**, or **All loaded plans**, then **Se
 Review the suggestion thumbnails and check the matches to count. Nothing is selected or added automatically. Choose an existing condition or create a named condition, then **Add selected counts**. Matches become normal count measurements on their original sheets, appear in totals/exports, and can be removed together with one Undo. Reaccepting matching locations in the same condition skips existing counts. Search remains available in read-only mode, but adding counts is disabled.
 
 Matching is approximate and may miss distorted, faint, differently sized, or arbitrarily rotated symbols. Similarity is a matching score, not a probability. Review before accepting. Results are capped at 250 per page and 1,000 overall; narrow the scope or raise similarity if a limit is reached.
+
+The login and sign-up screens use white action buttons and a gray mode selector with dark text in light theme.
+
+Login now returns to the requested project or workspace. Read-only status displays the license-server reason and provides Retry license check; failed license checks time out after 20 seconds.
+
+Accounts without an active subscription receive one 30-day free trial. Existing trial dates are preserved. The workspace and Profile show a live days/hours/minutes/seconds countdown; hover over it for the exact local end date and time. Editing becomes read-only when the trial expires.
+
+Read-only toolbar messages use compact wording and truncate to fit. Hover over the message for full license details; Retry checks the license again.
+
+Successful sign-in opens the workspace directly without a Welcome or Continue screen. Sign-in errors still open Profile for recovery.
+
+When a previous browser login holds the editing license, choose Use here in the toolbar to transfer editing to the current session. The server verifies the active subscription or trial before transferring; the previous session becomes read-only on its next license check.
+
+A fresh email, Google, or verified-code login automatically revokes other login sessions and transfers the editing license. Restoring a session or refreshing a token does not take over. Previously open app sessions sign out on their next license check, normally within 45 seconds while visible.
+
+New users choose Start 30-day trial in the workspace toolbar or Subscription panel. The server starts the 30-day clock on activation, preserves existing trial dates, and prevents restarts. After expiry, the workspace is view-only unless a subscription is active.
+
+Upgrade and Start 30-day trial use compact outlined buttons matching the Condition control, with neutral backgrounds and theme-aware text.
+
+Subscription plans are always expanded in Profile and membership settings, with no Subscription or Hide plans toggle.
+
+Symbol search selects its reference directly on the main PDF canvas at the current zoom. Drag a tight box to open search settings and results; Select symbol on plan chooses another reference, and Escape cancels selection.
+
+Symbol search marks selected matches with red outline rectangles only. It does not create counts, conditions, text notes, or arrows. Undo removes the outline batch.
+
+Hide matches / Show matches in the top toolbar toggles symbol-search red boxes without deleting them. Hidden boxes are also excluded from print and export. Adding a new batch shows matches again.
+
+Fixed invisible symbol-search outlines caused by incompatible SVG bounds. Existing saved outlines now render, and new outlines use the standard bounds format.
+
+Symbol search verifies all reference ink pixels and scores ink intersection over union, penalizing extra text and linework rather than rewarding shared white space. Existing outlines are unchanged; rerun search to obtain results with the stricter scoring.
+
+Clear search in Symbol search removes suggestions and all symbol-match outline boxes. A matching toolbar action clears boxes without reopening the dialog. Undo restores removed boxes.
+
+Symbol search opens as a bottom drawer and immediately activates reference-box selection on the PDF above it. The drawer stays open during selection, search, and outline review. Select symbol on plan starts another selection; Cancel exits selection without closing the drawer.
+
+During symbol reference selection, scroll to zoom around the pointer and hold Space while dragging, or middle-drag, to pan. A normal left drag selects the symbol. The bottom drawer stays open.
+
+Symbol search now compares individual painted PDF vector objects by path geometry instead of flattened page pixels. Overlapping text and separate graphics are excluded. Select a complete object; when several fit, the largest enclosed object is used. Scans and symbols split or batched into unrelated PDF objects may not match; original CAD layers are not reconstructed.
+
+Each symbol-search run keeps its outlines in a separate numbered group with its own color. The bottom drawer lists groups with Show/Hide and Delete search controls. Group names and colors save with the project; Undo restores a deleted group. Clear all searches removes all groups.
+
+Symbol search splits batched PDF drawing commands into individual subpaths, allowing repeated squares along fence lines to be selected independently. Closed polygon matching handles different start corners, winding direction, and rectangle versus line-path encodings.
+
+Symbol search also extracts individual reusable PDF images and image-mask placements, including repeated symbol batches, without comparing the flattened background.
+
+Symbol search offers Click a shape and Drag a box reference-selection modes. Click selection chooses the smallest PDF object under the pointer and highlights its bounds in blue. Both modes preserve PDF content and support pan and zoom.
+
+In Click a shape reference selection, hovering previews the shape bounds in amber; clicking selects it in blue. Hover preview clears during panning, zooming, or leaving the selection area.
+
+The Symbol search drawer uses the shared shadcn-style Button component with outline, primary, and ghost variants, neutral light/dark surfaces, compact controls, and consistent focus states.
+
+The Symbol search drawer has Search and Help tabs. Selection guidance, navigation shortcuts, matching limits, and group-management instructions are in Help; search settings and results stay in Search.
+
+Completed symbol searches automatically add colored outlines and clear the reference preview. The drawer no longer shows suggestion cards, checkboxes, or an outline confirmation button. The Select tool activates so users can click individual outlines and press Delete or Backspace; Undo restores deletions.
+
+Symbol search groups use a Search marks list with Marked visibility toggles, color swatches, scope and reference details, match/page totals, individual red remove controls, and Remove all. New search details persist with project outlines.
+
+Whiteboard > Add > Estimate Document creates an editable Beitzell Fence estimate with the company logo, rose table headers, burgundy labels, automatic current date, and a cryptographic UUID proposal number. Enter customer, project, rep, activity amounts, expiration and acceptance details; Save estimate generates a PDF with automatic totals. Edit estimate reopens its fields, and the document saves and exports with the board. Activity overflow is rejected instead of clipped.
+
+Estimate Document editing uses the white branded estimate page itself, with borderless editable fields in the address, dates, sales, project, activities, amounts and acceptance positions. The logo, rose headers, burgundy labels and automatic total remain visible while filling out the document; Save and Cancel are outside the paper.
+
+Estimate activities automatically continue onto additional branded pages. The editor supports up to 200 activities; total and acceptance labels appear only on the final page. Saved PDFs include all activity pages and page numbers.
+
+
+Cloudflare hosting is configured for estimating.studio and www.estimating.studio. See CLOUDFLARE_DEPLOYMENT.md for deployment and local-project transfer guidance.
+
+
+App branding is ESTIMATING across authentication, workspace/Whiteboard headers, browser tabs, installed web-app metadata and native display names.

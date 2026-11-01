@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { BrandText } from "../brand/marks.jsx";
+import { APP_NAME } from "../brand/appName.js";
 import googleLogo from "../brand/google-g.png";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
 import { createAuth, googleSignInUnavailable } from "../lib/supabase/auth.js";
@@ -26,24 +27,24 @@ export default function AuthPage() {
   async function submit(event) {
     event.preventDefault(); setBusy(true); setError(""); setMessage("");
     try {
-      if (step === "signin") { await auth.signIn(email.trim(), password); navigate("/?explore=1", { replace: true }); }
+      if (step === "signin") { await auth.signIn(email.trim(), password); navigate(returnTo === "/" ? "/?workspace=1" : returnTo, { replace: true }); }
       else if (step === "signup") {
         const result = await auth.signUp(email.trim(), password, name.trim());
-        if (result.session) navigate("/?explore=1", { replace: true });
+        if (result.session) navigate(returnTo === "/" ? "/?workspace=1" : returnTo, { replace: true });
         else { setStep("confirm"); setMessage("Enter the confirmation code sent to your email."); }
       } else if (step === "forgot") { await auth.forgotPassword(email.trim()); setStep("recover"); setMessage("If an account exists, a recovery email has been sent."); }
       else if (step === "confirm" || step === "recover") {
         await auth.verifyCode(email.trim(), code.trim(), step === "recover" ? "recovery" : "signup");
-        if (step === "recover") setStep("password"); else navigate("/?explore=1", { replace: true });
+        if (step === "recover") setStep("password"); else navigate(returnTo === "/" ? "/?workspace=1" : returnTo, { replace: true });
         setCode("");
-      } else if (step === "password") { await auth.updatePassword(password); navigate("/?explore=1", { replace: true }); }
+      } else if (step === "password") { await auth.updatePassword(password); navigate(returnTo === "/" ? "/?workspace=1" : returnTo, { replace: true }); }
       setPassword("");
     } catch (err) { setError(err.message || "Could not complete sign-in. Please try again."); }
     finally { setBusy(false); }
   }
   async function google() {
     setBusy(true); setError("");
-    try { await auth.signInWithGoogle(new URL("/?explore=1", window.location.origin).href); }
+    try { await auth.signInWithGoogle(new URL(returnTo === "/" ? "/?workspace=1" : returnTo, window.location.origin).href); }
     catch (err) { setError(err.message || "Google sign-in could not start."); setBusy(false); }
   }
   return <main className="auth-page">
@@ -67,7 +68,7 @@ export default function AuthPage() {
         {error && <p role="alert" className="auth-page-error">{error}</p>}{message && <p role="status">{message}</p>}
         <button className="auth-page-submit" type="submit" disabled={disabled}>{busy ? "Please wait…" : step === "signin" ? "Sign in" : step === "signup" ? "Create account" : step === "forgot" ? "Send recovery email" : step === "password" ? "Save password" : "Verify email"}</button>
       </form>
-      <p className="auth-page-switch">{signup ? "Already have an account? " : "New to Beitzell Estimating? "}<button type="button" disabled={busy} onClick={() => switchCard(signup ? "signin" : "signup")}>{signup ? "Sign in" : "Create an account"}</button></p>
+      <p className="auth-page-switch">{signup ? "Already have an account? " : `New to ${APP_NAME}? `}<button type="button" disabled={busy} onClick={() => switchCard(signup ? "signin" : "signup")}>{signup ? "Sign in" : "Create an account"}</button></p>
       <Link className="auth-page-guest" to={returnTo === "/" ? "/?guest=1" : returnTo}>Continue in view-only mode</Link>
     </section>
   </main>;

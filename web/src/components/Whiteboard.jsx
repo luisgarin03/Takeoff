@@ -1,3 +1,6 @@
+import EstimateDocumentEditor from './EstimateDocumentEditor.jsx';
+import SupplierList from './SupplierList.jsx';
+import { newEstimateDocument, estimateDocumentPdf } from '../lib/estimateDocument.js';
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import * as pdfjsLib from "pdfjs-dist";
@@ -258,6 +261,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
   const [showExportPages, setShowExportPages] = useState(false);
   const [drawingColor, setDrawingColor] = useState(ARROW_COLORS[0].value), [drawingPreview, setDrawingPreview] = useState(null);
   const [sowPreview, setSowPreview] = useState(null);
+  const [estimateEditor, setEstimateEditor] = useState(null);
+  const [supplierListOpen, setSupplierListOpen] = useState(false);
   const [imageCrop, setImageCrop] = useState(null);
   const imageCropRef = useRef(imageCrop); imageCropRef.current = imageCrop;
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -568,6 +573,20 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
     gesture.current = null; setPreview(null); setDrawingPreview(null); setSowPreview(null); setExportAreaPreview(null);
     if (pointers.current.size === 1) gesture.current = { kind: "pan", p: [...pointers.current.values()][0], view: viewRef.current };
   }
+  async function saveEstimateDocument(data) {
+    if (denyReadOnlyEdit()) return;
+    const bytes = await estimateDocumentPdf(data);
+    const current = boardRef.current;
+    const saved = estimateEditor?.itemId && current.items.find(item => item.id === estimateEditor.itemId);
+    if (estimateEditor?.itemId && !saved) throw new Error("This estimate was removed. Close and create a new document.");
+    const assetId = saved?.assetId || crypto.randomUUID();
+    const asset = { id: assetId, name: `Estimate ${data.number}.pdf`, type: "application/pdf", size: bytes.length, data: bytesToBase64(bytes) };
+    const p = center(), v = viewRef.current;
+    const item = { ...(saved || { id: crypto.randomUUID(), kind: "file", assetId, page: 1, x: (p.x-v.x)/v.scale-306, y: (p.y-v.y)/v.scale-396, w: 612, h: 870 }), estimateDocument: data };
+    const next = { ...current, assets: [...current.assets.filter(old => old.id !== assetId), asset], items: saved ? current.items.map(old => old.id === saved.id ? item : old) : [...current.items,item] };
+    commit(next); setEstimateEditor(null); setSelected(item.id);
+    if (!saved) setCamera(fitWhiteboard(next, viewport.current.clientWidth, viewport.current.clientHeight));
+  }
   function addNote(text = "", at = null) {
     if (denyReadOnlyEdit()) return;
     if (text.length > 100000) { setError("Pasted text exceeds the 100,000 character note limit."); return; }
@@ -864,6 +883,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
             { label: "Add files", icon: "plus", onSelect: () => input.current.click() },
             { label: "Take photo", icon: "camera", onSelect: () => cameraInput.current?.click() },
             { label: "Note", icon: "textNote", disabled: board.items.length >= 2000, onSelect: () => addNote() },
+            { label: "Estimate Document", icon: "plus", onSelect: () => setEstimateEditor({ data: newEstimateDocument() }) },
+            { label: "Supplier list", icon: "document", onSelect: () => setSupplierListOpen(true) },
             { label: "SOW panel", icon: "plus", onSelect: () => commit(addWhiteboardSowPanel(boardRef.current)) },
           ]} />
         <ToolMenu title="Export" face={<><Icon name="document" size={17} /><span>{exporting ? "Exporting…" : "Export"}</span></>} disabled={busy || exporting}
@@ -874,6 +895,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
           ]} />
       </div>
       <div className="wb-header-utilities">
+        <Button icon="document" label="Supplier list" onClick={() => setSupplierListOpen(true)}>Supplier list</Button>
         <span className="wb-header-item-count">{board.items.length + drawingCount} Items</span>
       <span className="wb-status" role="status" aria-hidden={longTaskLabel ? "true" : undefined}>{exportMode === "custom" ? exportTaskLabel : exportMode === "pages" ? "Exporting pages..." : exportMode === "selection" ? "Exporting selection..." : exportMode === "single" ? "Exporting PDF..." : busy ? "Adding files..." : saveState === "saving" ? "Saving..." : lastExportSize ? `Last export ${formatFileSize(lastExportSize)}` : saveState === "saved" ? "Saved ✓" : ""}</span>
         <Button icon="eye" label="Hide toolbar" onClick={() => setToolbarHidden(true)} />
@@ -909,6 +931,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
       onPointerDown={(e) => { pastePoint.current = point(e); start(e); }} onPointerMove={(e) => { pastePoint.current = point(e); move(e); }} onPointerUp={(e) => end(e)} onPointerCancel={(e) => end(e, true)}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); queueLocalFiles(e.dataTransfer.files, point(e)); }}>
       {!board.items.length && !drawingCount && <div className="wb-empty"><Icon name="document" size={36} /><strong>No notes yet</strong><span>Paste text, images or supported files, or add them manually.</span><button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => input.current.click()} disabled={busy || readOnly}><Icon name="plus" size={16} />Add PDFs or images</button></div>}
+      {estimateEditor && <EstimateDocumentEditor initial={estimateEditor.data} onSave={saveEstimateDocument} onClose={() => setEstimateEditor(null)} />}
+      {supplierListOpen && <SupplierList readOnly={readOnly} onClose={() => setSupplierListOpen(false)} />}
       {board.items.map((saved) => {
         const item = preview?.id === saved.id ? { ...saved, ...preview } : saved;
         const asset = assets.get(item.assetId);
@@ -920,6 +944,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
         return <article key={item.id} className={`wb-item${item.id === selected ? " is-selected" : ""}${item.kind === "note" ? " wb-note" : ""}${mode === "export-page" && item.kind === "file" ? " is-export-page-target" : ""}${mode === "export-page" && pagePicked ? " is-export-page-picked" : ""}`}
           aria-label={item.kind === "note" ? "Text note" : asset?.name} onPointerDown={(e) => start(e, { type: "item", value: item })}
           style={{ width: item.w, height: item.h, transform: `translate(${view.x + item.x * view.scale}px, ${view.y + item.y * view.scale}px) scale(${view.scale})`, ...(item.kind === "note" ? { background: NOTE_COLORS[item.color] } : {}) }}>
+          {item.estimateDocument && <button type="button" className="wb-edit-estimate" disabled={readOnly} onPointerDown={e => e.stopPropagation()} onClick={() => setEstimateEditor({ itemId: item.id, data: item.estimateDocument })}>Edit estimate</button>}
           <div className="wb-item-title wb-color-title" title={asset?.name || item.title || "Note"}
             style={{ ...(itemHeaderStyle || {}), paddingRight: `calc(12px + ${87 / view.scale}px)` }}>
             <Icon name={item.kind === "note" ? "textNote" : "document"} size={15} />

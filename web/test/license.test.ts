@@ -2,6 +2,25 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { hasActiveLicense, licenseRequired, resolveLicenseAccess, sandboxLicensesAllowed } from "../src/lib/license.js";
 import { revenueCatConfig } from "../src/lib/revenueCatBilling.js";
+import { trialTimeRemaining } from "../src/lib/license.js";
+
+test('trial countdown handles exact start, expiry and invalid dates', () => {
+  const now = Date.parse('2026-10-31T12:00:00Z');
+  const record = { subscriptionProvider: 'trial', subscriptionCurrentPeriodEnd: new Date(now + 30 * 86400000).toISOString() };
+  assert.deepEqual(trialTimeRemaining(record, now), { expired: false, days: 30, hours: 0, minutes: 0, seconds: 0 });
+  assert.deepEqual(trialTimeRemaining(record, now + 1000), { expired: false, days: 29, hours: 23, minutes: 59, seconds: 59 });
+  assert.deepEqual(trialTimeRemaining(record, now + 31 * 86400000), { expired: true, days: 0, hours: 0, minutes: 0, seconds: 0 });
+  assert.equal(trialTimeRemaining({ ...record, subscriptionCurrentPeriodEnd: 'invalid' }, now), null);
+  assert.equal(trialTimeRemaining({ ...record, subscriptionProvider: 'stripe' }, now), null);
+});
+
+test('unused trials offer activation and expired trials remain view-only', () => {
+  assert.equal(resolveLicenseAccess({ session: { granted: false, reason: 'trial_available' } }).reason, 'trial_available');
+  const now = Date.parse('2026-10-31T12:00:00Z');
+  const record = { subscriptionProvider: 'trial', subscriptionStatus: 'trialing', subscriptionCurrentPeriodEnd: new Date(now + 30 * 86400000).toISOString() };
+  assert.equal(resolveLicenseAccess({ now, record, session: { granted: true } }).readOnly, false);
+  assert.equal(resolveLicenseAccess({ now: now + 30 * 86400000, record, session: { granted: true } }).reason, 'trial_expired');
+});
 import { getLicenseDeviceId, licenseDeviceName } from "../src/lib/licenseSession.js";
 import { projectWritesAreBlocked, setProjectWritesBlocked, store } from "../src/lib/store.js";
 

@@ -92,7 +92,7 @@ $env:WINDOWS_PUBLISHER_NAME = "Exact certificate publisher"
 npm run dist:win
 ```
 
-The installer appears in `release/` as `Beitzell Estimating-Setup-x64.exe`. Omit the certificate variables only for internal smoke builds; Windows will show an unknown-publisher warning. Verify Authenticode after building and timestamp the signature through the certificate provider. Installer upgrades preserve `%LOCALAPPDATA%\OpenTakeoff`, including local projects.
+The installer appears in `release/` as `ESTIMATING-Setup-x64.exe`. Omit the certificate variables only for internal smoke builds; Windows will show an unknown-publisher warning. Verify Authenticode after building and timestamp the signature through the certificate provider. Installer upgrades preserve `%LOCALAPPDATA%\OpenTakeoff`, including local projects.
 
 Production installers also contain an owner-controlled update channel fixed to the
 public `luisgarin03/Takeoff` GitHub Releases feed. Configure the `release` GitHub

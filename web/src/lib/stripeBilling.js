@@ -41,7 +41,7 @@ export function createStripeBillingAdapter(client, navigate = (url) => window.lo
   async claimLicenseSession(_user,device){
    // A free account's trial must not depend on Stripe being configured.
    try { await invoke('refresh'); } catch { /* Session endpoint verifies saved entitlements independently. */ }
-   const {data,error}=await client.functions.invoke('otk-billing',{body:{action:'session',device_id:device.deviceId,device_name:device.deviceName}});
+   const {data,error}=await client.functions.invoke('otk-billing',{body:{action:'session',device_id:device.deviceId,device_name:device.deviceName,take_over:device.takeOver===true}});
    if(error)throw error;
    return {subscription:stripeSubscription(data.subscription),session:{granted:data.session?.granted===true,reason:data.session?.reason || '',activeDeviceName:data.session?.active_device_name || '',leaseExpiresAt:data.session?.lease_expires_at}};
   },

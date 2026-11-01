@@ -443,14 +443,14 @@ export function pathBounds(d) {
  * and neither axis can blow up when the other is ~0 (a vertical or horizontal
  * divider whose degenerate viewBox axis was clamped to a tiny epsilon).
  *
- * @param {[number, number]} vb  local viewBox size [vw, vh]
+ * @param {[number, number] | [number, number, number, number]} vb  local viewBox size [vw, vh] or bounds [x, y, vw, vh]
  * @param {number} wFrac         placed longest-side length as a fraction of sheetW (default 0.08)
  * @param {number} sheetW        target width in px (sheet/panel width)
  * @returns {{ s: number, bw: number, bh: number }}  scale + placed box px; s<=0 ⇒ nothing to draw
  */
 export function svgPlacedBox(vb, wFrac, sheetW) {
-  const vw = Array.isArray(vb) ? Number(vb[0]) : 0;
-  const vh = Array.isArray(vb) ? Number(vb[1]) : 0;
+  const vw = Array.isArray(vb) ? Number(vb.length === 4 ? vb[2] : vb[0]) : 0;
+  const vh = Array.isArray(vb) ? Number(vb.length === 4 ? vb[3] : vb[1]) : 0;
   const longest = Math.max(vw, vh);
   const w = Number(wFrac) > 0 ? Number(wFrac) : 0.08;
   const s = longest > 0 && Number.isFinite(longest) && Number.isFinite(sheetW) ? (w * sheetW) / longest : 0;

@@ -76,7 +76,7 @@ async function refreshServer(client) {
 
 async function claimServerSession(client, device) {
   const { data, error } = await client.functions.invoke("otk-billing", {
-    body: { action: "session", device_id: device.deviceId, device_name: device.deviceName },
+    body: { action: "session", device_id: device.deviceId, device_name: device.deviceName, take_over: device.takeOver === true },
   });
   if (error) throw error;
   return {

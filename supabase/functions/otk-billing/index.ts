@@ -2,7 +2,7 @@ import { trialEntitlement } from "../_shared/trial-entitlement.js";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 
 const env = (key: string) => Deno.env.get(key) || "";
-const allowedOrigins = env("OTK_BILLING_ALLOWED_ORIGINS").split(",").map((value) => value.trim()).filter(Boolean);
+const allowedOrigins = (env("OTK_BILLING_ALLOWED_ORIGINS") + "," + env("OTK_DEPLOYMENT_ALLOWED_ORIGINS")).split(",").map((value) => value.trim()).filter(Boolean);
 const entitlementId = env("REVENUECAT_ENTITLEMENT_ID");
 const revenueCatKey = env("REVENUECAT_SECRET_API_KEY");
 const webhookAuthorization = env("REVENUECAT_WEBHOOK_AUTHORIZATION");
@@ -180,7 +180,7 @@ Deno.serve(async (req: Request) => {
     if (!bearer) return json({ code: "OTK_AUTH" }, 401);
     const { data, error } = await db.auth.getUser(bearer);
     if (error || !data.user) return json({ code: "OTK_AUTH" }, 401);
-    if (action === "session") {
+    if (action === "session" || action === "start_trial") {
       const { data: savedSubscription, error: subscriptionError } = await db.from("otk_subscriptions").select("*").eq("user_id", data.user.id).maybeSingle();
       if (subscriptionError) throw subscriptionError;
       // Webhooks keep existing entitlements current. A brand-new account has
@@ -195,14 +195,23 @@ Deno.serve(async (req: Request) => {
       if (!deviceId) return json({ code: "OTK_LICENSE_DEVICE" }, 400);
       const localSandboxTest = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin) && /^(sk|rk)_test_/.test(env("STRIPE_TEST_SECRET_KEY"));
       if (!subscriptionIsActive(subscription, allowSandboxLicenses || localSandboxTest)) {
+        if (action === "start_trial") {
+          const started = new Date();
+          const { error: startError } = await db.from("otk_user_trials").upsert({
+            user_id: data.user.id, started_at: started.toISOString(),
+            ends_at: new Date(started.getTime() + 30 * 86400000).toISOString(),
+          }, { onConflict: "user_id", ignoreDuplicates: true });
+          if (startError) throw startError;
+        }
         const { data: trial, error: trialError } = await db.from("otk_user_trials").select("user_id,started_at,ends_at").eq("user_id", data.user.id).maybeSingle();
         if (trialError) throw trialError;
+        if (!trial) return json({ subscription, session: { granted: false, reason: "trial_available" } });
         subscription = trialEntitlement(data.user.id, trial) || subscription;
       }
       if (!subscriptionIsActive(subscription, allowSandboxLicenses || localSandboxTest)) {
         return json({ subscription, session: { granted: false, reason: "subscription" } });
       }
-      const { data: rows, error: claimError } = await db.rpc("otk_claim_license_session", {
+      const { data: rows, error: claimError } = await db.rpc(requestBody.take_over === true ? "otk_transfer_license_session" : "otk_claim_license_session", {
         p_user_id: data.user.id,
         p_device_id: deviceId,
         p_device_name: deviceName || "Computer",

@@ -1,6 +1,7 @@
-import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { BrandText } from "../brand/marks.jsx";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
+import { waitForLatestLogin } from "../lib/supabase/auth.js";
 import { createAppBillingAdapter } from "../lib/stripeBilling.js";
 import { createBillingService } from "../lib/subscriptions.js";
 import { licenseRequired, resolveLicenseAccess, sandboxLicensesAllowed } from "../lib/license.js";
@@ -16,6 +17,7 @@ export default function LicenseGate({ children }) {
   const device = useMemo(() => currentLicenseDevice(), []);
   const [state, setState] = useState({ userId: "", loading: true, record: null, session: null, error: "" });
   const [refresh, setRefresh] = useState(0);
+  const takeOver = useRef(false);
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
   useEffect(() => {
@@ -23,12 +25,24 @@ export default function LicenseGate({ children }) {
     if (cloud.offline) { setState((value) => ({ ...value, loading: false, session: null, error: "" })); return; }
     let live = true;
     setState((value) => ({ ...value, loading: value.userId !== cloud.user.id || (!value.record && !value.session), error: "" }));
-    service.claimLicenseSession(cloud.user, device).then((result) => {
+    const timeout = window.setTimeout(() => {
+      if (!live) return;
+      live = false;
+      setState((value) => ({ ...value, userId: cloud.user.id, loading: false, session: null, error: "The license check timed out. Retry the license check to enable editing." }));
+    }, 20000);
+    const requestedTransfer = takeOver.current;
+    takeOver.current = false;
+    waitForLatestLogin(cloud.client).then(() => service.claimLicenseSession(cloud.user, { ...device, takeOver: requestedTransfer })).then((result) => {
+      window.clearTimeout(timeout);
+      if (live && result.session?.reason === "another_device") {
+        void cloud.client.auth.signOut({ scope: "local" });
+      }
       if (live) setState({ userId: cloud.user.id, loading: false, record: result.subscription, session: result.session, error: "" });
     }).catch(() => {
-      if (live) setState((value) => ({ ...value, loading: false, session: null, error: "The license server could not be reached." }));
+      window.clearTimeout(timeout);
+      if (live) setState((value) => ({ ...value, userId: cloud.user.id, loading: false, session: null, error: "The license server could not be reached. Retry the license check to enable editing." }));
     });
-    return () => { live = false; };
+    return () => { live = false; window.clearTimeout(timeout); };
   }, [required, cloud.user, cloud.client, cloud.offline, service, device, refresh]);
   useEffect(() => {
     if (cloud.offline || !cloud.user) return undefined;
@@ -53,6 +67,15 @@ export default function LicenseGate({ children }) {
     session: stateBelongsToUser ? state.session : null,
     allowSandbox: sandboxLicensesAllowed(),
   });
+  access.retry = () => setRefresh((value) => value + 1);
+  access.useHere = () => { takeOver.current = true; setRefresh((value) => value + 1); };
+  access.startTrial = async () => {
+    const { error, data } = await cloud.client.functions.invoke("otk-billing", {
+      body: { action: "start_trial", device_id: device.deviceId, device_name: device.deviceName },
+    });
+    if (error || data?.code) throw new Error("Could not start your trial. Please try again.");
+    setRefresh((value) => value + 1);
+  };
 
   useLayoutEffect(() => {
     setProjectWritesBlocked(required && access.readOnly);

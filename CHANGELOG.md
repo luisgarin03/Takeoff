@@ -153,7 +153,7 @@
 
 - Added launch-ready Supabase/RevenueCat subscription infrastructure: server-owned per-user license records with read-own RLS, verified billing webhooks, authenticated entitlement refresh, Apple-native purchase/restore support, identified hosted checkout for Windows/web, and an opt-in sign-in/license gate that stays disabled until production configuration is complete. Production gating rejects sandbox transactions by default while preserving paid access through a recorded billing-grace period. Editing now additionally requires internet and a short server-owned one-computer lease; offline, unsubscribed, and second-computer sessions open read-only while retaining viewing and export. A persistence-level write guard backs up the disabled editing UI. Added the Capacitor iOS project, iOS sync/open scripts, Windows code-signing configuration, focused license tests, and a full release/setup checklist. No payment, Supabase, Apple, or signing secrets are committed.
 
-- Added a hidden floating **Experimental tools** panel for deployment-facing cleanup. Three quick clicks or taps on the visually unchanged Beitzell Estimating logo toggle the panel. Report, Zone, AI, Revisions, Render settings, and the Command line retain their existing behavior there, while their former Takeoff-toolbar and canvas-rail positions close up naturally on desktop and mobile.
+- Added a hidden floating **Experimental tools** panel for deployment-facing cleanup. Three quick clicks or taps on the visually unchanged ESTIMATING logo toggle the panel. Report, Zone, AI, Revisions, Render settings, and the Command line retain their existing behavior there, while their former Takeoff-toolbar and canvas-rail positions close up naturally on desktop and mobile.
 
 - Group estimating controls into Project, Sheets and Takeoff tabs, keeping logo/account outside.
 - Preserve mounted control state and use scroll-safe dropdowns on mobile.
@@ -241,7 +241,7 @@ All notable changes to OpenTakeoff. Dates are release/merge dates on `main`.
 
 - Added Blueprint, Forest, Graphite, and Classic Paper report themes, retaining custom JSON import and Reset.
 
-- The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated Estimating by Luis Garin wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
+- The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated ESTIMATING wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
 - Theme palette control now opens logo color, effect, brightness, and speed settings, applied live to the real logo and saved locally.
 
 - Cursor theme offers Default (original grayscale), Red, Blue, Pink, Orange, Purple, Green, and Yellow. It changes immediately and saves in this browser independently of logo colors; Reset logo keeps the cursor choice. Drawing, text, pan, and resize retain their cursor roles. Busy cursors use the included static fallbacks.
@@ -632,3 +632,74 @@ Verified Pro subscriptions automatically leave read-only exploration and open th
 New accounts receive a free 30-day trial from signup, without a payment card. The toolbar shows trial days remaining and Upgrade. Trial dates are server-owned and do not reset on login, reinstall, or checkout. At expiry editing is disabled unless an active subscription is verified. Existing paid subscriptions take priority; existing accounts are not backfilled.
 
 - Added local visual symbol search with reference selection, multi-page scopes, adjustable similarity and rotations, cancellable worker matching, thumbnail review, duplicate prevention, and undoable count conversion.
+
+- Fixed light-theme login and sign-up buttons to use white and gray surfaces with readable dark text.
+
+- Login now returns to the requested project or workspace. Read-only status displays the license-server reason and provides Retry license check; failed license checks time out after 20 seconds.
+
+- Added first-trial backfill for existing unsubscribed accounts and a live trial countdown in the workspace and Profile.
+
+- Shortened read-only license messages and constrained their width to prevent toolbar overlap.
+
+- Removed the post-login Welcome screen so users continue directly to their workspace.
+
+- Added authenticated Use here license transfer to recover editing from an old browser session.
+
+- Made fresh logins automatically revoke other sessions and claim the editing license; displaced sessions sign out on their next license check.
+
+- Replaced automatic signup trials with an explicit Start 30-day trial action and preserved view-only enforcement at expiry.
+
+- Matched Upgrade and Start trial buttons to the compact outlined Condition control.
+
+- Removed the subscription plans toggle and kept plans always expanded.
+
+- Replaced the symbol-search preview with direct reference selection on the main PDF canvas.
+
+- Changed symbol-search confirmation from count creation to red outline rectangles.
+
+- Added a toolbar toggle to hide and show symbol-search outline boxes.
+
+- Fixed invisible symbol-search outlines caused by incompatible SVG bounds. Existing saved outlines now render, and new outlines use the standard bounds format.
+
+- Tightened symbol-match scoring with full foreground verification and penalties for unrelated ink.
+
+- Added Clear search actions to remove symbol-search results and outline boxes.
+
+- Moved symbol search to a persistent bottom drawer with immediate canvas reference selection.
+
+- Enabled wheel zoom and Space/middle-button panning during symbol selection.
+
+- Replaced flattened raster symbol matching with isolated PDF vector-object geometry matching.
+
+- Added separate colored symbol-search groups with individual visibility and deletion controls.
+
+- Split batched vector paths into searchable subpaths and normalized closed polygon matching.
+
+- Added reusable image and image-mask symbol extraction alongside vector subpaths.
+
+- Added click-to-select PDF shapes alongside box selection, with a blue reference highlight.
+
+- Added an amber hover preview before selecting PDF shapes for symbol search.
+
+- Restyled Symbol search with shared shadcn-style buttons and neutral drawer controls.
+
+- Added Search/Help drawer tabs and moved instructional text into Help.
+
+- Automatically outline completed symbol searches and remove the preview/review confirmation step; enable individual outline selection and deletion.
+
+- Restyled symbol-search groups as Search marks rows with scope details and page totals.
+
+- Added editable Whiteboard Estimate Documents with Beitzell branding, unique numbers, automatic dates, calculated totals, and PDF output.
+
+- Replaced the estimate data-entry form with an editable document matching the branded estimate layout.
+
+- Added multi-page estimate activities with acceptance and total only on the final page.
+
+
+Whiteboard Supplier list includes 11 default companies with official website/contact links and logos. Open from the toolbar or Add menu; search or add custom suppliers (saved in this browser).
+
+
+Cloudflare hosting is configured for estimating.studio and www.estimating.studio. See CLOUDFLARE_DEPLOYMENT.md for deployment and local-project transfer guidance.
+
+
+App branding is ESTIMATING across authentication, workspace/Whiteboard headers, browser tabs, installed web-app metadata and native display names.

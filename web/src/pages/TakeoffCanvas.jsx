@@ -1,6 +1,8 @@
 import SymbolSearchDialog from "../components/SymbolSearchDialog.jsx";
-import { symbolCountShapes } from "../lib/symbolSearch.js";
+
 import { hasEditingMembership, sandboxLicensesAllowed, trialDaysRemaining } from "../lib/license.js";
+import TrialCountdown from "../components/TrialCountdown.jsx";
+import StartTrialButton from "../components/StartTrialButton.jsx";
 import { SHARING_UI_ENABLED } from "../lib/sharingVisibility.js";
 import { usePinchZoom } from "../lib/usePinchZoom.js";
 import { APP_NAME } from "../brand/appName.js";
@@ -263,6 +265,9 @@ export default function TakeoffCanvas() {
   const [sheetPickerPageCounts, setSheetPickerPageCounts] = useState({});
   const [findOpen, setFindOpen] = useState(false);
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
+  const [showSymbolMatches, setShowSymbolMatches] = useState(true);
+  const [hiddenSymbolSearches, setHiddenSymbolSearches] = useState(new Set());
+  const isSymbolMatch = (markup) => markup.symbolMatch === true || (markup.type === "svg" && markup.color === "#ff0000" && Array.isArray(markup.pts) && markup.pts.length === 5);
   const [findPanelTab, setFindPanelTab] = useState("find");
   const [findQuery, setFindQuery] = useState("");
   const [findSuggestions, setFindSuggestions] = useState(() => {
@@ -884,7 +889,7 @@ export default function TakeoffCanvas() {
   const [missingImportBusy, setMissingImportBusy] = useState("");
   const [missingImportError, setMissingImportError] = useState("");
   const [cloudView, setCloudView] = useState(() => SHARING_UI_ENABLED && new URLSearchParams(window.location.search).has("sharedProject") ? "projects" : null);
-  useEffect(() => { if (cloudAccount.authReturn && !calendarReturnPending.current) { if (explore && !cloudAccount.authReturn.error) cloudAccount.clearAuthReturn(); else setCloudView(cloudAccount.authReturn.error ? "account" : "welcome"); } }, [cloudAccount.authReturn, explore, cloudAccount.clearAuthReturn]);
+  useEffect(() => { if (cloudAccount.authReturn && !calendarReturnPending.current) { if (cloudAccount.authReturn.error) setCloudView("account"); else { setCloudView(null); cloudAccount.clearAuthReturn(); } } }, [cloudAccount.authReturn, explore, cloudAccount.clearAuthReturn]);
   useEffect(() => { if (!cloudAccount.driveReturn) return; if (cloudAccount.driveReturn.calendar || calendarReturnPending.current) { setCloudView(null); setProjectCalendarOpen(true); calendarReturnPending.current = false; cloudAccount.clearDriveReturn(); } else setCloudView("account"); }, [cloudAccount.driveReturn, cloudAccount.clearDriveReturn]);
   const portableProjectId = useRef(crypto.randomUUID());
   const projectFileLock = useRef(false);
@@ -1259,7 +1264,7 @@ export default function TakeoffCanvas() {
     const keys = new Set(sheetGroup.length ? sheetGroup : [sheetKey]);
     return shapes.filter((s) => keys.has(s.sheet_id));
   }, [shapes, sheetGroup, sheetKey]);
-  const conditionVisibleContent = useMemo(() => filterVisibleConditionContent({ conditions, shapes, markups, chainLinkFences }), [conditions, shapes, markups, chainLinkFences]);
+  const conditionVisibleContent = useMemo(() => filterVisibleConditionContent({ conditions, shapes, markups: markups.filter((markup) => !isSymbolMatch(markup) || (showSymbolMatches && !hiddenSymbolSearches.has(markup.symbolSearchId || "legacy"))), chainLinkFences }), [conditions, shapes, markups, chainLinkFences, showSymbolMatches, hiddenSymbolSearches]);
   const displayedShapes = useMemo(() => {
     const keys = new Set(sheetGroup.length ? sheetGroup : [sheetKey]);
     return conditionVisibleContent.shapes.filter((shape) => keys.has(shape.sheet_id));
@@ -5091,16 +5096,30 @@ export default function TakeoffCanvas() {
       origin: { method: "manual" },
     }] }, { documentMeasurement: true });
   }
-  function addSymbolCounts(matches, conditionId, newName) {
+  function clearSymbolSearch() {
     if (denyReadOnlyEdit()) return false;
-    if (conditionId && !conditions.some((item) => item.id === conditionId)) throw new Error("Choose an existing condition or create a new one.");
-    const target = conditionId || mintCondition(newName || "Symbol count").id;
-    const additions = symbolCountShapes(matches, target, shapes);
-    if (additions.length) {
-      dispatchShape({ type: "add", shapes: additions }, { documentMeasurement: true });
-      setActiveCond(target); setCommitMsg(`${additions.length} reviewed symbol counts added. Undo removes the batch.`);
-    }
-    return { added: additions.length, conditionId: target };
+    const ids = markupsRef.current.filter(isSymbolMatch).map((markup) => markup.id);
+    if (ids.length) dispatchMarkup({ type: "delete", ids });
+    setShowSymbolMatches(true);
+    setCommitMsg("Symbol search cleared. Undo restores the removed boxes.");
+  }
+  function outlineSymbolMatches(matches, searchId, details) {
+    if (denyReadOnlyEdit()) return false;
+    const groupId = searchId || uid("search");
+    const existing = markupsRef.current.find((markup) => markup.symbolSearchId === groupId);
+    const groupCount = markupsRef.current.filter(isSymbolMatch).reduce((largest, markup) => Math.max(largest, Number(/^Search (\d+)$/.exec(markup.symbolSearchName || "")?.[1]) || 0), 0);
+    const color = existing?.color || `hsl(${(groupCount * 137.508) % 360} 85% 48%)`;
+    const groupName = existing?.symbolSearchName || `Search ${groupCount + 1}`;
+    const additions = matches.filter((hit) => hit.w > 0 && hit.h > 0).map((hit) => ({
+      id: uid("mk"), created_at: nowIso(), sheet_id: hit.key, rfi_id: "", symbolMatch: true, symbolSearchId: groupId, symbolSearchName: groupName, symbolSearchDetails: details,
+      type: "svg", color, fill: "none", weight: 1, at: [hit.x + hit.w / 2, hit.y + hit.h / 2], w: Math.max(hit.w, hit.h / hit.pageAspect), vb: [hit.w * hit.pageAspect, hit.h], path: `M0 0 H${hit.w * hit.pageAspect} V${hit.h} H0 Z`,
+      pts: [[hit.x, hit.y], [hit.x + hit.w, hit.y], [hit.x + hit.w, hit.y + hit.h], [hit.x, hit.y + hit.h], [hit.x, hit.y]],
+    }));
+    if (additions.length) setShowSymbolMatches(true);
+    if (additions.length) dispatchMarkup({ type: "restore", items: additions.map((markup, index) => ({ markup, index: markupsRef.current.length + index })) });
+    setTool("select");
+    setCommitMsg(`${additions.length} outlines added to ${groupName}. Click an outline and press Delete to remove it.`);
+    return { added: additions.length };
   }
   function commitCount(p) {
     if (!activeCond) { setCommitMsg("Pick or add a condition first."); return; }
@@ -8294,7 +8313,26 @@ export default function TakeoffCanvas() {
         onAddToEstimate={addFenceCalculationToEstimate}
         onClose={() => setFenceCalculatorOpen(false)} />}
       {symbolSearchOpen && focusPanel?.file && <SymbolSearchDialog source={{ key: focusPanel.key, file: focusPanel.file, page: focusPanel.page }} sheets={sheets} docFor={docFor}
-        conditions={conditions} activeCondition={activeCond} readOnly={readOnly} onAddCounts={addSymbolCounts}
+        onViewGesture={(gesture) => {
+          const current = tfRef.current;
+          if (gesture.zoom !== undefined) {
+            const point = toImage(gesture.x, gesture.y);
+            const scale = Math.max(.05, Math.min(20, current.scale * Math.exp(-gesture.zoom * .002)));
+            setTfNow({ x: current.x + point[0] * (current.scale - scale), y: current.y + point[1] * (current.scale - scale), scale });
+          } else setTfNow({ ...current, x: current.x + gesture.dx, y: current.y + gesture.dy });
+        }}
+        referenceToScreen={(box) => { const bounds = containerRef.current.getBoundingClientRect(), view = tfRef.current; return { left: bounds.left + view.x + (focusPanel.xOffset + box.x * focusPanel.img.w) * view.scale, top: bounds.top + view.y + box.y * focusPanel.img.h * view.scale, width: box.w * focusPanel.img.w * view.scale, height: box.h * focusPanel.img.h * view.scale }; }}
+        selectionFromCanvas={(start, end) => {
+          const a = toImage(start.x, start.y), b = toImage(end.x, end.y), panel = focusPanel;
+          const x = Math.max(0, Math.min(a[0], b[0]) - panel.xOffset), y = Math.max(0, Math.min(a[1], b[1]));
+          const right = Math.min(panel.img.w, Math.max(a[0], b[0]) - panel.xOffset), bottom = Math.min(panel.img.h, Math.max(a[1], b[1]));
+          return { x: x / panel.img.w, y: y / panel.img.h, w: (right - x) / panel.img.w, h: (bottom - y) / panel.img.h };
+        }}
+        conditions={conditions} activeCondition={activeCond} readOnly={readOnly} onOutlineMatches={outlineSymbolMatches} onClearSearch={clearSymbolSearch}
+        searchGroups={Array.from(markups.filter(isSymbolMatch).reduce((groups, markup) => { const id = markup.symbolSearchId || "legacy"; const group = groups.get(id) || { id, name: markup.symbolSearchName || "Earlier search", color: markup.color, details: markup.symbolSearchDetails, count: 0, pageKeys: new Set(), pages: 0 }; group.count++; group.pageKeys.add(markup.sheet_id); group.pages = group.pageKeys.size; groups.set(id, group); return groups; }, new Map()).values())}
+        hiddenSearches={hiddenSymbolSearches}
+        onToggleSearch={(id) => setHiddenSymbolSearches((previous) => { const next = new Set(previous); next.has(id) ? next.delete(id) : next.add(id); return next; })}
+        onDeleteSearch={(id) => { if (denyReadOnlyEdit()) return; const ids = markupsRef.current.filter((markup) => isSymbolMatch(markup) && (markup.symbolSearchId || "legacy") === id).map((markup) => markup.id); if (ids.length) dispatchMarkup({ type: "delete", ids }); }}
         onClose={() => setSymbolSearchOpen(false)} onOpenChange={onMenuDepth} />}
       {addConditionOpen && <AddConditionDialog onAdd={confirmAddCondition} onClose={() => setAddConditionOpen(false)} />}
       {saveSettingsOpen && <SaveSettingsDialog filename={projectFilename(projectName || "Untitled project")} compactProject={compactProject}
@@ -8340,12 +8378,15 @@ export default function TakeoffCanvas() {
             style={{ fontFamily: "var(--f-display)", fontSize: 15, color: "var(--ink)", letterSpacing: "-0.02em" }}><BrandText /></strong>}
           account={<>
         {readOnly && <div className="toolbar-readonly-status">
-          <strong>Read only mode</strong>
-          <button type="button" onClick={() => cloudAccount.user ? setCloudView("membership") : openSignInPage()}>Upgrade</button>
+          <StartTrialButton />
+          {licenseAccess.reason !== "trial_available" && <strong title={readOnlyMessage}>Read-only</strong>}
+          <span hidden={licenseAccess.reason === "trial_available"} className="toolbar-license-message" role="status" title={licenseAccess.message || readOnlyMessage}>{licenseAccess.reason === "another_device" ? "License in use on another session" : licenseAccess.reason === "server" ? "License check unavailable" : licenseAccess.reason === "offline" ? "Reconnect to edit" : licenseAccess.reason === "trial_expired" ? "Your trial has ended" : licenseAccess.reason === "subscription" ? "No active subscription" : "View-only workspace"}</span>
+          {cloudAccount.user && licenseAccess.reason !== "trial_available" && <button type="button" title={licenseAccess.reason === "another_device" ? "Move the editing license to this session" : "Retry license check"} onClick={() => licenseAccess.reason === "another_device" ? licenseAccess.useHere?.() : licenseAccess.retry?.()}>{licenseAccess.reason === "another_device" ? "Use here" : "Retry"}</button>}
+          {(!cloudAccount.user || ["subscription", "trial_expired"].includes(licenseAccess.reason)) && <button type="button" onClick={() => cloudAccount.user ? setCloudView("membership") : openSignInPage()}>{cloudAccount.user ? "Subscription" : "Sign in"}</button>}
         </div>}
         {!readOnly && trialDays !== null && <div className="toolbar-trial-status" role="status">
-          <strong>Free trial · {trialDays} {trialDays === 1 ? "day" : "days"} left</strong>
-          <button type="button" onClick={() => setCloudView("membership")}>Upgrade</button>
+          <strong><TrialCountdown subscription={licenseAccess.subscription} /></strong>
+          <button className="membership-action" type="button" onClick={() => setCloudView("membership")}>Upgrade</button>
         </div>}
         {!readOnly && trialDays === null && <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--ink-muted)", minWidth: 44, fontFamily: "var(--f-mono)" }}>
           <LongTaskLoader active={saveState === "saving"} label="Saving project…" compact delay={500} />

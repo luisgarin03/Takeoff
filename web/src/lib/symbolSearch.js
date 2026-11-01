@@ -11,7 +11,7 @@ export function binaryRaster({ width, height, data }) {
 export function cropSymbol(image, box) {
   const x = Math.max(0, Math.floor(box.x)), y = Math.max(0, Math.floor(box.y));
   const w = Math.min(image.width - x, Math.ceil(box.w)), h = Math.min(image.height - y, Math.ceil(box.h));
-  if (w < 8 || h < 8 || w > 300 || h > 300) throw new Error('Select one symbol between 8 and 300 pixels wide and high. Zoom the preview if needed.');
+  if (w < 8 || h < 8 || w > 300 || h > 300) throw new Error('Select one symbol between 8 and 300 pixels wide and high. Zoom the plan before selecting if needed.');
   const pixels = new Uint8Array(w * h);
   let ink = 0;
   for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) ink += pixels[j * w + i] = image.pixels[(y + j) * image.width + x + i];
@@ -38,7 +38,7 @@ function variant(template, scale, rotation) {
     (bit ? foreground : background).push([x, y]);
   }
   const sample = (points) => points.filter((_, i) => i % Math.max(1, Math.ceil(points.length / 96)) === 0);
-  return { w, h, ink: foreground.length, foreground: sample(foreground), background: sample(background), scale, rotation };
+  return { w, h, ink: foreground.length, allForeground: foreground, foreground: sample(foreground), background: sample(background), scale, rotation };
 }
 export function suppressSymbolOverlaps(candidates, limit = 250) {
   const kept = [];
@@ -67,7 +67,14 @@ export function searchSymbolRaster(image, template, { threshold = .88, scales = 
     if (recall < threshold - .15) return 0;
     let clear = 0;
     for (const [dx, dy] of t.background) clear += 1 - image.pixels[(y + dy) * image.width + x + dx];
-    return recall * .7 + (t.background.length ? clear / t.background.length : 1) * .3;
+    const approximate = recall * .7 + (t.background.length ? clear / t.background.length : 1) * .3;
+    if (approximate < threshold - .05) return 0;
+    // Verify every ink pixel. White space must not inflate a weak match, and
+    // extra ink from text, hatch marks or crossing lines must lower the score.
+    let intersection = 0;
+    for (const [dx, dy] of t.allForeground) intersection += image.pixels[(y + dy) * image.width + x + dx];
+    const union = t.ink + mass - intersection;
+    return union > 0 ? intersection / union : 0;
   };
   for (const rotation of rotations) for (const scale of scales) {
     const t = variant(template, scale, rotation);

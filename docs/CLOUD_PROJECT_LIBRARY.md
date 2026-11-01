@@ -33,7 +33,7 @@ Automated checks cover status, author round trips, nested/empty ZIP contents, un
 
 - `npm run typecheck`: passed.
 - `npm run lint`: passed, no lint warnings.
-- Full `npm test`: **1,050 passed / 15 failed**. The failures match the existing baseline: 14 branding/CSV/store expectations still expect OpenTakeoff rather than Beitzell Estimating, plus the existing second-device Drive restore integrity test. They were not suppressed or modified. Consequently `npm run check` stops at tests.
+- Full `npm test`: **1,050 passed / 15 failed**. The failures match the existing baseline: 14 branding/CSV/store expectations still expect OpenTakeoff rather than ESTIMATING, plus the existing second-device Drive restore integrity test. They were not suppressed or modified. Consequently `npm run check` stops at tests.
 - `npm run build` run separately: passed; existing large-chunk warning remains.
 - `git diff --check`: passed.
 - Additional full-modal browser fixture checks passed: connected idle subtitle hidden, author shown, old Download action absent, missing-local-folder Open fallback, real folder-list UI navigation, This project provider picker absent, unsaved Download Locally disabled, and 390px responsive layout. No page errors in the completed checks. Expected missing-folder handling logs a development warning; existing React Router future-flag warnings remain.

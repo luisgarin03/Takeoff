@@ -1,6 +1,6 @@
 # OpenTakeoff
 
-The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated Estimating by Luis Garin wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
+The empty Plan Set landing page uses React Bits Color Bends behind the onboarding panel, with the shared animated ESTIMATING wordmark in place of the blueprint icon. It stays off PDF and Whiteboard workspaces, pauses in hidden tabs, and stays still with reduced motion enabled.
 
 A browser-based construction takeoff canvas. See [the project brief](AGENT_BRIEF.md), [feature map](FEATURES.md), and [user guide](docs/USER_GUIDE.md).
 
@@ -134,7 +134,7 @@ The selected-folder browser puts `.otk` files first, then folders ordered newest
 
 **Create New Source Folder:** in the source-folder screen, choose a parent location in your Google Drive for desktop mount. Confirm creation of the fixed `Estimate save data/Projects` structure. If the source already exists, choose **Use Existing Folder**, **Choose Another Location**, or **Cancel**. Successful creation/reuse automatically remembers the source and opens Projects; no second Locate action is needed. Cancellation before confirmation creates nothing. Creation and remembered-source setup access only the chosen parent and immediate Projects listing, without a recursive drive scan. The browser remembers a directory handle rather than a hard-coded drive letter. It cannot reliably verify that the selected location is synced by Google Drive.
 
-When signed in, your account avatar and display name appear beside the Beitzell Estimating logo. Select either to open Profile, view your email, edit your display name, or log out. The default name/photo come from Google account metadata; a saved display name takes precedence. Missing or unavailable photos use initials.
+When signed in, your account avatar and display name appear beside the ESTIMATING logo. Select either to open Profile, view your email, edit your display name, or log out. The default name/photo come from Google account metadata; a saved display name takes precedence. Missing or unavailable photos use initials.
 
 Report appearance includes Blueprint, Forest, Graphite, and Classic Paper presets, plus custom JSON theme import and Reset.
 
@@ -165,7 +165,7 @@ The **Takeoff** tab also contains the live condition summary. It shows the armed
 
 Starting a scale-dependent measurement on an unscaled sheet opens a large centered **Set the scale first** dialog instead of relying on the small status line. Its scale dropdown offers the detected plan scale, every standard scale, and **Calibrate two points…**; the guidance reminds estimators to compare the choice with the printed plan dimension. Count and markup tools remain available without a scale because they do not calculate real-world area or length.
 
-Experimental Takeoff features stay in a hidden floating panel so the everyday toolbar and canvas rail remain balanced for deployment. Quickly click or tap the unchanged Beitzell Estimating logo three times to toggle **Experimental tools**. The panel contains the working Report, Zone, AI, Revisions, Render settings, and Command line controls; close it with × or Escape.
+Experimental Takeoff features stay in a hidden floating panel so the everyday toolbar and canvas rail remain balanced for deployment. Quickly click or tap the unchanged ESTIMATING logo three times to toggle **Experimental tools**. The panel contains the working Report, Zone, AI, Revisions, Render settings, and Command line controls; close it with × or Escape.
 
 Theme panel: choose any interface accent color with the Accent color picker. The choice previews immediately, saves in this browser, and applies to buttons, highlights, focus rings, and sliders in light and dark mode. Reset accent restores the default blue. Logo, cursor, and takeoff condition colors remain separate.
 
@@ -249,3 +249,74 @@ Verified Pro subscriptions automatically leave read-only exploration and open th
 New accounts receive a free 30-day trial from signup, without a payment card. The toolbar shows trial days remaining and Upgrade. Trial dates are server-owned and do not reset on login, reinstall, or checkout. At expiry editing is disabled unless an active subscription is verified. Existing paid subscriptions take priority; existing accounts are not backfilled.
 
 **Visual symbol search:** Select a reference symbol in the plan preview, search the current page/PDF/all loaded plans locally, review thumbnail suggestions, and add selected matches as an undoable count batch. Includes similarity adjustment, quarter-turn rotations, preview zoom, and duplicate-count protection.
+
+The login and sign-up screens use white action buttons and a gray mode selector with dark text in light theme.
+
+Login now returns to the requested project or workspace. Read-only status displays the license-server reason and provides Retry license check; failed license checks time out after 20 seconds.
+
+Accounts without an active subscription receive one 30-day free trial. Existing trial dates are preserved. The workspace and Profile show a live days/hours/minutes/seconds countdown; hover over it for the exact local end date and time. Editing becomes read-only when the trial expires.
+
+Read-only toolbar messages use compact wording and truncate to fit. Hover over the message for full license details; Retry checks the license again.
+
+Successful sign-in opens the workspace directly without a Welcome or Continue screen. Sign-in errors still open Profile for recovery.
+
+When a previous browser login holds the editing license, choose Use here in the toolbar to transfer editing to the current session. The server verifies the active subscription or trial before transferring; the previous session becomes read-only on its next license check.
+
+A fresh email, Google, or verified-code login automatically revokes other login sessions and transfers the editing license. Restoring a session or refreshing a token does not take over. Previously open app sessions sign out on their next license check, normally within 45 seconds while visible.
+
+New users choose Start 30-day trial in the workspace toolbar or Subscription panel. The server starts the 30-day clock on activation, preserves existing trial dates, and prevents restarts. After expiry, the workspace is view-only unless a subscription is active.
+
+Upgrade and Start 30-day trial use compact outlined buttons matching the Condition control, with neutral backgrounds and theme-aware text.
+
+Subscription plans are always expanded in Profile and membership settings, with no Subscription or Hide plans toggle.
+
+Symbol search selects its reference directly on the main PDF canvas at the current zoom. Drag a tight box to open search settings and results; Select symbol on plan chooses another reference, and Escape cancels selection.
+
+Symbol search marks selected matches with red outline rectangles only. It does not create counts, conditions, text notes, or arrows. Undo removes the outline batch.
+
+Hide matches / Show matches in the top toolbar toggles symbol-search red boxes without deleting them. Hidden boxes are also excluded from print and export. Adding a new batch shows matches again.
+
+Fixed invisible symbol-search outlines caused by incompatible SVG bounds. Existing saved outlines now render, and new outlines use the standard bounds format.
+
+Symbol search verifies all reference ink pixels and scores ink intersection over union, penalizing extra text and linework rather than rewarding shared white space. Existing outlines are unchanged; rerun search to obtain results with the stricter scoring.
+
+Clear search in Symbol search removes suggestions and all symbol-match outline boxes. A matching toolbar action clears boxes without reopening the dialog. Undo restores removed boxes.
+
+Symbol search opens as a bottom drawer and immediately activates reference-box selection on the PDF above it. The drawer stays open during selection, search, and outline review. Select symbol on plan starts another selection; Cancel exits selection without closing the drawer.
+
+During symbol reference selection, scroll to zoom around the pointer and hold Space while dragging, or middle-drag, to pan. A normal left drag selects the symbol. The bottom drawer stays open.
+
+Symbol search now compares individual painted PDF vector objects by path geometry instead of flattened page pixels. Overlapping text and separate graphics are excluded. Select a complete object; when several fit, the largest enclosed object is used. Scans and symbols split or batched into unrelated PDF objects may not match; original CAD layers are not reconstructed.
+
+Each symbol-search run keeps its outlines in a separate numbered group with its own color. The bottom drawer lists groups with Show/Hide and Delete search controls. Group names and colors save with the project; Undo restores a deleted group. Clear all searches removes all groups.
+
+Symbol search splits batched PDF drawing commands into individual subpaths, allowing repeated squares along fence lines to be selected independently. Closed polygon matching handles different start corners, winding direction, and rectangle versus line-path encodings.
+
+Symbol search also extracts individual reusable PDF images and image-mask placements, including repeated symbol batches, without comparing the flattened background.
+
+Symbol search offers Click a shape and Drag a box reference-selection modes. Click selection chooses the smallest PDF object under the pointer and highlights its bounds in blue. Both modes preserve PDF content and support pan and zoom.
+
+In Click a shape reference selection, hovering previews the shape bounds in amber; clicking selects it in blue. Hover preview clears during panning, zooming, or leaving the selection area.
+
+The Symbol search drawer uses the shared shadcn-style Button component with outline, primary, and ghost variants, neutral light/dark surfaces, compact controls, and consistent focus states.
+
+The Symbol search drawer has Search and Help tabs. Selection guidance, navigation shortcuts, matching limits, and group-management instructions are in Help; search settings and results stay in Search.
+
+Completed symbol searches automatically add colored outlines and clear the reference preview. The drawer no longer shows suggestion cards, checkboxes, or an outline confirmation button. The Select tool activates so users can click individual outlines and press Delete or Backspace; Undo restores deletions.
+
+Symbol search groups use a Search marks list with Marked visibility toggles, color swatches, scope and reference details, match/page totals, individual red remove controls, and Remove all. New search details persist with project outlines.
+
+Whiteboard > Add > Estimate Document creates an editable Beitzell Fence estimate with the company logo, rose table headers, burgundy labels, automatic current date, and a cryptographic UUID proposal number. Enter customer, project, rep, activity amounts, expiration and acceptance details; Save estimate generates a PDF with automatic totals. Edit estimate reopens its fields, and the document saves and exports with the board. Activity overflow is rejected instead of clipped.
+
+Estimate Document editing uses the white branded estimate page itself, with borderless editable fields in the address, dates, sales, project, activities, amounts and acceptance positions. The logo, rose headers, burgundy labels and automatic total remain visible while filling out the document; Save and Cancel are outside the paper.
+
+Estimate activities automatically continue onto additional branded pages. The editor supports up to 200 activities; total and acceptance labels appear only on the final page. Saved PDFs include all activity pages and page numbers.
+
+
+Whiteboard Supplier list includes 11 default companies with official website/contact links and logos. Open from the toolbar or Add menu; search or add custom suppliers (saved in this browser).
+
+
+Cloudflare hosting: the `takeoff` Worker serves estimating.studio and www.estimating.studio. See [deployment notes](docs/CLOUDFLARE_DEPLOYMENT.md) for deploy commands and local-project transfer guidance.
+
+
+App branding is ESTIMATING across authentication, workspace/Whiteboard headers, browser tabs, installed web-app metadata and native display names.
