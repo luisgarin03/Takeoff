@@ -1,3 +1,4 @@
+import AppToast from "./AppToast.jsx";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { BrandText } from "../brand/marks.jsx";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
@@ -24,7 +25,7 @@ export default function LicenseGate({ children }) {
     if (!cloud.user || !cloud.client) { setState({ userId: "", loading: false, record: null, session: null, error: "" }); return; }
     if (cloud.offline) { setState((value) => ({ ...value, loading: false, session: null, error: "" })); return; }
     let live = true;
-    setState((value) => ({ ...value, loading: value.userId !== cloud.user.id || (!value.record && !value.session), error: "" }));
+    setState((value) => ({ ...value, loading: value.userId !== cloud.user.id, error: "" }));
     const timeout = window.setTimeout(() => {
       if (!live) return;
       live = false;
@@ -34,16 +35,13 @@ export default function LicenseGate({ children }) {
     takeOver.current = false;
     waitForLatestLogin(cloud.client).then(() => service.claimLicenseSession(cloud.user, { ...device, takeOver: requestedTransfer })).then((result) => {
       window.clearTimeout(timeout);
-      if (live && result.session?.reason === "another_device") {
-        void cloud.client.auth.signOut({ scope: "local" });
-      }
       if (live) setState({ userId: cloud.user.id, loading: false, record: result.subscription, session: result.session, error: "" });
     }).catch(() => {
       window.clearTimeout(timeout);
       if (live) setState((value) => ({ ...value, userId: cloud.user.id, loading: false, session: null, error: "The license server could not be reached. Retry the license check to enable editing." }));
     });
     return () => { live = false; window.clearTimeout(timeout); };
-  }, [required, cloud.user, cloud.client, cloud.offline, service, device, refresh]);
+  }, [required, cloud.user?.id, cloud.client, cloud.offline, service, device, refresh]);
   useEffect(() => {
     if (cloud.offline || !cloud.user) return undefined;
     const check = () => { if (!document.hidden) setRefresh((value) => value + 1); };
@@ -67,6 +65,8 @@ export default function LicenseGate({ children }) {
     session: stateBelongsToUser ? state.session : null,
     allowSandbox: sandboxLicensesAllowed(),
   });
+  const checkingLicense = required && !!cloud.user && (!stateBelongsToUser || state.loading) && !cloud.offline;
+  if (checkingLicense) { access.readOnly = true; access.reason = "checking"; access.message = "Checking your license and editing session…"; }
   access.retry = () => setRefresh((value) => value + 1);
   access.useHere = () => { takeOver.current = true; setRefresh((value) => value + 1); };
   access.startTrial = async () => {
@@ -90,6 +90,9 @@ export default function LicenseGate({ children }) {
     {children}
   </LicenseAccessProvider>;
   if (!cloud.user) return <LicenseAccessProvider value={access}>{children}</LicenseAccessProvider>;
-  if ((!stateBelongsToUser || state.loading) && !cloud.offline) return <main className="launch-gate"><div className="launch-card"><h1><BrandText /></h1><p>Checking your license and editing session…</p></div></main>;
-  return <LicenseAccessProvider value={access}>{children}</LicenseAccessProvider>;
+
+  return <LicenseAccessProvider value={access}>
+    {children}
+    {checkingLicense && <AppToast message="Checking your license and editing session…" loading className="license-check-snackbar" style={{ position: "fixed", bottom: "max(18px, env(safe-area-inset-bottom))", left: "50%", transform: "translateX(-50%)", zIndex: 5000, pointerEvents: "none", maxWidth: "calc(100vw - 32px)", width: "max-content" }} />}
+  </LicenseAccessProvider>;
 }

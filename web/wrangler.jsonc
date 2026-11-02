@@ -9,7 +9,9 @@
     "not_found_handling": "single-page-application"
   },
   "routes": [
-    { "pattern": "estimating.studio", "custom_domain": true },
-    { "pattern": "www.estimating.studio", "custom_domain": true }
+    {
+      "pattern": "app.estimating.studio",
+      "custom_domain": true
+    }
   ]
 }

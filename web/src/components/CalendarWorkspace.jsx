@@ -38,6 +38,11 @@ export default function CalendarWorkspace({ metadata, onClose, onSaveMetadata })
   const [notice, setNotice] = useState(""), [cachedAt, setCachedAt] = useState(""), [editing, setEditing] = useState(null), [settings, setSettings] = useState(false), [revision, setRevision] = useState(0);
   const [details, setDetails] = useState(null);
   const [googleEditing, setGoogleEditing] = useState(null), [googleWrite, setGoogleWrite] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
   const canWrite = !!userId && !cloud.offline && !license.readOnly;
   const writable = calendars.filter((c) => c.role !== "viewer");
   const canEdit = (row) => canWrite && calendars.some((c) => c.id === row.calendar_id && c.role !== "viewer");
@@ -68,12 +73,12 @@ export default function CalendarWorkspace({ metadata, onClose, onSaveMetadata })
     if (!repo || !range || cloud.offline) return;
     const id = ++loadId.current;
     try {
-      const next = await repo.list(), events = await repo.events(next.map((c) => c.id), range.start, range.end);
+      const next = await repo.list(), events = await repo.events(next.map((c) => c.id), searchQuery ? "1900-01-01T00:00:00Z" : range.start, searchQuery ? "2200-01-01T00:00:00Z" : range.end);
       if (id !== loadId.current) return;
       setCalendars(next); setRows(events); setCachedAt("");
-      await writeCalendarCache(cacheKey, { calendars: next, rows: events, range });
+      if (!searchQuery) await writeCalendarCache(cacheKey, { calendars: next, rows: events, range });
     } catch (e) { if (id !== loadId.current) return; setCalendars([]); setRows([]); await clearCalendarCache(cacheKey).catch(() => {}); setError(`Calendar could not load: ${e.message}. Apply the calendar migration if it has not been installed.`); }
-  }, [repo, range, cloud.offline, cacheKey]);
+  }, [repo, range, cloud.offline, cacheKey, searchQuery]);
   useEffect(() => { loadId.current++; setCalendars([]); setRows([]); setGoogleEvents([]); setGoogleCalendars([]); setGoogleIds([]); setGoogleWrite(false); setGoogleEditing(null); setEditing(null); setDetails(null); return () => { loadId.current++; }; }, [userId]);
   useEffect(() => {
     if (!repo) return;
@@ -90,7 +95,13 @@ export default function CalendarWorkspace({ metadata, onClose, onSaveMetadata })
       const { data: connection, error: connectionError } = await cloud.client.from("google_connections").select("status,granted_scopes").eq("owner_id", userId).maybeSingle();
       if (connectionError) throw new Error("Could not restore your Google Calendar connection. Try Refresh.");
       if (live) setGoogleWrite(!!connection?.granted_scopes?.includes("https://www.googleapis.com/auth/calendar"));
-      if (!connection || connection.status !== "connected" || !connection.granted_scopes?.includes("https://www.googleapis.com/auth/calendar.events.readonly")) return;
+      if (!connection || connection.status !== "connected" || !(connection.granted_scopes?.includes("https://www.googleapis.com/auth/calendar.events.readonly") || connection.granted_scopes?.includes("https://www.googleapis.com/auth/calendar"))) {
+        if (live) {
+          setGoogleCalendars([]); setGoogleIds([]); setGoogleEvents([]); setGoogleWrite(false);
+          setError("Google Calendar is disconnected for this account. Open Settings and reconnect Google Calendar to load your events.");
+        }
+        return;
+      }
       const data = await edge("calendar-calendars");
       if (live) { setGoogleCalendars(data.calendars); setGoogleIds(restoreGoogleSelection(cacheKey, data.calendars)); }
     })().catch((e) => { if (live) setError(e.message); });
@@ -102,13 +113,22 @@ export default function CalendarWorkspace({ metadata, onClose, onSaveMetadata })
   useEffect(() => {
     if (cloud.offline || !range || !googleIds.length) { setGoogleEvents([]); return; }
     let live = true;
-    Promise.all(googleIds.map(async (id) => { const data = await edge("calendar-events", { calendarId: id, start: range.start, end: range.end }); return data.events.map((event) => ({ ...event, calendarId: id })); })).then((events) => { if (live) setGoogleEvents([...new Map(events.flat().map((e) => [`${e.calendarId}/${e.id}`, e])).values()]); }).catch((e) => { if (live) { setGoogleEvents([]); setError(e.message); } });
+    Promise.allSettled(googleIds.map(async (id) => {
+      const data = await edge("calendar-events", { calendarId: id, start: range.start, end: range.end, search: searchQuery });
+      return data.events.map((event) => ({ ...event, calendarId: id }));
+    })).then((results) => {
+      if (!live) return;
+      const events = results.filter((result) => result.status === "fulfilled").flatMap((result) => result.value);
+      setGoogleEvents([...new Map(events.map((event) => [`${event.calendarId}/${event.id}`, event])).values()]);
+      const failed = results.find((result) => result.status === "rejected");
+      setError(failed ? failed.reason.message : "");
+    });
     return () => { live = false; };
-  }, [range, googleIds, edge, cloud.offline, revision]);
+  }, [range, googleIds, edge, cloud.offline, revision, searchQuery]);
   const events = useMemo(() => {
-    const match = (title, description = "") => `${title} ${description}`.toLowerCase().includes(search.toLowerCase());
-    return [...rows.filter((e) => !hidden.includes(e.calendar_id) && (!category || category === e.category) && match(e.title, e.description)).map((e) => fullCalendarEvent(e, calendars.find((c) => c.id === e.calendar_id), canWrite && calendars.some((c) => c.id === e.calendar_id && c.role !== "viewer"))),
-      ...googleEvents.filter((e) => !category && match(e.title)).map((e) => googleCalendarEvent(e, googleCalendars.find((c) => c.id === e.calendarId), canWrite && googleWrite && ["writer", "owner"].includes(e.accessRole))),
+    const match = (title, description = "") => `${title || ""} ${description || ""}`.toLowerCase().includes(search.trim().toLowerCase());
+    return [...rows.filter((e) => !hidden.includes(e.calendar_id) && (!category || category === e.category) && match(e.title, `${e.description || ""} ${e.location || ""}`)).map((e) => fullCalendarEvent(e, calendars.find((c) => c.id === e.calendar_id), canWrite && calendars.some((c) => c.id === e.calendar_id && c.role !== "viewer"))),
+      ...googleEvents.filter((e) => !category && match(e.title, `${e.description || ""} ${e.location || ""}`)).map((e) => googleCalendarEvent(e, googleCalendars.find((c) => c.id === e.calendarId), canWrite && googleWrite && ["writer", "owner"].includes(e.accessRole))),
       ...(!showProjects || category ? [] : projects.filter((p) => p.submissionDate && match(p.name)).map((p) => ({ id: `project:${p.search}`, title: `Due — ${p.name}`, start: p.submissionDate, allDay: true, color: "#4f8d80", editable: false, extendedProps: { kind: "project", project: p } })))];
   }, [rows, calendars, googleCalendars, googleEvents, projects, hidden, showProjects, search, category, canWrite, googleWrite]);
   async function run(action) { setBusy(true); setError(""); try { await action(); } catch (e) { setError(e.message); } finally { setBusy(false); } }
@@ -119,7 +139,15 @@ export default function CalendarWorkspace({ metadata, onClose, onSaveMetadata })
       setGoogleEditing({ ...raw, calendarId: event.calendarId }); setDetails(null);
     });
   }
-  function create(info) {
+  function create(info, appOnly = false) {
+    const googleTarget = googleWrite && googleCalendars.find((calendar) => ["owner", "writer"].includes(calendar.accessRole) && googleIds.includes(calendar.id)) || googleWrite && googleCalendars.find((calendar) => calendar.primary && ["owner", "writer"].includes(calendar.accessRole)) || googleWrite && googleCalendars.find((calendar) => ["owner", "writer"].includes(calendar.accessRole));
+    if (!appOnly && canWrite && googleTarget) {
+      const start = info.dateStr || info.startStr || new Date().toISOString();
+      const allDay = info.allDay ?? !start.includes("T");
+      const end = info.endStr || new Date(Date.parse(start) + (allDay ? 86400000 : 3600000)).toISOString();
+      setGoogleEditing({ calendarId: googleTarget.id, start: allDay ? { date: start.slice(0, 10) } : { dateTime: start }, end: allDay ? { date: end.slice(0, 10) } : { dateTime: end } });
+      return;
+    }
     if (!canWrite || !writable.length) { setNotice("Log in with editing access to create events."); return; }
     const start = info.dateStr || info.startStr || new Date().toISOString(), date = new Date(start), all = info.allDay ?? !start.includes("T");
     setEditing({ calendar_id: writable[0].id, start_time: date.toISOString(), end_time: new Date(info.endStr || date.getTime() + (all ? 86400000 : 3600000)).toISOString(), all_day: all, timezone: calendarZone() });
@@ -143,12 +171,13 @@ export default function CalendarWorkspace({ metadata, onClose, onSaveMetadata })
   }
   const calendarCheckbox = (c) => <label className="calendar-checkbox" key={c.id}><input type="checkbox" checked={!hidden.includes(c.id)} onChange={() => setHidden((ids) => ids.includes(c.id) ? ids.filter((id) => id !== c.id) : [...ids, c.id])} /><span style={{ color: c.color }}>●</span>{c.name}</label>;
   return createPortal(<div className="project-calendar-shade"><section className="project-calendar calendar-workspace" ref={root} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Project calendar" onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") { if (googleEditing) setGoogleEditing(null); else if (editing) setEditing(null); else if (details) setDetails(null); else onClose(); } }}>
-    <header><h2>Calendar</h2><input aria-label="Search events" placeholder="Search events…" value={search} onChange={(e) => setSearch(e.target.value)} /><select aria-label="Filter category" value={category} onChange={(e) => setCategory(e.target.value)}><option value="">All categories</option>{[...new Set(rows.map((r) => r.category))].map((c) => <option key={c}>{c}</option>)}</select><button disabled={busy || cloud.offline} onClick={() => run(async () => { await refresh(); setRevision((r) => r + 1); })}>Refresh</button><button onClick={() => setSettings((v) => !v)}>Settings</button><button className="project-calendar-close" onClick={onClose} aria-label="Close calendar">×</button></header>
+    <header><h2>Calendar</h2><input aria-label="Search events" placeholder="Search events…" value={search} onChange={(e) => setSearch(e.target.value)} /><select aria-label="Filter category" value={category} onChange={(e) => setCategory(e.target.value)}><option value="">All categories</option>{[...new Set(rows.map((r) => r.category))].map((c) => <option key={c}>{c}</option>)}</select><button type="button" aria-label="Refresh calendar" title="Refresh calendar" disabled={busy || cloud.offline} onClick={() => run(async () => { await refresh(); setRevision((r) => r + 1); })}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block" }}><path d="M20 7v5h-5" /><path d="M4 17v-5h5" /><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17" /></svg></button><button type="button" aria-label="Calendar settings" title="Calendar settings" aria-expanded={settings} onClick={() => setSettings((v) => !v)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block" }}><path d="m9 3-.5 2a8 8 0 0 0-1.6.9L5 5.3 3 8.7l1.5 1.4a8 8 0 0 0 0 1.8L3 13.3l2 3.4 1.9-.6a8 8 0 0 0 1.6.9l.5 2h4l.5-2a8 8 0 0 0 1.6-.9l1.9.6 2-3.4-1.5-1.4a8 8 0 0 0 0-1.8L19 8.7l-2-3.4-1.9.6a8 8 0 0 0-1.6-.9L13 3Z" /><circle cx="11" cy="11" r="3" /></svg></button><button className="project-calendar-close" onClick={onClose} aria-label="Close calendar">×</button></header>
     {(cloud.offline || cachedAt) && <p className="calendar-notice">Offline · Cached information may be outdated{cachedAt ? ` · Last synced ${new Date(cachedAt).toLocaleString()}` : ""}. Editing is disabled.</p>}{error && <p role="alert">{error}</p>}{notice && <p role="status" className="calendar-notice">{notice}</p>}
-    <div className="calendar-workspace-body"><aside className="calendar-sidebar"><button disabled={!canWrite || !writable.length} onClick={() => create({ allDay: true, dateStr: dateKey(new Date()) })}>+ Create event</button><button disabled={!canWrite || !googleWrite || !googleCalendars.some((c) => ["owner", "writer"].includes(c.accessRole))} onClick={() => setGoogleEditing({})}>+ Google event</button>{!googleWrite && !!googleCalendars.length && <button onClick={() => setSettings(true)}>Enable Google editing</button>}<label>Go to date<input type="date" onChange={(e) => { if (e.target.value) ref.current.getApi().gotoDate(e.target.value); }} /></label><MiniCalendar onChoose={(date) => ref.current.getApi().gotoDate(date)} />
+    {searchQuery && <div className="calendar-search-results" role="region" aria-label="Event search results"><strong>{events.length} matching events in selected calendars</strong>{events.map((event) => <button type="button" key={event.id} onClick={() => { const date = typeof event.start === "string" ? event.start : ""; setSearch(""); if (date) ref.current?.getApi().gotoDate(date); }}>{event.title} · {typeof event.start === "string" ? event.start.slice(0, 10) : "Recurring event"}</button>)}</div>}
+<div className="calendar-workspace-body"><aside className="calendar-sidebar"><button disabled={!canWrite || !writable.length} onClick={() => create({ allDay: true, dateStr: dateKey(new Date()) })}>+ Create event</button><button disabled={!canWrite || !writable.length} onClick={() => create({ allDay: true, dateStr: dateKey(new Date()) }, true)}>+ App-only event</button><button disabled={!canWrite || !googleWrite || !googleCalendars.some((c) => ["owner", "writer"].includes(c.accessRole))} onClick={() => setGoogleEditing({})}>+ Google event</button>{!googleWrite && !!googleCalendars.length && <button onClick={() => setSettings(true)}>Enable Google editing</button>}<label>Go to date<input type="date" onChange={(e) => { if (e.target.value) ref.current.getApi().gotoDate(e.target.value); }} /></label><MiniCalendar onChoose={(date) => ref.current.getApi().gotoDate(date)} />
       <h4>Project due dates</h4><label className="calendar-checkbox"><input type="checkbox" checked={showProjects} onChange={(e) => setShowProjects(e.target.checked)} />Local projects</label><h4>My calendars</h4>{calendars.filter((c) => c.owner_id === userId).map(calendarCheckbox)}<h4>Shared calendars</h4>{calendars.filter((c) => c.owner_id !== userId).map(calendarCheckbox)}<h4>Google calendars</h4>{googleCalendars.map((c) => <label className="calendar-checkbox" key={c.id}><input type="checkbox" checked={googleIds.includes(c.id)} onChange={(e) => selectGoogleCalendars(e.target.checked ? [...googleIds, c.id] : googleIds.filter((id) => id !== c.id))} /><span style={{ color: googleCalendarDisplayColors(c.color, c.textColor).color }}>●</span>{c.name}</label>)}{!userId && <p>Log in for cloud calendars. Local project dates remain available.</p>}
       {settings && <CalendarSettings googleCalendars={googleCalendars} googleWrite={googleWrite} cloud={cloud} calendars={calendars} repo={repo} edge={edge} canWrite={canWrite} busy={busy} run={run} onRefresh={refresh} onGoogle={(items) => { setGoogleCalendars(items); setGoogleEvents([]); setGoogleIds(restoreGoogleSelection(cacheKey, items)); }} onDisconnect={async () => { setGoogleCalendars([]); setGoogleEvents([]); setGoogleIds([]); await clearCalendarCache(cacheKey); }} />}
-    </aside><main className="calendar-main"><FullCalendar ref={ref} plugins={plugins} initialView="dayGridMonth" height="100%" timeZone="local" headerToolbar={{ left: "prev,next today", center: "title", right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek" }} buttonText={{ today: "Today", month: "Month", week: "Week", day: "Day", list: "Agenda" }} nowIndicator selectable={canWrite} editable={canWrite} dayMaxEvents longPressDelay={400} events={events} datesSet={(info) => setRange((old) => old?.start === info.startStr && old?.end === info.endStr ? old : { start: info.startStr, end: info.endStr })} dateClick={create} select={create} eventDrop={reschedule} eventResize={reschedule} eventClick={({ event, jsEvent }) => { jsEvent.preventDefault(); setDetails(event); }} /></main></div>
+    </aside><main className="calendar-main"><FullCalendar ref={ref} plugins={plugins} initialView="dayGridMonth" height="100%" timeZone="local" headerToolbar={{ left: "prev,next today", center: "title", right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek" }} buttonText={{ today: "Today", month: "Month", week: "Week", day: "Day", list: "Agenda" }} nowIndicator selectable={canWrite} editable={canWrite} dayMaxEvents longPressDelay={400} events={events} datesSet={(info) => setRange((old) => old?.start === info.startStr && old?.end === info.endStr ? old : { start: info.startStr, end: info.endStr })} dateClick={(info) => create(info)} select={(info) => create(info)} eventDrop={reschedule} eventResize={reschedule} eventClick={({ event, jsEvent }) => { jsEvent.preventDefault(); setDetails(event); }} /></main></div>
     {details && <CalendarEventDetails event={details} editable={details.extendedProps.kind === "google" ? canWrite && googleWrite && ["owner", "writer"].includes(details.extendedProps.google.accessRole) : details.extendedProps.kind === "project" ? canWrite : !!details.extendedProps.row && canEdit(details.extendedProps.row)} busy={busy} onClose={() => setDetails(null)} onEditEvent={() => { if (details.extendedProps.kind === "google") editGoogle(details.extendedProps.google); else { setEditing(details.extendedProps.row); setDetails(null); } }} onEditSeries={() => editGoogle(details.extendedProps.google, true)} onSaveBid={async (bidDetails) => {
       if (!canWrite) throw new Error("Editing access required.");
       const p = details.extendedProps;
@@ -163,7 +192,7 @@ export default function CalendarWorkspace({ metadata, onClose, onSaveMetadata })
         const updated = await repo.save({ ...row, description: bidDescription(bidDetails), location: bidDetails.location }, row.updated_at); details.setExtendedProp("row", { ...updated, calendar_attachments: row.calendar_attachments }); await refresh();
       }
     }} onDelete={async () => { setBusy(true); try { await repo.remove(details.extendedProps.row); setDetails(null); await refresh(); } finally { setBusy(false); } }} onOpenProject={() => { const project = details.extendedProps.project; if (project.search === window.location.search) onClose(); else window.location.assign(`${window.location.pathname}${project.search}`); }} />}
-    {googleEditing && <GoogleCalendarEventEditor event={googleEditing} calendars={googleCalendars} edge={edge} onClose={() => setGoogleEditing(null)} onSaved={async () => { setGoogleEditing(null); setRevision((r) => r + 1); }} />}
+    {googleEditing && <GoogleCalendarEventEditor event={googleEditing} calendars={googleCalendars} edge={edge} onClose={() => setGoogleEditing(null)} onSaved={async (calendarId) => { if (calendarId) selectGoogleCalendars([...new Set([...googleIds, calendarId])]); setGoogleEditing(null); setRevision((r) => r + 1); }} />}
     {editing && <CalendarEventEditor key={editing.id || "new"} event={editing} calendars={calendars} editable={editing.id ? canEdit(editing) : canWrite} busy={busy} onClose={() => setEditing(null)} onPick={() => pickDriveFiles({ sharePicker: () => edge("share-picker") }, { title: "Attach Google Drive files to this event" })} onDetach={async (id) => { await repo.detach(id); setEditing((e) => ({ ...e, calendar_attachments: e.calendar_attachments.filter((f) => f.id !== id) })); await refresh(); }} onSave={async (draft, version, files) => { setBusy(true); try { const row = await repo.save(draft, version); setEditing({ ...row, calendar_attachments: editing.calendar_attachments || [] }); await repo.attach(row.id, files); setEditing(null); await refresh(); } finally { setBusy(false); } }} onDelete={async (event) => { await repo.remove(event); setEditing(null); await refresh(); }} />}
   </section></div>, document.body);
 }

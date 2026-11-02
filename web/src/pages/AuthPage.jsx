@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { BrandText } from "../brand/marks.jsx";
 import { APP_NAME } from "../brand/appName.js";
 import googleLogo from "../brand/google-g.png";
@@ -69,7 +69,6 @@ export default function AuthPage() {
         <button className="auth-page-submit" type="submit" disabled={disabled}>{busy ? "Please wait…" : step === "signin" ? "Sign in" : step === "signup" ? "Create account" : step === "forgot" ? "Send recovery email" : step === "password" ? "Save password" : "Verify email"}</button>
       </form>
       <p className="auth-page-switch">{signup ? "Already have an account? " : `New to ${APP_NAME}? `}<button type="button" disabled={busy} onClick={() => switchCard(signup ? "signin" : "signup")}>{signup ? "Sign in" : "Create an account"}</button></p>
-      <Link className="auth-page-guest" to={returnTo === "/" ? "/?guest=1" : returnTo}>Continue in view-only mode</Link>
     </section>
   </main>;
 }

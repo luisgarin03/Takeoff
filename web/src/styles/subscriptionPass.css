@@ -1,0 +1,69 @@
+.subscription-plans:has(.subscription-pass) { grid-template-columns: repeat(2,minmax(0,350px)); gap: 36px; justify-content: center; padding: 12px 4px; }
+.subscription-plan.subscription-pass { position: relative; isolation: isolate; border: 0; border-radius: 2px; padding: 34px 26px 30px; gap: 0; background: linear-gradient(125deg,#fafafa,#e6e6e6 60%,#d7d7d7); color: #202020; box-shadow: 0 16px 35px #0003; mask: radial-gradient(circle at 10px 0,transparent 6px,#000 6.5px) top left/20px 51% repeat-x, radial-gradient(circle at 10px 100%,transparent 6px,#000 6.5px) bottom left/20px 51% repeat-x; }
+.pass-eyebrow { display:flex; justify-content:space-between; width:100%; gap:12px; font-size:9px; font-weight:700; letter-spacing:1.3px; text-transform:uppercase; }
+.pass-word { align-self:center; font: 950 clamp(60px,7vw,82px)/1 Arial,sans-serif; letter-spacing:-6px; margin:30px 0 24px; text-shadow: 1px 2px 0 #aaa; }
+.pass-perforation { position:relative; border-top:2px dotted #aaa; width:calc(100% + 22px); margin:0 -11px 27px; }
+.pass-perforation span { position:absolute; right:8px; top:-15px; background:#e7e7e7; padding-left:5px; font-size:24px; }
+.subscription-plan.subscription-pass h4 { font-size:24px; line-height:1.2; letter-spacing:-.7px; margin:0 0 14px; color:#202020; }
+.subscription-pass .pass-description { min-height:42px; margin:0 0 10px; font-size:13px; line-height:1.6; color:#555; }
+.pass-badges { display:flex; gap:6px; flex-wrap:wrap; min-height:24px; }
+.subscription-pass .subscription-badge { background:#d4d4d4; color:#333; border:1px solid #bbb; font-size:10px; }
+.pass-pricing { margin:12px 0 24px; }
+.subscription-plan.subscription-pass .subscription-price { margin:0 0 6px; font-size:44px; font-weight:750; letter-spacing:-2px; line-height:1.1; color:#202020; }
+.pass-pricing > span { font-size:12px; color:#555; }
+.pass-features { list-style:none; padding:0; margin:0 0 26px; display:grid; gap:13px; font-size:12px; }
+.pass-features li { display:flex; gap:10px; line-height:1.4; }
+.pass-features li > span { color:#555; }
+:root .subscription-pass button { width:100%; display:flex; justify-content:space-between; align-items:center; padding:14px 16px; margin-top:auto; border:0; border-radius:4px!important; background:#202020; color:white; font-size:12px; font-weight:700; min-height:44px; }
+:root .subscription-pass button:hover:not(:disabled) { background:#383838; }
+:root .subscription-pass button:disabled { opacity:.55; }
+.subscription-pass .pass-terms { font-size:10px; line-height:1.6; color:#666; margin:12px 0 22px; }
+.pass-footer { display:flex; justify-content:space-between; align-items:center; gap:16px; width:100%; border-top:2px dotted #aaa; padding-top:22px; }
+.pass-footer small { display:block; text-transform:uppercase; font-size:8px; letter-spacing:1.5px; color:#555; margin-bottom:5px; }
+.pass-footer strong { font-size:23px; }
+.pass-barcode { width:110px; height:38px; background:repeating-linear-gradient(90deg,#222 0 1px,transparent 1px 3px,#222 3px 5px,transparent 5px 6px,#222 6px 7px,transparent 7px 10px,#222 10px 13px,transparent 13px 15px); }
+@media(max-width:650px) { .subscription-plans:has(.subscription-pass) { grid-template-columns:minmax(0,350px); gap:24px; } }
+/* Compact pass cards for profile and upgrade dialogs. */
+.subscription-plans:has(.subscription-pass) { grid-template-columns: repeat(2,minmax(0,290px)); gap: 24px; }
+.subscription-plan.subscription-pass { padding: 25px 22px 24px; }
+.subscription-pass .pass-word { font-size: 62px; margin: 20px 0 19px; letter-spacing: -4px; }
+.subscription-pass .pass-perforation { margin-bottom: 20px; }
+.subscription-plan.subscription-pass h4 { font-size: 21px; margin-bottom: 10px; }
+.subscription-pass .pass-description { font-size: 12px; min-height: 36px; margin-bottom: 6px; }
+.subscription-pass .pass-pricing { margin: 8px 0 17px; }
+.subscription-plan.subscription-pass .subscription-price { font-size: 36px; }
+.subscription-pass .pass-features { gap: 9px; margin-bottom: 19px; font-size: 11px; }
+:root .subscription-pass button { min-height: 38px; padding: 10px 12px; }
+.subscription-pass .pass-terms { margin: 10px 0 16px; font-size: 9px; }
+.subscription-pass .pass-footer { padding-top: 16px; }
+.subscription-pass .pass-footer strong { font-size: 20px; }
+.subscription-pass .pass-barcode { width: 94px; height: 30px; }
+@media(max-width:650px) { .subscription-plans:has(.subscription-pass) { grid-template-columns:minmax(0,290px); gap:20px; } }
+
+/* Match the landing page's floating passes and moving paper sheen. */
+.subscription-plan.subscription-pass {
+  animation: subscription-pass-float 7s ease-in-out infinite;
+}
+.subscription-plan.subscription-pass:nth-child(2) { animation-delay: -3.5s; }
+.subscription-plan.subscription-pass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(115deg,transparent 20%,#ffffff55 42%,transparent 64%);
+  background-size: 250% 100%;
+  animation: subscription-pass-sheen 10s ease-in-out infinite;
+}
+@keyframes subscription-pass-float {
+  0%,100% { transform: translateY(0) rotate(-.6deg); }
+  50% { transform: translateY(-8px) rotate(.6deg); }
+}
+@keyframes subscription-pass-sheen {
+  0%,100% { background-position: 100% 0; }
+  50% { background-position: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .subscription-plan.subscription-pass,
+  .subscription-plan.subscription-pass::before { animation: none; }
+}

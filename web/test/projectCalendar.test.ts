@@ -38,3 +38,19 @@ test("Google calendar colors and per-event overrides retain background and foreg
  assert.ok(result?.events);
  assert.deepEqual(result.events.map(({ color, textColor }: any) => [color, textColor]), [["#70a89f", "#111111"], ["#fbd75b", "#1d1d1d"], ["#70a89f", "#111111"]]);
 });
+
+test("Google Calendar search includes events outside the visible date range", async () => {
+ let eventUrl = "";
+ const api = createProjectCalendar({ token: async () => "test", fetcher: async (input) => {
+  const url = String(input);
+  if (url.includes("calendarList")) return Response.json({ items: [{ id: "mine" }] });
+  eventUrl = url;
+  return Response.json({ items: [{ id: "future", summary: "Site visit", start: { date: "2028-06-01" } }] });
+ } });
+ const result = await api("user", "events", { calendarId: "mine", search: "Site visit" });
+ const query = new URL(eventUrl).searchParams;
+ assert.equal(query.get("q"), "Site visit");
+ assert.equal(query.has("timeMin"), false);
+ assert.equal(query.has("timeMax"), false);
+ assert.equal(result.events[0].id, "future");
+});

@@ -9,6 +9,11 @@ function I({ children, size = 24, stroke = 1.5, color = "currentColor" }) {
 }
 
 export const icons = {
+  settings: (s) => <I size={s}><path d="m9 3-1 3-3-1-2 4 2 2v2l-2 2 2 4 3-1 1 3h6l1-3 3 1 2-4-2-2v-2l2-2-2-4-3 1-1-3Z" /><circle cx="12" cy="12" r="3" /></I>,
+  printer: (s) => <I size={s}><path d="M7 8V3h10v5M7 17H3V8h18v9h-4" /><path d="M7 14h10v7H7zM17 11h1" /></I>,
+  download: (s) => <I size={s}><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" /></I>,
+  fenceCalculator: (s) => <I size={s}><path d="M3 21V5l2-2 2 2v16M7 8h5M7 15h5" /><rect x="12" y="6" width="10" height="15" rx="1" /><path d="M15 9h4M15 13h1M19 13h0M15 17h1M19 16v2M18 17h2" /></I>,
+  calendar: (s) => <I size={s}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 10h18M7 14h2M12 14h2M7 18h2" /></I>,
   camera: (s) => <I size={s}><path d="M3 7H7L9 4H15L17 7H21V20H3Z" /><circle cx="12" cy="13" r="4" /></I>,
   brush: (s) => <I size={s}><path d="M10 14 18 3a2 2 0 0 1 3 3L13 17Z" /><path d="M10 14c-3-1-5 1-5 4 0 2-2 3-3 3 4 1 9 0 10-3" /></I>,
   eye: (s) => <I size={s}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></I>,

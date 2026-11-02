@@ -159,3 +159,7 @@
 :root:not([data-theme="dark"]) body .wb .wb-toolbar-reveal { background: #fff !important; border: 1px solid #85858d !important; color: #000 !important; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 :root:not([data-theme="dark"]) body .toolbar-visibility-toggle svg,
 :root:not([data-theme="dark"]) body .wb .wb-toolbar-reveal svg { color: #000 !important; stroke: #000 !important; }
+
+:root[data-theme="dark"] .canvas-workspace .takeoff-workspace-surface {
+  background: #171717 !important;
+}

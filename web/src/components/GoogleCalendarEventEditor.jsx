@@ -43,13 +43,14 @@ export default function GoogleCalendarEventEditor({ event, calendars, edge, onCl
         if (Date.parse(body.end.date || body.end.dateTime) <= Date.parse(body.start.date || body.start.dateTime)) throw new Error("End must be after start. All-day end dates are exclusive.");
         await edge(event.id && action !== "duplicate" ? "calendar-update" : "calendar-create", { calendarId: event.calendarId || calendarId, eventId: event.id, etag: event.etag, event: body, sendUpdates: notifications });
       }
-      await onSaved();
+      await onSaved(action === "delete" ? null : event.calendarId || calendarId);
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
   return <div className="calendar-editor-shade"><form className="calendar-event-editor" role="dialog" aria-modal="true" aria-label="Google event editor" onSubmit={(e) => { e.preventDefault(); execute("save"); }}>
     <header><h3>{event.id ? "Edit Google event" : "Create Google event"}</h3><button type="button" aria-label="Close Google event editor" onClick={onClose}>×</button></header>
     <fieldset disabled={busy}>
       <label>Calendar<select required disabled={!!event.id} value={calendarId} onChange={(e) => setCalendarId(e.target.value)}>{calendars.filter((c) => ["writer", "owner"].includes(c.accessRole)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      <p>This event is saved directly to the selected Google Calendar.</p>
       <label>Title<input required autoFocus maxLength={250} value={draft.summary} onChange={(e) => change("summary", e.target.value)} /></label>
       <label className="calendar-checkbox"><input type="checkbox" checked={allDay} onChange={(e) => { setAllDay(e.target.checked); setStart(e.target.checked ? start.slice(0, 10) : `${start.slice(0, 10)}T09:00`); setEnd(e.target.checked ? end.slice(0, 10) : `${end.slice(0, 10)}T10:00`); }} />All day</label>
       <div className="calendar-editor-pair"><label>Start<input required type={allDay ? "date" : "datetime-local"} value={start} onChange={(e) => setStart(e.target.value)} /></label><label>End {allDay ? "(following day)" : ""}<input required type={allDay ? "date" : "datetime-local"} value={end} onChange={(e) => setEnd(e.target.value)} /></label></div>

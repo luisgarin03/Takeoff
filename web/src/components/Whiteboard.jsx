@@ -1,3 +1,4 @@
+import { useFitToolbar } from "../lib/useFitToolbar.js";
 import EstimateDocumentEditor from './EstimateDocumentEditor.jsx';
 import SupplierList from './SupplierList.jsx';
 import { newEstimateDocument, estimateDocumentPdf } from '../lib/estimateDocument.js';
@@ -228,6 +229,8 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
   const root = useRef(null), viewport = useRef(null), input = useRef(null);
   const cameraInput = useRef(null);
   const toolbarRef = useRef(null);
+  const headerRef = useRef(null);
+  useFitToolbar(headerRef);
   const [toolbarHidden, setToolbarHidden] = useState(false);
   useEffect(() => {
     const element = toolbarRef.current;
@@ -862,7 +865,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
       onClose={() => { if (!exporting) setExportRequest(null); }} />}
     {toolbarHidden && <Button icon="chevronDown" className="wb-toolbar-reveal" label="Show toolbar" onClick={() => setToolbarHidden(false)} />}
     <div className="wb-toolbar-overlay" ref={toolbarRef} hidden={toolbarHidden}>
-    <header className="wb-header">
+    <header ref={headerRef} className="wb-header">
       <Button icon="chevronLeft" label="Close whiteboard" onClick={onClose} disabled={busy} />
       <div className="wb-title"><strong>Whiteboard</strong><span>{projectName || "Untitled project"}</span></div>
       <div className="wb-primary-tools">

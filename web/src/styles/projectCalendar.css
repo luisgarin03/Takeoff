@@ -146,3 +146,97 @@
 @media(max-width:550px) { .project-calendar-shade { padding: 4px; } .calendar-workspace { height: calc(100dvh - 8px); } .calendar-workspace-body { flex-direction: column; } .calendar-sidebar { flex: 0 0 auto; max-height: 160px; border-right: 0; border-bottom: 1px solid var(--ink-faint); } .calendar-mini { display: none; } .calendar-sidebar h4 { margin: 8px 0; } .calendar-sidebar > label { display: inline-flex !important; margin-right: 8px; } .calendar-settings { max-height: 140px; overflow:auto; } .calendar-main { min-height: 300px; } .calendar-editor-pair { grid-template-columns: 1fr; } }
 
 .google-event-description { min-height: 240px; line-height: 1.65; white-space: pre-wrap; resize: vertical; }
+
+/* Dark fields remain distinct from the Calendar and editor surfaces. */
+:root[data-theme="dark"] :is(.project-calendar, .calendar-event-editor, .calendar-event-detail, .calendar-bid-form) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]):not([type="button"]):not([type="submit"]), textarea, select) {
+  background: #101011 !important;
+  color: #e3e3e3 !important;
+  border: 1px solid #454548;
+  color-scheme: dark;
+}
+:root[data-theme="dark"] :is(.project-calendar, .calendar-event-editor, .calendar-event-detail, .calendar-bid-form) :is(input, textarea)::placeholder {
+  color: #a5a5ad;
+  opacity: 1;
+}
+:root[data-theme="dark"] :is(.project-calendar, .calendar-event-editor, .calendar-event-detail, .calendar-bid-form) :is(input, textarea, select):focus-visible {
+  outline: 2px solid #a8c7fa;
+  outline-offset: 1px;
+}
+
+
+:root[data-theme="dark"] :is(.project-calendar, .calendar-event-editor, .calendar-event-detail, .calendar-bid-form) {
+  --field-bg: #101011;
+  --field-ink: #e3e3e3;
+  --field-placeholder: #a5a5ad;
+  --field-border: #454548;
+  --field-scheme: dark;
+}
+
+/* Keep individual view buttons without an enclosing capsule. */
+.calendar-workspace .calendar-main [role="tablist"] {
+  border: 0 !important;
+  outline: 0;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.calendar-search-results { flex: 0 0 auto; max-height: 180px; overflow: auto; padding: 10px 16px; border-bottom: 1px solid var(--ink-faint); } .calendar-search-results > button { display: block; margin-top: 5px; text-align: left; }
+
+/* Calendar controls share one rhythm and height. */
+:root .calendar-workspace > header { align-items: center; gap: 10px; }
+:root:root:root:root body .calendar-workspace > header :is(input, select, button) {
+  box-sizing: border-box;
+  height: 36px !important;
+  min-height: 36px !important;
+}
+:root .calendar-workspace > header select { padding: 5px 10px; }
+:root .calendar-workspace > header button { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; }
+:root .calendar-sidebar > button { display: block; margin: 0 0 8px; min-height: 36px; }
+:root .calendar-main [role="tablist"] { display: flex; gap: 8px; }
+:root .calendar-main [role="tablist"] > button { margin: 0; border-radius: 7px; }
+
+:root .calendar-workspace > header select[aria-label="Filter category"] {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 150px;
+  padding: 5px 36px 5px 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 12px !important;
+}
+
+/* Calendar views behave as one segmented toggle. */
+:root .calendar-workspace .calendar-main [role="tablist"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border: 0 !important;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--ink) 6%, var(--paper-bright)) !important;
+  box-shadow: none !important;
+}
+:root .calendar-workspace .calendar-main [role="tablist"] > button {
+  margin: 0;
+  min-height: 32px;
+  padding: 6px 13px;
+  border: 0 !important;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-muted);
+  box-shadow: none;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+:root .calendar-workspace .calendar-main [role="tablist"] > button[aria-selected="true"] {
+  background: var(--ink) !important;
+  color: var(--paper-bright) !important;
+  font-weight: 600;
+  box-shadow: 0 1px 3px #0003;
+}
+:root .calendar-workspace .calendar-main [role="tablist"] > button:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root .calendar-workspace .calendar-main [role="tablist"] > button { transition: none; }
+}

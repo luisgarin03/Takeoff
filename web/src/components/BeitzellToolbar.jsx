@@ -1,3 +1,4 @@
+import { useFitToolbar } from "../lib/useFitToolbar.js";
 import React, { createContext, useEffect, useId, useRef, useState } from "react";
 import "../styles/toolbarTabs.css";
 
@@ -8,6 +9,8 @@ const TABS = ["Sheets", "Takeoff"];
 export default function BeitzellToolbar({ logo, projectSelector, account, project, sheets, takeoff, sheetNavigation }) {
   const [active, setActive] = useState(null);
   const id = useId();
+  const headerRef = useRef(null);
+  useFitToolbar(headerRef);
   const tabsRef = useRef(null);
   useEffect(() => {
     const tabs = tabsRef.current;
@@ -36,7 +39,7 @@ export default function BeitzellToolbar({ logo, projectSelector, account, projec
     document.getElementById(`${id}-${TABS[next]}`)?.focus();
   }
   return <div className="estimating-toolbar">
-    <div className="estimating-toolbar-header">
+    <div ref={headerRef} className="estimating-toolbar-header">
       <div className="estimating-toolbar-logo">{logo}</div>
       <ToolbarPanelContext.Provider value={true}><div className="estimating-toolbar-project">{projectSelector}{project}</div></ToolbarPanelContext.Provider>
       <div ref={tabsRef} className="estimating-toolbar-tabs" role="tablist" aria-label="Estimating toolbar" onKeyDown={onKeyDown}>

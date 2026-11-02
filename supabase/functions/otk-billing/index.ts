@@ -2,7 +2,7 @@ import { trialEntitlement } from "../_shared/trial-entitlement.js";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 
 const env = (key: string) => Deno.env.get(key) || "";
-const allowedOrigins = (env("OTK_BILLING_ALLOWED_ORIGINS") + "," + env("OTK_DEPLOYMENT_ALLOWED_ORIGINS")).split(",").map((value) => value.trim()).filter(Boolean);
+const allowedOrigins = ("https://app.estimating.studio," + env("OTK_BILLING_ALLOWED_ORIGINS") + "," + env("OTK_DEPLOYMENT_ALLOWED_ORIGINS")).split(",").map((value) => value.trim()).filter(Boolean);
 const entitlementId = env("REVENUECAT_ENTITLEMENT_ID");
 const revenueCatKey = env("REVENUECAT_SECRET_API_KEY");
 const webhookAuthorization = env("REVENUECAT_WEBHOOK_AUTHORIZATION");
@@ -241,4 +241,3 @@ Deno.serve(async (req: Request) => {
     return json({ code: "OTK_BILLING_FAILED" }, 502);
   }
 });
-

@@ -75,11 +75,11 @@ Deno.serve(async (req: Request) => {
       const { data: connection, error: connectionError } = await db.from("google_connections").select("status,granted_scopes").eq("owner_id", user).maybeSingle();
       if (connectionError) return json({ code: "OTK_CALENDAR_SETUP" }, 503);
       if (action === "calendar-disconnect") {
-        const remaining = (connection?.granted_scopes || []).filter((scope: string) => !scope.startsWith("https://www.googleapis.com/auth/calendar."));
+        const remaining = (connection?.granted_scopes || []).filter((scope: string) => scope !== "https://www.googleapis.com/auth/calendar" && !scope.startsWith("https://www.googleapis.com/auth/calendar."));
         const { error } = await db.from("google_connections").update({ granted_scopes: remaining, selected_calendar_ids: [], status: remaining.includes("https://www.googleapis.com/auth/drive.file") ? "connected" : "disconnected", updated_at: new Date().toISOString() }).eq("owner_id", user);
         return error ? json({ code: "OTK_CALENDAR_SETUP" }, 503) : json({ disconnected: true });
       }
-      if (connection?.status !== "connected" || !connection.granted_scopes?.includes("https://www.googleapis.com/auth/calendar.events.readonly")) return json({ code: "OTK_CALENDAR_CONNECT" }, 409);
+      if (connection?.status !== "connected" || !(connection.granted_scopes?.includes("https://www.googleapis.com/auth/calendar.events.readonly") || connection.granted_scopes?.includes("https://www.googleapis.com/auth/calendar"))) return json({ code: "OTK_CALENDAR_CONNECT" }, 409);
       const readActions = ["calendar-calendars", "calendar-events", "calendar-get", "calendar-colors"];
       if (!readActions.includes(action) && !connection.granted_scopes?.includes("https://www.googleapis.com/auth/calendar")) return json({ code: "OTK_CALENDAR_WRITE_PERMISSION" }, 403);
       const input = JSON.parse(new TextDecoder().decode(await limitedBytes(req, 131072)));
