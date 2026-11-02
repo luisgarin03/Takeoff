@@ -4,18 +4,26 @@ import { createAppBillingAdapter } from "../lib/stripeBilling.js";
 import { useLicenseAccess } from "../lib/licenseAccess.jsx";
 import TrialCountdown from "./TrialCountdown.jsx";
 import StartTrialButton from "./StartTrialButton.jsx";
+import "../styles/subscriptionPass.css";
+
+const PASS_FEATURES = ["PDF plans and sheet navigation", "Length, area, and count takeoffs", "Drawing markups and annotations", "Material calculations and estimates", "Cloud projects"];
 
 function SubscriptionPlanCard({ plan, current, disabled, onChoose }) {
-  return <article className="subscription-plan">
-    <h4>{plan.name}</h4>
-    <p>{plan.billingLabel}</p>
-    {plan.testMode && <span className="subscription-badge">Stripe sandbox</span>}
-    {current && <span className="subscription-badge">Current plan</span>}
-    <p className="subscription-price">{plan.displayPrice || monthlyPrice(plan.price)}<span> / {plan.interval}</span></p>
-    <button type="button" disabled={disabled || current} onClick={() => onChoose(plan.id)}>{current ? "Current plan" : `Choose ${plan.billingLabel}`}</button>
+  const yearly = plan.interval === "year";
+  return <article className="subscription-plan subscription-pass">
+    <div className="pass-eyebrow"><span>ESTIMATING</span><span>{yearly ? "Best value" : "Flexible access"}</span></div>
+    <div className="pass-word" aria-hidden="true">PASS</div>
+    <div className="pass-perforation" aria-hidden="true"><span>✂</span></div>
+    <h4>{yearly ? "Pass for a year" : "Pass for 30 days"}</h4>
+    <p className="pass-description">{yearly ? "A full year of ESTIMATING." : "A flexible pass for your estimating work."}</p>
+    <div className="pass-badges">{plan.testMode && <span className="subscription-badge">Stripe sandbox</span>}{current && <span className="subscription-badge">Current plan</span>}</div>
+    <div className="pass-pricing"><p className="subscription-price">{plan.displayPrice || monthlyPrice(plan.price)}</p><span>{yearly ? "Yearly subscription" : "Monthly subscription"}</span></div>
+    <ul className="pass-features">{PASS_FEATURES.map((feature) => <li key={feature}><span aria-hidden="true">✓</span>{feature}</li>)}</ul>
+    <button type="button" aria-label={current ? `Current ${plan.billingLabel} plan` : `Choose ${plan.billingLabel} pass`} disabled={disabled || current} onClick={() => onChoose(plan.id)}><span>{current ? "Current plan" : "Choose this pass"}</span><span aria-hidden="true">↗</span></button>
+    <p className="pass-terms">{plan.displayPrice || monthlyPrice(plan.price)} billed {yearly ? "yearly" : "monthly"} · Subscription terms shown at checkout.</p>
+    <footer className="pass-footer"><div><small>Access pass</small><strong>{yearly ? "01Y" : "30D"}</strong></div><div className="pass-barcode" aria-hidden="true" /></footer>
   </article>;
 }
-
 export default function SubscriptionSection({ user, offline, client, service: suppliedService, onOpenWorkspace }) {
   const license = useLicenseAccess();
   const configuredService = useMemo(() => client ? createBillingService(createAppBillingAdapter(client)) : billingService, [client]);
@@ -39,7 +47,8 @@ export default function SubscriptionSection({ user, offline, client, service: su
     document.addEventListener("visibilitychange", refresh);
     return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, []);
-  const record = license.subscription?.subscriptionProvider === 'trial' ? license.subscription : state.record;
+  // Show the billing subscription even when editing uses a trial.
+  const record = state.record || license.subscription;
   const current = record && ["active", "trialing"].includes(record.subscriptionStatus);
   const plan = SUBSCRIPTION_PLANS.find((item) => item.id === record?.subscriptionPlan);
   async function action(planId) {

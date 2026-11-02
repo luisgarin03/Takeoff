@@ -1,3 +1,4 @@
+import AppSettingsDialog from "../components/AppSettingsDialog.jsx";
 import SymbolSearchDialog from "../components/SymbolSearchDialog.jsx";
 
 import { hasEditingMembership, sandboxLicensesAllowed, trialDaysRemaining } from "../lib/license.js";
@@ -414,6 +415,7 @@ export default function TakeoffCanvas() {
   // above. lib/theme.js owns the DOM; this state just keeps the glyph current.
   const [theme, setTheme] = useState(getTheme);
   const [themeSettingsOpen, setThemeSettingsOpen] = useState(false);
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   useEffect(() => onThemeChange(setTheme), []);
   // diff-only prefs (cf. reportColumns): only keys that differ from the
   // defaults persist, so a future default change reaches existing users
@@ -2261,6 +2263,8 @@ export default function TakeoffCanvas() {
     setPlanImportBusy(true);
     try {
       setCommitMsg("Reading files…");
+      // Let the opening animation paint before parsing or validating plans.
+      await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
       let pdfs = [], skipped = [];
       try { ({ pdfs, skipped } = await ingestFiles(incoming, { onProgress: setCommitMsg })); }
       catch (e) { setCommitMsg(`Couldn't read those files: ${e.message || e}`); return false; }
@@ -3294,6 +3298,7 @@ export default function TakeoffCanvas() {
     projectFileLock.current = true;
     setProjectFileBusy("Opening project file..."); setProjectFileError("");
     try {
+      await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
       if (file.size > MAX_PROJECT_FILE_BYTES) throw new Error(`Project file exceeds the ${MAX_PROJECT_FILE_LABEL} limit.`);
       const project = await readProjectFile(new Uint8Array(await file.arrayBuffer()));
       const compatiblePdfs = [];
@@ -8134,32 +8139,34 @@ export default function TakeoffCanvas() {
       onOpenChange={onMenuDepth} disabled={!!projectFileBusy}
       items={[
         { id: "new-project", icon: "plus", label: "New project…", onSelect: () => setProjectMetadataModal("new") },
-        { id: "edit-project", label: "Project Data..", onSelect: () => setView("gallery") },
-        { id: "project-calendar", label: "Project calendar", onSelect: () => setProjectCalendarOpen(true) },
+        { id: "edit-project", icon: "blueprint", label: "Project Data…", onSelect: () => setView("gallery") },
+        { id: "project-calendar", icon: "calendar", label: "Calendar", onSelect: () => setProjectCalendarOpen(true) },
         "divider",
         { id: "save-project", icon: "document", label: "Save..", onSelect: () => setSaveSettingsOpen(true), disabled: !hydrated.current || !!loadError },
         ...(compactProject ? [{ id: "import-missing-files", icon: "plus", label: "Import missing files...", onSelect: () => { setMissingImportError(""); setMissingImportOpen(true); },
           title: `Restore ${compactProject.files.length} original PDF${compactProject.files.length === 1 ? "" : "s"} from a folder or ZIP file.` }] : []),
-        { id: "open-project", icon: "plus", label: "Open project...", onSelect: () => projectInputRef.current?.click() },
+        { id: "open-project", icon: "folder", label: "Open project...", onSelect: () => projectInputRef.current?.click() },
         { id: "open-recent", custom: <RecentProjectsMenu /> },
         { id: "pdf-opening-settings", icon: "sliders", label: "PDF opening & OCR...", onSelect: () => setPdfOpeningSettingsOpen(true),
           title: `Saved plans: ${pdfPreferences.openMode === PDF_OPEN_MODES.FAST ? "fast auto-detect" : "verify every page"} · Find OCR: ${pdfPreferences.ocrMode}` },
         "divider",
-        { id: "print-plans", icon: "document", label: "Print...", onSelect: () => setPrintDialogOpen(true),
+        { id: "print-plans", icon: "printer", label: "Print...", onSelect: () => setPrintDialogOpen(true),
           disabled: !focusPanel.file || !hydrated.current || !!loadError },
-        { id: "download-page", icon: "document", label: pageExportBusy ? "Downloading page..." : "Download this page...",
+        { id: "download-page", icon: "download", label: pageExportBusy ? "Downloading page..." : "Download this page...",
           title: "Choose export quality and download the current sheet with takeoff lines, notes, and markups but no measurement labels", onSelect: () => setPageExportDialogOpen(true),
           disabled: pageExportBusy || !focusPanel.file || !hydrated.current || !!loadError },
-        { id: "fence-calculator", icon: "calculator", label: "Fence Material Calculator...",
+        { id: "fence-calculator", icon: "fenceCalculator", label: "Fence Material Calculator...",
           title: "Calculate fence materials from the active takeoff's LF or count", onSelect: () => setFenceCalculatorOpen(true),
           disabled: !hydrated.current || !!loadError },
         ...(new URLSearchParams(window.location.search).has("localProject") ? ["divider",
           { id: "local-workspace", label: "Return to default workspace", onSelect: () => window.location.assign(window.location.pathname) }] : []),
+        "divider",
+        { id: "app-settings", icon: "settings", label: "Settings", onSelect: () => setAppSettingsOpen(true) },
       ]} /></>
   );
 
   const longTaskLabel = planImportBusy
-    ? "Checking plan compatibility…"
+    ? "Opening plans…"
     : missingImportBusy
       ? missingImportBusy
     : whiteboardImportBusy
@@ -8182,7 +8189,7 @@ export default function TakeoffCanvas() {
       <input ref={missingFilesInputRef} type="file" accept=".pdf,application/pdf,.zip,application/zip,application/x-zip-compressed" multiple
         aria-label="Choose original PDFs or a ZIP containing missing project files" style={{ display: "none" }}
         onChange={(e) => { const files = Array.from(e.target.files || []); e.target.value = ""; if (files.length) replaceMissingProjectFiles(files); }} />
-      <LongTaskLoader active={!!longTaskLabel} label={longTaskLabel || "Working…"} variant="fixed" delay={350} />
+      <LongTaskLoader active={!!longTaskLabel} label={longTaskLabel || "Working…"} variant="fixed" delay={0} />
       {scaleRequiredSheet && <div role="dialog" aria-modal="true" aria-labelledby="scale-required-title"
         onPointerDown={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}
         style={{ position: "fixed", inset: 0, zIndex: 3100, display: "grid", placeItems: "center", padding: 20, background: "rgba(0,0,0,.48)" }}>
@@ -8351,7 +8358,7 @@ export default function TakeoffCanvas() {
         <div role="dialog" aria-modal="true" aria-label="Project file" onDrop={(e) => e.stopPropagation()}
           style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", padding: 16 }}>
           <div className="panel" style={{ background: "var(--paper-bright)", color: "var(--ink)", padding: 24, maxWidth: 420 }}>
-            <LongTaskLoader active={!!projectFileBusy} label={projectFileBusy || "Opening project…"} compact delay={300} />
+            <LongTaskLoader active={!!projectFileBusy} label={projectFileBusy || "Opening project…"} compact delay={0} />
             <p role={projectFileError ? "alert" : undefined} style={{ overflowWrap: "anywhere" }}>{projectFileError || projectFileBusy || `Open ${projectFilePrompt.name}?`}</p>
             {projectFilePrompt && <>
               <p>Your current project stays saved in this browser. Finish any drawing in progress before switching.</p>
@@ -9279,7 +9286,7 @@ export default function TakeoffCanvas() {
          </div>
        )}
        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-        <div ref={containerRef} {...touchZoom} onPointerDown={(event) => {
+        <div className="takeoff-workspace-surface" ref={containerRef} {...touchZoom} onPointerDown={(event) => {
           if (readOnly && tool !== "pan" && tool !== "text-select") { denyReadOnlyEdit(); return; }
           if ((tool === "select" || tool === "text-select") && !textLeaderMarkupId && event.target?.closest?.(".takeoff-pdf-text-layer")) {
             const point = toImage(event.clientX, event.clientY);
@@ -10181,6 +10188,7 @@ export default function TakeoffCanvas() {
 
        </div>
 
+        {appSettingsOpen && <AppSettingsDialog onClose={() => setAppSettingsOpen(false)} onMenuDepth={onMenuDepth} onAppearance={() => setThemeSettingsOpen(true)} onPdf={() => setPdfOpeningSettingsOpen(true)} onTrackpad={() => setSettingsOpen(true)} />}
         {themeSettingsOpen && <ThemeSettings theme={theme} toggleTheme={toggleTheme} onClose={() => setThemeSettingsOpen(false)} onMenuDepth={onMenuDepth} />}
         {settingsOpen && <TrackpadSettings
           visible={trackpadVisible} width={trackpadWidth} height={trackpadHeight} opacity={trackpadOpacity}

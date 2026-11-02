@@ -157,7 +157,7 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
                 onMouseLeave={(e) => { e.currentTarget.style.background = it.active ? "var(--paper-cream)" : "transparent"; if (!dis) it.onHover?.(false); }}>
                 {it.disclosure && <span style={{ display: "inline-flex", width: 13, justifyContent: "center", color: "var(--ink-muted)" }}><Icon name={it.disclosure === "expanded" ? "chevronDown" : "chevronRight"} size={12} /></span>}
                 {checkable && <span style={{ display: "inline-flex", width: 15, justifyContent: "center", color: "var(--c-positive)", visibility: it.checked ? "visible" : "hidden" }}><Icon name="check" size={14} /></span>}
-                {it.icon && <span style={{ display: "inline-flex", width: 17, justifyContent: "center", color: it.tint || fg }}><Icon name={it.icon} size={16} /></span>}
+                {it.icon && <span style={{ display: "inline-flex", width: 17, height: 18, flexShrink: 0, alignItems: "center", justifyContent: "center", color: it.tint || fg }}><Icon name={it.icon} size={16} /></span>}
                 <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 13, fontWeight: it.header || it.active ? 600 : 400, ...(it.accessory ? { minWidth: 0, overflowWrap: "anywhere" } : {}) }}>{it.label}</span>
                 {it.shortcut && <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-muted)" }}>{it.shortcut}</span>}
               </button>

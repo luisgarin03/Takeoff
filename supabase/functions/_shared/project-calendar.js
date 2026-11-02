@@ -77,13 +77,14 @@ export function createProjectCalendar({ token, fetcher = fetch }) {
       return request(auth, "/freeBusy", "POST", { timeMin: input.start, timeMax: input.end, items: input.ids.map((id) => ({ id })) });
     }
     if (action === "events") {
+      const search = String(input.search || "").trim().slice(0, 200);
       const start = new Date(input.start), end = new Date(input.end);
-      if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start || end - start > 100 * 86400000) fail("OTK_CALENDAR_RANGE");
+      if (!search && (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start || end - start > 100 * 86400000)) fail("OTK_CALENDAR_RANGE");
       const calendar = (calendars.items || []).find((c) => c.id === input.calendarId);
       if (!calendar) fail("OTK_CALENDAR_REQUEST");
       let items = [], pageToken = "";
       do {
-        const query = new URLSearchParams({ timeMin: start.toISOString(), timeMax: end.toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "250", ...(pageToken ? { pageToken } : {}) });
+        const query = new URLSearchParams({ ...(search ? { q: search, singleEvents: "false" } : { timeMin: start.toISOString(), timeMax: end.toISOString(), singleEvents: "true", orderBy: "startTime" }), maxResults: "250", ...(pageToken ? { pageToken } : {}) });
         const page = await request(auth, `/calendars/${encodeURIComponent(calendar.id)}/events?${query}`);
         items.push(...(page.items || []).filter((event) => event.status !== "cancelled")); pageToken = page.nextPageToken || "";
       } while (pageToken && items.length < 2000);

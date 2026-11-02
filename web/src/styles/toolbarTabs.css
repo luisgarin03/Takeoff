@@ -371,3 +371,17 @@ textarea.condition-name-input { display: block; resize: none; overflow: hidden; 
 .canvas-workspace .glass-drawer-markups { position: fixed !important; inset: auto 0 0 0 !important; width: 100vw !important; max-width: 100vw !important; height: 50dvh; max-height: 50dvh; z-index: 450 !important; border: 1px solid var(--ink-faint); border-bottom: 0; border-radius: 10px 10px 0 0; box-sizing: border-box; animation: conditions-drawer-up 180ms ease-out; }
 .canvas-workspace .glass-drawer-markups > div:first-child { flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) { .canvas-workspace .glass-drawer-markups { animation: none; } }
+
+
+/* Keep every header control together; useFitToolbar scales only on overflow. */
+:root .estimating-toolbar-header { flex-wrap: nowrap; width: max-content; min-width: 100%; box-sizing: border-box; }
+:root .estimating-toolbar-header > * { flex-shrink: 0; }
+@media (max-width: 900px) {
+  :root .estimating-toolbar-header { gap: 4px; padding: 4px; }
+  :root .estimating-toolbar-header button { padding-left: 5px; padding-right: 5px; }
+}
+
+.tool-menu-popover .dropdown-action { min-height: 32px; }
+.tool-menu-popover .dropdown-action svg { display: block; flex-shrink: 0; }
+.tool-menu-popover .recent-projects > summary { padding-left: 16px !important; }
+.tool-menu-popover .recent-projects > summary::marker { font-size: 12px; }
