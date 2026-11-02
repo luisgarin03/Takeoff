@@ -1,4 +1,4 @@
-"use client"
+import { supabase } from "@/lib/supabase"
 
 import {
   CreditCard,
@@ -109,7 +109,7 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuItem
                 className="cursor-pointer"
-                render={<Link to="/sign-in" />}
+                onClick={() => { void supabase?.auth.signOut({scope:"local"}) }}
               >
                 <LogOut />
                 Log out

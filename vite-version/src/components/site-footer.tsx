@@ -16,7 +16,7 @@ export function SiteFooter() {
               rel="noopener noreferrer"
               className="font-medium text-foreground hover:text-primary transition-colors"
             >
-              ShadcnStore Team
+              ESTIMATING Team
             </Link>
           </div>
           <p className="text-xs text-muted-foreground">

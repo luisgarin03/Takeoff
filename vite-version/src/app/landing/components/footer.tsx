@@ -1,3 +1,4 @@
+import { getAppUrl } from "@/lib/utils"
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -42,10 +43,10 @@ const footerLinks = {
     { name: "Webinars", href: "#webinars" },
   ],
   legal: [
-    { name: "Privacy", href: "#privacy" },
-    { name: "Terms", href: "#terms" },
-    { name: "Security", href: "#security" },
-    { name: "Status", href: "#status" },
+    { name: "Privacy", href: getAppUrl("/legal/privacy") },
+    { name: "Terms", href: getAppUrl("/legal/terms") },
+    { name: "Security", href: getAppUrl("/legal/security") },
+    { name: "Status", href: getAppUrl("/legal/status") },
   ],
 }
 
@@ -128,7 +129,7 @@ export function LandingFooter() {
                 className="flex items-center gap-2 cursor-pointer"
               >
                 <Logo size={32} />
-                <span className="font-bold text-xl">ShadcnStore</span>
+                <span className="font-bold text-xl brand-text-shimmer">ESTIMATING</span>
               </a>
             </div>
             <p className="text-muted-foreground mb-6 max-lg:text-center max-lg:flex max-lg:justify-center">
@@ -238,7 +239,7 @@ export function LandingFooter() {
                 target="_blank"
                 className="font-semibold text-foreground hover:text-primary transition-colors cursor-pointer"
               >
-                ShadcnStore
+                ESTIMATING
               </a>
             </div>
             <span className="hidden sm:inline">•</span>
@@ -248,22 +249,22 @@ export function LandingFooter() {
           </div>
           <div className="flex items-center gap-4 text-sm text-muted-foreground mt-4 md:mt-0">
             <a
-              href="#privacy"
+              href={getAppUrl("/legal/privacy")}
               className="hover:text-foreground transition-colors"
             >
               Privacy Policy
             </a>
             <a
-              href="#terms"
+              href={getAppUrl("/legal/terms")}
               className="hover:text-foreground transition-colors"
             >
               Terms of Service
             </a>
             <a
-              href="#cookies"
+              href={getAppUrl("/legal/privacy")}
               className="hover:text-foreground transition-colors"
             >
-              Cookie Policy
+              Cookies & storage
             </a>
           </div>
         </div>

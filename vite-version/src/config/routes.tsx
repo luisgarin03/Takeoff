@@ -1,5 +1,5 @@
 import type { ComponentType } from "react"
-import { Navigate, type RouteObject } from "react-router-dom"
+import { type RouteObject } from "react-router-dom"
 
 /**
  * Every page is code-split. With the data router, a route's code is loaded
@@ -12,9 +12,13 @@ function page(load: () => Promise<{ default: ComponentType }>) {
 
 export const routes: RouteObject[] = [
   // Use relative path "dashboard" instead of "/dashboard" for basename compatibility
-  { path: "/", element: <Navigate to="dashboard" replace /> },
+  { path: "/", lazy: page(() => import("@/app/home/page")) },
+  { path: "/legal", lazy: page(() => import("@/app/legal/page")) },
+  { path: "/legal/:document", lazy: page(() => import("@/app/legal/page")) },
+  { path: "/checkout", lazy: page(() => import("@/app/checkout/page")) },
   // Landing Page
   { path: "/landing", lazy: page(() => import("@/app/landing/page")) },
+  { path: "/preview", lazy: page(() => import("@/app/preview/page")) },
   // Dashboard Routes
   { path: "/dashboard", lazy: page(() => import("@/app/dashboard/page")) },
   { path: "/dashboard-2", lazy: page(() => import("@/app/dashboard-2/page")) },

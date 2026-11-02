@@ -1,3 +1,4 @@
+import { Ecosystem } from "@/components/ecosystem"
 "use client"
 
 import React from "react"
@@ -20,17 +21,18 @@ import {
 } from "./components/landing-theme-customizer"
 import { AboutSection } from "./components/about-section"
 
-export default function LandingPage() {
+export default function LandingPage({preview=false}:{preview?:boolean}) {
   const [themeCustomizerOpen, setThemeCustomizerOpen] = React.useState(false)
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="estimating-landing min-h-screen bg-background text-foreground">
       {/* Navigation */}
-      <LandingNavbar />
+      <LandingNavbar preview={preview} />
 
       {/* Main Content */}
       <main>
         <HeroSection />
+        <Ecosystem />
         <LogoCarousel />
         <StatsSection />
         <AboutSection />
@@ -48,13 +50,13 @@ export default function LandingPage() {
       <LandingFooter />
 
       {/* Theme Customizer */}
-      <LandingThemeCustomizerTrigger
+      {preview && <><LandingThemeCustomizerTrigger
         onClick={() => setThemeCustomizerOpen(true)}
       />
       <LandingThemeCustomizer
         open={themeCustomizerOpen}
         onOpenChange={setThemeCustomizerOpen}
-      />
+      /></>}
     </div>
   )
 }

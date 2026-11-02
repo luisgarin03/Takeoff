@@ -1,67 +1,68 @@
 "use client"
 
 import {
-  BarChart3,
+  CalendarDays,
   Zap,
-  Users,
+  Eye,
   ArrowRight,
-  Database,
+  Link2,
   Package,
   Crown,
   Layout,
-  Palette,
+  ListChecks,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Image3D } from "@/components/image-3d"
 
+
 const mainFeatures = [
   {
     icon: Package,
-    title: "Curated Component Library",
+    title: "PDFs & Images",
     description:
-      "Hand-picked blocks and templates for quality and reliability.",
+      "Add PDFs and images to keep your project references together.",
   },
   {
     icon: Crown,
-    title: "Free & Premium Options",
+    title: "Organize Your Files",
     description:
-      "Start free, upgrade to premium collections when you need more.",
+      "Arrange files on the board in a way that makes sense for your project.",
   },
   {
     icon: Layout,
-    title: "Ready-to-Use Templates",
-    description: "Copy-paste components that just work out of the box.",
+    title: "View Files Together",
+    description: "View your documents and images in one visual workspace.",
   },
   {
     icon: Zap,
-    title: "Regular Updates",
-    description: "New blocks and templates added weekly to keep you current.",
+    title: "Notes & Navigation",
+    description: "Paste text or add notes, then pan and zoom to explore the board.",
   },
 ]
 
 const secondaryFeatures = [
   {
-    icon: BarChart3,
-    title: "Multiple Frameworks",
+    icon: CalendarDays,
+    title: "Your Calendar List",
     description:
-      "React, Next.js, and Vite compatibility for flexible development.",
+      "See your connected Google calendars and choose which schedule to view.",
   },
   {
-    icon: Palette,
-    title: "Modern Tech Stack",
-    description: "Built with shadcn/ui, Tailwind CSS, and TypeScript.",
+    icon: ListChecks,
+    title: "Events in Context",
+    description: "Review upcoming events alongside your estimating workflow.",
   },
   {
-    icon: Users,
-    title: "Responsive Design",
-    description: "Mobile-first components for all screen sizes and devices.",
+    icon: Eye,
+    title: "Read-Only Access",
+    description: "View Google Calendar events without changing the originals.",
   },
   {
-    icon: Database,
-    title: "Developer-Friendly",
+    icon: Link2,
+    title: "Google Calendar Connection",
     description:
-      "Clean code, well-documented, easy integration and customization.",
+      "Connect your Google account and authorize access to your calendars and events.",
   },
 ]
 
@@ -72,37 +73,28 @@ export function FeaturesSection() {
         {/* Section Header */}
         <div className="mx-auto max-w-2xl text-center mb-16">
           <Badge variant="outline" className="mb-4">
-            Marketplace Features
+            Project Whiteboard
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">
-            Everything you need to build amazing web applications
+            Organize your files. See the whole picture.
           </h2>
           <p className="text-lg text-muted-foreground">
-            Our marketplace provides curated blocks, templates, landing pages,
-            and admin dashboards to help you build professional applications
-            faster than ever.
+            Bring PDFs, images, and notes into one visual workspace so your project files are easier to organize and view.
           </p>
         </div>
 
         {/* First Feature Section */}
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-8 xl:gap-16 mb-24">
           {/* Left Image */}
-          <Image3D
-            lightSrc="feature-1-light.png"
-            darkSrc="feature-1-dark.png"
-            alt="Analytics dashboard"
-            direction="left"
-          />
+          <Image3D lightSrc="whiteboard-workspace.png" darkSrc="whiteboard-workspace.png" alt="ESTIMATING Whiteboard with controls to add PDFs, images, and notes, and pan or zoom the workspace" direction="left" />
           {/* Right Content */}
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-4">
               <h3 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-                Components that accelerate development
+                A visual home for your project files
               </h3>
               <p className="text-muted-foreground text-base text-pretty">
-                Our curated marketplace offers premium blocks and templates
-                designed to save time and ensure consistency across your admin
-                projects.
+                Use Whiteboard to organize files and view them together. Add PDFs and images, paste text, and arrange your references across the board. Pan, zoom, or fit the view to move from individual details to the bigger picture.
               </p>
             </div>
 
@@ -130,20 +122,8 @@ export function FeaturesSection() {
               ))}
             </ul>
 
-            <div className="flex flex-col sm:flex-row gap-4 pe-4 pt-2">
-              <Button size="lg" className="cursor-pointer">
-                <a
-                  href="https://shadcnstore.com/templates"
-                  className="flex items-center"
-                >
-                  Browse Templates
-                  <ArrowRight className="ms-2 size-4" aria-hidden="true" />
-                </a>
-              </Button>
-              <Button size="lg" variant="outline" className="cursor-pointer">
-                <a href="https://shadcnstore.com/blocks">View Components</a>
-              </Button>
-            </div>
+            <div className="flex flex-col sm:flex-row gap-4 pe-4 pt-2"><Button size="lg" nativeButton={false} render={<a href={import.meta.env.VITE_ESTIMATING_APP_URL || "https://app.estimating.studio"} />}>Open ESTIMATING <ArrowRight className="ms-2 size-4" aria-hidden="true" /></Button><Button size="lg" variant="outline" nativeButton={false} render={<a href="#contact" />}>Ask about Whiteboard</Button></div>
+
           </div>
         </div>
 
@@ -153,12 +133,10 @@ export function FeaturesSection() {
           <div className="flex flex-col gap-6 order-2 lg:order-1">
             <div className="flex flex-col gap-4">
               <h3 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-                Built for modern development workflows
+                Keep your schedule in view
               </h3>
               <p className="text-muted-foreground text-base text-pretty">
-                Every component follows best practices with TypeScript,
-                responsive design, and clean code architecture that integrates
-                seamlessly into your projects.
+                Bring your Google Calendar into ESTIMATING to view your calendars and upcoming events while you work. Keep meetings, site visits, and deadlines in view without switching away from your estimating workspace.
               </p>
             </div>
 
@@ -186,30 +164,13 @@ export function FeaturesSection() {
               ))}
             </ul>
 
-            <div className="flex flex-col sm:flex-row gap-4 pe-4 pt-2">
-              <Button size="lg" className="cursor-pointer">
-                <a href="#" className="flex items-center">
-                  View Documentation
-                  <ArrowRight className="ms-2 size-4" aria-hidden="true" />
-                </a>
-              </Button>
-              <Button size="lg" variant="outline" className="cursor-pointer">
-                <a
-                  href="https://github.com/shadcnstore/shadcn-dashboard-landing-template"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  GitHub Repository
-                </a>
-              </Button>
-            </div>
+            <div className="flex flex-wrap gap-4 pt-2"><Button size="lg" nativeButton={false} render={<a href={import.meta.env.VITE_ESTIMATING_APP_URL || "https://app.estimating.studio"} />}>Open ESTIMATING <ArrowRight className="ms-2 size-4" aria-hidden="true" /></Button><Button size="lg" variant="outline" nativeButton={false} render={<a href="#contact" />}>Ask about Calendar</Button></div>
           </div>
-
           {/* Right Image */}
           <Image3D
-            lightSrc="feature-2-light.png"
-            darkSrc="feature-2-dark.png"
-            alt="Performance dashboard"
+            lightSrc="calendar-preview.svg"
+            darkSrc="calendar-preview.svg"
+            alt="Illustrative monthly calendar with example drawing review, site visit, and bid deadline events"
             direction="right"
             className="order-1 lg:order-2"
           />

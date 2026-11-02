@@ -18,7 +18,7 @@ import {
 } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Logo } from "@/components/logo"
-import { SidebarNotification } from "@/components/sidebar-notification"
+import { supabase } from "@/lib/supabase"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -34,7 +34,7 @@ import {
 
 const data = {
   user: {
-    name: "ShadcnStore",
+    name: "ESTIMATING",
     email: "store@example.com",
     avatar: "",
   },
@@ -210,6 +210,14 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const [account, setAccount] = React.useState({name:"Administrator", email:"", avatar:""})
+  React.useEffect(() => {
+    let active = true
+    void supabase?.auth.getUser().then(({data}) => {
+      if (active && data.user) setAccount({name:data.user.user_metadata.name || "Administrator",email:data.user.email || "",avatar:""})
+    })
+    return () => { active = false }
+  }, [])
   return (
     <Sidebar {...props}>
       <SidebarHeader>
@@ -220,7 +228,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <Logo size={24} className="text-current" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">ShadcnStore</span>
+                <span className="truncate font-medium brand-text-shimmer">ESTIMATING</span>
                 <span className="truncate text-xs">Admin Dashboard</span>
               </div>
             </SidebarMenuButton>
@@ -233,8 +241,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ))}
       </SidebarContent>
       <SidebarFooter>
-        <SidebarNotification />
-        <NavUser user={data.user} />
+        <NavUser user={account} />
       </SidebarFooter>
     </Sidebar>
   )
