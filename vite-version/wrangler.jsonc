@@ -4,6 +4,7 @@
   "account_id": "c2c26c48bd3f7545024eb67e8a2f50e1",
   "compatibility_date": "2026-11-01",
   "workers_dev": true,
+  "previews": {},
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
