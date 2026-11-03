@@ -1,6 +1,6 @@
-import { Ecosystem } from "@/components/ecosystem"
 "use client"
 
+import { Ecosystem } from "@/components/ecosystem"
 import React from "react"
 import { LandingNavbar } from "./components/navbar"
 import { HeroSection } from "./components/hero-section"

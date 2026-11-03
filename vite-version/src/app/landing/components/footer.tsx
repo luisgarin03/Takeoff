@@ -1,6 +1,6 @@
-import { getAppUrl } from "@/lib/utils"
 "use client"
 
+import { getAppUrl } from "@/lib/utils"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, useForm } from "react-hook-form"
 import { z } from "zod"
