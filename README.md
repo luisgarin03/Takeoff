@@ -563,7 +563,7 @@ This clone is the local development workspace for the Cloudflare project `estima
 - Build output: `vite-version/dist`
 - Runtime: Cloudflare static assets, compatibility date `2026-11-01`
 
-Cloudflare production is the `estimating-website` Worker and is published with manual Wrangler deployments. Cloudflare does not connect this Worker to a Git branch, so each deployment should include its full source commit in the Wrangler deployment message. Treat the shared Git branch as source of truth and record the active Worker version after every deployment. Public Vite configuration such as `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` belongs in an untracked local environment file; never commit private service-role keys.
+Cloudflare production is the `estimating-website` Worker and is published with manual Wrangler deployments. Cloudflare does not connect this Worker to a Git branch, so each deployment should include its full source commit in the Wrangler deployment message. Treat the shared Git branch as source of truth and record the active Worker version after every deployment. Copy `vite-version/.env.example` to `vite-version/.env.local` on each PC before building so both machines use the same public Supabase client configuration. The publishable key is intended for browser use; never put a Supabase service-role key in a client build or commit one to Git.
 
 Run locally from `vite-version`:
 
@@ -574,6 +574,6 @@ npm run lint
 npm run build
 ```
 
-Public configuration is documented in `vite-version/.env.example`. Never commit secrets or reuse production write credentials for local testing without explicit approval.
+Public configuration is documented in `vite-version/.env.example`. Never commit private credentials or reuse production write credentials for local testing without explicit approval.
 
 Before working on either PC, fetch the shared branch and fast-forward to it. Keep routine website work on `development/cloudflare-website-local`, commit and push completed changes, then fast-forward the other PC from the same branch. Do not cherry-pick between PCs or force-push. After reviewing the commit, run `npm ci`, `npm run build`, and deploy that exact build manually with Wrangler. Include the full commit hash in the deployment message, then verify the active Worker version and the live site before calling the source and deployment synchronized.
