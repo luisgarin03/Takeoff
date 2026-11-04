@@ -301,16 +301,18 @@ select {
 .find-all-dialog {
   position: fixed;
   top: var(--find-dialog-top, max(12px, env(safe-area-inset-top, 0px)));
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
   right: max(12px, env(safe-area-inset-right, 0px));
   width: min(520px, calc(100vw - 24px));
   min-width: min(360px, calc(100vw - 24px));
-  min-height: min(260px, calc(100dvh - var(--find-dialog-top, 12px) - max(12px, env(safe-area-inset-bottom, 0px))));
+  height: auto !important;
+  min-height: 0;
   max-width: calc(100vw - 24px);
-  max-height: calc(100dvh - var(--find-dialog-top, 12px) - var(--find-dialog-y, 0px) - max(12px, env(safe-area-inset-bottom, 0px)));
+  max-height: none !important;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transform: translate(var(--find-dialog-x, 0px), var(--find-dialog-y, 0px));
+  transform: translate(var(--find-dialog-x, 0px), 0);
   border: 1px solid var(--ink-faint);
   border-radius: 10px;
   background: var(--paper-bright);
@@ -326,11 +328,10 @@ select {
   flex: 0 0 auto;
   padding: 12px 14px;
   border-bottom: 1px solid var(--ink-faint);
-  cursor: grab;
+  cursor: default;
   user-select: none;
   touch-action: none;
 }
-.find-dialog-header:active { cursor: grabbing; }
 .find-dialog-header strong { min-width: 0; overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .find-dialog-header-actions,
 .find-dialog-tabs { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; }
@@ -598,13 +599,14 @@ select {
   border-right: 0;
   border-left: 2px solid currentColor;
 }
+.find-dialog-resize-handle { display: none !important; }
 .find-dialog-resize-handle:focus-visible { outline: 2px solid var(--cobalt); outline-offset: -3px; }
 @media (max-width: 600px) {
   .find-dialog-shade { padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
   .find-all-dialog {
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
     width: calc(100vw - 16px);
     min-width: 0;
-    max-height: calc(100dvh - var(--find-dialog-top, 8px) - var(--find-dialog-y, 0px) - max(8px, env(safe-area-inset-bottom, 0px)));
     border-radius: 9px;
   }
   .find-dialog-header { padding: 9px 11px; }

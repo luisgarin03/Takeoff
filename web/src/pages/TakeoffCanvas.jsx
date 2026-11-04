@@ -270,7 +270,7 @@ export default function TakeoffCanvas() {
   const [hiddenSymbolSearches, setHiddenSymbolSearches] = useState(new Set());
   const isSymbolMatch = (markup) => markup.symbolMatch === true || (markup.type === "svg" && markup.color === "#ff0000" && Array.isArray(markup.pts) && markup.pts.length === 5);
   const [findPanelTab, setFindPanelTab] = useState("find");
-  const [findSearchSetupOpen, setFindSearchSetupOpen] = useState(false);
+  const [findSearchSetupOpen, setFindSearchSetupOpen] = useState(true);
   const [findQuery, setFindQuery] = useState("");
   const [findSuggestions, setFindSuggestions] = useState(() => {
     try {
@@ -294,7 +294,6 @@ export default function TakeoffCanvas() {
   const [findDialogSize, setFindDialogSize] = useState({ width: 0, height: 0 });
   const findInputRef = useRef(null);
   const findDialogRef = useRef(null);
-  const findDragRef = useRef(null);
   const findResizeRef = useRef(null);
   const findRequestRef = useRef(0);
   const findJobSequenceRef = useRef(0);
@@ -2010,15 +2009,17 @@ export default function TakeoffCanvas() {
     if (!findOpen) return undefined;
     const onResize = () => {
       setFindDialogOffset({ x: 0, y: 0 });
-      const panel = findDialogRef.current;
-      if (!panel) return;
+      if (!findDialogRef.current) return;
       const toolbarBottom = document.querySelector(".glass-toolbar-stack")?.getBoundingClientRect().bottom || 0;
-      const maxTop = window.innerHeight - panel.getBoundingClientRect().height - 12;
-      setFindDialogTop(maxTop >= toolbarBottom + 12 ? toolbarBottom + 12 : 12);
+      setFindDialogTop(toolbarBottom + 8);
     };
     const frame = requestAnimationFrame(onResize);
     window.addEventListener("resize", onResize);
     return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", onResize); };
+  }, [findOpen]);
+
+  useEffect(() => {
+    if (findOpen) setFindSearchSetupOpen(true);
   }, [findOpen]);
 
   useEffect(() => {
@@ -2044,36 +2045,6 @@ export default function TakeoffCanvas() {
     return () => { cancelAnimationFrame(frame); observer.disconnect(); };
   }, [findOpen]);
 
-  const startFindDialogDrag = (event) => {
-    if (event.button !== 0 || event.target.closest("button")) return;
-    const rect = findDialogRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    findDragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
-      offsetX: findDialogOffset.x, offsetY: findDialogOffset.y };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    event.preventDefault();
-  };
-  const moveFindDialog = (event) => {
-    const drag = findDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const rect = findDialogRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const dialogStyle = getComputedStyle(findDialogRef.current);
-    const baseRight = parseFloat(dialogStyle.right) || 12;
-    const baseTop = parseFloat(dialogStyle.top) || 12;
-    const baseLeft = window.innerWidth - baseRight - rect.width;
-    const minX = 12 - baseLeft;
-    const maxX = window.innerWidth - 12 - rect.width - baseLeft;
-    const minY = 12 - baseTop;
-    const maxY = window.innerHeight - 12 - rect.height - baseTop;
-    setFindDialogOffset({
-      x: Math.max(minX, Math.min(maxX, drag.offsetX + event.clientX - drag.startX)),
-      y: Math.max(minY, Math.min(maxY, drag.offsetY + event.clientY - drag.startY)),
-    });
-  };
-  const endFindDialogDrag = (event) => {
-    if (findDragRef.current?.pointerId === event.pointerId) findDragRef.current = null;
-  };
   const onFindPanelTabKeyDown = (event) => {
     let next = "";
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") next = findPanelTab === "find" ? "help" : "find";
@@ -8786,12 +8757,12 @@ export default function TakeoffCanvas() {
               onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); closeFind(); } }}
               style={{
                 "--find-dialog-x": `${findDialogOffset.x}px`,
-                "--find-dialog-y": `${findDialogOffset.y}px`,
+                "--find-dialog-y": "0px",
                 "--find-dialog-top": `${findDialogTop}px`,
                 ...(findDialogSize.width ? { width: `${findDialogSize.width}px` } : {}),
                 ...(findDialogSize.height ? { height: `${findDialogSize.height}px` } : {}),
               }}>
-              <header className="find-dialog-header" onPointerDown={startFindDialogDrag} onPointerMove={moveFindDialog} onPointerUp={endFindDialogDrag} onPointerCancel={endFindDialogDrag}>
+              <header className="find-dialog-header">
                 <strong id="find-dialog-title">Find in loaded plans</strong>
                 <span className="find-dialog-header-actions">
                   <span className="find-dialog-tabs" role="tablist" aria-label="Find panel sections">
@@ -8983,8 +8954,7 @@ export default function TakeoffCanvas() {
                 <h4>Panel controls</h4>
                 <p><span className="find-help-preview" aria-hidden="true"><span>Find</span><span className="is-selected">Help</span></span><strong>Find / Help:</strong> switch between the search controls and these instructions.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-square">×</span></span><strong>× in the header:</strong> closes the panel. You can also press Escape or click the active Find toolbar button.</p>
-                <p><span className="find-help-preview" aria-hidden="true"><span><b>Find in loaded plans</b></span></span><strong>Title bar:</strong> drag it to move the panel. The panel stays open while you pan, zoom, or use other tools.</p>
-                <p><span className="find-help-preview" aria-hidden="true"><span className="is-square">└</span><span className="is-square">┘</span></span><strong>Lower corner handles:</strong> drag either corner to resize the panel, including down to the bottom of the screen. When a handle has keyboard focus, use arrow keys to resize, or Shift + arrow keys for larger steps. Scroll inside the panel to read content that does not fit.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span><b>Find in loaded plans</b></span></span><strong>Panel:</strong> opens below the toolbar and fills the remaining screen height. Search controls start expanded and stay open until you collapse them with the arrow beside Matching Pages. The panel stays open while you pan, zoom, or use other tools.</p>
               </div>}
               <button className="find-dialog-resize-handle is-left" type="button" aria-label="Resize find panel from lower-left corner" title="Drag or use arrow keys to resize"
                 onKeyDown={(event) => resizeFindDialogWithKeyboard(event, "left")}

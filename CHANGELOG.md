@@ -2,6 +2,7 @@
 
 ## Unreleased — October 30 checkpoint
 
+- Docked the Find panel below the toolbar through the bottom of the screen and made search controls expanded each time Find opens. The arrow beside Matching pages still collapses the controls while keeping the results heading visible.
 - Added a down-arrow toggle in Find to collapse the keyword and scope-suggestion section while keeping the current search and results available.
 - Darkened the full-page drawing crosshair guides for clearer contrast against bright construction plans without increasing their line weight.
 - Added lightweight drafting feedback to Linear measurements: each newly placed vertex pops into position with a brief expanding ring while its connected segment draws on from the previous point. Reduced-motion users receive the finished geometry without animation.
