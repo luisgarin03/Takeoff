@@ -8911,17 +8911,17 @@ export default function TakeoffCanvas() {
                   <div className="find-page-results-heading">
                     <span className="find-page-results-title">
                       <span>Matching pages</span>
-                      <span className="find-page-navigation">
-                        {findPages.length > 0 && <span className="find-result-count">Page {(findPageIndex + 1).toLocaleString()} / {findPages.length.toLocaleString()}</span>}
-                        <button type="button" onClick={() => moveFindPage(-1)} disabled={!findPages.length || findBusy} title="Previous matching page" aria-label="Previous matching page"><Icon name="chevronLeft" size={13} /></button>
-                        <button type="button" onClick={() => moveFindPage(1)} disabled={!findPages.length || findBusy} title="Next matching page" aria-label="Next matching page"><Icon name="chevronRight" size={13} /></button>
-                      </span>
                       <button type="button" className="find-page-collapse-toggle" aria-expanded={findSearchSetupOpen}
                         aria-controls="find-search-setup-content" onClick={() => setFindSearchSetupOpen((open) => !open)}
                         title={findSearchSetupOpen ? "Collapse search controls" : "Expand search controls"}
                         aria-label={findSearchSetupOpen ? "Collapse search controls" : "Expand search controls"}>
                         <Icon name={findSearchSetupOpen ? "chevronUp" : "chevronDown"} size={13} />
                       </button>
+                      <span className="find-page-navigation">
+                        {findPages.length > 0 && <span className="find-result-count">Page {(findPageIndex + 1).toLocaleString()} / {findPages.length.toLocaleString()}</span>}
+                        <button type="button" onClick={() => moveFindPage(-1)} disabled={!findPages.length || findBusy} title="Previous matching page" aria-label="Previous matching page"><Icon name="chevronLeft" size={13} /></button>
+                        <button type="button" onClick={() => moveFindPage(1)} disabled={!findPages.length || findBusy} title="Next matching page" aria-label="Next matching page"><Icon name="chevronRight" size={13} /></button>
+                      </span>
                     </span>
                     <span className="find-page-results-actions">
                       <button type="button" className="find-page-heading-action" onClick={() => setFindHideSingleMatchPages((hidden) => !hidden)} aria-pressed={findHideSingleMatchPages}
