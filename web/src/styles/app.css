@@ -533,6 +533,7 @@ select {
 .find-page-results { display: flex; min-height: 180px; flex: 1 0 180px; flex-direction: column; gap: 6px; }
 .find-page-results-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; color: var(--ink-muted); font: 700 10px/1.3 var(--f-mono, monospace); letter-spacing: .08em; text-transform: uppercase; }
 .find-page-results-title { display: inline-flex; align-items: center; gap: 5px; }
+.find-page-results-title > .find-page-navigation { margin-left: 2px; }
 .find-page-collapse-toggle { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border: 1px solid var(--ink-faint); border-radius: 5px; padding: 0; background: transparent; color: var(--ink-muted); cursor: pointer; }
 .find-page-collapse-toggle:hover { border-color: var(--cobalt); color: var(--cobalt); }
 .find-page-results-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }

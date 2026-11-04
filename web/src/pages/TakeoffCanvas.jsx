@@ -8865,11 +8865,6 @@ export default function TakeoffCanvas() {
                     aria-pressed={findJobs.some((job) => job.visible !== false)} title="Show or hide highlights for all completed searches">
                     {findJobs.some((job) => job.visible !== false) ? "Unmark all pages" : "Mark all pages"}
                   </button>
-                  <span className="find-page-navigation">
-                    {findPages.length > 0 && <span className="find-result-count">Page {(findPageIndex + 1).toLocaleString()} / {findPages.length.toLocaleString()}</span>}
-                    <button type="button" onClick={() => moveFindPage(-1)} disabled={!findPages.length || findBusy} title="Previous matching page" aria-label="Previous matching page"><Icon name="chevronLeft" size={13} /></button>
-                    <button type="button" onClick={() => moveFindPage(1)} disabled={!findPages.length || findBusy} title="Next matching page" aria-label="Next matching page"><Icon name="chevronRight" size={13} /></button>
-                  </span>
                 </div>
                 <div className="find-dialog-status" aria-live={findBusy ? "off" : "polite"}>
                   {findMessage || (findResults.length && !findBusy ? `${findResults.length.toLocaleString()} matches on ${findPages.length.toLocaleString()} page${findPages.length === 1 ? "" : "s"} across ${new Set(findPages.map((resultPage) => resultPage.file)).size.toLocaleString()} PDF${new Set(findPages.map((resultPage) => resultPage.file)).size === 1 ? "" : "s"}.` : `${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"} will be searched.`)}
@@ -8911,10 +8906,16 @@ export default function TakeoffCanvas() {
                     })}
                   </ol>
                 </section>}
+                </div>
                 {allFindPages.length > 0 && !findBusy && <section className="find-page-results" aria-label="Pages containing search keywords">
                   <div className="find-page-results-heading">
                     <span className="find-page-results-title">
                       <span>Matching pages</span>
+                      <span className="find-page-navigation">
+                        {findPages.length > 0 && <span className="find-result-count">Page {(findPageIndex + 1).toLocaleString()} / {findPages.length.toLocaleString()}</span>}
+                        <button type="button" onClick={() => moveFindPage(-1)} disabled={!findPages.length || findBusy} title="Previous matching page" aria-label="Previous matching page"><Icon name="chevronLeft" size={13} /></button>
+                        <button type="button" onClick={() => moveFindPage(1)} disabled={!findPages.length || findBusy} title="Next matching page" aria-label="Next matching page"><Icon name="chevronRight" size={13} /></button>
+                      </span>
                       <button type="button" className="find-page-collapse-toggle" aria-expanded={findSearchSetupOpen}
                         aria-controls="find-search-setup-content" onClick={() => setFindSearchSetupOpen((open) => !open)}
                         title={findSearchSetupOpen ? "Collapse search controls" : "Expand search controls"}
@@ -8952,7 +8953,6 @@ export default function TakeoffCanvas() {
                     })}
                   </ol>
                 </section>}
-                </div>
               </div> : <div id="find-help-panel" className="find-dialog-content find-dialog-help-panel" role="tabpanel" aria-labelledby="find-help-tab">
                 <h3>Find help</h3><p>Button previews below are visual references; use the Find tab to operate them.</p>
                 <h4>Search words and suggestions</h4>
