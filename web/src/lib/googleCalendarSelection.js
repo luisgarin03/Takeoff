@@ -11,3 +11,7 @@ export function saveGoogleSelection(account, ids, storage = globalThis.localStor
   if (!account) return;
   try { storage.setItem(keyFor(account), JSON.stringify(ids)); } catch { /* Selection still works for this session. */ }
 }
+export function clearGoogleSelection(account, storage = globalThis.localStorage) {
+  if (!account) return;
+  try { storage.removeItem(keyFor(account)); } catch { /* Browser storage may be unavailable. */ }
+}

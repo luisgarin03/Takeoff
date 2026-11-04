@@ -205,7 +205,7 @@ test("download cancellation during the final cache write cannot return bytes", a
   const files = createDriveFiles({ client: {} as any, url: "https://test.supabase.co", key: "public", userId: "user",
     assertUser: async () => {}, cache: {
       get: async (_path: string, part: any) => part === "verified" ? { size: 3, type: "application/pdf" } : data,
-      put: async () => { controller.abort(); }, clear: async () => {},
+      put: async () => { controller.abort(); }, clear: async () => {}, clearAll: async () => true,
     } });
   await assert.rejects(files.download(`${id}/${hash}`, {
     record: { sha256: hash, size: 3, mime_type: "application/pdf" }, signal: controller.signal,
@@ -217,7 +217,7 @@ test("download account changes during the final cache write cannot return bytes"
   const files = createDriveFiles({ client: {} as any, url: "https://test.supabase.co", key: "public", userId: "user",
     assertUser: async () => { if (changed) throw Object.assign(new Error("OTK_AUTH"), { code: "OTK_AUTH" }); }, cache: {
       get: async (_path: string, part: any) => part === "verified" ? { size: 3, type: "application/pdf" } : data,
-      put: async () => { changed = true; }, clear: async () => {},
+      put: async () => { changed = true; }, clear: async () => {}, clearAll: async () => true,
     } });
   await assert.rejects(files.download(`${id}/${hash}`, {
     record: { sha256: hash, size: 3, mime_type: "application/pdf" },

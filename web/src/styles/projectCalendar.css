@@ -7,6 +7,7 @@
 .project-calendar-close { margin-left: auto; }
 .project-calendar-hint { margin: 0; padding: 0 18px 12px; }
 .project-calendar-google { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 8px 18px 12px; }
+.project-calendar-google .google-data-disclosure { flex-basis: 100%; }
 .project-calendar > [role="alert"] { color: var(--c-danger); padding: 0 18px; }
 .project-calendar-scroll { flex: 1; min-height: 0; overflow: auto; }
 .project-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); min-width: 680px; }

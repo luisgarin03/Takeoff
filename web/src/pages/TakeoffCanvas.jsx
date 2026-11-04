@@ -270,6 +270,7 @@ export default function TakeoffCanvas() {
   const [hiddenSymbolSearches, setHiddenSymbolSearches] = useState(new Set());
   const isSymbolMatch = (markup) => markup.symbolMatch === true || (markup.type === "svg" && markup.color === "#ff0000" && Array.isArray(markup.pts) && markup.pts.length === 5);
   const [findPanelTab, setFindPanelTab] = useState("find");
+  const [findSearchSetupOpen, setFindSearchSetupOpen] = useState(true);
   const [findQuery, setFindQuery] = useState("");
   const [findSuggestions, setFindSuggestions] = useState(() => {
     try {
@@ -317,6 +318,23 @@ export default function TakeoffCanvas() {
   // PDF in the folder (spec books, as-builts). Stable per mount (store is swapped
   // in before the canvas mounts).
   const cloudMode = typeof store.listFolder === "function";
+  const [googleDriveAccessActive, setGoogleDriveAccessActive] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const userId = cloudAccount.user?.id;
+    if (!cloudAccount.client || !userId) { setGoogleDriveAccessActive(false); return () => { live = false; }; }
+    // Fail closed until the user's Google permission record is checked.
+    setGoogleDriveAccessActive(true);
+    cloudAccount.client.from("google_connections").select("status,granted_scopes").eq("owner_id", userId).maybeSingle()
+      .then(({ data, error }) => {
+        if (!live) return;
+        if (error) { setGoogleDriveAccessActive(true); return; }
+        setGoogleDriveAccessActive(data?.status === "connected" && data.granted_scopes?.includes("https://www.googleapis.com/auth/drive.file"));
+      })
+      .catch(() => { if (live) setGoogleDriveAccessActive(true); });
+    return () => { live = false; };
+  }, [cloudAccount.client, cloudAccount.user?.id]);
+  const assistantBlockedByGoogleDrive = cloudMode || googleDriveAccessActive;
   // Reactive sign-in state: the "browse team projects" toolbar link is a
   // convenience shortcut for someone ALREADY signed in — it must never appear
   // while signed out, or it'd be a second OAuth entry point (a /projects
@@ -522,6 +540,13 @@ export default function TakeoffCanvas() {
   const [projectAssistantUndoLabel, setProjectAssistantUndoLabel] = useState("");
   const projectAssistantAbortRef = useRef(null);
   const projectAssistantUndoRef = useRef(null);
+  useEffect(() => {
+    if (!assistantBlockedByGoogleDrive) return;
+    agentAbortRef.current?.abort();
+    projectAssistantAbortRef.current?.abort();
+    setAgentOpen(false);
+    setProjectAssistantOpen(false);
+  }, [assistantBlockedByGoogleDrive]);
   useEffect(() => {
     const el = toolbarStackRef.current;
     if (!el) return;
@@ -6550,7 +6575,7 @@ export default function TakeoffCanvas() {
     if (entry) setAgentLog((l) => [...l.slice(-199), entry]);
   }
   async function runAgent(goal) {
-    if (agentRunning) return;
+    if (assistantBlockedByGoogleDrive || agentRunning) return;
     if (!isAiConfigured()) { setShowAiSettings(true); return; }
     if (agentStateRef.current.status !== "ready") { setCommitMsg("Sheet still loading — try again in a moment."); return; }
     const ctl = new AbortController();
@@ -6752,7 +6777,7 @@ export default function TakeoffCanvas() {
   }, [projectAssistantOpen]);
 
   async function runSecureProjectAssistant(prompt, { retry = false } = {}) {
-    if (projectAssistantRunning || !projectAssistantConfigured || !isSignedIn()) return;
+    if (assistantBlockedByGoogleDrive || projectAssistantRunning || !projectAssistantConfigured || !isSignedIn()) return;
     const cleanPrompt = String(prompt || "").trim();
     if (!cleanPrompt) return;
     const prior = retry ? projectAssistant.messages.slice(0, Math.max(0, projectAssistant.messages.findLastIndex((item) => item.role === "user"))) : projectAssistant.messages;
@@ -8777,13 +8802,20 @@ export default function TakeoffCanvas() {
                 </span>
               </header>
               {findPanelTab === "find" ? <div id="find-search-panel" className="find-dialog-content" role="tabpanel" aria-labelledby="find-search-tab">
-                <label className="find-dialog-label">
-                  Search words or phrases <span>(separate multiple terms with commas)</span>
-                  <input ref={findInputRef} type="search" value={findQuery} placeholder="e.g. fence, gate, dumpster" aria-label="Keywords for PDF text search"
-                    onChange={(event) => updateFindDraft(event.target.value)}
-                    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (!findBusy) runFind(); } }} />
-                </label>
-                <section className="find-suggestions-section" aria-label="Scope suggestions">
+                <section className="find-search-setup" aria-label="Search terms and scope suggestions">
+                  <button className="find-search-setup-toggle" type="button" aria-expanded={findSearchSetupOpen}
+                    aria-controls="find-search-setup-content" onClick={() => setFindSearchSetupOpen((open) => !open)}>
+                    <span>Search terms and scope suggestions</span>
+                    <Icon name={findSearchSetupOpen ? "chevronUp" : "chevronDown"} size={15} />
+                  </button>
+                  <div id="find-search-setup-content" className="find-search-setup-content" hidden={!findSearchSetupOpen}>
+                    <label className="find-dialog-label">
+                      Search words or phrases <span>(separate multiple terms with commas)</span>
+                      <input ref={findInputRef} type="search" value={findQuery} placeholder="e.g. fence, gate, dumpster" aria-label="Keywords for PDF text search"
+                        onChange={(event) => updateFindDraft(event.target.value)}
+                        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (!findBusy) runFind(); } }} />
+                    </label>
+                    <section className="find-suggestions-section" aria-label="Scope suggestions">
                   <div className="find-suggestions-heading">
                     <span>Scope suggestions · click a name to include or exclude it</span>
                     <button type="button" onClick={() => setFindSuggestions([...DEFAULT_SCOPE_TERMS])} disabled={findSuggestions.length === DEFAULT_SCOPE_TERMS.length && findSuggestions.every((term, index) => term === DEFAULT_SCOPE_TERMS[index])}>Restore defaults</button>
@@ -8817,6 +8849,8 @@ export default function TakeoffCanvas() {
                     <input type="text" value={findSuggestionInput} onChange={(event) => setFindSuggestionInput(event.target.value)} placeholder="Add a scope suggestion" aria-label="New scope suggestion" />
                     <button type="submit" disabled={!parseFindTerms(findSuggestionInput).length || findSuggestions.length >= 40}>Add</button>
                   </form>
+                    </section>
+                  </div>
                 </section>
                 <div className="find-dialog-actions">
                   <button className="find-run-button" type="button" onClick={() => runFind()} disabled={findBusy || !parseFindTerms(findQuery).length}>
@@ -8917,6 +8951,7 @@ export default function TakeoffCanvas() {
               </div> : <div id="find-help-panel" className="find-dialog-content find-dialog-help-panel" role="tabpanel" aria-labelledby="find-help-tab">
                 <h3>Find help</h3><p>Button previews below are visual references; use the Find tab to operate them.</p>
                 <h4>Search words and suggestions</h4>
+                <p><span className="find-help-preview" aria-hidden="true"><span>Search terms and scope suggestions</span><span className="is-square"><Icon name="chevronDown" size={13} /></span></span><strong>Search setup:</strong> click its heading to collapse or expand the keywords and scope suggestions. Your current search and suggestions stay in place while the section is collapsed.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span>fence, gate, dumpster</span></span><strong>Search words or phrases:</strong> enter the words you want to find, separated by commas. Press Enter to search all loaded plans.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-chip is-selected">fence</span><span className="is-chip">gate</span></span><strong>Suggestion names:</strong> click a name to add it to the search box; click it again to exclude it. This changes your keywords without starting a search.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-chip">fence <span>×</span></span></span><strong>× beside a suggestion:</strong> removes that suggestion and takes it out of the search box.</p>
@@ -8990,11 +9025,11 @@ export default function TakeoffCanvas() {
                   title="Zone check — trace a region to read every condition's quantities inside it. Nothing is saved.">
                   <Icon name="zone" size={17} /><span>Zone</span>
                 </button>
-                <button type="button" className={agentOpen ? "takeoff-dev-action is-active" : "takeoff-dev-action"}
+                {!assistantBlockedByGoogleDrive && <button type="button" className={agentOpen ? "takeoff-dev-action is-active" : "takeoff-dev-action"}
                   onClick={() => { setFrontDrawer("agent"); setAgentOpen((open) => !open); setDevPanelOpen(false); }} aria-pressed={agentOpen}
                   title="Agent — describe a takeoff; it stages dashed proposals you accept or reject (bring your own AI key)">
                   <Icon name="agentAI" size={17} /><span>AI</span>{agentProposals.length > 0 && <b>{agentProposals.length}</b>}
-                </button>
+                </button>}
                 <button type="button" className="takeoff-dev-action" onClick={() => { setDevPanelOpen(false); setShowRevisions(true); }}
                   title="Revisions — save the takeoff at each bid revision and compare what moved">
                   <Icon name="revisions" size={17} /><span>Revisions</span>
@@ -10203,7 +10238,7 @@ export default function TakeoffCanvas() {
             Takeoffs panel). Honest empty state until the BYO-AI seam is
             configured; otherwise the goal box, the streaming run log, and the
             per-proposal accept/reject desk. */}
-        {agentOpen && (
+        {agentOpen && !assistantBlockedByGoogleDrive && (
           <AgentPanel
             width={agentPanelW}
             configured={isAiConfigured()}
@@ -10342,7 +10377,7 @@ export default function TakeoffCanvas() {
           (the Agent panel links here; closing re-renders, so `configured`
           re-reads immediately). */}
       {showAiSettings && <AiSettings onClose={() => setShowAiSettings(false)} />}
-      {projectAssistantOpen && <ProjectAssistantPanel
+      {projectAssistantOpen && !assistantBlockedByGoogleDrive && <ProjectAssistantPanel
         configured={projectAssistantConfigured} model={projectAssistantModel} signedIn={!!googleUser && isSignedIn()}
         messages={projectAssistant.messages} running={projectAssistantRunning} streamingText={projectAssistantDraft} activity={projectAssistantActivity}
         proposals={projectAssistantProposals} scope={projectAssistantScope}

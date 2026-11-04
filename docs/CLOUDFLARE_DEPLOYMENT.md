@@ -1,17 +1,24 @@
 ## Cloudflare deployment
 
-The current web build is hosted by the `takeoff` Cloudflare Worker. Its custom domains are `https://estimating.studio` and `https://www.estimating.studio`; the fallback URL is `https://takeoff.luisgarin003.workers.dev`. Configuration lives in `web/wrangler.jsonc`.
+The OpenTakeoff app is served by the `takeoff` Cloudflare Worker at `https://app.estimating.studio`. Worker configuration is in `web/wrangler.jsonc`; the Cloudflare Workers Builds project uses `luisgarin03/Takeoff`, root directory `web`, build command `npm run build`, and deploy command `npx wrangler deploy --assets ./dist --compatibility-date 2026-10-22`.
 
-Deploy from `web/` after checks finish (do not build and upload concurrently):
+### Shared office/home source
+
+Use `production/cloudflare-app` as the one shared office/home branch. The office checkout and home checkout should never carry separate unpublished versions of the same work. Work on one computer at a time:
+
+1. Check `git status --short --branch` and safely commit or preserve any in-progress edits.
+2. Switch to `production/cloudflare-app` and run `git pull --ff-only` before editing.
+3. Run `npm run check` from `web`, commit completed work, then push to `origin production/cloudflare-app`.
+4. On the other computer, pull the branch with `--ff-only` before editing. Do not cherry-pick.
+
+For a fresh home-PC clone, create the tracking branch with:
 
 ```powershell
-npm run check
-npx wrangler deploy
+git switch --track -c production/cloudflare-app origin/production/cloudflare-app
 ```
 
-The build reads public Supabase configuration from `web/.env.local`. Keep privileged keys out of VITE variables. Supabase Auth uses `https://estimating.studio` as its site URL and allows both custom domains plus the Worker URL as redirects. Edge functions merge `OTK_DEPLOYMENT_ALLOWED_ORIGINS` into their existing origin allowlists, preserving previous deployments. DNS registration/propagation can delay a newly purchased domain even after Cloudflare reports the custom domain attached.
+### Verify the live version
 
-Browser-local projects and custom suppliers remain in the browser origin where they were created. Export/import local projects to move them from localhost to the hosted site.
+After each push, confirm Cloudflare shows a successful build for the pushed Git commit and that the resulting Worker version is active in Production. A failed build, a manually deployed version without a commit reference, or disagreement between the dashboard status and Wrangler output is not proof that the intended source is live. Inspect the production deployment and active traffic before calling the source and Cloudflare versions synchronized.
 
-
-The dedicated source backup and Cloudflare production branch is `opentakeoff-cloudfare` in `luisgarin03/Takeoff`. Keep secrets and local environment configuration outside Git. Marketing pages should be a separate project folder (for example `website/`) in this repository, deployed independently of the `web/` app.
+Keep secrets and local environment files out of Git. The app's public local configuration is read from `web/.env.local`; privileged keys must never be placed in `VITE_*` variables. Browser-local projects and suppliers remain in their browser origin, so use the app's export/import workflow to move those data between localhost and the hosted site.

@@ -1,8 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { checked, CloudError } from "./errors.js";
 
-export const GOOGLE_CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar";
-
 const GOOGLE_RETURN = "otkGoogle";
 const callbackFields = [GOOGLE_RETURN, "code", "error", "error_code", "error_description", "access_token", "refresh_token", "provider_token", "provider_refresh_token", "expires_in", "expires_at", "token_type", "type"];
 const oauthReturns = new WeakMap();
@@ -71,18 +69,7 @@ export function restoreGoogleReturn(client, href = window.location.href, replace
     try {
       const data = await freshLogin(client, client.auth.exchangeCodeForSession(code));
       if (!data?.session) throw new Error("No OAuth session");
-      let calendarError = "";
-      try {
-        if (!data.session.provider_refresh_token) throw new Error("Missing Google grant");
-        const result = await client.functions.invoke("otk-drive?action=calendar-signin", {
-          body: { refreshToken: data.session.provider_refresh_token },
-          headers: { Authorization: `Bearer ${data.session.access_token}` },
-        });
-        if (result.error || !result.data?.connected) throw new Error("Calendar connection failed");
-      } catch {
-        calendarError = "Signed in, but Calendar access was not approved or could not be saved. You can reconnect Google Calendar in Calendar settings.";
-      }
-      return { error: "", calendarError };
+      return { error: "" };
     } catch {
       return { error: "Google sign-in could not be completed. Try again in the same browser where you started. Your local work is safe." };
     }
@@ -97,7 +84,7 @@ export function createAuth(client) {
     session: () => checked(client.auth.getSession()),
     subscribe: (fn) => { const { data } = client.auth.onAuthStateChange((_event, session) => fn(session)); return () => data.subscription.unsubscribe(); },
     signIn: (email, password) => freshLogin(client, client.auth.signInWithPassword({ email, password })),
-    signInWithGoogle: (href = window.location.href) => checked(client.auth.signInWithOAuth({ provider: "google", options: { redirectTo: googleRedirectUrl(href), scopes: GOOGLE_CALENDAR_SCOPES, queryParams: { access_type: "offline", prompt: "consent", include_granted_scopes: "true" } } })),
+    signInWithGoogle: (href = window.location.href) => checked(client.auth.signInWithOAuth({ provider: "google", options: { redirectTo: googleRedirectUrl(href), scopes: "openid email profile", queryParams: { prompt: "select_account" } } })),
     signUp: (email, password, displayName) => freshLogin(client, client.auth.signUp({ email, password, options: { data: { display_name: displayName } } })),
     signOut: () => checked(client.auth.signOut({ scope: "local" })),
     forgotPassword: (email) => checked(client.auth.resetPasswordForEmail(email)),

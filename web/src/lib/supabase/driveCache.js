@@ -22,5 +22,16 @@ export function createDriveCache(namespace, indexedDB = globalThis.indexedDB) {
     get: (path, part) => operation("readonly", (s) => s.get(key(path, part))),
     put: (path, part, value) => operation("readwrite", (s) => s.put(value, key(path, part))),
     clear: (path) => operation("readwrite", (s) => s.delete(IDBKeyRange.bound(`${namespace}/${path}/`, `${namespace}/${path}/\uffff`))),
+    async clearAll() {
+      try {
+        const db = await open();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction("chunks", "readwrite");
+          tx.objectStore("chunks").delete(IDBKeyRange.bound(`${namespace}/`, `${namespace}/\uffff`));
+          tx.oncomplete = resolve; tx.onerror = tx.onabort = () => reject(tx.error);
+        });
+        return true;
+      } catch { return false; }
+    },
   };
 }

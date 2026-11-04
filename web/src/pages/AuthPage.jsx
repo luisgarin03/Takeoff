@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { BrandText } from "../brand/marks.jsx";
 import { APP_NAME } from "../brand/appName.js";
 import googleLogo from "../brand/google-g.png";
+import GoogleDataDisclosure from "../components/GoogleDataDisclosure.jsx";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
 import { createAuth, googleSignInUnavailable } from "../lib/supabase/auth.js";
 import { authReturnPath } from "../lib/authNavigation.js";
@@ -58,7 +59,7 @@ export default function AuthPage() {
       {!cloud.configuration.configured && <p role="alert">Account sign-in is not configured for this build.</p>}
       {cloud.offline && <p role="status">You’re offline. Reconnect to sign in.</p>}
       <form key={step} onSubmit={submit}>
-        {["signin", "signup"].includes(step) && <><button className="auth-page-google" type="button" disabled={disabled || !!unavailable} title={unavailable || undefined} onClick={google}><img src={googleLogo} alt="" width="20" height="20" />Continue with Google</button><div className="auth-page-divider"><span />or use email<span /></div></>}
+        {["signin", "signup"].includes(step) && <><GoogleDataDisclosure /><button className="auth-page-google" type="button" disabled={disabled || !!unavailable} title={unavailable || undefined} onClick={google}><img src={googleLogo} alt="" width="20" height="20" />Continue with Google</button><div className="auth-page-divider"><span />or use email<span /></div></>}
         {step === "signup" && <label>Your name<input autoFocus required maxLength={120} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} /></label>}
         {step !== "password" && <label>Email<input autoFocus={!signup} type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>}
         {["signin", "signup", "password"].includes(step) && <label>Password<input type="password" required minLength={step === "signin" ? 1 : 8} autoComplete={step === "signin" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} />{step === "signup" && <small>At least 8 characters</small>}</label>}

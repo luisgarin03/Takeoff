@@ -6,12 +6,14 @@ import { signInPath } from "../lib/authNavigation.js";
 import { Icon } from "../brand/icons.jsx";
 import googleLogo from "../brand/google-g.png";
 import googleDriveLogo from "../brand/google-drive.png";
+import GoogleDataDisclosure from "./GoogleDataDisclosure.jsx";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
 import { createAuth, googleSignInUnavailable } from "../lib/supabase/auth.js";
 import { createProjectRepository } from "../lib/supabase/projects.js";
 import { createFileStorage } from "../lib/supabase/files.js";
 import { createDriveFiles } from "../lib/supabase/driveFiles.js";
 import { createProjectFiles } from "../lib/supabase/projectFiles.js";
+import { clearGoogleSelection } from "../lib/googleCalendarSelection.js";
 
 import { createCloudSync } from "../lib/supabase/sync.js";
 import { cloudError, CloudError } from "../lib/supabase/errors.js";
@@ -338,6 +340,19 @@ export default function CloudProjects({ initialView = "projects", source, getPay
       download: (name, blob) => { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); } });
     } finally { cloud.setStatus(await services.sync.status(getPayload()).catch(() => "Local Only")); }
   }
+  async function disconnectGoogle() {
+    if (!services || !window.confirm("Disconnect Google access from ESTIMATING? This will clear the app's saved Google connection and downloaded browser cache. It will not delete your Google account, files, or ESTIMATING account.")) return;
+    const result = await services.drive.disconnect();
+    const cacheCleared = await services.drive.clearCache();
+    clearGoogleSelection(userId);
+    const state = await cloud.refreshDrive();
+    setDrive(state || { connected: false, status: "disconnected" });
+    setNotice(!cacheCleared
+      ? "The app removed its saved Google token, but could not clear this browser's downloaded-file cache. Clear site data in browser settings; remove ESTIMATING in Google Account connections if Google did not confirm revocation."
+      : result.revoked
+        ? "Google access disconnected."
+        : "The app removed its Google token and browser cache, but Google did not confirm revocation. Remove ESTIMATING in Google Account connections to revoke access fully.");
+  }
   const visible = projects.filter((p) => filter === "legacy" ? p.file_provider !== "google_drive" : p.file_provider === "google_drive" && (filter === "recent" || (filter === "mine" ? p.owner_id === userId : p.owner_id !== userId)));
   const projectActions = (p, canOpen = true) => <>
     {!p.deleted_at && <>{canOpen && <button disabled={!!busy || cloud.offline} onClick={() => run(() => open(p.id))}>Open project</button>}<button disabled={!!busy || cloud.offline} onClick={() => ask("copy-cloud", p)}>Duplicate</button></>}
@@ -359,6 +374,7 @@ export default function CloudProjects({ initialView = "projects", source, getPay
           {authentication ? <form onSubmit={authenticate} className="cloud-auth">
             <h3>{{ signin: "Sign in", signup: "Create account", forgot: "Forgot password", confirm: "Confirm email", recover: "Recovery code", password: "New password" }[authMode]}</h3>
             {["signin", "signup"].includes(authMode) && <>
+              <GoogleDataDisclosure />
               <button className="cloud-google" type="button" disabled={!!busy || cloud.offline || !!googleUnavailable} title={googleUnavailable || undefined} onClick={authenticateGoogle}><img src={googleLogo} alt="" width="20" height="20" />Continue with Google</button>
               {googleUnavailable && <p role="note">{googleUnavailable}</p>}
             </>}
@@ -371,10 +387,11 @@ export default function CloudProjects({ initialView = "projects", source, getPay
           </form> : <>
             {view === "membership" && <SubscriptionSection user={cloud.user} offline={cloud.offline} client={cloud.client} initiallyOpen onOpenWorkspace={() => { onClose(); navigate("/?workspace=1"); }} />}
 
-            {view === "account" && <ProfileAccountSection cloud={cloud} displayName={displayName} busy={!!busy}
+            {view === "account" && <ProfileAccountSection cloud={cloud} displayName={displayName} busy={!!busy} googleConnected={!!drive?.connected || !!cloud.driveConnected}
               onNameChange={(value) => { profileDraft.current.edited = true; setDisplayName(value); }}
               onSave={(e) => { e.preventDefault(); run(async () => { await auth.saveProfile(cloud.user.id, displayName); profileDraft.current.edited = false; await cloud.refreshProfile(); setDisplayName(displayName.trim()); setNotice("Profile saved."); }); }}
-              onSignOut={() => run(async () => { await auth.signOut(); cloud.setStatus("Local Only"); })} />}
+              onSignOut={() => run(async () => { await auth.signOut(); cloud.setStatus("Local Only"); })}
+              onDisconnectGoogle={() => run(disconnectGoogle)} />}
             {view === "save" && <div className="cloud-save"><h3>{getPayload().project_name || "Untitled project"}</h3>
               <p>Cloud status: {currentCloud?.file_provider === "supabase" ? "Existing project uses Supabase Storage" : drive?.connected ? "Google Drive connected" : "Connect Google Drive in Profile"}</p>
               <div className="cloud-actions"><button className="btn-primary" disabled={!!busy || cloud.offline || !!source.listFolder || (!currentCloud && !drive?.connected)} onClick={() => run(() => save())}><Icon name="document" size={16} />Save to Cloud</button><button disabled={!!busy || cloud.offline || currentCloud?.file_provider !== "google_drive"} onClick={() => run(() => download(currentCloud))}>Download Locally</button><button className="btn-ghost" disabled={!!busy || cloud.offline || !!source.listFolder} onClick={() => ask("copy-local")}>Save As...</button></div>

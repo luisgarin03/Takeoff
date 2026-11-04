@@ -47,6 +47,7 @@ export function createDriveFiles({ client, url, key, userId, assertUser, fetcher
     listFolder: (projectId, folderId, signal) => request("folder-list", { body: { projectId, folderId }, signal }),
     folderChunk: (projectId, entry, offset, signal) => retry(() => request("folder-chunk", { body: { projectId, fileId: entry.id, offset, expected: { size: entry.size, modifiedTime: entry.modifiedTime, name: entry.name } }, binary: true, signal }), signal),
     status: () => request("status"),
+    clearCache: () => cache.clearAll?.(),
     sharePicker: () => request("share-picker"),
     shareSend: (body) => request("share-send", { body }),
     shareFiles: (id) => request("share-files", { body: { id } }),

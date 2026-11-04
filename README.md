@@ -88,7 +88,7 @@ The Markups panel follows the canvas selection: the matching row receives a clea
 
 Count takeoffs use the same condition-colored square with a white outline on the live canvas, downloaded pages, Marked Set PDFs, and pages imported to Whiteboard; export never substitutes a circle.
 
-**PDF text search:** click **Find** in the sheet toolbar or press `Ctrl+F` (`⌘F` on Mac). A movable, resizable, non-modal panel opens at the top-right without starting a scan; enter comma-separated terms or use the scope suggestions, then choose **Find in all plans** for every loaded PDF, **Find in this PDF set** for every page in the focused PDF file, or **Find in this page** for only the focused sheet. Keywords use whole-word boundaries, so **gate** does not match inside **aggregate** or **gated**. Every run becomes a separately controlled Search marks job with its own editable highlight color, show/hide control, and remove button; these job rows expand without a nested scrollbar, and repeated matches across visible jobs are deduplicated. **Unmark all pages** hides every job without deleting it, and **Remove all** clears the completed searches. The PDF remains available for pan, zoom, and drawing while the panel stays open. Results are grouped into a clickable page list with the keywords and match counts found on each page, and the previous/next buttons move between matching pages. **Hide 1 match pages** removes one-match pages from that list and its navigation without deleting marks; the corresponding Show control restores them. **Rank** sorts the remaining list from the pages with the most matches to the fewest; clicking it again restores plan order. **Download JSON File** saves the complete latest search—not the currently filtered list—with ranked pages and PDFs, keyword totals, exact matched text and bounded context, available normalized coordinates, page size/label metadata, and deterministic construction categories. Zero-match PDFs remain in the document ranking, and no PDF is rescanned for the download. Visible highlights are also included by **Project > Download this page** in their selected colors. Open the panel's **Help** tab for usage guidance, resize from either lower corner, or close it with × or the active **Find** toolbar button. Pages with no usable selectable text can fall back to local, in-browser OCR; choose Automatic, Ask first, or Off under **Project > PDF opening & OCR**.
+**PDF text search:** click **Find** in the sheet toolbar or press `Ctrl+F` (`⌘F` on Mac). A movable, resizable, non-modal panel opens at the top-right without starting a scan; expand or collapse the keyword and scope-suggestion section with its arrow, then enter comma-separated terms or use the scope suggestions, then choose **Find in all plans** for every loaded PDF, **Find in this PDF set** for every page in the focused PDF file, or **Find in this page** for only the focused sheet. Keywords use whole-word boundaries, so **gate** does not match inside **aggregate** or **gated**. Every run becomes a separately controlled Search marks job with its own editable highlight color, show/hide control, and remove button; these job rows expand without a nested scrollbar, and repeated matches across visible jobs are deduplicated. **Unmark all pages** hides every job without deleting it, and **Remove all** clears the completed searches. The PDF remains available for pan, zoom, and drawing while the panel stays open. Results are grouped into a clickable page list with the keywords and match counts found on each page, and the previous/next buttons move between matching pages. **Hide 1 match pages** removes one-match pages from that list and its navigation without deleting marks; the corresponding Show control restores them. **Rank** sorts the remaining list from the pages with the most matches to the fewest; clicking it again restores plan order. **Download JSON File** saves the complete latest search—not the currently filtered list—with ranked pages and PDFs, keyword totals, exact matched text and bounded context, available normalized coordinates, page size/label metadata, and deterministic construction categories. Zero-match PDFs remain in the document ranking, and no PDF is rescanned for the download. Visible highlights are also included by **Project > Download this page** in their selected colors. Open the panel's **Help** tab for usage guidance, resize from either lower corner, or close it with × or the active **Find** toolbar button. Pages with no usable selectable text can fall back to local, in-browser OCR; choose Automatic, Ask first, or Off under **Project > PDF opening & OCR**.
 
 **Fast PDF opening:** new imports and saved projects use Fast auto-detect by default. Previously verified plans reuse their compatibility result, while a new or unverified plan checks only its first page instead of blocking on an every-page render. Later pages are validated when opened. Choose **Project > PDF opening & OCR** to switch to **Verify every page** for a stricter import/startup check. Compatibility results are stored alongside the local plan or cloud sheet manifest and are discarded when that PDF is replaced.
 
@@ -316,7 +316,28 @@ Estimate activities automatically continue onto additional branded pages. The ed
 Whiteboard Supplier list includes 11 default companies with official website/contact links and logos. Open from the toolbar or Add menu; search or add custom suppliers (saved in this browser).
 
 
-Cloudflare hosting: the `takeoff` Worker serves estimating.studio and www.estimating.studio. See [deployment notes](docs/CLOUDFLARE_DEPLOYMENT.md) for deploy commands and local-project transfer guidance.
+Cloudflare hosting: the `takeoff` Worker serves `https://app.estimating.studio`. See [deployment notes](docs/CLOUDFLARE_DEPLOYMENT.md) for the shared production branch, build settings, and office/home sync workflow.
 
 
 App branding is ESTIMATING across authentication, workspace/Whiteboard headers, browser tabs, installed web-app metadata and native display names.
+# Cloudflare production and office/home sync
+
+This checkout deploys the OpenTakeoff app to Cloudflare Workers.
+
+- Repository: `https://github.com/luisgarin03/Takeoff.git`
+- Production URL: `https://app.estimating.studio`
+- Shared office/home branch: `production/cloudflare-app`
+- Cloudflare Worker: `takeoff`
+- Cloudflare build root: `web`
+- Build command: `npm run build`
+- Deploy command: `npx wrangler deploy --assets ./dist --compatibility-date 2026-10-22`
+
+Use one PC at a time. Before editing on either machine, check `git status --short --branch`, switch to `production/cloudflare-app`, and run `git pull --ff-only`. Commit and push completed work to that branch before starting on the other PC. The other PC then pulls the branch with `--ff-only`; do not cherry-pick or edit divergent copies of the same files at the same time.
+
+On a fresh home-PC clone, run:
+
+```powershell
+git switch --track -c production/cloudflare-app origin/production/cloudflare-app
+```
+
+Run `npm run check` from `web` before pushing. After pushing, verify Cloudflare shows a successful build for that commit and that the production `takeoff` Worker is serving its resulting version. A failed build or a mismatch between the build status and Wrangler output does not prove the intended commit is live; inspect the deployment and active traffic before calling the versions synchronized. Keep secrets out of Git; `web/.env.local` is local-only.

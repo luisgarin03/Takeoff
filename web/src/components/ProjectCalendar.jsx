@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
 import { connectDrive } from "../lib/supabase/driveConnection.js";
+import GoogleCalendarDataDisclosure from "./GoogleCalendarDataDisclosure.jsx";
 import "../styles/projectCalendar.css";
 
 async function localProjects() {
@@ -60,6 +61,7 @@ export default function ProjectCalendar({ metadata, onClose }) {
     <header><h2>Project calendar</h2><button onClick={() => setMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}>Today</button><button aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>‹</button><button aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button><strong aria-live="polite">{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong><button className="project-calendar-close" onClick={onClose} aria-label="Close calendar">×</button></header>
     <p className="project-calendar-hint">Projects saved in this browser, shown on their submission / due date. Set dates in Project Data.</p>
     <div className="project-calendar-google">
+      <GoogleCalendarDataDisclosure />
       <button disabled={busy || !cloud.user} onClick={async () => { setError(""); try { await connectDrive({ connect: async (returnUrl) => { const { data, error } = await cloud.client.functions.invoke("otk-drive?action=connect", { body: { returnUrl, calendar: true } }); if (error) throw error; return data; } }); } catch { setError("Could not connect Google Calendar. Please try again."); } }}>Connect Google Calendar</button>
       <button disabled={busy || !cloud.user} onClick={loadCalendars}>Load calendars</button>
       {!!calendars.length && <select aria-label="Google calendar" value={calendarId} onChange={(e) => setCalendarId(e.target.value)}>{calendars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { GOOGLE_CALENDAR_SCOPES, createAuth, googleRedirectUrl, googleSignInUnavailable, restoreGoogleReturn } from "../src/lib/supabase/auth.js";
+import { createAuth, googleRedirectUrl, googleSignInUnavailable, restoreGoogleReturn } from "../src/lib/supabase/auth.js";
 import { createClient } from "@supabase/supabase-js";
 import { createProjectRepository } from "../src/lib/supabase/projects.js";
 import { cloudError } from "../src/lib/supabase/errors.js";
@@ -59,11 +59,11 @@ test("Google redirects stay on localhost or the current HTTPS deployment and pre
   }
 });
 
-test("Google auth requests Calendar during initial Supabase sign-in, with safe initiation errors", async () => {
+test("Google auth requests identity-only scopes during sign-in, with safe initiation errors", async () => {
   let request: any;
   const auth = createAuth({ auth: { signInWithOAuth: async (args: any) => { request = args; return { data: { provider: "google", url: "https://auth.example.com/authorize" }, error: null }; } } });
   await auth.signInWithGoogle("http://localhost:5173/?localProject=workspace");
-  assert.deepEqual(request, { provider: "google", options: { redirectTo: "http://localhost:5173/?localProject=workspace&otkGoogle=1", scopes: GOOGLE_CALENDAR_SCOPES, queryParams: { access_type: "offline", prompt: "consent", include_granted_scopes: "true" } } });
+  assert.deepEqual(request, { provider: "google", options: { redirectTo: "http://localhost:5173/?localProject=workspace&otkGoogle=1", scopes: "openid email profile", queryParams: { prompt: "select_account" } } });
   const failure = createAuth({ auth: { signInWithOAuth: async () => ({ error: { message: "private provider internals" } }) } });
   await assert.rejects(failure.signInWithGoogle("https://takeoff.example.com/"), (e: any) => e.code === "OTK_NETWORK" && !e.message.includes("private"));
 });
@@ -84,7 +84,7 @@ test("OAuth callback exchanges once across concurrent/remounted consumers and sc
   assert.deepEqual(cleaned, ["/?localProject=workspace"]);
   finish({ data: { session: { user: { id: "google-user" } } }, error: null });
   assert.equal((await first).error, "");
-  assert.match((await first).calendarError, /Calendar access/);
+  assert.deepEqual(await first, { error: "" });
   assert.equal((await restoreGoogleReturn(client, "http://localhost:5173/?localProject=workspace")).error, "");
   assert.equal(exchanges, 1);
 });
@@ -153,16 +153,14 @@ test("real Supabase SDK completes PKCE after reload and persists/restores the sa
 });
 
 
-test("initial Google callback saves Calendar grant once without another OAuth redirect", async () => {
+test("initial Google callback does not request a separate Calendar grant", async () => {
   let saves = 0;
   const client = { auth: { signOut: async () => ({ error: null }), exchangeCodeForSession: async () => ({ data: { session: { access_token: "app-session", provider_refresh_token: "google-refresh" } } }) },
     functions: { invoke: async (name: string, input: any) => {
-      if(name === "otk-billing") return { error: null };
-      saves++; assert.equal(name, "otk-drive?action=calendar-signin");
-      assert.deepEqual(input, { body: { refreshToken: "google-refresh" }, headers: { Authorization: "Bearer app-session" } });
-      return { data: { connected: true } };
+      if (name === "otk-billing") return { error: null };
+      saves++; return { error: new Error(`Unexpected invocation: ${name} ${JSON.stringify(input)}`) };
     } } };
   const result = await restoreGoogleReturn(client, "http://localhost:5173/?otkGoogle=1&code=once", () => {});
-  assert.deepEqual(result, { error: "", calendarError: "" });
-  await restoreGoogleReturn(client, "http://localhost:5173/"); assert.equal(saves, 1);
+  assert.deepEqual(result, { error: "" });
+  await restoreGoogleReturn(client, "http://localhost:5173/"); assert.equal(saves, 0);
 });

@@ -2,6 +2,7 @@
 
 ## Unreleased — October 30 checkpoint
 
+- Added a down-arrow toggle in Find to collapse the keyword and scope-suggestion section while keeping the current search and results available.
 - Darkened the full-page drawing crosshair guides for clearer contrast against bright construction plans without increasing their line weight.
 - Added lightweight drafting feedback to Linear measurements: each newly placed vertex pops into position with a brief expanding ring while its connected segment draws on from the previous point. Reduced-motion users receive the finished geometry without animation.
 - Fixed Takeoff-to-Whiteboard imports so the loading toast changes to a completed or failed result after ingestion, and additional imports are processed when the Whiteboard is already open.

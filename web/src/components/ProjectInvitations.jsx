@@ -54,7 +54,8 @@ export default function ProjectInvitations({ cloud, drive, assertUser, shareEntr
     {incoming.map((item) => <div key={item.id} className="share-invitation-row"><div><strong>{item.project_name}</strong><small>From {item.sender_email} · {item.imported_at ? "Imported" : "New invitation"}</small></div><button disabled={busy} onClick={() => run(() => choose(item))}>Import to my Drive</button></div>)}
     {shareEntry && <section ref={shareForm} className="cloud-confirm" aria-label="Share project">
       <h3>Share {shareEntry.name}</h3><p>Choose the actual files in Google Drive. The recipient gets read/download access to those files in your Drive. Save and sync your latest .otk file first.</p>
-      <div className="cloud-actions"><button disabled={busy || cloud.offline} onClick={() => run(async () => { const picked = await pickDriveFiles(drive); if (picked) setFiles(picked); })}>Choose files in Google Drive</button><button disabled={busy || cloud.offline} onClick={() => run(() => connectDrive(drive))}>Connect Google Drive</button></div>
+      <div className="cloud-actions"><button disabled={busy || cloud.offline} onClick={() => run(async () => { const picked = await pickDriveFiles(drive); if (picked) setFiles(picked); })}>Choose files in Google Drive</button></div>
+      <button disabled={busy || cloud.offline} onClick={() => run(() => connectDrive(drive))}>Connect Google Drive</button>
       {files && <><ul className="share-file-list">{files.map((f) => <li key={f.id}>{f.name}</li>)}</ul>
         <form onSubmit={(e) => { e.preventDefault(); run(async () => {
           setStatus("");
