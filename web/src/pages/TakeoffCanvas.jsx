@@ -270,7 +270,7 @@ export default function TakeoffCanvas() {
   const [hiddenSymbolSearches, setHiddenSymbolSearches] = useState(new Set());
   const isSymbolMatch = (markup) => markup.symbolMatch === true || (markup.type === "svg" && markup.color === "#ff0000" && Array.isArray(markup.pts) && markup.pts.length === 5);
   const [findPanelTab, setFindPanelTab] = useState("find");
-  const [findSearchSetupOpen, setFindSearchSetupOpen] = useState(true);
+  const [findSearchSetupOpen, setFindSearchSetupOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findSuggestions, setFindSuggestions] = useState(() => {
     try {
@@ -8802,13 +8802,9 @@ export default function TakeoffCanvas() {
                 </span>
               </header>
               {findPanelTab === "find" ? <div id="find-search-panel" className="find-dialog-content" role="tabpanel" aria-labelledby="find-search-tab">
+                <div id="find-search-setup-content" className="find-search-setup-content" hidden={!findSearchSetupOpen}>
                 <section className="find-search-setup" aria-label="Search terms and scope suggestions">
-                  <button className="find-search-setup-toggle" type="button" aria-expanded={findSearchSetupOpen}
-                    aria-controls="find-search-setup-content" onClick={() => setFindSearchSetupOpen((open) => !open)}>
-                    <span>Search terms and scope suggestions</span>
-                    <Icon name={findSearchSetupOpen ? "chevronUp" : "chevronDown"} size={15} />
-                  </button>
-                  <div id="find-search-setup-content" className="find-search-setup-content" hidden={!findSearchSetupOpen}>
+                  <div className="find-search-setup-content">
                     <label className="find-dialog-label">
                       Search words or phrases <span>(separate multiple terms with commas)</span>
                       <input ref={findInputRef} type="search" value={findQuery} placeholder="e.g. fence, gate, dumpster" aria-label="Keywords for PDF text search"
@@ -8917,7 +8913,15 @@ export default function TakeoffCanvas() {
                 </section>}
                 {allFindPages.length > 0 && !findBusy && <section className="find-page-results" aria-label="Pages containing search keywords">
                   <div className="find-page-results-heading">
-                    <span>Matching pages</span>
+                    <span className="find-page-results-title">
+                      <span>Matching pages</span>
+                      <button type="button" className="find-page-collapse-toggle" aria-expanded={findSearchSetupOpen}
+                        aria-controls="find-search-setup-content" onClick={() => setFindSearchSetupOpen((open) => !open)}
+                        title={findSearchSetupOpen ? "Collapse search controls" : "Expand search controls"}
+                        aria-label={findSearchSetupOpen ? "Collapse search controls" : "Expand search controls"}>
+                        <Icon name={findSearchSetupOpen ? "chevronUp" : "chevronDown"} size={13} />
+                      </button>
+                    </span>
                     <span className="find-page-results-actions">
                       <button type="button" className="find-page-heading-action" onClick={() => setFindHideSingleMatchPages((hidden) => !hidden)} aria-pressed={findHideSingleMatchPages}
                         title={findHideSingleMatchPages ? "Show pages with exactly one match" : "Hide pages with exactly one match from this list and its navigation"}>
@@ -8948,6 +8952,7 @@ export default function TakeoffCanvas() {
                     })}
                   </ol>
                 </section>}
+                </div>
               </div> : <div id="find-help-panel" className="find-dialog-content find-dialog-help-panel" role="tabpanel" aria-labelledby="find-help-tab">
                 <h3>Find help</h3><p>Button previews below are visual references; use the Find tab to operate them.</p>
                 <h4>Search words and suggestions</h4>

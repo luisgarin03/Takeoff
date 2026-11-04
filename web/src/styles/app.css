@@ -373,6 +373,8 @@ select {
   padding: 14px;
 }
 .find-search-setup { display: flex; flex-direction: column; gap: 10px; }
+.find-search-setup-content { display: flex; flex-direction: column; gap: 12px; }
+.find-search-setup-content[hidden] { display: none; }
 .find-search-setup-toggle {
   display: flex;
   align-items: center;
@@ -389,8 +391,6 @@ select {
   text-align: left;
 }
 .find-search-setup-toggle svg { flex: 0 0 auto; color: var(--ink-muted); }
-.find-search-setup-content { display: flex; flex-direction: column; gap: 12px; }
-.find-search-setup-content[hidden] { display: none; }
 .find-dialog-label {
   display: flex;
   flex-direction: column;
@@ -532,6 +532,9 @@ select {
 .find-job-count { color: var(--ink-muted); font: 10px/1.25 var(--f-mono, monospace); text-align: right; white-space: nowrap; }
 .find-page-results { display: flex; min-height: 180px; flex: 1 0 180px; flex-direction: column; gap: 6px; }
 .find-page-results-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; color: var(--ink-muted); font: 700 10px/1.3 var(--f-mono, monospace); letter-spacing: .08em; text-transform: uppercase; }
+.find-page-results-title { display: inline-flex; align-items: center; gap: 5px; }
+.find-page-collapse-toggle { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border: 1px solid var(--ink-faint); border-radius: 5px; padding: 0; background: transparent; color: var(--ink-muted); cursor: pointer; }
+.find-page-collapse-toggle:hover { border-color: var(--cobalt); color: var(--cobalt); }
 .find-page-results-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .find-page-heading-action { display: inline-flex; min-height: 28px; align-items: center; gap: 5px; border: 1px solid transparent; border-radius: 5px; padding: 4px 7px; background: transparent; color: var(--ink-muted); cursor: pointer; font: 700 10px/1 var(--f-mono, monospace); letter-spacing: .02em; text-transform: none; }
 .find-page-heading-action:hover { border-color: var(--ink-faint); color: var(--ink); }
