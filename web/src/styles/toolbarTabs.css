@@ -383,5 +383,28 @@ textarea.condition-name-input { display: block; resize: none; overflow: hidden; 
 
 .tool-menu-popover .dropdown-action { min-height: 32px; }
 .tool-menu-popover .dropdown-action svg { display: block; flex-shrink: 0; }
-.tool-menu-popover .recent-projects > summary { padding-left: 16px !important; }
-.tool-menu-popover .recent-projects > summary::marker { font-size: 12px; }
+.tool-menu-popover .recent-projects > summary {
+  display: flex;
+  min-height: 30px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px !important;
+  list-style: none;
+}
+.tool-menu-popover .recent-projects > summary::-webkit-details-marker { display: none; }
+.tool-menu-popover .recent-projects > summary::marker { content: ""; }
+.tool-menu-popover .recent-projects > summary::before {
+  display: inline-flex;
+  width: 17px;
+  height: 18px;
+  flex: 0 0 17px;
+  align-items: center;
+  justify-content: center;
+  content: "›";
+  font-size: 17px;
+  line-height: 1;
+  color: var(--ink-muted);
+  transform: rotate(0deg);
+}
+.tool-menu-popover .recent-projects[open] > summary::before { transform: rotate(90deg); }
