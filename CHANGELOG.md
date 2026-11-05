@@ -2,6 +2,7 @@
 
 ## Unreleased — October 30 checkpoint
 
+- Enabled Pro editing for all active Stripe test subscriptions on the hosted test deployment. Test checkouts still collect no real payments; the sandbox access flags must be disabled before switching to live billing.
 - **Find in all plans** now lets users choose loaded PDFs from a collapsible checked-by-default plan list, minimizes the Find panel while searching the selected plans in the background, provides a progress control to reopen it early, and restores the panel when the search completes.
 - Reworded Google Drive sign-in and browsing prompts so they do not assume a team account or claim the user already has cloud projects.
 - Replaced the Google sign-in disclosure paragraph on login forms with a standalone Privacy policy link.

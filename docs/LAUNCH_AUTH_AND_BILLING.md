@@ -38,7 +38,7 @@ Apple treats feature-unlocking subscriptions as digital purchases. Keep the iOS 
 
 Populate `web/.env.local` or the equivalent deployment/build secrets from `web/.env.example`. Test sign-up, email confirmation, sign-in, purchase, renewal, cancellation, expiration, billing issue, restore, reinstall, a second device, and a different account.
 
-Only after those tests pass, build with `VITE_REQUIRE_ACTIVE_LICENSE=1`. Production builds must keep `VITE_ALLOW_SANDBOX_LICENSES=0`; use `1` only for dedicated StoreKit/RevenueCat test builds.
+The current hosted deployment uses Stripe test-mode checkout for acceptance testing. Its production build sets `VITE_ALLOW_SANDBOX_LICENSES=1`, and the Supabase `otk-billing` function has `OTK_ALLOW_SANDBOX_LICENSES=true`. This intentionally lets every account with an active sandbox subscription claim Pro editing access; sandbox checkout does not collect real payments. Before switching this deployment to live billing, set both flags to `0`/`false` and configure live Stripe credentials.
 
 With the flag off, the current local-first app behavior remains unchanged. With it on,
 users must sign in and the app claims a short server-owned editing lease. Full editing
@@ -50,8 +50,8 @@ sleeping machine releases the editing seat without an administrator. Canceled
 subscriptions retain editing only through their recorded paid-through date. Local
 project files are never deleted by the gate.
 
-Deploy both billing migrations, including `202610210002_license_sessions.sql`. Keep
-`OTK_ALLOW_SANDBOX_LICENSES=false` in production. The editing lease is claimed only by
+Deploy both billing migrations, including `202610210002_license_sessions.sql`. The hosted test deployment sets
+`OTK_ALLOW_SANDBOX_LICENSES=true`; the editing lease is claimed only by
 the authenticated `otk-billing` Edge Function; browser clients cannot write session rows.
 
 ## 4. iOS release

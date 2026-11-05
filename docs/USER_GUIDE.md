@@ -1236,6 +1236,8 @@ A fresh email, Google, or verified-code login automatically revokes other login 
 
 New users choose Start 30-day trial in the workspace toolbar or Subscription panel. The server starts the 30-day clock on activation, preserves existing trial dates, and prevents restarts. After expiry, the workspace is view-only unless a subscription is active.
 
+The hosted site currently uses Stripe test mode. An active test subscription appears as **Test · active** in Profile and grants Pro editing for any account, without collecting a real payment. The live toolbar shows **PRO** while that subscription and its editing session remain active. This test access must be disabled before live billing is enabled.
+
 Upgrade and Start 30-day trial use compact outlined buttons matching the Condition control, with neutral backgrounds and theme-aware text.
 
 Subscription plans are always expanded in Profile and membership settings, with no Subscription or Hide plans toggle.

@@ -221,7 +221,7 @@ Calendar bid details: click an event for the tall scrolling bid card. With editi
 
 Stripe sandbox subscriptions: Estimating Pro is $40/month or $400/year through test-only Stripe Checkout. See [setup and test guide](docs/STRIPE_SANDBOX.md). No real card charges are enabled.
 
-Calendar authorization restores the calendar and current project after Google approval. Active Stripe sandbox subscriptions enable local development testing; hosted production builds still require a production license.
+Calendar authorization restores the calendar and current project after Google approval. The hosted app currently uses Stripe test mode: every active Stripe sandbox subscription grants Pro editing so the full membership experience can be tested without real charges. Disable sandbox access before switching to live billing; see [billing test setup](docs/LAUNCH_AUTH_AND_BILLING.md).
 
 Load sample plan waits for PDF import to complete and reports download/import errors with a retryable button. Sign in with editing access in the current browser before importing a sample.
 
@@ -244,7 +244,7 @@ Signed-out users start on the unified authentication page. Successful sign-in op
 
 Read-only workspaces display red **Read only mode** text in the top toolbar with an **Upgrade** button that opens membership plans (or sign-in for guests).
 
-Verified Pro subscriptions automatically leave read-only exploration and open the editable workspace; the toolbar avatar displays a PRO badge. Sandbox access still requires the existing development/test license policy and a granted editing session.
+Verified Pro subscriptions automatically leave read-only exploration and open the editable workspace; the toolbar avatar displays a PRO badge. In the hosted Stripe test deployment, any active sandbox subscription also grants a server-owned editing session so users can experience Pro without a real charge.
 
 New accounts receive a free 30-day trial from signup, without a payment card. The toolbar shows trial days remaining and Upgrade. Trial dates are server-owned and do not reset on login, reinstall, or checkout. At expiry editing is disabled unless an active subscription is verified. Existing paid subscriptions take priority; existing accounts are not backfilled.
 
