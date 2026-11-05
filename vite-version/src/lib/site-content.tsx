@@ -71,6 +71,7 @@ export function mergeSiteContent(value: unknown): SiteContent {
     if (base.id === "contact") {
       merged.items = merged.items.filter(item => !/github|discord/i.test(`${item.title || ""} ${item.label || ""} ${item.href || ""}`))
       if (!merged.items.length) merged.items = base.items
+      merged.items = merged.items.map(item => /faq/i.test(`${item.title || ""} ${item.label || ""}`) ? { ...item, href: "/landing#faq" } : item)
     }
     if (base.id === "logos") merged.items = merged.items.filter(item => !/github/i.test(`${item.name || ""} ${item.icon || ""}`))
     if (base.id === "about") for (const key of ["primaryButton", "primaryHref", "secondaryButton", "secondaryHref"]) if (/github|discord/i.test(String(merged[key] || ""))) merged[key] = ""

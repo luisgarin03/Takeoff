@@ -77,7 +77,7 @@ export function ContactSection() {
               const Icon = String(item.icon) === "BookOpen" ? BookOpen : String(item.icon) === "MessageCircle" ? MessageCircle : LifeBuoy
               return <Card key={index} className="hover:shadow-md transition-shadow cursor-pointer">
                 <CardHeader><CardTitle className="flex items-center gap-2"><Icon className="size-5 text-primary" />{String(item.title || "Contact")}</CardTitle></CardHeader>
-                <CardContent><p className="text-muted-foreground mb-3">{String(item.description || "")}</p><Button variant="outline" size="sm" className="cursor-pointer" nativeButton={false} render={<a href={String(item.href || "#contact")} target="_blank" rel="noopener noreferrer" />}>{String(item.label || "Contact")}</Button></CardContent>
+                <CardContent><p className="text-muted-foreground mb-3">{String(item.description || "")}</p><Button variant="outline" size="sm" className="cursor-pointer" nativeButton={false} render={<a href={/faq/i.test(String(item.title || item.label || "")) ? "/landing#faq" : String(item.href || "#contact")} />}>{String(item.label || "Contact")}</Button></CardContent>
               </Card>
             })}
           </div>
