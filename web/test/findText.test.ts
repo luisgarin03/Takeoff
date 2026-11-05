@@ -94,6 +94,10 @@ test("find targets can cover all loaded PDFs, the focused PDF, or only the focus
     { file: "A.pdf", page: null, key: null },
     { file: "B.pdf", page: null, key: null },
   ]);
+  assert.deepEqual(findSearchTargets(sheets, "all", null, ["B.pdf"]), [
+    { file: "B.pdf", page: null, key: null },
+  ]);
+  assert.deepEqual(findSearchTargets(sheets, "all", null, new Set()), []);
   assert.deepEqual(findSearchTargets(sheets, "file", { key: "B.pdf#7", file: "B.pdf", page: 7 }), [
     { file: "B.pdf", page: null, key: null },
   ]);

@@ -179,8 +179,9 @@ export function stepFindPageIndex(current, direction, pageCount) {
  * @param {Array<{ name?: string }>} sheets
  * @param {"all" | "file" | "page"} scope
  * @param {{ key?: string, file?: string, page?: number } | null} currentPage
+ * @param {string[] | Set<string> | null} selectedFiles Optional allowlist for all-plan searches.
  */
-export function findSearchTargets(sheets, scope = "all", currentPage = null) {
+export function findSearchTargets(sheets, scope = "all", currentPage = null, selectedFiles = null) {
   const loadedFiles = [];
   const seen = new Set();
   for (const sheet of sheets || []) {
@@ -189,7 +190,12 @@ export function findSearchTargets(sheets, scope = "all", currentPage = null) {
     seen.add(file);
     loadedFiles.push(file);
   }
-  if (scope === "all") return loadedFiles.map((file) => ({ file, page: null, key: null }));
+  if (scope === "all") {
+    const selected = selectedFiles == null ? null : new Set(selectedFiles);
+    return loadedFiles
+      .filter((file) => !selected || selected.has(file))
+      .map((file) => ({ file, page: null, key: null }));
+  }
 
   const file = String(currentPage?.file || "").trim();
   if (scope === "file") {

@@ -265,6 +265,9 @@ export default function TakeoffCanvas() {
   const [sheetPickerExpandedFiles, setSheetPickerExpandedFiles] = useState(() => new Set());
   const [sheetPickerPageCounts, setSheetPickerPageCounts] = useState({});
   const [findOpen, setFindOpen] = useState(false);
+  const [findBackgroundMinimized, setFindBackgroundMinimized] = useState(false);
+  const [findPlanSelectionOpen, setFindPlanSelectionOpen] = useState(false);
+  const [findSelectedFiles, setFindSelectedFiles] = useState(null);
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
   const [showSymbolMatches, setShowSymbolMatches] = useState(true);
   const [hiddenSymbolSearches, setHiddenSymbolSearches] = useState(new Set());
@@ -293,6 +296,7 @@ export default function TakeoffCanvas() {
   const [findDialogTop, setFindDialogTop] = useState(12);
   const [findDialogSize, setFindDialogSize] = useState({ width: 0, height: 0 });
   const findInputRef = useRef(null);
+  const previousFindFilesRef = useRef(new Set());
   const findDialogRef = useRef(null);
   const findResizeRef = useRef(null);
   const findRequestRef = useRef(0);
@@ -1700,6 +1704,7 @@ export default function TakeoffCanvas() {
     findRequestRef.current++;
     finishFindOcrPrompt(false);
     setFindOpen(false);
+    setFindBackgroundMinimized(false);
     setFindBusy(false);
     setFindBusyScope("");
     setFindMessage("");
@@ -1721,6 +1726,28 @@ export default function TakeoffCanvas() {
       ? "Keywords updated. Existing highlights remain marked; choose a search scope to start another search."
       : "Choose Find in all plans, Find in this PDF set, or Find in this page to start searching.");
   }, [findJobs.length]);
+  const findLoadedFiles = useMemo(() => findSearchTargets(sheets).map((target) => target.file), [sheets]);
+  const selectedFindFiles = useMemo(() => findSelectedFiles ?? new Set(findLoadedFiles), [findLoadedFiles, findSelectedFiles]);
+  useEffect(() => {
+    const loaded = new Set(findLoadedFiles);
+    setFindSelectedFiles((current) => {
+      if (current == null) return current;
+      const next = new Set([...current].filter((file) => loaded.has(file)));
+      for (const file of loaded) {
+        if (!previousFindFilesRef.current.has(file)) next.add(file);
+      }
+      return next;
+    });
+    previousFindFilesRef.current = loaded;
+  }, [findLoadedFiles]);
+  const toggleFindFile = useCallback((file) => {
+    setFindSelectedFiles((current) => {
+      const next = new Set(current ?? findLoadedFiles);
+      if (next.has(file)) next.delete(file);
+      else next.add(file);
+      return next;
+    });
+  }, [findLoadedFiles]);
   useEffect(() => {
     try { localStorage.setItem("opentakeoff.find-scope-suggestions", JSON.stringify(findSuggestions)); }
     catch { /* Suggestions remain usable for this session if storage is unavailable. */ }
@@ -1733,13 +1760,13 @@ export default function TakeoffCanvas() {
     setActive(target.file); setPage(target.page); setSheetGroup([]);
     if (resultPage.firstMatch) setPendingFind({ ...resultPage.firstMatch, request: findRequestRef.current });
   }, []);
-  const runFind = useCallback(async (scope = "all", rawQuery = findQuery, { background = false } = {}) => {
+  const runFind = useCallback(async (scope = "all", rawQuery = findQuery, { background = false, reopenWhenDone = false, selectedFiles = null } = {}) => {
     const query = rawQuery.trim();
     const terms = parseFindTerms(query);
     const currentPage = (scope === "file" || scope === "page") && focusPanel
       ? { key: focusPanel.key, file: focusPanel.file, page: focusPanel.page }
       : null;
-    const targets = findSearchTargets(sheets, scope, currentPage);
+    const targets = findSearchTargets(sheets, scope, currentPage, selectedFiles);
     const request = ++findRequestRef.current;
     setFindQuery(rawQuery);
     setFindMessage("");
@@ -1747,7 +1774,7 @@ export default function TakeoffCanvas() {
     if (!terms.length) { setFindMessage("Enter a word or choose a scope suggestion."); return; }
     if (!sheets.length) { setFindMessage("Load a plan PDF to search."); return; }
     if (!targets.length) {
-      setFindMessage(scope === "file" ? "Open a PDF before searching this PDF set." : "Open a PDF page before searching this page.");
+      setFindMessage(scope === "all" ? "Select at least one loaded plan to search." : scope === "file" ? "Open a PDF before searching this PDF set." : "Open a PDF page before searching this page.");
       return;
     }
     setFindBusy(true);
@@ -1869,6 +1896,8 @@ export default function TakeoffCanvas() {
         id: `find-${Date.now()}-${sequence}`,
         scope,
         query,
+        targetPlanCount: scope === "all" ? targets.length : undefined,
+        loadedPlanCount: scope === "all" ? findLoadedFiles.length : undefined,
         searchTerms: terms,
         targetKey: currentPage?.key || "",
         targetFile: currentPage?.file || "",
@@ -1917,9 +1946,29 @@ export default function TakeoffCanvas() {
       if (request === findRequestRef.current) {
         setFindBusy(false);
         setFindBusyScope("");
+        if (reopenWhenDone) {
+          setFindBackgroundMinimized(false);
+          setFindPanelTab("find");
+          setFindOpen(true);
+        }
       }
     }
-  }, [commitFindJobs, docFor, findQuery, focusPanel, requestFindOcr, sheets, showFindPage, textContentForPage]);
+  }, [commitFindJobs, docFor, findLoadedFiles.length, findQuery, focusPanel, requestFindOcr, sheets, showFindPage, textContentForPage]);
+  const runAllFindInBackground = useCallback(() => {
+    const query = findQuery;
+    const selectedFiles = findLoadedFiles.filter((file) => selectedFindFiles.has(file));
+    if (!sheets.length || !parseFindTerms(query).length) {
+      runFind("all", query);
+      return;
+    }
+    if (!selectedFiles.length) {
+      setFindMessage("Select at least one loaded plan to search.");
+      return;
+    }
+    setFindBackgroundMinimized(true);
+    setFindOpen(false);
+    void runFind("all", query, { background: true, reopenWhenDone: true, selectedFiles });
+  }, [findLoadedFiles, findQuery, runFind, selectedFindFiles, sheets.length]);
   useEffect(() => {
     if (!autoFindDefaultsPendingRef.current || !hydrated.current || !sheets.length || findBusy) return;
     autoFindDefaultsPendingRef.current = false;
@@ -1949,6 +1998,7 @@ export default function TakeoffCanvas() {
   }, [findBusy, findExportJob, findJsonBusy, galleryLabels, projectName]);
   const openFind = useCallback(() => {
     const initialQuery = findQuery.trim() ? findQuery : findSuggestions.join(", ");
+    setFindBackgroundMinimized(false);
     setFindPanelTab("find");
     setFindOpen(true);
     if (!findQuery.trim()) setFindQuery(initialQuery);
@@ -8780,7 +8830,7 @@ export default function TakeoffCanvas() {
                       Search words or phrases <span>(separate multiple terms with commas)</span>
                       <input ref={findInputRef} type="search" value={findQuery} placeholder="e.g. fence, gate, dumpster" aria-label="Keywords for PDF text search"
                         onChange={(event) => updateFindDraft(event.target.value)}
-                        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (!findBusy) runFind(); } }} />
+                        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (!findBusy) runAllFindInBackground(); } }} />
                     </label>
                     <section className="find-suggestions-section" aria-label="Scope suggestions">
                   <div className="find-suggestions-heading">
@@ -8818,9 +8868,22 @@ export default function TakeoffCanvas() {
                   </form>
                     </section>
                   </div>
+                  <section className="find-plan-selection" aria-label="Plans to search">
+                    <button className="find-plan-selection-toggle" type="button" aria-expanded={findPlanSelectionOpen}
+                      aria-controls="find-plan-selection-list" onClick={() => setFindPlanSelectionOpen((open) => !open)}>
+                      <span>Plans to search <span className="find-plan-selection-count">{selectedFindFiles.size} of {findLoadedFiles.length} selected</span></span>
+                      <Icon name={findPlanSelectionOpen ? "chevronUp" : "chevronDown"} size={14} />
+                    </button>
+                    {findPlanSelectionOpen && <div id="find-plan-selection-list" className="find-plan-selection-list">
+                      {findLoadedFiles.length ? findLoadedFiles.map((file) => <label className="find-plan-selection-option" key={file} title={file}>
+                        <input type="checkbox" checked={selectedFindFiles.has(file)} onChange={() => toggleFindFile(file)} />
+                        <span>{file}</span>
+                      </label>) : <span className="find-plan-selection-empty">No plans are loaded.</span>}
+                    </div>}
+                  </section>
                 </section>
                 <div className="find-dialog-actions">
-                  <button className="find-run-button" type="button" onClick={() => runFind()} disabled={findBusy || !parseFindTerms(findQuery).length}>
+                  <button className="find-run-button" type="button" onClick={runAllFindInBackground} disabled={findBusy || !parseFindTerms(findQuery).length || !selectedFindFiles.size}>
                     {findBusy && findBusyScope === "all" ? "Scanning…" : "Find in all plans"}
                   </button>
                   <button className="find-current-pdf-button" type="button" onClick={() => runFind("file")} disabled={findBusy || !focusPanel?.file || !parseFindTerms(findQuery).length}
@@ -8838,7 +8901,7 @@ export default function TakeoffCanvas() {
                   </button>
                 </div>
                 <div className="find-dialog-status" aria-live={findBusy ? "off" : "polite"}>
-                  {findMessage || (findResults.length && !findBusy ? `${findResults.length.toLocaleString()} matches on ${findPages.length.toLocaleString()} page${findPages.length === 1 ? "" : "s"} across ${new Set(findPages.map((resultPage) => resultPage.file)).size.toLocaleString()} PDF${new Set(findPages.map((resultPage) => resultPage.file)).size === 1 ? "" : "s"}.` : `${sheets.length} loaded plan${sheets.length === 1 ? "" : "s"} will be searched.`)}
+                  {findMessage || (findResults.length && !findBusy ? `${findResults.length.toLocaleString()} matches on ${findPages.length.toLocaleString()} page${findPages.length === 1 ? "" : "s"} across ${new Set(findPages.map((resultPage) => resultPage.file)).size.toLocaleString()} PDF${new Set(findPages.map((resultPage) => resultPage.file)).size === 1 ? "" : "s"}.` : `${selectedFindFiles.size} selected plan${selectedFindFiles.size === 1 ? "" : "s"} will be searched.`)}
                 </div>
                 <button className="find-json-download" type="button" onClick={downloadLatestFindResults}
                   disabled={findBusy || findJsonBusy || !findExportJob?.matches?.length}
@@ -8858,7 +8921,9 @@ export default function TakeoffCanvas() {
                         ? `This page · ${tabLabel(job.targetKey)}`
                         : job.scope === "file"
                           ? `This PDF set · ${job.targetFile || job.matches[0]?.file || "PDF"}`
-                          : "All loaded plans";
+                          : job.targetPlanCount < job.loadedPlanCount
+                            ? `${job.targetPlanCount} of ${job.loadedPlanCount} selected plans`
+                            : "All loaded plans";
                       return <li key={job.id} className={job.visible === false ? "is-hidden" : ""}>
                         <button className="find-job-visibility" type="button" onClick={() => setFindJobVisible(job.id, job.visible === false)}
                           aria-pressed={job.visible !== false} aria-label={`${job.visible === false ? "Show" : "Hide"} search marks for ${jobLabel}: ${job.query}`}
@@ -8928,13 +8993,13 @@ export default function TakeoffCanvas() {
                 <h3>Find help</h3><p>Button previews below are visual references; use the Find tab to operate them.</p>
                 <h4>Search words and suggestions</h4>
                 <p><span className="find-help-preview" aria-hidden="true"><span>Search terms and scope suggestions</span><span className="is-square"><Icon name="chevronDown" size={13} /></span></span><strong>Search setup:</strong> click its heading to collapse or expand the keywords and scope suggestions. Your current search and suggestions stay in place while the section is collapsed.</p>
-                <p><span className="find-help-preview" aria-hidden="true"><span>fence, gate, dumpster</span></span><strong>Search words or phrases:</strong> enter the words you want to find, separated by commas. Press Enter to search all loaded plans.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span>fence, gate, dumpster</span></span><strong>Search words or phrases:</strong> enter the words you want to find, separated by commas. Press Enter to search the checked plans.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-chip is-selected">fence</span><span className="is-chip">gate</span></span><strong>Suggestion names:</strong> click a name to add it to the search box; click it again to exclude it. This changes your keywords without starting a search.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-chip">fence <span>×</span></span></span><strong>× beside a suggestion:</strong> removes that suggestion and takes it out of the search box.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span>Add</span></span><strong>Add:</strong> type a new suggestion in the field below the chips, then click Add. Comma-separated suggestions are supported. They are added to both the suggestions and your search words. You can keep up to 40 suggestions.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-link">Restore defaults</span></span><strong>Restore defaults:</strong> restores the original suggestion list. It does not reset the words already in the search box.</p>
                 <h4>Choose where to search</h4>
-                <p><span className="find-help-preview" aria-hidden="true"><span className="is-primary">Find in all plans</span></span><strong>Find in all plans:</strong> searches every loaded PDF.</p>
+                <p><span className="find-help-preview" aria-hidden="true"><span className="is-primary">Find in all plans</span></span><strong>Find in all plans:</strong> searches every checked PDF. Open Plans to search to check or uncheck files; all loaded files start checked.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-outline">Find in this PDF set</span></span><strong>Find in this PDF set:</strong> searches every page of the PDF currently focused on the canvas.</p>
                 <p><span className="find-help-preview" aria-hidden="true"><span className="is-outline">Find in this page</span></span><strong>Find in this page:</strong> searches only the currently focused sheet.</p>
                 <p>Each run adds a separate search and keeps previous searches. Search buttons are unavailable while scanning or when the search box is empty; the PDF-set and page buttons also require an open PDF.</p>
@@ -8966,6 +9031,14 @@ export default function TakeoffCanvas() {
                 onPointerCancel={endFindDialogResize} onLostPointerCapture={endFindDialogResize} />
             </section>
           </div>, document.body,
+        )}
+        {findBackgroundMinimized && findBusy && !findOpen && createPortal(
+          <button type="button" className="find-background-status" onClick={openFind}
+            aria-label={`Show Find progress: ${findMessage || "Searching all loaded plans"}`}>
+            <LongTaskLoader active label={findMessage || "Searching all loaded plans…"} compact delay={0} announce={false} />
+            <span className="find-background-status-copy" aria-live="polite">{findMessage || "Searching all loaded plans…"}</span>
+            <span className="find-background-status-action">Open</span>
+          </button>, document.body,
         )}
       </div>
 

@@ -2,6 +2,7 @@
 
 ## Unreleased — October 30 checkpoint
 
+- **Find in all plans** now lets users choose loaded PDFs from a collapsible checked-by-default plan list, minimizes the Find panel while searching the selected plans in the background, provides a progress control to reopen it early, and restores the panel when the search completes.
 - Reworded Google Drive sign-in and browsing prompts so they do not assume a team account or claim the user already has cloud projects.
 - Replaced the Google sign-in disclosure paragraph on login forms with a standalone Privacy policy link.
 - Allowed Google profile photos from `https://lh3.googleusercontent.com` in the web Content Security Policy's `img-src` directive.
