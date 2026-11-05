@@ -2,6 +2,7 @@
 
 ## Unreleased — October 30 checkpoint
 
+- Reworded Google Drive sign-in and browsing prompts so they do not assume a team account or claim the user already has cloud projects.
 - Replaced the Google sign-in disclosure paragraph on login forms with a standalone Privacy policy link.
 - Allowed Google profile photos from `https://lh3.googleusercontent.com` in the web Content Security Policy's `img-src` directive.
 - Docked the Find panel below the toolbar through the bottom of the screen and made search controls expanded each time Find opens. The arrow beside Matching pages still collapses the controls while keeping the results heading visible.

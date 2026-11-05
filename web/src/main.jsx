@@ -80,8 +80,8 @@ function Centered({ title, body }) {
 // extra element under the button (the home flavor's skip link).
 function SignInScreen({
   ready, signIn,
-  title = "This project is stored in your team's Google Drive",
-  body = "Sign in with your team Google account to open it. Only accounts on the team domain can sign in.",
+  title = "This project is stored in Google Drive",
+  body = "Sign in with a Google account that has access to this project.",
   footer = null,
 }) {
   const [err, setErr] = useState("");
@@ -184,8 +184,8 @@ function ProjectHomeGate() {
   if (!user) {
     return (
       <SignInScreen ready={ready} signIn={signIn}
-        title="Your team's projects live in Google Drive"
-        body="Sign in with your team Google account to browse and open them. Only accounts on the team domain can sign in."
+        title="Projects in Google Drive"
+        body="Sign in with a Google account that has permission to browse and open these projects."
         footer={
           <Link to="/" style={{ fontSize: 12.5, color: "var(--ink-muted)" }}>
             skip — use the local canvas

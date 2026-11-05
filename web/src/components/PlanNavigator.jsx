@@ -594,7 +594,7 @@ export default function PlanNavigator({
                     {!user ? (
                       <>
                         <button type="button" onClick={handleDriveSignIn} disabled={driveBusy}
-                          title="Sign in with your team Google account to open projects stored in Drive"
+                          title="Sign in with Google to open projects stored in Drive"
                           style={{ border: "none", background: "transparent", padding: 0, color: "var(--cobalt)", cursor: driveBusy ? "default" : "pointer", fontSize: 12, textDecoration: "underline", fontFamily: "var(--f-body)" }}>
                           {driveBusy ? "Signing in…" : "or sign in with Google Drive"}
                         </button>
@@ -602,7 +602,7 @@ export default function PlanNavigator({
                       </>
                     ) : (
                       <Link to="/projects" style={{ color: "var(--cobalt)", fontSize: 12, textDecoration: "underline" }}>
-                        browse your Google Drive projects
+                        Browse projects in Google Drive
                       </Link>
                     )}
                   </div>
