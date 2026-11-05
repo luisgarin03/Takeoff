@@ -37,21 +37,15 @@ const faqItems: FaqItem[] = [
   },
   {
     value: "item-4",
-    question: "Can I save a project and come back to it later?",
-    answer:
-      "Yes. Cloud Projects are included with ESTIMATING passes. Sign in to your account to return to saved project work. Keep your own backup of important project records as well.",
-  },
-  {
-    value: "item-5",
     question: "Does Google sign-in give ESTIMATING access to Gmail or Calendar?",
     answer:
       "No. Google sign-in is for your ESTIMATING account. Connecting Google Calendar is a separate, optional step that asks for calendar permissions when you choose that feature.",
   },
   {
-    value: "item-6",
+    value: "item-5",
     question: "What does a pass cost, and can I make a live payment?",
     answer:
-      "The 30-day pass is $40 per month, and the annual pass is $400 per year. Both include PDF plans and sheet navigation, takeoffs, markups, material calculations, and Cloud Projects. Subscriptions renew; checkout shows the terms and total. Checkout is currently in test mode and does not accept live payments.",
+      "The 30-day pass is $40 per month, and the annual pass is $400 per year. Both include PDF plans and sheet navigation, takeoffs, markups, and material calculations. Subscriptions renew; checkout shows the terms and total. Checkout is currently in test mode and does not accept live payments.",
   },
 ]
 

@@ -37,7 +37,7 @@ export function LiveAdmin({usersOnly=false}:{usersOnly?:boolean}) {
  return <BaseLayout title={usersOnly ? "Users" : "Dashboard"} description="Live data from OpenTakeoff · Supabase">
  <div className="px-4 lg:px-6 space-y-6">{!usersOnly && <section className="rounded-xl border p-5 space-y-4"><h2 className="text-lg font-semibold">Homepage image</h2><WebsiteImage editable /></section>}
  {!usersOnly && <WebsiteImageEditor/>}
- <div className="flex items-center justify-between gap-4"><p className="text-sm text-muted-foreground">Users, billing status, trials, and cloud projects</p><Button onClick={refresh} disabled={busy}>Refresh</Button></div>
+ <div className="flex items-center justify-between gap-4"><p className="text-sm text-muted-foreground">Users, billing status, and trials</p><Button onClick={refresh} disabled={busy}>Refresh</Button></div>
  {error && <p role="alert" className="rounded-lg border border-red-500 p-4 text-red-500 break-words">{error}</p>}
  {busy && <p role="status">Loading live database…</p>}
  {data && <>

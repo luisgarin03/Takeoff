@@ -12,7 +12,7 @@ Logs: `.runtime/server.log` and `.runtime/server-error.log`.
 
 ## Supabase
 Connected to the existing **OpenTakeoff** project, `oeprbftxfnksgdqztezq`.
-Dashboard and Users show live account counts, active subscription/trial counts, cloud project counts, and a paginated searchable user list. No production user/subscription mutation controls are included. Other cloned admin pages are explicitly marked template demos.
+Dashboard and Users show live account counts, active subscription/trial counts, and a paginated searchable user list. No production user/subscription mutation controls are included. Other cloned admin pages are explicitly marked template demos.
 
 Sign in using your existing OpenTakeoff account. The initial administrator is **luisgarin003@gmail.com**. Website sessions use their own browser storage key. Signing out here signs out this website locally.
 
@@ -20,7 +20,7 @@ Supabase public URL and publishable key are stored in ignored `vite-version/.env
 
 For Google sign-in, Supabase Authentication > URL Configuration must allow `http://127.0.0.1:5174/dashboard` (and any alternate development port). Add your deployed website callback URL before hosting it. Email/password sign-in works independently of OAuth redirect configuration.
 
-The additive admin database migration has already been applied. To reinitialize intentionally, run `./Initialize-Database.ps1` while authenticated with the Supabase CLI. Startup never reapplies migrations or resets existing production data. The functions check an explicit, server-owned `otk_website_admins` allowlist on every request. They return only account, entitlement, and project-count fields, never project contents or authentication secrets.
+The additive admin database migration has already been applied. To reinitialize intentionally, run `./Initialize-Database.ps1` while authenticated with the Supabase CLI. Startup never reapplies migrations or resets existing production data. The functions check an explicit, server-owned `otk_website_admins` allowlist on every request. They return only account and entitlement fields, never project contents or authentication secrets.
 
 Manage allowlisted administrators through Supabase SQL Editor, using the confirmed user's UUID from Authentication > Users:
 
