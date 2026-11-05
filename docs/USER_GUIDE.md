@@ -1159,7 +1159,7 @@ The condition summary shows its editable name once; the totals section displays 
 
 The Draw rail menu spans the available height beneath the top toolbar and is 40 pixels wider to the right than a standard rail dropdown. Its tools scroll only when they exceed that space; other rail menus retain their compact dimensions.
 
-The sheet selector and previous/next controls sit in the top header immediately after Takeoff, available with either toolbar tab open or collapsed.
+The sheet selector and previous/next controls sit in the top header immediately after Takeoff, available with either toolbar tab open or collapsed. In the selector's PDF sets list, use the trash icon beside a file's page count to remove that PDF from the current project. Its takeoffs and markups remain saved.
 
 The Sheets tab strip shows bookmarked pages when any are available, including automatic markup bookmarks, in plan order. With no bookmarks it shows open sheets. The overflow menu retains access to other open pages; bookmarking is separate from closing a tab.
 

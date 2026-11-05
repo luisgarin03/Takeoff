@@ -2,6 +2,7 @@
 
 ## Unreleased — October 30 checkpoint
 
+- Added a per-PDF trash control beside each file's page count in the sheet selector; it removes the PDF from the current project while retaining its takeoffs and markups. Centered the minimized Find/OCR progress widget along the bottom of the page.
 - Enabled Pro editing for all active Stripe test subscriptions on the hosted test deployment. Test checkouts still collect no real payments; the sandbox access flags must be disabled before switching to live billing.
 - **Find in all plans** now lets users choose loaded PDFs from a collapsible checked-by-default plan list, minimizes the Find panel while searching the selected plans in the background, provides a progress control to reopen it early, and restores the panel when the search completes.
 - Reworded Google Drive sign-in and browsing prompts so they do not assume a team account or claim the user already has cloud projects.

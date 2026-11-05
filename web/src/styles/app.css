@@ -323,8 +323,10 @@ select {
 .find-background-status {
   position: fixed;
   z-index: 2999;
-  right: max(12px, env(safe-area-inset-right, 0px));
+  left: 50%;
   bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  right: auto;
+  transform: translateX(-50%);
   display: flex;
   max-width: min(480px, calc(100vw - 24px));
   align-items: center;
@@ -342,6 +344,8 @@ select {
 .find-background-status-copy { min-width: 0; overflow: hidden; color: var(--ink-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .find-background-status-action { flex: 0 0 auto; color: var(--cobalt); font-size: 12px; font-weight: 700; }
 .find-background-status:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+.dropdown-shortcut-action { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 26px; height: 26px; margin-left: 4px; padding: 0; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--c-danger); cursor: pointer; }
+.dropdown-shortcut-action:hover, .dropdown-shortcut-action:focus-visible { border-color: var(--c-danger); background: color-mix(in srgb, var(--c-danger) 10%, transparent); outline: none; }
 .find-dialog-header {
   display: flex;
   align-items: center;

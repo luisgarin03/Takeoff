@@ -8035,6 +8035,13 @@ export default function TakeoffCanvas() {
         fullWidth: true, dividerBelow: true,
         disclosure: expanded ? "expanded" : "collapsed", stayOpen: true,
         shortcut: count ? `${count} page${count === 1 ? "" : "s"}` : "",
+        shortcutAction: {
+          icon: "trash",
+          label: `Remove ${name} from this project`,
+          onSelect: () => {
+            if (window.confirm(`Remove “${name}” and its ${count || "all"} page${count === 1 ? "" : "s"} from this project? Existing takeoffs and markups will be kept.`)) void closePdf(name);
+          },
+        },
         title: `${expanded ? "Collapse" : "Expand"} ${name}`,
         onSelect: () => {
           setSheetPickerExpandedFiles((current) => {

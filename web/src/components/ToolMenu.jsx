@@ -151,7 +151,7 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
                   opacity: dis ? 0.38 : 1, color: fg,
                   ...(it.fullWidth ? { gridColumn: "1 / -1" } : it.gridColumn ? { gridColumn: it.gridColumn } : {}),
                   ...(!it.accessory && it.dividerBelow ? { borderBottom: "1px solid var(--ink-faint)", marginBottom: 3 } : {}),
-                  ...(it.accessory ? { flex: 1, minWidth: 0 } : {}),
+                  ...(it.accessory || it.shortcutAction ? { flex: 1, minWidth: 0 } : {}),
                 }}
                 onMouseEnter={(e) => { if (!dis && !it.active) e.currentTarget.style.background = "var(--paper-shadow)"; if (!dis) it.onHover?.(true); }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = it.active ? "var(--paper-cream)" : "transparent"; if (!dis) it.onHover?.(false); }}>
@@ -159,10 +159,10 @@ export default function ToolMenu({ face, active = false, accent = "cobalt", titl
                 {checkable && <span style={{ display: "inline-flex", width: 15, justifyContent: "center", color: "var(--c-positive)", visibility: it.checked ? "visible" : "hidden" }}><Icon name="check" size={14} /></span>}
                 {it.icon && <span style={{ display: "inline-flex", width: 17, height: 18, flexShrink: 0, alignItems: "center", justifyContent: "center", color: it.tint || fg }}><Icon name={it.icon} size={16} /></span>}
                 <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 13, fontWeight: it.header || it.active ? 600 : 400, ...(it.accessory ? { minWidth: 0, overflowWrap: "anywhere" } : {}) }}>{it.label}</span>
-                {it.shortcut && <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-muted)" }}>{it.shortcut}</span>}
+                {it.shortcut && !it.shortcutAction && <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-muted)" }}>{it.shortcut}</span>}
               </button>
             );
-            return it.accessory ? <div key={it.id || i} style={{ display: "flex", alignItems: "center", minWidth: 0, ...(it.fullWidth ? { gridColumn: "1 / -1" } : it.gridColumn ? { gridColumn: it.gridColumn } : {}), ...(Number(it.gridColumn) > 1 ? { borderLeft: "1px solid var(--ink-faint)", paddingLeft: 4 } : {}), ...(it.dividerBelow ? { borderBottom: "1px solid var(--ink-faint)", marginBottom: 3, paddingBottom: 3 } : {}) }}>{action}{it.accessory}</div> : action;
+            return it.accessory || it.shortcutAction ? <div key={it.id || i} style={{ display: "flex", alignItems: "center", minWidth: 0, ...(it.fullWidth ? { gridColumn: "1 / -1" } : it.gridColumn ? { gridColumn: it.gridColumn } : {}), ...(Number(it.gridColumn) > 1 ? { borderLeft: "1px solid var(--ink-faint)", paddingLeft: 4 } : {}), ...(it.dividerBelow ? { borderBottom: "1px solid var(--ink-faint)", marginBottom: 3, paddingBottom: 3 } : {}) }}>{action}{it.shortcutAction && <><button type="button" className="dropdown-shortcut-action" aria-label={it.shortcutAction.label} title={it.shortcutAction.label} onClick={it.shortcutAction.onSelect}><Icon name={it.shortcutAction.icon} size={14} /></button>{it.shortcut && <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--ink-muted)", padding: "0 8px 0 3px", whiteSpace: "nowrap" }}>{it.shortcut}</span>}</>}{it.accessory}</div> : action;
           })}
         </div>
       )}
