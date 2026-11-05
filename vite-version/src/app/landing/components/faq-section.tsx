@@ -19,39 +19,39 @@ type FaqItem = {
 const faqItems: FaqItem[] = [
   {
     value: "item-1",
-    question: "How do I integrate ESTIMATING components into my project?",
+    question: "What can I do with ESTIMATING?",
     answer:
-      "Integration is simple! All our components are built with shadcn/ui and work with React, Next.js, and Vite. Just copy the component code, install any required dependencies, and paste it into your project. Each component comes with detailed installation instructions and examples.",
+      "Bring PDF plans into one workspace, move between sheets, take off lengths, areas, and counts, add drawing markups, and turn measured quantities into material calculations and estimates.",
   },
   {
     value: "item-2",
-    question: "What's the difference between free and premium components?",
+    question: "Which takeoff tools are included?",
     answer:
-      "Free components include essential UI elements like buttons, forms, and basic layouts. Premium components offer advanced features like complex data tables, analytics dashboards, authentication flows, and complete admin templates. Premium also includes Figma files, priority support, and commercial licenses.",
+      "ESTIMATING includes length, area, and count takeoffs, plus drawing markups and material calculations. You can keep the quantities and plan references together as you work through the project.",
   },
   {
     value: "item-3",
-    question: "Can I use these components in commercial projects?",
+    question: "What can I put on the Whiteboard?",
     answer:
-      "Yes! Free components come with an MIT license for unlimited use. Premium components include a commercial license that allows usage in client projects, SaaS applications, and commercial products without attribution requirements.",
+      "Add PDFs, images, and text notes, arrange them on the board, and pan or zoom to review your references together.",
   },
   {
     value: "item-4",
-    question: "Do you provide support and updates?",
+    question: "Can I save a project and come back to it later?",
     answer:
-      "Absolutely! We provide community support for free components through our Discord server and GitHub issues. Premium subscribers get priority email support, regular component updates, and early access to new releases. We also maintain compatibility with the latest shadcn/ui versions.",
+      "Yes. Cloud Projects are included with ESTIMATING passes. Sign in to your account to return to saved project work. Keep your own backup of important project records as well.",
   },
   {
     value: "item-5",
-    question: "What frameworks and tools do you support?",
+    question: "Does Google sign-in give ESTIMATING access to Gmail or Calendar?",
     answer:
-      "Our components work with React 18+, Next.js 13+, and Vite. We use TypeScript, Tailwind CSS, and follow shadcn/ui conventions. Components are tested with popular tools like React Hook Form, TanStack Query, and Zustand for state management.",
+      "No. Google sign-in is for your ESTIMATING account. Connecting Google Calendar is a separate, optional step that asks for calendar permissions when you choose that feature.",
   },
   {
     value: "item-6",
-    question: "How often do you release new components?",
+    question: "What does a pass cost, and can I make a live payment?",
     answer:
-      "We release new components and templates weekly. Premium subscribers get early access to new releases, while free components are updated regularly based on community feedback. You can track our roadmap and request specific components through our GitHub repository.",
+      "The 30-day pass is $40 per month, and the annual pass is $400 per year. Both include PDF plans and sheet navigation, takeoffs, markups, material calculations, and Cloud Projects. Subscriptions renew; checkout shows the terms and total. Checkout is currently in test mode and does not accept live payments.",
   },
 ]
 
@@ -68,8 +68,8 @@ const FaqSection = () => {
             Frequently Asked Questions
           </h2>
           <p className="text-lg text-muted-foreground">
-            Everything you need to know about ESTIMATING components, licensing,
-            and integration. Still have questions? We're here to help!
+            Answers about plan takeoffs, project files, calendar connections,
+            and subscription passes.
           </p>
         </div>
 
