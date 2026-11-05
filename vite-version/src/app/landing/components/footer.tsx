@@ -10,12 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Logo } from "@/components/logo"
 import { Heart } from "lucide-react"
-import {
-  Github,
-  Twitter,
-  Linkedin,
-  Youtube,
-} from "@/components/icons/brand-icons"
+import { useSiteSection, useSiteContent } from "@/lib/site-content"
 
 const newsletterSchema = z.object({
   email: z.string().email({
@@ -50,18 +45,9 @@ const footerLinks = {
   ],
 }
 
-const socialLinks = [
-  { name: "Twitter", href: "#", icon: Twitter },
-  {
-    name: "GitHub",
-    href: "https://github.com/shadcnstore/shadcn-dashboard-landing-template",
-    icon: Github,
-  },
-  { name: "LinkedIn", href: "#", icon: Linkedin },
-  { name: "YouTube", href: "#", icon: Youtube },
-]
-
 export function LandingFooter() {
+  const section = useSiteSection("footer")
+  const content = useSiteContent()
   const form = useForm<z.infer<typeof newsletterSchema>>({
     resolver: zodResolver(newsletterSchema),
     defaultValues: {
@@ -124,39 +110,16 @@ export function LandingFooter() {
           <div className="col-span-4 lg:col-span-2 max-w-2xl">
             <div className="flex items-center gap-2 mb-4 max-lg:justify-center">
               <a
-                href="https://shadcnstore.com"
-                target="_blank"
+                href="/"
                 className="flex items-center gap-2 cursor-pointer"
               >
                 <Logo size={32} />
-                <span className="font-bold text-xl brand-text-shimmer">ESTIMATING</span>
+                <span className="font-bold text-xl brand-text-shimmer">{content.brand}</span>
               </a>
             </div>
             <p className="text-muted-foreground mb-6 max-lg:text-center max-lg:flex max-lg:justify-center">
-              Accelerating web development with curated blocks, templates,
-              landing pages, and admin dashboards designed for modern
-              developers.
+              {section.description}
             </p>
-            <div className="flex gap-4 max-lg:justify-center">
-              {socialLinks.map((social) => (
-                <Button
-                  key={social.name}
-                  variant="ghost"
-                  size="icon"
-                  nativeButton={false}
-                  render={
-                    <a
-                      href={social.href}
-                      aria-label={social.name}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    />
-                  }
-                >
-                  <social.icon className="size-4" />
-                </Button>
-              ))}
-            </div>
           </div>
 
           {/* Links Columns */}
@@ -235,16 +198,15 @@ export function LandingFooter() {
               <Heart className="size-4 text-destructive fill-current" />
               <span>by</span>
               <a
-                href="https://shadcnstore.com"
-                target="_blank"
+                href="/"
                 className="font-semibold text-foreground hover:text-primary transition-colors cursor-pointer"
               >
-                ESTIMATING
+                {content.brand}
               </a>
             </div>
             <span className="hidden sm:inline">•</span>
             <span>
-              © {new Date().getFullYear()} for the developer community
+              {section.copyrightLine || "Built for construction takeoffs and estimates."}
             </span>
           </div>
           <div className="flex items-center gap-4 text-sm text-muted-foreground mt-4 md:mt-0">

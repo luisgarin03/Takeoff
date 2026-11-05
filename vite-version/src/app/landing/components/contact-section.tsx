@@ -14,8 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Mail, MessageCircle, BookOpen } from "lucide-react"
-import { Github } from "@/components/icons/brand-icons"
+import { Mail, MessageCircle, BookOpen, LifeBuoy } from "lucide-react"
 import { useSiteSection } from "@/lib/site-content"
 
 const contactFormSchema = z.object({
@@ -74,86 +73,13 @@ export function ContactSection() {
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Contact Options */}
           <div className="flex flex-col gap-6 order-2 lg:order-1">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageCircle className="size-5 text-primary" />
-                  {String(section.items[0]?.title || "Discord Community")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground mb-3">
-                  {String(section.items[0]?.description || "Contact the team for help with ESTIMATING.")}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="cursor-pointer"
-                  nativeButton={false}
-                  render={
-                    <a
-                      href={String(section.items[0]?.href || "#contact")}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    />
-                  }
-                >
-                  {String(section.items[0]?.label || "Open")}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Github className="size-5 text-primary" />
-                  {String(section.items[1]?.title || "GitHub Issues")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground mb-3">
-                  {String(section.items[1]?.description || "Send us your questions.")}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="cursor-pointer"
-                  nativeButton={false}
-                  render={
-                    <a
-                      href={String(section.items[1]?.href || "#contact")}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    />
-                  }
-                >
-                  {String(section.items[1]?.label || "Open")}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="size-5 text-primary" />
-                  {String(section.items[2]?.title || "Documentation")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground mb-3">
-                  {String(section.items[2]?.description || "Find answers and guidance.")}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="cursor-pointer"
-                  nativeButton={false}
-                render={<a href={String(section.items[2]?.href || "#contact")} />}
-                >
-                  {String(section.items[2]?.label || "Open")}
-                </Button>
-              </CardContent>
-            </Card>
+            {section.items.filter(item => !/github|discord/i.test(`${item.title || ""} ${item.label || ""} ${item.href || ""}`)).map((item, index) => {
+              const Icon = String(item.icon) === "BookOpen" ? BookOpen : String(item.icon) === "MessageCircle" ? MessageCircle : LifeBuoy
+              return <Card key={index} className="hover:shadow-md transition-shadow cursor-pointer">
+                <CardHeader><CardTitle className="flex items-center gap-2"><Icon className="size-5 text-primary" />{String(item.title || "Contact")}</CardTitle></CardHeader>
+                <CardContent><p className="text-muted-foreground mb-3">{String(item.description || "")}</p><Button variant="outline" size="sm" className="cursor-pointer" nativeButton={false} render={<a href={String(item.href || "#contact")} target="_blank" rel="noopener noreferrer" />}>{String(item.label || "Contact")}</Button></CardContent>
+              </Card>
+            })}
           </div>
 
           {/* Contact Form */}

@@ -10,11 +10,14 @@ import {
 } from "@/components/ui/card"
 import { CardDecorator } from "@/components/ui/card-decorator"
 import { Code, Palette, Layout, Crown } from "lucide-react"
-import { Github } from "@/components/icons/brand-icons"
 import { useSiteSection } from "@/lib/site-content"
 
 export function AboutSection() {
   const section=useSiteSection("about")
+  const actions = [
+    { label: section.primaryButton, href: section.primaryHref, icon: true },
+    { label: section.secondaryButton, href: section.secondaryHref, icon: false },
+  ].filter(action => !/github|discord/i.test(`${action.label || ""} ${action.href || ""}`))
   const iconMap:Record<string,typeof Code>={Code,Palette,Layout,Crown}
   const values=section.items.map(item=>({...item,icon:iconMap[String(item.icon)]||Code})) as Array<{title?:string;description?:string;icon:typeof Code}>
   return (
@@ -60,36 +63,22 @@ export function AboutSection() {
             </span>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button
+            {actions.map((action,index)=><Button
+              key={index}
               size="lg"
+              variant={index ? "outline" : "default"}
               className="cursor-pointer"
               nativeButton={false}
               render={
                 <a
-                  href={section.primaryHref}
+                  href={String(action.href || "#about")}
                   target="_blank"
                   rel="noopener noreferrer"
                 />
               }
             >
-              <Github data-icon="inline-start" />
-              {section.primaryButton}
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="cursor-pointer"
-              nativeButton={false}
-              render={
-                <a
-                  href={section.secondaryHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                />
-              }
-            >
-              {section.secondaryButton}
-            </Button>
+              {action.icon && <Code data-icon="inline-start" />}{action.label}
+            </Button>)}
           </div>
         </div>
       </div>

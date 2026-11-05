@@ -6,7 +6,6 @@ import {
   Database,
   Building2,
   Rocket,
-  Settings,
   Zap,
   Package,
   Layout,
@@ -87,12 +86,6 @@ const menuSections = [
         description: "Interactive preview of all components",
         icon: Palette,
         href: "#showcase",
-      },
-      {
-        title: "GitHub Repository",
-        description: "Open source foundation and community",
-        icon: Settings,
-        href: "#github",
       },
       {
         title: "Design System",

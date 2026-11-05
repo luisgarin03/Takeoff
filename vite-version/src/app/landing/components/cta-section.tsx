@@ -1,7 +1,6 @@
 "use client"
 
 import { ArrowRight, TrendingUp, Package } from "lucide-react"
-import { Github } from "@/components/icons/brand-icons"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -73,7 +72,7 @@ export function CTASection() {
                     />
                   }
                 >
-                  <Github className="size-5" data-icon="inline-start" />
+                  <ArrowRight className="size-5" data-icon="inline-start" />
                   {String(section.items[1]?.label || "Explore features")}
                   <ArrowRight
                     className="transition-transform group-hover:translate-x-1"
