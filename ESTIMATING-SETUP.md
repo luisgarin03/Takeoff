@@ -14,13 +14,17 @@ Logs: `.runtime/server.log` and `.runtime/server-error.log`.
 Connected to the existing **OpenTakeoff** project, `oeprbftxfnksgdqztezq`.
 Dashboard and Users show live account counts, active subscription/trial counts, and a paginated searchable user list. No production user/subscription mutation controls are included. Other cloned admin pages are explicitly marked template demos.
 
+The Dashboard includes Website Content. Select a section to edit its copy, links, images, and icons. Uploads go to the public `website-media` bucket. Publishing writes the public website document to `otk_website_content`; the root page and `/landing` read the published document, so content changes do not require a new Worker deployment. Blog posts are created in the Blog section and appear when marked published.
+
 Sign in using your existing OpenTakeoff account. The initial administrator is **luisgarin003@gmail.com**. Website sessions use their own browser storage key. Signing out here signs out this website locally.
 
 Supabase public URL and publishable key are stored in ignored `vite-version/.env.local`. No service-role key is included in browser code. On a fresh copy the startup script can copy only public Supabase settings from the existing app's `web/.env.local`; otherwise fill these in using `.env.example`.
 
 For Google sign-in, Supabase Authentication > URL Configuration must allow `http://127.0.0.1:5174/dashboard` (and any alternate development port). Add your deployed website callback URL before hosting it. Email/password sign-in works independently of OAuth redirect configuration.
 
-The additive admin database migration has already been applied. To reinitialize intentionally, run `./Initialize-Database.ps1` while authenticated with the Supabase CLI. Startup never reapplies migrations or resets existing production data. The functions check an explicit, server-owned `otk_website_admins` allowlist on every request. They return only account and entitlement fields, never project contents or authentication secrets.
+The additive admin database migration has already been applied. To reinitialize intentionally, run `./Initialize-Database.ps1` while authenticated with the Supabase CLI. Startup never reapplies migrations or resets existing production data. The functions check an explicit, server-owned `otk_website_admins` allowlist on every request. They return only account and entitlement fields, never submitted content or authentication secrets.
+
+Apply new additive migrations with `supabase db push --linked` after confirming the linked project is the OpenTakeoff production project.
 
 Manage allowlisted administrators through Supabase SQL Editor, using the confirmed user's UUID from Authentication > Users:
 
