@@ -3,35 +3,12 @@
 import { Package, Download, Users, Star } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { DotPattern } from "@/components/dot-pattern"
-
-const stats = [
-  {
-    icon: Package,
-    value: "500+",
-    label: "Components",
-    description: "Ready-to-use blocks",
-  },
-  {
-    icon: Download,
-    value: "25K+",
-    label: "Downloads",
-    description: "Trusted worldwide",
-  },
-  {
-    icon: Users,
-    value: "10K+",
-    label: "Developers",
-    description: "Active community",
-  },
-  {
-    icon: Star,
-    value: "4.9",
-    label: "Rating",
-    description: "User satisfaction",
-  },
-]
+import { useSiteSection } from "@/lib/site-content"
 
 export function StatsSection() {
+  const section=useSiteSection("stats")
+  const iconMap:Record<string,typeof Package>={Package,Download,Users,Star}
+  const stats=section.items.map(item=>({...item,icon:iconMap[String(item.icon)]||Package})) as Array<{value?:string|number;label?:string;description?:string;icon:typeof Package}>
   return (
     <section className="py-12 sm:py-16 relative">
       {/* Background with transparency */}

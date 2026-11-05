@@ -18,6 +18,7 @@ export function Image3D({
   direction = "left",
 }: Image3DProps) {
   const isRight = direction === "right"
+  const source = (value: string) => /^https?:\/\//i.test(value) ? value : assetUrl(value)
 
   return (
     <div className={cn("group relative aspect-[4/3] w-full", className)}>
@@ -56,7 +57,7 @@ export function Image3D({
 
             {/* Theme-aware images */}
             <img
-              src={assetUrl(lightSrc)}
+              src={source(lightSrc)}
               alt={`${alt} - Light Mode`}
               className={cn(
                 "block size-full object-contain scale-90 dark:hidden transition-transform duration-700 group-hover:scale-95",
@@ -67,7 +68,7 @@ export function Image3D({
             />
 
             <img
-              src={assetUrl(darkSrc)}
+              src={source(darkSrc)}
               alt={`${alt} - Dark Mode`}
               className={cn(
                 "hidden dark:block size-full object-contain scale-90 transition-transform duration-700 group-hover:scale-95",

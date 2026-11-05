@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Mail, MessageCircle, BookOpen } from "lucide-react"
 import { Github } from "@/components/icons/brand-icons"
+import { useSiteSection } from "@/lib/site-content"
 
 const contactFormSchema = z.object({
   firstName: z.string().min(2, {
@@ -36,6 +37,7 @@ const contactFormSchema = z.object({
 })
 
 export function ContactSection() {
+  const section = useSiteSection("contact")
   const form = useForm<z.infer<typeof contactFormSchema>>({
     resolver: zodResolver(contactFormSchema),
     defaultValues: {
@@ -59,14 +61,13 @@ export function ContactSection() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center mb-16">
           <Badge variant="outline" className="mb-4">
-            Get In Touch
+            {section.eyebrow}
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">
-            Need help or have questions?
+            {section.title}
           </h2>
           <p className="text-lg text-muted-foreground">
-            Our team is here to help you get the most out of ESTIMATING. Choose
-            the best way to reach out to us.
+            {section.description}
           </p>
         </div>
 
@@ -77,13 +78,12 @@ export function ContactSection() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <MessageCircle className="size-5 text-primary" />
-                  Discord Community
+                  {String(section.items[0]?.title || "Discord Community")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground mb-3">
-                  Join our active community for quick help and discussions with
-                  other developers.
+                  {String(section.items[0]?.description || "Contact the team for help with ESTIMATING.")}
                 </p>
                 <Button
                   variant="outline"
@@ -92,13 +92,13 @@ export function ContactSection() {
                   nativeButton={false}
                   render={
                     <a
-                      href="https://discord.com/invite/XEQhPc9a6p"
+                      href={String(section.items[0]?.href || "#contact")}
                       target="_blank"
                       rel="noopener noreferrer"
                     />
                   }
                 >
-                  Join Discord
+                  {String(section.items[0]?.label || "Open")}
                 </Button>
               </CardContent>
             </Card>
@@ -107,13 +107,12 @@ export function ContactSection() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Github className="size-5 text-primary" />
-                  GitHub Issues
+                  {String(section.items[1]?.title || "GitHub Issues")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground mb-3">
-                  Report bugs, request features, or contribute to our open
-                  source repository.
+                  {String(section.items[1]?.description || "Send us your questions.")}
                 </p>
                 <Button
                   variant="outline"
@@ -122,13 +121,13 @@ export function ContactSection() {
                   nativeButton={false}
                   render={
                     <a
-                      href="https://github.com/shadcnstore/shadcn-dashboard-landing-template/issues"
+                      href={String(section.items[1]?.href || "#contact")}
                       target="_blank"
                       rel="noopener noreferrer"
                     />
                   }
                 >
-                  View on GitHub
+                  {String(section.items[1]?.label || "Open")}
                 </Button>
               </CardContent>
             </Card>
@@ -137,22 +136,21 @@ export function ContactSection() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BookOpen className="size-5 text-primary" />
-                  Documentation
+                  {String(section.items[2]?.title || "Documentation")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground mb-3">
-                  Browse our comprehensive guides, tutorials, and component
-                  documentation.
+                  {String(section.items[2]?.description || "Find answers and guidance.")}
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
                   className="cursor-pointer"
                   nativeButton={false}
-                  render={<a href="#" />}
+                render={<a href={String(section.items[2]?.href || "#contact")} />}
                 >
-                  View Docs
+                  {String(section.items[2]?.label || "Open")}
                 </Button>
               </CardContent>
             </Card>

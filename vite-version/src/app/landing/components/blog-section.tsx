@@ -9,60 +9,35 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-
-const blogs = [
-  {
-    id: 1,
-    image: "https://ui.shadcn.com/placeholder.svg",
-    category: "Technology",
-    title: "AI Development Catalysts",
-    description:
-      "Exploring how AI-driven tools are transforming software development workflows and accelerating innovation.",
-  },
-  {
-    id: 2,
-    image: "https://ui.shadcn.com/placeholder.svg",
-    category: "Lifestyle",
-    title: "Minimalist Living Guide",
-    description:
-      "Minimalist living approaches that can help reduce stress and create more meaningful daily experiences.",
-  },
-  {
-    id: 3,
-    image: "https://ui.shadcn.com/placeholder.svg",
-    category: "Design",
-    title: "Accessible UI Trends",
-    description:
-      "How modern UI trends are embracing accessibility while maintaining sleek, intuitive user experiences.",
-  },
-]
+import { useSiteSection } from "@/lib/site-content"
 
 export function BlogSection() {
+  const section = useSiteSection("blog")
+  const blogs = section.items.filter(blog => blog.published !== false)
   return (
     <section id="blog" className="py-24 sm:py-32 bg-muted/50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="mx-auto max-w-2xl text-center mb-16">
           <Badge variant="outline" className="mb-4">
-            Latest Insights
+            {section.eyebrow}
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">
-            From our blog
+            {section.title}
           </h2>
           <p className="text-lg text-muted-foreground">
-            Stay updated with the latest trends, best practices, and insights
-            from our team of experts.
+            {section.description}
           </p>
         </div>
 
         {/* Blog Grid */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {blogs.map((blog) => (
-            <Card key={blog.id} className="overflow-hidden py-0">
+          {blogs.map((blog, index) => (
+            <Card key={index} className="overflow-hidden py-0">
               <div className="aspect-video">
                 <img
-                  src={blog.image}
-                  alt={blog.title}
+                  src={String(blog.image || "")}
+                  alt={String(blog.imageAlt || blog.title || "")}
                   className="size-full object-cover dark:invert dark:brightness-[0.95]"
                   loading="lazy"
                   decoding="async"
@@ -70,24 +45,25 @@ export function BlogSection() {
               </div>
               <CardHeader className="gap-3 px-6 pt-6">
                 <p className="text-xs tracking-widest text-muted-foreground uppercase">
-                  {blog.category}
+                  {String(blog.category || "")}
                 </p>
                 <CardTitle className="text-xl font-bold">
-                  {blog.title}
+                  {String(blog.title || "")}
                 </CardTitle>
                 <CardDescription className="text-base">
-                  {blog.description}
+                  {String(blog.description || "")}
                 </CardDescription>
               </CardHeader>
               <CardFooter className="px-6 pb-6">
                 <a
-                  href="#"
-                  onClick={(e) => e.preventDefault()}
+                  href={String(blog.href || "#blog")}
+                  onClick={blog.content ? (e) => { e.preventDefault(); const el=e.currentTarget.closest("article")?.querySelector("[data-blog-content]"); el?.classList.toggle("hidden") } : undefined}
                   className="inline-flex items-center gap-2 text-primary hover:underline cursor-pointer"
                 >
-                  Learn More
+                  {String(blog.linkLabel || (blog.content ? "Read Article" : "Learn More"))}
                   <ArrowRight className="size-4" />
                 </a>
+                {blog.content && <div data-blog-content className="hidden whitespace-pre-wrap px-6 pb-6 text-sm text-muted-foreground">{String(blog.content)}</div>}
               </CardFooter>
             </Card>
           ))}

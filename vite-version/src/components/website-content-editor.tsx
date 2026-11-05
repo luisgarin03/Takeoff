@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 import { defaultSiteContent, mergeSiteContent, type SiteContent } from "@/lib/site-content"
-import { LiveSite } from "@/components/live-site"
+import { LandingPageContent } from "@/app/landing/page"
+import { SiteContentProvider } from "@/lib/site-content"
 import { Link } from "react-router-dom"
 
-const iconOptions = ["Sparkles", "FileText", "Ruler", "Calculator", "PencilRuler", "PanelsTopLeft", "CalendarDays", "Building2", "Users", "User", "Ticket", "CalendarRange", "ClipboardCheck", "Newspaper", "CircleHelp", "Mail", "Heart", "Layers", "Workflow", "CheckCircle", "Shield", "BookOpen", "Image", "Star", "Package", "ArrowRight"]
+const iconOptions = ["Sparkles", "FileText", "Ruler", "Calculator", "PencilRuler", "PanelsTopLeft", "CalendarDays", "Building2", "Users", "User", "Ticket", "CalendarRange", "ClipboardCheck", "Newspaper", "CircleHelp", "Mail", "Heart", "Layers", "Workflow", "CheckCircle", "Shield", "BookOpen", "Image", "Star", "Package", "ArrowRight", "Zap", "Eye", "Link2", "Code", "Palette", "Crown", "Download", "Github", "shopify", "netflix", "spotify", "airbnb", "dropbox", "stripe", "google", "apple", "meta", "tesla", "salesforce"]
 function updateAt(value: any, path: (string | number)[], next: unknown): any {
   if (!path.length) return next
   const [head, ...tail] = path
@@ -69,6 +70,12 @@ export function WebsiteContentEditor() {
     const post = { title: "New article", category: "News", description: "Write a short introduction.", content: "Write your article here.", image: "", imageAlt: "", icon: "Newspaper", published: true, href: "" }
     change(["sections", draft.sections.indexOf(section), "items"], [...posts, post])
   }
+  function addItem() {
+    const template = section.items[0] ? structuredClone(section.items[0]) : { label: "New item", href: "#" }
+    const item = Object.fromEntries(Object.entries(template).map(([key, value]) => [key, typeof value === "boolean" ? false : typeof value === "number" ? 0 : ""]))
+    if (section.id === "blog") Object.assign(item, { title: "New article", category: "News", description: "Write a short introduction.", content: "Write your article here.", image: "", imageAlt: "", published: true, href: "" })
+    change(["sections", draft.sections.indexOf(section), "items"], [...section.items, item])
+  }
   if (!section) return null
   return <BaseLayout title="Website Content" description="Edit and publish the public website">
     <div className="space-y-6 p-4 lg:p-6">
@@ -84,11 +91,12 @@ export function WebsiteContentEditor() {
             <div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="text-lg font-semibold">{section.label}</h3><p className="text-sm text-muted-foreground">Every text field, image, and icon in this section can be changed.</p></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={section.visible} onChange={e => change(["sections", draft.sections.indexOf(section), "visible"], e.target.checked)}/> Show on website</label></div>
             <Fields value={section} path={["sections", draft.sections.indexOf(section)]} onChange={change} images={images} onUpload={upload}/>
             {section.id === "blog" && <Button variant="outline" onClick={addBlogPost}>Create blog post</Button>}
+            {section.id !== "blog" && <Button variant="outline" onClick={addItem}>Add item</Button>}
             {section.id === "blog" && section.items.length > 0 && <p className="text-sm text-muted-foreground">New articles are displayed on the public page as soon as they are published.</p>}
           </>}
         </section>
       </div>
-      <section className="overflow-hidden rounded-xl border"><div className="border-b bg-card p-3 font-medium">Live content preview</div><div className="max-h-[70vh] overflow-auto"><LiveSite preview content={draft}/></div></section>
+      <section className="overflow-hidden rounded-xl border"><div className="border-b bg-card p-3 font-medium">Live content preview</div><div className="max-h-[70vh] overflow-auto"><SiteContentProvider value={draft}><LandingPageContent preview/></SiteContentProvider></div></section>
     </div>
   </BaseLayout>
 }

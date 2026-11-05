@@ -1,6 +1,7 @@
 "use client"
 
 import { Skeleton } from "@/components/ui/skeleton"
+import { useSiteSection } from "@/lib/site-content"
 
 // Simple icon component for company logos
 const SimpleIcon = ({
@@ -56,29 +57,14 @@ const SimpleIcon = ({
   )
 }
 
-// Tech companies data
-const techCompanies = [
-  { name: "Shopify", id: "shopify" },
-  { name: "Netflix", id: "netflix" },
-  { name: "Spotify", id: "spotify" },
-  { name: "Airbnb", id: "airbnb" },
-  { name: "Dropbox", id: "dropbox" },
-  { name: "Stripe", id: "stripe" },
-  { name: "Google", id: "google" },
-  { name: "Apple", id: "apple" },
-  { name: "Meta", id: "meta" },
-  { name: "Tesla", id: "tesla" },
-  { name: "Salesforce", id: "salesforce" },
-  { name: "GitHub", id: "github" },
-] as const
-
 export function LogoCarousel() {
+  const section = useSiteSection("logos")
   return (
     <section className="pb-12 sm:pb-16 lg:pb-20 pt-12">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center">
           <p className="text-sm font-medium text-muted-foreground mb-8">
-            Trusted by leading companies worldwide
+            {section.title}
           </p>
 
           {/* Logo Carousel with Fade Effect */}
@@ -93,29 +79,29 @@ export function LogoCarousel() {
             <div className="overflow-hidden">
               <div className="flex animate-logo-scroll gap-x-8 sm:gap-x-12">
                 {/* First set of logos */}
-                {techCompanies.map((company, index) => (
+                {section.items.map((company, index) => (
                   <div
                     key={`first-${index}`}
                     className="flex h-16 w-40 shrink-0 items-center justify-center opacity-60 transition-opacity duration-300 hover:opacity-100"
                   >
                     <div className="flex items-center gap-3">
-                      <SimpleIcon iconSlug={company.id} size={28} />
+                      <SimpleIcon iconSlug={String(company.icon)} size={28} />
                       <span className="text-foreground text-lg font-semibold whitespace-nowrap">
-                        {company.name}
+                        {String(company.name)}
                       </span>
                     </div>
                   </div>
                 ))}
                 {/* Second set for seamless loop - identical to first */}
-                {techCompanies.map((company, index) => (
+                {section.items.map((company, index) => (
                   <div
                     key={`second-${index}`}
                     className="flex h-16 w-40 shrink-0 items-center justify-center opacity-60 transition-opacity duration-300 hover:opacity-100"
                   >
                     <div className="flex items-center gap-3">
-                      <SimpleIcon iconSlug={company.id} size={28} />
+                      <SimpleIcon iconSlug={String(company.icon)} size={28} />
                       <span className="text-foreground text-lg font-semibold whitespace-nowrap">
-                        {company.name}
+                        {String(company.name)}
                       </span>
                     </div>
                   </div>

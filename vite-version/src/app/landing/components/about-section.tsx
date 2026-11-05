@@ -11,50 +11,25 @@ import {
 import { CardDecorator } from "@/components/ui/card-decorator"
 import { Code, Palette, Layout, Crown } from "lucide-react"
 import { Github } from "@/components/icons/brand-icons"
-
-const values = [
-  {
-    icon: Code,
-    title: "Developer First",
-    description:
-      "Every component is built with the developer experience in mind, ensuring clean code and easy integration.",
-  },
-  {
-    icon: Palette,
-    title: "Design Excellence",
-    description:
-      "We maintain the highest design standards, following shadcn/ui principles and modern UI patterns.",
-  },
-  {
-    icon: Layout,
-    title: "Production Ready",
-    description:
-      "Battle-tested components used in real applications with proven performance and reliability across different environments.",
-  },
-  {
-    icon: Crown,
-    title: "Premium Quality",
-    description:
-      "Hand-crafted with attention to detail and performance optimization, ensuring exceptional user experience and accessibility.",
-  },
-]
+import { useSiteSection } from "@/lib/site-content"
 
 export function AboutSection() {
+  const section=useSiteSection("about")
+  const iconMap:Record<string,typeof Code>={Code,Palette,Layout,Crown}
+  const values=section.items.map(item=>({...item,icon:iconMap[String(item.icon)]||Code})) as Array<{title?:string;description?:string;icon:typeof Code}>
   return (
     <section id="about" className="py-24 sm:py-32">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="mx-auto max-w-4xl text-center mb-16">
           <Badge variant="outline" className="mb-4">
-            About ESTIMATING
+            {section.eyebrow}
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-6">
-            Built for developers, by developers
+            {section.title}
           </h2>
           <p className="text-lg text-muted-foreground mb-8">
-            We're passionate about creating the best marketplace for shadcn/ui
-            components and templates. Our mission is to accelerate development
-            and help developers build beautiful admin interfaces faster.
+            {section.description}
           </p>
         </div>
 
@@ -81,7 +56,7 @@ export function AboutSection() {
         <div className="mt-16 text-center">
           <div className="flex items-center justify-center gap-2 mb-6">
             <span className="text-muted-foreground">
-              ❤️ Made with love for the developer community
+              {section.closingLine}
             </span>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -91,14 +66,14 @@ export function AboutSection() {
               nativeButton={false}
               render={
                 <a
-                  href="https://github.com/shadcnstore/shadcn-dashboard-landing-template"
+                  href={section.primaryHref}
                   target="_blank"
                   rel="noopener noreferrer"
                 />
               }
             >
               <Github data-icon="inline-start" />
-              Star on GitHub
+              {section.primaryButton}
             </Button>
             <Button
               size="lg"
@@ -107,13 +82,13 @@ export function AboutSection() {
               nativeButton={false}
               render={
                 <a
-                  href="https://discord.com/invite/XEQhPc9a6p"
+                  href={section.secondaryHref}
                   target="_blank"
                   rel="noopener noreferrer"
                 />
               }
             >
-              Join Discord Community
+              {section.secondaryButton}
             </Button>
           </div>
         </div>

@@ -6,8 +6,13 @@ import { Badge } from "@/components/ui/badge"
 import { DotPattern } from "@/components/dot-pattern"
 
 import { useHeroImage } from "@/lib/website-media"
+import { useSiteContent, useSiteSection } from "@/lib/site-content"
 export function HeroSection() {
-  const heroImage = useHeroImage()
+  const section = useSiteSection("hero")
+  const content = useSiteContent()
+  const fallbackImage = useHeroImage()
+  const heroImage = section.image || fallbackImage
+  const title = section.title.split("\n")
   return (
     <section
       id="hero"
@@ -24,23 +29,21 @@ export function HeroSection() {
           {/* Announcement Badge */}
           <div className="mb-8 flex justify-center">
             <Badge variant="outline" className="px-4 py-2 border-foreground">
-              Plans. Takeoffs. Estimates.
+              {section.eyebrow}
             </Badge>
           </div>
 
           {/* Main Headline */}
           <h1 className="mb-6 text-4xl font-bold tracking-tight sm:text-6xl lg:text-7xl">
-            Better takeoffs.<br />
+            {title[0]}<br />
             <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-              More confident estimates.
+              {title.slice(1).join(" ")}
             </span>
           </h1>
 
           {/* Subheading */}
           <p className="mx-auto mb-10 max-w-2xl text-lg text-muted-foreground sm:text-xl">
-            Bring your drawings, measurements, and estimates into one
-            workspace. Move from the first sheet to the final quantity with a
-            clearer view of the work.
+            {section.description}
           </p>
 
           {/* CTA Buttons */}
@@ -49,9 +52,9 @@ export function HeroSection() {
               size="lg"
               className="text-base cursor-pointer"
               nativeButton={false}
-              render={<a href={import.meta.env.VITE_ESTIMATING_APP_URL || "https://app.estimating.studio"} />}
+              render={<a href={String(section.items[0]?.href || "app") === "app" ? content.appUrl : String(section.items[0]?.href)} />}
             >
-              Open ESTIMATING
+              {section.items[0]?.label || "Open ESTIMATING"}
               <ArrowRight data-icon="inline-end" />
             </Button>
             <Button
@@ -59,9 +62,9 @@ export function HeroSection() {
               size="lg"
               className="text-base cursor-pointer"
               nativeButton={false}
-              render={<a href="#features" />}
+              render={<a href={String(section.items[1]?.href || "#features")} />}
             >
-              Explore the workflow
+              {section.items[1]?.label || "Explore the workflow"}
             </Button>
           </div>
         </div>
@@ -75,7 +78,7 @@ export function HeroSection() {
             <div className="relative rounded-xl border bg-card shadow-2xl">
               <img
                 src={heroImage}
-                alt="ESTIMATING workspace displaying a construction blueprint"
+                alt={section.imageAlt}
 
 
                 className="w-full rounded-xl h-auto block"
