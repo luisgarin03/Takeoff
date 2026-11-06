@@ -4830,8 +4830,10 @@ export default function TakeoffCanvas() {
           return;
         }
         // start and mp are both stage px, so xOffset cancels in the delta; normalize
-        // by the markup's OWN panel dims. Live setMarkups each move (mirrors the shape
-        // `move` pattern; NOT commit-on-release). Persistence is automatic.
+        // by the markup's OWN panel dims. For callouts and text leaders, move only
+        // the note anchor: the arrow tip remains attached to its target and the
+        // rendered leader stretches or shortens with the note. Live setMarkups each
+        // move (mirrors the shape `move` pattern; NOT commit-on-release).
         const dx = (mp[0] - d.start[0]) / sp.img.w, dy = (mp[1] - d.start[1]) / sp.img.h;
         const o = d.orig;
         let afterMarkup = null;
@@ -4839,7 +4841,7 @@ export default function TakeoffCanvas() {
           if (m.id !== d.markupId) return m;
           if (o.pts) afterMarkup = { ...m, pts: o.pts.map(([nx, ny]) => [nx + dx, ny + dy]) };   // highlighter stroke
           else if (o.rect) afterMarkup = { ...m, rect: [[o.rect[0][0] + dx, o.rect[0][1] + dy], [o.rect[1][0] + dx, o.rect[1][1] + dy]] };
-          else if (o.target) afterMarkup = { ...m, at: [o.at[0] + dx, o.at[1] + dy], target: [o.target[0] + dx, o.target[1] + dy] };
+          else if (o.target) afterMarkup = { ...m, at: [o.at[0] + dx, o.at[1] + dy] };
           else if (o.from) afterMarkup = { ...m, from: [o.from[0] + dx, o.from[1] + dy], to: [o.to[0] + dx, o.to[1] + dy] };
           else afterMarkup = { ...m, at: [o.at[0] + dx, o.at[1] + dy] };   // text + bubble
           return afterMarkup;
