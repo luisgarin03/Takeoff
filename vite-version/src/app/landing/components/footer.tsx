@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Logo } from "@/components/logo"
 import { Heart } from "lucide-react"
 import { useSiteSection, useSiteContent } from "@/lib/site-content"
+import { useState } from "react"
 
 const newsletterSchema = z.object({
   email: z.string().email({
@@ -22,20 +23,14 @@ const footerLinks = {
   product: [
     { name: "Features", href: "#features" },
     { name: "Pricing", href: "#pricing" },
-    { name: "API", href: "#api" },
-    { name: "Documentation", href: "#docs" },
   ],
-  company: [
-    { name: "About", href: "#about" },
-    { name: "Blog", href: "#blog" },
-    { name: "Careers", href: "#careers" },
-    { name: "Press", href: "#press" },
+  learn: [
+    { name: "About ESTIMATING", href: "#about" },
+    { name: "Field notes", href: "#blog" },
   ],
-  resources: [
-    { name: "Help Center", href: "#help" },
-    { name: "Community", href: "#community" },
-    { name: "Guides", href: "#guides" },
-    { name: "Webinars", href: "#webinars" },
+  support: [
+    { name: "Help & FAQs", href: "#faq" },
+    { name: "Contact us", href: "#contact" },
   ],
   legal: [
     { name: "Privacy", href: getAppUrl("/legal/privacy") },
@@ -48,6 +43,7 @@ const footerLinks = {
 export function LandingFooter() {
   const section = useSiteSection("footer")
   const content = useSiteContent()
+  const [submissionNotice, setSubmissionNotice] = useState("")
   const form = useForm<z.infer<typeof newsletterSchema>>({
     resolver: zodResolver(newsletterSchema),
     defaultValues: {
@@ -56,10 +52,10 @@ export function LandingFooter() {
   })
 
   function onSubmit(values: z.infer<typeof newsletterSchema>) {
-    // Here you would typically send the email to your newsletter service
-    console.log(values)
-    // Show success message and reset form
-    form.reset()
+    const subject = encodeURIComponent("ESTIMATING product updates")
+    const body = encodeURIComponent(`Please add ${values.email} to the ESTIMATING product updates list.`)
+    window.location.href = `mailto:fernando@estimating.studio?subject=${subject}&body=${body}`
+    setSubmissionNotice("Your email app should open with a request to receive product updates. Send the email to subscribe. If it does not open, email fernando@estimating.studio.")
   }
 
   return (
@@ -68,10 +64,9 @@ export function LandingFooter() {
         {/* Newsletter Section */}
         <div className="mb-16">
           <div className="mx-auto max-w-2xl text-center">
-            <h3 className="text-2xl font-bold mb-4">Stay updated</h3>
+            <h3 className="text-2xl font-bold mb-4">Product updates from ESTIMATING</h3>
             <p className="text-muted-foreground mb-6">
-              Get the latest updates, articles, and resources sent to your inbox
-              weekly.
+              Get occasional notes about plan review, takeoffs, and estimating. Your address is only added after you send the email request.
             </p>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
@@ -98,14 +93,15 @@ export function LandingFooter() {
                 />
               </FieldGroup>
               <Button type="submit" className="cursor-pointer">
-                Subscribe
+                Request updates
               </Button>
             </form>
+            {submissionNotice && <p className="mt-3 text-sm text-muted-foreground" role="status" aria-live="polite">{submissionNotice}</p>}
           </div>
         </div>
 
         {/* Main Footer Content */}
-        <div className="grid gap-8 grid-cols-4 lg:grid-cols-6">
+        <div className="grid gap-8 grid-cols-4 lg:grid-cols-5">
           {/* Brand Column */}
           <div className="col-span-4 lg:col-span-2 max-w-2xl">
             <div className="flex items-center gap-2 mb-4 max-lg:justify-center">
@@ -140,9 +136,9 @@ export function LandingFooter() {
           </div>
 
           <div className="max-md:col-span-2 lg:col-span-1">
-            <h4 className="font-semibold mb-4">Company</h4>
+            <h4 className="font-semibold mb-4">Learn</h4>
             <ul className="flex flex-col gap-3">
-              {footerLinks.company.map((link) => (
+              {footerLinks.learn.map((link) => (
                 <li key={link.name}>
                   <a
                     href={link.href}
@@ -156,9 +152,9 @@ export function LandingFooter() {
           </div>
 
           <div className="max-md:col-span-2 lg:col-span-1">
-            <h4 className="font-semibold mb-4">Resources</h4>
+            <h4 className="font-semibold mb-4">Support</h4>
             <ul className="flex flex-col gap-3">
-              {footerLinks.resources.map((link) => (
+              {footerLinks.support.map((link) => (
                 <li key={link.name}>
                   <a
                     href={link.href}

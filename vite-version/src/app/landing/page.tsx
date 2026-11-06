@@ -20,10 +20,12 @@ import {
   LandingThemeCustomizerTrigger,
 } from "./components/landing-theme-customizer"
 import { AboutSection } from "./components/about-section"
-import { SiteContentProvider } from "@/lib/site-content"
+import { SiteContentProvider, useSiteContent } from "@/lib/site-content"
 
 export function LandingPageContent({preview=false}:{preview?:boolean}) {
   const [themeCustomizerOpen, setThemeCustomizerOpen] = React.useState(false)
+  const content = useSiteContent()
+  const isVisible = (id: string) => content.sections.find(section => section.id === id)?.visible !== false
 
   return (
     <div className="estimating-landing min-h-screen bg-background text-foreground">
@@ -34,21 +36,21 @@ export function LandingPageContent({preview=false}:{preview?:boolean}) {
       <main>
         <HeroSection />
         <Ecosystem />
-        <LogoCarousel />
-        <StatsSection />
-        <AboutSection />
-        <FeaturesSection />
-        <TeamSection />
-        <PricingSection />
-        <TestimonialsSection />
-        <BlogSection />
-        <FaqSection />
-        <CTASection />
-        <ContactSection />
+        {isVisible("logos") && <LogoCarousel />}
+        {isVisible("stats") && <StatsSection />}
+        {isVisible("about") && <AboutSection />}
+        {isVisible("features") && <FeaturesSection />}
+        {isVisible("team") && <TeamSection />}
+        {isVisible("pricing") && <PricingSection />}
+        {isVisible("testimonials") && <TestimonialsSection />}
+        {isVisible("blog") && <BlogSection />}
+        {isVisible("faq") && <FaqSection />}
+        {isVisible("cta") && <CTASection />}
+        {isVisible("contact") && <ContactSection />}
       </main>
 
       {/* Footer */}
-      <LandingFooter />
+      {isVisible("footer") && <LandingFooter />}
 
       {/* Theme Customizer */}
       {preview && <><LandingThemeCustomizerTrigger

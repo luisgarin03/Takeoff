@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { CardDecorator } from "@/components/ui/card-decorator"
-import { Code, Palette, Layout, Crown } from "lucide-react"
+import { Code, FileText, Ruler, Calculator, PanelsTopLeft } from "lucide-react"
 import { useSiteSection } from "@/lib/site-content"
 
 export function AboutSection() {
@@ -18,7 +18,7 @@ export function AboutSection() {
     { label: section.primaryButton, href: section.primaryHref, icon: true },
     { label: section.secondaryButton, href: section.secondaryHref, icon: false },
   ].filter(action => !/github|discord/i.test(`${action.label || ""} ${action.href || ""}`))
-  const iconMap:Record<string,typeof Code>={Code,Palette,Layout,Crown}
+  const iconMap:Record<string,typeof Code>={Code,FileText,Ruler,Calculator,PanelsTopLeft}
   const values=section.items.map(item=>({...item,icon:iconMap[String(item.icon)]||Code})) as Array<{title?:string;description?:string;icon:typeof Code}>
   return (
     <section id="about" className="py-24 sm:py-32">

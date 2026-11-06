@@ -55,15 +55,16 @@ export function BlogSection() {
                 </CardDescription>
               </CardHeader>
               <CardFooter className="px-6 pb-6">
-                <a
-                  href={String(blog.href || "#blog")}
-                  onClick={blog.content ? (e) => { e.preventDefault(); const el=e.currentTarget.closest("article")?.querySelector("[data-blog-content]"); el?.classList.toggle("hidden") } : undefined}
-                  className="inline-flex items-center gap-2 text-primary hover:underline cursor-pointer"
-                >
-                  {String(blog.linkLabel || (blog.content ? "Read Article" : "Learn More"))}
+                {blog.content ? <details className="group w-full">
+                  <summary className="inline-flex cursor-pointer list-none items-center gap-2 text-primary hover:underline">
+                    {String(blog.linkLabel || "Read article")}
+                    <ArrowRight className="size-4 transition-transform group-open:rotate-90" />
+                  </summary>
+                  <div className="mt-4 whitespace-pre-wrap border-t pt-4 text-sm leading-relaxed text-muted-foreground">{String(blog.content)}</div>
+                </details> : <a href={String(blog.href || "#blog")} className="inline-flex items-center gap-2 text-primary hover:underline">
+                  {String(blog.linkLabel || "Learn more")}
                   <ArrowRight className="size-4" />
-                </a>
-                {blog.content && <div data-blog-content className="hidden whitespace-pre-wrap px-6 pb-6 text-sm text-muted-foreground">{String(blog.content)}</div>}
+                </a>}
               </CardFooter>
             </Card>
           ))}

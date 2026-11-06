@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Mail, MessageCircle, BookOpen, LifeBuoy } from "lucide-react"
 import { useSiteSection } from "@/lib/site-content"
+import { useState } from "react"
 
 const contactFormSchema = z.object({
   firstName: z.string().min(2, {
@@ -37,6 +38,7 @@ const contactFormSchema = z.object({
 
 export function ContactSection() {
   const section = useSiteSection("contact")
+  const [submissionNotice, setSubmissionNotice] = useState("")
   const form = useForm<z.infer<typeof contactFormSchema>>({
     resolver: zodResolver(contactFormSchema),
     defaultValues: {
@@ -49,10 +51,10 @@ export function ContactSection() {
   })
 
   function onSubmit(values: z.infer<typeof contactFormSchema>) {
-    // Here you would typically send the form data to your backend
-    console.log(values)
-    // You could also show a success message or redirect
-    form.reset()
+    const subject = encodeURIComponent(values.subject)
+    const body = encodeURIComponent(`Name: ${values.firstName} ${values.lastName}\nEmail: ${values.email}\n\n${values.message}`)
+    window.location.href = `mailto:fernando@estimating.studio?subject=${subject}&body=${body}`
+    setSubmissionNotice("Your email app should open with your message. Send it there to reach the ESTIMATING team. If it does not open, email fernando@estimating.studio.")
   }
 
   return (
@@ -175,7 +177,7 @@ export function ContactSection() {
                           <Input
                             id="contact-section-subject"
                             aria-invalid={fieldState.invalid}
-                            placeholder="Component request, bug report, general inquiry..."
+                            placeholder="Question about a takeoff, estimate, account, or something else..."
                             {...field}
                           />
                           {fieldState.invalid && (
@@ -196,7 +198,7 @@ export function ContactSection() {
                           <Textarea
                             id="contact-section-message"
                             aria-invalid={fieldState.invalid}
-                            placeholder="Tell us how we can help you with ESTIMATING components..."
+                            placeholder="Tell us what you were working on and how we can help..."
                             rows={10}
                             className="min-h-50"
                             {...field}
@@ -209,8 +211,9 @@ export function ContactSection() {
                     />
                   </FieldGroup>
                   <Button type="submit" className="w-full cursor-pointer">
-                    Send Message
+                    Continue in email app
                   </Button>
+                  {submissionNotice && <p className="text-sm text-muted-foreground" role="status" aria-live="polite">{submissionNotice}</p>}
                 </form>
               </CardContent>
             </Card>
