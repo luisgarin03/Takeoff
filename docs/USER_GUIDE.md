@@ -501,6 +501,8 @@ Arm **Select** (`V`) and click a shape. Selection is one shape at a time on the 
 
 Quantities recompute live as you edit. Every completed gesture is one undo step (a drag that ends where it started records nothing), and editing a machine-made shape — One-Click or agent — grades it as *corrected* in its provenance, with the machine's original boundary frozen the first time you touch it. The **Edit** menu in the bottom-left rail carries the same verbs — Copy, Paste, Duplicate, **Flip Horizontal**, **Flip Vertical**, Delete selected, Undo last point, Undo last shape, Redo — with their shortcuts beside them. Flip mirrors the selected shape about its own center (an isometry — SF/LF never change); it has no keyboard shortcut, only the menu.
 
+Changing the active condition only affects new measurements. To move an existing measurement, select it and choose **Transfer to condition** in the Takeoff summary. The Takeoffs drawer opens; click the destination condition to transfer it in one undoable action. Click elsewhere or press `Esc` to cancel and close the drawer while keeping the measurement selected.
+
 ### Copy, paste, duplicate
 
 - `⌘C` copies the selected shape — the toast reminds you: *"Copied — ⌘V pastes onto the sheet under your cursor."* Toasts follow the selected light or dark appearance; active work adds the animated app loader in your theme accent color.
@@ -510,7 +512,7 @@ Quantities recompute live as you edit. Every completed gesture is one undo step 
 
 ### Reassigning a shape's condition
 
-With a shape selected, click a condition **panel row, strip chip, or palette chip** — each shows the reassign affordance when a shape is selected — and the shape moves to that finish, quantities and all. The number keys never reassign: a digit press arms the condition without touching your selection, so a stray `3` can't silently move quantities. Reassigning is one undo step.
+Selecting a different condition never moves an existing shape. Use **Transfer to condition** in the Takeoff summary to choose a destination from the Takeoffs drawer; the transfer is one undo step. The number keys arm conditions for new measurements without changing the selected shape.
 
 ### Shape labels — phases and areas
 

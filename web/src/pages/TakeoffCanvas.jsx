@@ -568,6 +568,7 @@ export default function TakeoffCanvas() {
   const [ocSel, setOcSel] = useState(null);        // selected proposal vertex {ri, vi} — Delete removes just that point
   const [ocHover, setOcHover] = useState(-1);      // proposal region under the cursor — handles reveal on hover
   const [selectedId, setSelectedId] = useState(null);   // selected shape (Select tool)
+  const [transferringShapeId, setTransferringShapeId] = useState(null); // explicit destination selection for a selected measurement
   const [selVert, setSelVert] = useState(null);         // selected vertex index of the selected shape — Delete removes just that point
   const [shapeContinuation, setShapeContinuation] = useState(null); // { shapeId, atStart, tool, prev } — extend an existing open run in place
   const [selectedMarkupId, setSelectedMarkupId] = useState(null); // selected markup — mutually exclusive with selectedId
@@ -801,6 +802,7 @@ export default function TakeoffCanvas() {
   // selecting a shape clears any markup selection and vice-versa — one live
   // selection at a time (bidirectional mutual exclusivity). Passing null clears both.
   const selectShape = (id) => {
+    setTransferringShapeId(null);
     setSelectedId(id); setSelectedMarkupId(null); setSelectedChainMarkerId(null);
     const fence = id ? chainLinkFences.find((item) => item.shape_id === id) : null;
     setSelectedChainFenceId(fence?.id || null);
@@ -3898,11 +3900,8 @@ export default function TakeoffCanvas() {
     }
   }, [tool, shapeContinuation]);
 
-  // Number keys 1–9 switch the active condition (material) fast — through
-  // activateCondition with reassign:false: a digit press has no visual
-  // reassign affordance (unlike the panel row / strip button), so it must
-  // never silently move a selected shape's quantities. It still dismisses a
-  // live bulk selection, same as every activation surface. When the palette is
+  // Number keys 1–9 switch the active condition (material) fast. They only
+  // affect new measurements and dismiss a live bulk selection. When the palette is
   // curated the digits follow PALETTE ORDER (the cobalt badges on the chips);
   // an un-pinned workspace falls back to condition-array order, so the shortcut
   // works out of the box before anyone pins anything.
@@ -3914,11 +3913,11 @@ export default function TakeoffCanvas() {
       const n = parseInt(e.key, 10);
       if (n < 1 || n > 9) return;
       const id = palette.length ? palette[n - 1] : conditions[n - 1]?.id;
-      if (id) activateCondition(id, { reassign: false });
+      if (id) activateCondition(id);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [conditions, palette, tool, selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conditions, palette]);
 
   // Undo a wrong click: Backspace/Delete (or Cmd/Ctrl+Z) removes the last placed
   // point; Escape cancels the whole in-progress shape.
@@ -6215,7 +6214,6 @@ export default function TakeoffCanvas() {
     if (tool === "surface") commitSurface(poly); else if (tool === "linear") commitLinear(poly); else if (tool === "curve") commitLinear(poly, true); else commitPoly(poly, tool === "deduct"); setPoly([]);
   }
   function deleteSelected() { if (selectedId) { dispatchShape({ type: "delete", ids: [selectedId] }); setSelectedId(null); } }
-  function reassignSelected(condId) { if (selectedId) dispatchShape({ type: "reassign", ids: [selectedId], condition_id: condId }); }
   function reassignSelectedLabel(value) { if (selectedId) dispatchShape({ type: "label", ids: [selectedId], value }); }   // Select-tool single-shape re-label (#111) — value "" / null clears it; label commands never stamp
 
   // pan/zoom the canvas to fit a condition's takeoffs on the open sheets —
@@ -6275,7 +6273,7 @@ export default function TakeoffCanvas() {
     if (denyReadOnlyEdit()) return;
     if (!tag) return;
     const c = mintCondition(tag);
-    activateCondition(c.id, { reassign: false });   // no reassign affordance on +condition; still dismisses a live bulk selection
+    activateCondition(c.id);   // adding a condition does not move the selected measurement
     setAddConditionOpen(false);
   }
 
@@ -6496,7 +6494,7 @@ export default function TakeoffCanvas() {
       getConditions: () => agentStateRef.current.conditions.map((c) => ({ id: c.id, finish_tag: c.finish_tag })),
       getShapeLabels: () => shapeLabels,
       getActiveConditionId: () => activeCond || "",
-      activateCondition: (id) => activateCondition(id, { reassign: false }),
+      activateCondition,
       createCondition: (tag) => mintCondition(tag),
       updateCondition: updateCondById,
       addLabel,
@@ -6954,7 +6952,7 @@ export default function TakeoffCanvas() {
     if (type === "sheet") { openSheets([id], false); return; }
     if (type === "measurement") { const row = shapes.find((item) => item.id === id); if (row) { openSheets([row.sheet_id], false); setSelectedId(row.id); setSelectedMarkupId(null); setTool("select"); } return; }
     if (type === "markup") { const row = markups.find((item) => item.id === id); if (row) flyToMarkup(row); return; }
-    if (type === "condition") { if (conditions.some((item) => item.id === id)) activateCondition(id, { reassign: false }); return; }
+    if (type === "condition") { if (conditions.some((item) => item.id === id)) activateCondition(id); return; }
     if (type === "sow") { setWhiteboardOpen(true); return; }
     if (type === "rfi") { setLeftTab("rfi"); return; }
     if (type === "revision") setShowRevisions(true);
@@ -7150,7 +7148,7 @@ export default function TakeoffCanvas() {
     setImportRows(null);
     if (!made.length) { setCommitMsg("Those finishes already exist as conditions."); return; }
     setConditions((cs) => [...cs, ...made]);
-    activateCondition(made[0].id, { reassign: false });
+    activateCondition(made[0].id);
     setCommitMsg(`Created ${made.length} condition${made.length === 1 ? "" : "s"} from the schedule.`);
   }
   // every condition-editor save lands here — a bare updated_at is the whole
@@ -7722,33 +7720,57 @@ export default function TakeoffCanvas() {
   // The panel's condition-list VIEW (search / natural sort / grouping / the
   // ⌘/⇧ multi-select) lives in components/TakeoffsPanel.jsx.
 
-  // one activation path — the panel row, the compact strip, the 1–9 hotkeys,
-  // +condition, and Library Apply all funnel here so the reassign-in-Select
-  // and clear-multi-select semantics can never drift between surfaces. Only
-  // surfaces with a VISIBLE reassign affordance (the panel row and the strip
-  // button — both show the "reassign selected shape" hint once a shape is
-  // selected) actually reassign; { reassign: false } is for keyboard/
-  // programmatic activations (hotkeys, +condition, Library Apply) that offer
-  // no such affordance — a digit press or an Apply click must never silently
-  // move a selected shape's quantities. EVERY activation surface, reassigning
-  // or not, dismisses a live bulk selection.
-  const activateCondition = (id, { reassign = true } = {}) => {
-    if (reassign && tool === "select" && selectedId) reassignSelected(id);
+  // Condition activation only changes the default for new measurements.
+  // Moving an existing measurement is available through explicit transfer mode.
+  const activateCondition = (id) => {
     setActiveCond(id);
     panelSelectionRef.current?.();   // plain activation dismisses a live bulk selection (panel view state)
   };
-  // The label analogue (#111): with a shape selected in Select mode this re-labels
-  // it (mirroring activateCondition's reassign-on-activate); otherwise it just sets
-  // the active label for subsequent traces. value "" / null = No label / clear.
+  // value "" / null = No label / clear.
   const activateLabel = (value) => {
     if (tool === "select" && selectedId) reassignSelectedLabel(value);
     setActiveLabel(value);
   };
 
+  const beginShapeTransfer = () => {
+    if (!selShape || denyReadOnlyEdit()) return;
+    setTransferringShapeId(selShape.id);
+    setPanelPrefs((p) => ({ ...p, collapsed: false }));
+  };
+  const transferShapeToCondition = (conditionId) => {
+    if (!transferringShapeId || !conditions.some((condition) => condition.id === conditionId)) return;
+    dispatchShape({ type: "reassign", ids: [transferringShapeId], condition_id: conditionId });
+    setActiveCond(conditionId);
+    setTransferringShapeId(null);
+    setPanelPrefs((p) => ({ ...p, collapsed: true }));
+  };
+  useEffect(() => {
+    if (!transferringShapeId) return undefined;
+    const cancelOutside = (event) => {
+      if (event.type === "keydown") {
+        if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); }
+        setTransferringShapeId(null);
+        setPanelPrefs((p) => ({ ...p, collapsed: true }));
+        return;
+      }
+      if (event.type === "pointerdown") {
+        const row = event.target.closest(".condition-summary");
+        if (row && !event.target.closest("button,input,select,textarea")) return;
+      }
+      setTransferringShapeId(null);
+      setPanelPrefs((p) => ({ ...p, collapsed: true }));
+    };
+    window.addEventListener("pointerdown", cancelOutside, true);
+    window.addEventListener("keydown", cancelOutside, true);
+    return () => {
+      window.removeEventListener("pointerdown", cancelOutside, true);
+      window.removeEventListener("keydown", cancelOutside, true);
+    };
+  }, [transferringShapeId]);
+
   // ── top-bar quick-access palette (pinned conditions) ──────────────────────
-  // A palette chip is a shortcut, not a new activation path: single-click routes
-  // through activateCondition (same reassign/clear-selection semantics as the
-  // strip and panel row); double-click opens the docked Takeoffs panel on that
+  // A palette chip is a shortcut: single-click routes through activateCondition;
+  // double-click opens the docked Takeoffs panel on that
   // condition — the "don't open the sidebar unless double-clicked" contract.
   const pinToPalette = (id) => {
     if (denyReadOnlyEdit()) return;
@@ -7773,7 +7795,7 @@ export default function TakeoffCanvas() {
   });
   const openConditionInPanel = (id) => {
     setPanelPrefs((p) => (p.collapsed ? { ...p, collapsed: false } : p));   // reveal the docked panel; no-op if already open
-    activateCondition(id);   // highlight the row (reassigns a selected shape iff Select is armed, like every activation surface)
+    activateCondition(id);   // highlight the row without changing existing measurements
     // scroll the docked row into view AFTER the uncollapse paints — two rAFs so
     // the panel has mounted its list (the row carries data-cond-id)
     // CSS.escape the id — hydrate accepts hand-edited/older payloads, so an id
@@ -7837,9 +7859,9 @@ export default function TakeoffCanvas() {
   const applyTemplate = (t) => {
     const c = instantiateTemplate(t);
     setConditions((cs) => [...cs, c]);
-    // reassign:false — Library Apply has no visual reassign affordance, but it
-    // still dismisses a live bulk selection like every other activation surface
-    activateCondition(c.id, { reassign: false });
+    // Applying a condition also selects it for new measurements; it never moves
+    // the selected shape.
+    activateCondition(c.id);
     // the panel switches itself back to the Takeoffs tab (its Apply handler)
     setCommitMsg(`Added ${c.finish_tag} from the library.`);
   };
@@ -7939,7 +7961,7 @@ export default function TakeoffCanvas() {
   // at call time. Add a handler here and it's automatically stable.
   const panelHandlersRef = useRef(null);
   panelHandlersRef.current = {
-    onActivate: activateCondition, onLocate: locateCondition,
+    onActivate: (id) => transferringShapeId ? transferShapeToCondition(id) : activateCondition(id), onLocate: locateCondition,
     onOpenConditionPage: (_conditionId, key) => openSheets([key], false),
     onToggleAutoNoteArrow: (id, enabled) => updateCondById(id, { auto_note_arrow: enabled }),
     onToggleTakeoffVisibility: (id, enabled) => {
@@ -7967,7 +7989,7 @@ export default function TakeoffCanvas() {
     onAttachLibMaterial: attachLibMaterial, onPromoteMaterial: promoteMaterial, onRevertMatField: revertMatField,
     onUpdateLibMaterial: updateLibMaterial, onPushLibUpdate: pushLibUpdate,
     onDeleteLibMaterial: deleteLibMaterial, onAddLibMaterial: addLibMaterial,
-    onCalculateFence: (id) => { activateCondition(id, { reassign: false }); setFenceCalculatorOpen(true); },
+    onCalculateFence: (id) => { activateCondition(id); setFenceCalculatorOpen(true); },
     matFieldOverridden,   // pure helper, not an event handler — the forwarder returns its result
     onToggleCollapse: toggleTakeoffs, onTogglePin: togglePin,
     // these three are ALREADY stable on their own (setState identity, and
@@ -8693,6 +8715,13 @@ export default function TakeoffCanvas() {
                 {condH > 0 && Number(selShape.height_ft) !== condH && <button onClick={clearShapeHeight} title="Set this wall to the condition height">↺</button>}
               </div>
             )}
+            {tool === "select" && selShape && (
+              <button type="button" onClick={beginShapeTransfer}
+                title="Choose a condition, then select its row to transfer this measurement"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: "1px solid var(--cobalt)", background: transferringShapeId === selShape.id ? "var(--cobalt)" : "transparent", color: transferringShapeId === selShape.id ? "var(--paper-bright)" : "var(--cobalt)", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>
+                Transfer to condition
+              </button>
+            )}
             {tool === "select" && selShape && (selShape.measure_role === "linear" || selShape.measure_role === "surface_area")
               && (selVert === 0 || selVert === selShape.verts_norm.length - 1) && (
               <button type="button" onClick={beginShapeContinuation}
@@ -8751,7 +8780,6 @@ export default function TakeoffCanvas() {
           activation without opening the panel: drag a condition here from the
           Takeoffs panel (or the strip) to pin it, or use a row's pushpin. Each
           chip carries its 1–9 hotkey badge (cobalt); single-click activates
-          (reassigning a selected shape, like every activation surface),
           double-click opens the docked panel scrolled to that row, the pushpin
           unpins, and dragging one chip onto another reorders (which renumbers
           the hotkeys). Below the chips, the active condition's appearance editor
@@ -9146,7 +9174,7 @@ export default function TakeoffCanvas() {
             const hIdx = pinnedPal ? palette.indexOf(c.id) : i;
             const hot = hIdx >= 0 && hIdx < 9;
             return (
-              <button key={c.id} draggable onDragStart={(e) => { e.dataTransfer.setData(CONDITION_DND_MIME, c.id); e.dataTransfer.effectAllowed = "copy"; }} onClick={() => activateCondition(c.id)} title={tool === "select" && selectedId ? "Reassign selected shape to this condition" : (hot ? `Press ${hIdx + 1} · drag to the palette to pin` : "Drag to the palette to pin")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 10px 3px 4px", borderRadius: 0, border: on ? `2px solid ${c.color}` : (tool === "select" && selectedId ? "1px dashed var(--cobalt)" : "1px solid var(--ink-faint)"), background: on ? "var(--surface-pop)" : "transparent", cursor: "pointer", fontWeight: on ? 700 : 500, fontSize: 12.5 }}>
+              <button key={c.id} draggable onDragStart={(e) => { e.dataTransfer.setData(CONDITION_DND_MIME, c.id); e.dataTransfer.effectAllowed = "copy"; }} onClick={() => activateCondition(c.id)} title={hot ? `Press ${hIdx + 1} · drag to the palette to pin` : "Drag to the palette to pin"} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 10px 3px 4px", borderRadius: 0, border: on ? `2px solid ${c.color}` : "1px solid var(--ink-faint)", background: on ? "var(--surface-pop)" : "transparent", cursor: "pointer", fontWeight: on ? 700 : 500, fontSize: 12.5 }}>
                 {hot && <span style={{ fontSize: 9, fontFamily: "var(--f-mono,monospace)", color: pinnedPal ? "var(--cobalt)" : "var(--ink-muted)", border: `1px solid ${pinnedPal ? "var(--cobalt)" : "var(--ink-faint)"}`, borderRadius: 3, padding: "0 3px" }}>{hIdx + 1}</span>}
                 <span style={{ borderRadius: 4, overflow: "hidden", lineHeight: 0 }}><HatchSwatch type={c.hatch || "solid"} line={c.color} fill={c.fill} /></span>{c.finish_tag}
               </button>
@@ -10341,7 +10369,7 @@ export default function TakeoffCanvas() {
           matLibById={matLibById}
           linkedCountById={linkedCountById}
           panelPrefs={panelPrefs}
-          reassigning={tool === "select" && !!selectedId}
+          transferTargeting={!!transferringShapeId}
           epoch={panelEpoch}
           clearSelectionRef={panelSelectionRef}
           {...panelHandlers}
