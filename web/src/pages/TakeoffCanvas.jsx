@@ -7600,6 +7600,14 @@ export default function TakeoffCanvas() {
 
   const markupCount = markups.filter((m) => panelKeySet.has(m.sheet_id)).length;
   const selShape = selectedId ? displayedShapes.find((s) => s.id === selectedId) : null;
+  const transferAnchor = (() => {
+    if (tool !== "select" || !selShape?.verts_norm?.length) return null;
+    const panel = panels.find((item) => item.key === selShape.sheet_id);
+    if (!panel?.img?.w || !panel.img.h) return null;
+    const points = selShape.verts_norm.map(([x, y]) => [panel.xOffset + x * panel.img.w, y * panel.img.h]);
+    const xs = points.map(([x]) => x), ys = points.map(([, y]) => y);
+    return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  })();
   const setShapeHeight = (raw) => {
     const v = Math.max(0, parseFloat(raw) || 0);
     const next = shapes.map((s) => {
@@ -8750,13 +8758,6 @@ export default function TakeoffCanvas() {
                 <span>ft → {fa(selShape.computed?.area_sf || 0)}</span>
                 {condH > 0 && Number(selShape.height_ft) !== condH && <button onClick={clearShapeHeight} title="Set this wall to the condition height">↺</button>}
               </div>
-            )}
-            {tool === "select" && selShape && (
-              <button type="button" onClick={beginShapeTransfer}
-                title="Choose a condition, then select its row to transfer this measurement"
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: "1px solid var(--cobalt)", background: transferringShapeId === selShape.id ? "var(--cobalt)" : "transparent", color: transferringShapeId === selShape.id ? "var(--paper-bright)" : "var(--cobalt)", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>
-                Transfer to condition
-              </button>
             )}
             {tool === "select" && selShape && (selShape.measure_role === "linear" || selShape.measure_role === "surface_area")
               && (selVert === 0 || selVert === selShape.verts_norm.length - 1) && (
@@ -10120,6 +10121,14 @@ export default function TakeoffCanvas() {
               {/* markup draft marker (first click of cloud/callout) */}
               {markupDraft && <path d={starPath(markupDraft[0], markupDraft[1], 5 / tf.scale)} fill="#1f3fc7" />}
             </svg>
+            {transferAnchor && (
+              <button type="button" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onClick={(event) => { event.stopPropagation(); beginShapeTransfer(); }}
+                aria-pressed={transferringShapeId === selShape.id}
+                title="Choose a condition, then select its row to transfer this measurement"
+                style={{ position: "absolute", left: transferAnchor.x + 14 / tf.scale, top: transferAnchor.y - 10 / tf.scale, zIndex: 6, transform: `scale(${1 / tf.scale})`, transformOrigin: "left center", display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", border: "1px solid var(--cobalt)", background: transferringShapeId === selShape.id ? "var(--cobalt)" : "var(--paper-bright)", color: transferringShapeId === selShape.id ? "var(--paper-bright)" : "var(--cobalt)", boxShadow: "0 2px 8px rgba(0,0,0,.2)", cursor: "pointer", font: "700 12px var(--f-body, sans-serif)", whiteSpace: "nowrap" }}>
+                Transfer to condition
+              </button>
+            )}
           </div>
 
           {(status === "loading" || status === "rendering") && (

@@ -501,7 +501,7 @@ Arm **Select** (`V`) and click a shape. Selection is one shape at a time on the 
 
 Quantities recompute live as you edit. Every completed gesture is one undo step (a drag that ends where it started records nothing), and editing a machine-made shape — One-Click or agent — grades it as *corrected* in its provenance, with the machine's original boundary frozen the first time you touch it. The **Edit** menu in the bottom-left rail carries the same verbs — Copy, Paste, Duplicate, **Flip Horizontal**, **Flip Vertical**, Delete selected, Undo last point, Undo last shape, Redo — with their shortcuts beside them. Flip mirrors the selected shape about its own center (an isometry — SF/LF never change); it has no keyboard shortcut, only the menu.
 
-Changing the active condition only affects new measurements. To move an existing measurement, select it and choose **Transfer to condition** in the Takeoff summary. The Takeoffs drawer opens; click the destination condition to transfer it in one undoable action. Click elsewhere or press `Esc` to cancel and close the drawer while keeping the measurement selected.
+Changing the active condition only affects new measurements. To move an existing measurement, select it and click the on-canvas **Transfer to condition** button beside the selected measurement. The Takeoffs drawer opens; click the destination condition to transfer it in one undoable action. Click elsewhere or press `Esc` to cancel and close the drawer while keeping the measurement selected.
 
 ### Copy, paste, duplicate
 
@@ -512,7 +512,7 @@ Changing the active condition only affects new measurements. To move an existing
 
 ### Reassigning a shape's condition
 
-Selecting a different condition never moves an existing shape. Use **Transfer to condition** in the Takeoff summary to choose a destination from the Takeoffs drawer; the transfer is one undo step. The number keys arm conditions for new measurements without changing the selected shape.
+Selecting a different condition never moves an existing shape. Use the on-canvas **Transfer to condition** button beside the selected measurement to choose a destination from the Takeoffs drawer; the transfer is one undo step. The number keys arm conditions for new measurements without changing the selected shape.
 
 ### Shape labels — phases and areas
 

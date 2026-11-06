@@ -4,7 +4,7 @@
 
 - The Find panel can now be dragged by its header and stays within the visible screen area.
 - Moving an arrowed callout or text note now moves its note-side anchor while keeping the arrow tip fixed to the plan target; the leader resizes with the note and the move remains undoable.
-- Removed implicit measurement reassignment when changing the active condition. Select a measurement and use **Transfer to condition** to open the Takeoffs panel, then click the destination condition; clicking elsewhere or pressing Escape cancels and closes the panel. Transfers remain undoable.
+- Removed implicit measurement reassignment when changing the active condition. Select a measurement and use its on-canvas **Transfer to condition** button to open the Takeoffs panel, then click the destination condition; clicking elsewhere or pressing Escape cancels and closes the panel. Transfers remain undoable.
 - Added a per-PDF trash control beside each file's page count in the sheet selector; it removes the PDF from the current project while retaining its takeoffs and markups. Centered the minimized Find/OCR progress widget along the bottom of the page.
 - Enabled Pro editing for all active Stripe test subscriptions on the hosted test deployment. Test checkouts still collect no real payments; the sandbox access flags must be disabled before switching to live billing.
 - **Find in all plans** now lets users choose loaded PDFs from a collapsible checked-by-default plan list, minimizes the Find panel while searching the selected plans in the background, provides a progress control to reopen it early, and restores the panel when the search completes.
