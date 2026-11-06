@@ -8277,6 +8277,8 @@ export default function TakeoffCanvas() {
         { id: "fence-calculator", icon: "fenceCalculator", label: "Fence Material Calculator...",
           title: "Calculate fence materials from the active takeoff's LF or count", onSelect: () => setFenceCalculatorOpen(true),
           disabled: !hydrated.current || !!loadError },
+        { id: "property-map", icon: "pin", label: "Property Map Takeoff...",
+          title: "Measure a property from USGS aerial imagery", onSelect: () => navigate("/property-map", { state: { returnTo: `${window.location.pathname}${window.location.search}` } }) },
         ...(new URLSearchParams(window.location.search).has("localProject") ? ["divider",
           { id: "local-workspace", label: "Return to default workspace", onSelect: () => window.location.assign(window.location.pathname) }] : []),
         "divider",

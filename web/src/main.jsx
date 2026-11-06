@@ -1,5 +1,5 @@
 import { BrandText } from "./brand/marks.jsx";
-import React, { useEffect, useState } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import "./styles/tokens.css";
@@ -22,6 +22,8 @@ import LicenseGate from "./components/LicenseGate.jsx";
 import { AppUpdateNotice } from "./components/AppUpdates.jsx";
 import "./styles/textFields.css";
 import "./styles/workspaceUi.css";
+
+const PropertyMapPage = lazy(() => import("./pages/PropertyMapPage.jsx"));
 
 initTheme();   // index.html set data-theme pre-paint; this keeps it live
 
@@ -261,6 +263,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/sign-in" element={<AuthAlias />} />
           <Route path="/sign-up" element={<AuthAlias signup />} />
           <Route path="/projects" element={<LicenseGate><ProjectHomeGate /></LicenseGate>} />
+          <Route path="/property-map" element={<LicenseGate><Suspense fallback={<Centered title="Opening property map…" />}><PropertyMapPage /></Suspense></LicenseGate>} />
           <Route path="*" element={<LicenseGate><App /></LicenseGate>} />
         </Routes>
       </BrowserRouter>

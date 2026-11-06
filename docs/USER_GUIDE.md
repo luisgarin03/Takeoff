@@ -402,6 +402,12 @@ Order quantity = measured basis ÷ coverage, **rounded up to whole units**. The 
 
 Use the **calculator** button on any Takeoffs condition to open the Fence Material Calculator with that condition active. You can also open it from **Project → Fence Material Calculator** or the calculator button on the canvas rail. A linear fence condition imports its measured LF; a post/concrete condition imports its EA count. When the condition name clearly identifies board-on-board, chain-link, vinyl, aluminum, privacy, temporary fence, or post concrete, the matching calculator is suggested automatically. You can still choose any calculator from the left column.
 
+### Property Map Takeoff
+
+Choose **Project → Property Map Takeoff** to open the separate property map page. Enter a U.S. street address, city, and state to locate it. Address lookup uses the U.S. Census Bureau geocoder; the aerial basemap comes from USGS The National Map. Select **Distance**, **Area**, or **Count**, then click locations on the map. Finish a distance or area measurement with the on-map button; count mode adds one marker for each click. Use **Pan** to move and zoom the map. Measurement totals and individual results can use U.S. customary or metric units. Results save automatically in this browser and can be exported as CSV.
+
+**View in Google Maps** opens the searched address in Google Maps in a separate tab for visual reference. The in-app measurement tools remain on USGS imagery because Google Maps Platform does not permit tracing or digitizing features from its satellite imagery. Measurements from aerial imagery are planning estimates; check important dimensions against current plans or field measurements.
+
 The center column shows an isometric preview for the selected fence system. Its caption updates with the current length, height, panel length, post count, and gate count when those values apply, so you can confirm the kind of fence being calculated before adding materials to the estimate.
 
 Inputs are grouped by dimensions, layout, material rules, gates, and advanced settings. Results update as you type and show the unrounded requirement, waste, order quantity, optional unit cost, and optional total. Invalid spacing, overlap, gate width, or concrete-hole geometry is highlighted instead of producing a material list. **Edit rules** changes the current project's saved rule values without allowing executable formulas.

@@ -2,6 +2,7 @@
 
 ## Unreleased — October 30 checkpoint
 
+- Added a separate Property Map Takeoff page with U.S. Census address lookup, USGS aerial imagery, distance/area/count measurements, browser-local persistence, CSV export, and a Google Maps reference link for the searched address.
 - The Find panel can now be dragged by its header and stays within the visible screen area.
 - Moving an arrowed callout or text note now moves its note-side anchor while keeping the arrow tip fixed to the plan target; the leader resizes with the note and the move remains undoable.
 - Removed implicit measurement reassignment when changing the active condition. Select a measurement and use its on-canvas **Transfer to condition** button to open the Takeoffs panel, then click the destination condition; clicking elsewhere or pressing Escape cancels and closes the panel. Transfers remain undoable.
