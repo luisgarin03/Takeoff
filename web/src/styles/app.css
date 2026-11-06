@@ -301,14 +301,14 @@ select {
 .find-all-dialog {
   position: fixed;
   top: var(--find-dialog-top, max(12px, env(safe-area-inset-top, 0px)));
-  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  bottom: auto;
   right: max(12px, env(safe-area-inset-right, 0px));
   width: min(520px, calc(100vw - 24px));
   min-width: min(360px, calc(100vw - 24px));
-  height: auto !important;
+  height: calc(100dvh - var(--find-dialog-top, 12px) - 24px);
   min-height: 0;
   max-width: calc(100vw - 24px);
-  max-height: none !important;
+  max-height: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -354,10 +354,11 @@ select {
   flex: 0 0 auto;
   padding: 12px 14px;
   border-bottom: 1px solid var(--ink-faint);
-  cursor: default;
+  cursor: grab;
   user-select: none;
   touch-action: none;
 }
+.find-dialog-header:active { cursor: grabbing; }
 .find-dialog-header strong { min-width: 0; overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .find-dialog-header-actions,
 .find-dialog-tabs { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; }
@@ -655,7 +656,7 @@ select {
 @media (max-width: 600px) {
   .find-dialog-shade { padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
   .find-all-dialog {
-    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    bottom: auto;
     width: calc(100vw - 16px);
     min-width: 0;
     border-radius: 9px;

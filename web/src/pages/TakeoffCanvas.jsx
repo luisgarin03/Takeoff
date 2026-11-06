@@ -298,6 +298,7 @@ export default function TakeoffCanvas() {
   const findInputRef = useRef(null);
   const previousFindFilesRef = useRef(new Set());
   const findDialogRef = useRef(null);
+  const findDragRef = useRef(null);
   const findResizeRef = useRef(null);
   const findRequestRef = useRef(0);
   const findJobSequenceRef = useRef(0);
@@ -2106,6 +2107,39 @@ export default function TakeoffCanvas() {
     event.preventDefault();
     setFindPanelTab(next);
     requestAnimationFrame(() => document.getElementById(next === "find" ? "find-search-tab" : "find-help-tab")?.focus());
+  };
+  const startFindDialogDrag = (event) => {
+    if (event.button !== 0 || event.target.closest("button, input, select, textarea, a")) return;
+    const rect = findDialogRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    findDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      left: rect.left,
+      top: rect.top,
+      offsetX: findDialogOffset.x,
+      offsetY: findDialogOffset.y,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+  const moveFindDialogDrag = (event) => {
+    const drag = findDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (event.pointerType === "mouse" && event.buttons === 0) { findDragRef.current = null; return; }
+    const rect = findDialogRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const margin = window.innerWidth <= 600 ? 8 : 12;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    const left = Math.min(Math.max(margin, window.innerWidth - margin - rect.width), Math.max(margin, drag.left + dx));
+    const top = Math.min(Math.max(margin, window.innerHeight - margin - rect.height), Math.max(margin, drag.top + dy));
+    setFindDialogOffset({ x: drag.offsetX + left - drag.left, y: drag.offsetY + top - drag.top });
+    event.preventDefault();
+  };
+  const endFindDialogDrag = (event) => {
+    if (findDragRef.current?.pointerId === event.pointerId) findDragRef.current = null;
   };
   const startFindDialogResize = (event, edge) => {
     if (event.button !== 0) return;
@@ -8844,12 +8878,12 @@ export default function TakeoffCanvas() {
               onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); closeFind(); } }}
               style={{
                 "--find-dialog-x": `${findDialogOffset.x}px`,
-                "--find-dialog-y": "0px",
+                "--find-dialog-y": `${findDialogOffset.y}px`,
                 "--find-dialog-top": `${findDialogTop}px`,
                 ...(findDialogSize.width ? { width: `${findDialogSize.width}px` } : {}),
                 ...(findDialogSize.height ? { height: `${findDialogSize.height}px` } : {}),
               }}>
-              <header className="find-dialog-header">
+              <header className="find-dialog-header" onPointerDown={startFindDialogDrag} onPointerMove={moveFindDialogDrag} onPointerUp={endFindDialogDrag} onPointerCancel={endFindDialogDrag}>
                 <strong id="find-dialog-title">Find in loaded plans</strong>
                 <span className="find-dialog-header-actions">
                   <span className="find-dialog-tabs" role="tablist" aria-label="Find panel sections">
