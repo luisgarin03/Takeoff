@@ -45,8 +45,11 @@ export function TeamSection() {
                           alt={String(member.imageAlt || member.name)}
                           className="object-cover"
                         />
-                        <AvatarFallback className="text-lg font-semibold">
-                          {String(member.name).split(/\s+/).map(name=>name[0]).join("").slice(0,2)}
+                        <AvatarFallback aria-hidden="true" className="bg-muted text-muted-foreground">
+                          <svg viewBox="0 0 100 100" className="size-full" fill="currentColor">
+                            <circle cx="50" cy="33" r="16" />
+                            <path d="M12 96c3-22 18-35 38-35s35 13 38 35H12Z" />
+                          </svg>
                         </AvatarFallback>
                       </Avatar>
                     </CardDecorator>
