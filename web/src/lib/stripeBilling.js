@@ -10,15 +10,15 @@ export function createStripeBillingAdapter(client, navigate = (url) => window.lo
   const {data,error}=await client.functions.invoke('otk-stripe',{body:{...body,action}});
   if(error || data?.code) {
    let code=data?.code;try{if(!code && error?.context?.json)code=(await error.context.json()).code;}catch{/* network error */}
-   const messages={OTK_STRIPE_TEST_SETUP:'Stripe sandbox checkout is not configured on the server yet.',OTK_BILLING_ALREADY_ACTIVE:'You already have an active subscription. Use Manage Subscription.',OTK_BILLING_LIVE_ACCOUNT:'This account has a production subscription. Use a separate account for sandbox testing.',OTK_AUTH:'Sign in again to use Stripe checkout.'};
-   throw new Error(messages[code] || `Stripe test checkout is unavailable${code?` (${code})`:''}. Please try again.`);
+   const messages={OTK_BILLING_SETUP:'Stripe checkout is not configured on the server yet.',OTK_STRIPE_TEST_SETUP:'Stripe sandbox checkout is not configured on the server yet.',OTK_BILLING_ALREADY_ACTIVE:'You already have an active subscription. Use Manage Subscription.',OTK_BILLING_LIVE_ACCOUNT:'This account has a production subscription. Use a separate account for sandbox testing.',OTK_AUTH:'Sign in again to use Stripe checkout.'};
+   throw new Error(messages[code] || `Stripe billing is unavailable${code?` (${code})`:''}. Please try again.`);
   }
   return data;
  }
  async function open(action,body={}) {
   const data=await invoke(action,{...body,returnUrl:returnUrl()});
   const url=new URL(data.url);
-  if(data.testMode!==true || url.protocol!=='https:' || !['checkout.stripe.com','billing.stripe.com'].includes(url.hostname))throw new Error('Invalid Stripe checkout destination.');
+  if(typeof data.testMode!=='boolean' || url.protocol!=='https:' || !['checkout.stripe.com','billing.stripe.com'].includes(url.hostname))throw new Error('Invalid Stripe checkout destination.');
   navigate(url.href);
  }
  return {

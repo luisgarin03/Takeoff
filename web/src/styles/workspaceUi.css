@@ -16,7 +16,7 @@
   font-family: var(--f-body);
 }
 .estimating-toolbar-header { border-bottom: 0; }
-:root .tabbed-toolbar-stack { box-sizing: border-box; padding: 5px 5px 0; }
+:root .tabbed-toolbar-stack { box-sizing: border-box; padding: calc(5px + env(safe-area-inset-top, 0px)) calc(5px + env(safe-area-inset-right, 0px)) 0 calc(5px + env(safe-area-inset-left, 0px)); }
 .estimating-toolbar:has(.estimating-toolbar-tabs button[aria-selected="true"]) .estimating-toolbar-header { border-bottom: 1px solid var(--workspace-border); }
 .estimating-toolbar-panel { background: var(--workspace-surface); border-radius: 0 0 9px 9px; }
 .takeoff-toolbar-readout { background: var(--workspace-surface); border-color: var(--workspace-border); border-left: 7px solid var(--takeoff-readout-accent, var(--cobalt)); border-radius: 8px; box-shadow: 0 1px 2px #00000008; padding: 10px 12px; }
@@ -67,7 +67,17 @@
 .estimating-toolbar-account button[aria-label="User Guide"]:hover { border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
 
 .project-data-header { flex-shrink: 0; padding: 20px; border-bottom: 1px solid var(--ink-faint); background: var(--paper-cream); color: var(--ink); font-size: 12px; font-weight: 500; }
-.project-data-header input, .project-data-header select { box-sizing: border-box; width: 100%; height: 36px; padding: 6px 10px; border: 1px solid var(--ink-faint); border-radius: 6px; background: var(--paper-bright); color: var(--ink); font: inherit; }
+.project-data-fields { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; }
+@media (max-width: 480px) {
+  .project-data-header .project-data-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+  .project-data-fields > button { justify-self: end; }
+}
+.project-data-header label { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.project-data-header input, .project-data-header select { min-width: 0; box-sizing: border-box; width: 100%; height: 36px; padding: 6px 10px; border: 1px solid var(--ink-faint); border-radius: 6px; background: var(--paper-bright); color: var(--ink); font: inherit; }
 :root .conditions-modal-scrim .glass-drawer-conditions.conditions-modal > div:nth-child(2) > .takeoffs-tabs { background: #18181b !important; background-image: none !important; box-shadow: none !important; padding: 6px 12px !important; }
 .conditions-modal .takeoffs-tabs > .conditions-tab-list { display: inline-flex !important; flex: 0 1 auto !important; width: max-content !important; background: var(--workspace-muted); padding: 3px; border-radius: 9px; gap: 3px !important; max-width: calc(100% - 44px); overflow-x: auto; }
 .conditions-modal .conditions-tab-list button { min-height: 30px; border: 1px solid transparent !important; border-radius: 6px !important; padding: 4px 12px !important; background: transparent !important; color: var(--ink-muted) !important; opacity: 1 !important; font: 500 12px var(--f-body) !important; white-space: nowrap; }
@@ -163,3 +173,5 @@
 :root[data-theme="dark"] .canvas-workspace .takeoff-workspace-surface {
   background: #171717 !important;
 }
+
+:root .canvas-zoom-rail > .canvas-zoom-action { color: var(--workspace-foreground, var(--ink)); }

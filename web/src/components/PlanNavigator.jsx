@@ -62,7 +62,7 @@ export default function PlanNavigator({
   sheets, getDoc, scales, detectedScales, shapes, labels, onLabel, onDetect,
   thumbCacheRef, busyRef, openTabs, onOpen,
   onAddFiles, onClosePdf, onRemoveFromProject,
-  onCloseProject, onBrowseProjects, onSignIn, signedIn = false, previewOnly = false,
+  onCloseProject, onBrowseProjects, onSignIn, signedIn = false, previewOnly = false, sampleRequiresPreview = false,
   levels = {}, onAssignLevel,
   // browse (Drive) data
   listFolder, addSheets, onAdded,
@@ -158,7 +158,11 @@ export default function PlanNavigator({
 
   const loadSample = async () => {
     if (sampleBusy || !onAddFiles) return;
-    await loadSamplePlan({ baseUrl: import.meta.env.BASE_URL || "/", addFiles: onAddFiles, onBusy: setSampleBusy, onError: setSampleError });
+    if (sampleRequiresPreview) {
+      window.location.assign(`${import.meta.env.BASE_URL || "/"}?explore=1`);
+      return;
+    }
+    await loadSamplePlan({ baseUrl: import.meta.env.BASE_URL || "/", addFiles: (files) => onAddFiles(files, { reportFailure: true }), onBusy: setSampleBusy, onError: setSampleError });
   };
 
   const handleDriveSignIn = () => {
@@ -612,7 +616,7 @@ export default function PlanNavigator({
                 </div>
                 <button onClick={loadSample} disabled={sampleBusy} title="Open a real floor finish plan and try a takeoff"
                   style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "13px 22px", border: "1px solid var(--ink)", background: "var(--cobalt)", color: "var(--paper-bright)", cursor: sampleBusy ? "default" : "pointer", opacity: sampleBusy ? 0.65 : 1, fontWeight: 700, fontSize: 14, fontFamily: "var(--f-body)" }}>
-                  <Icon name="takeoff" size={16} />{sampleBusy ? "Loading sample…" : "Load sample plan"}
+                  <Icon name="takeoff" size={16} />{sampleBusy ? "Loading sample…" : sampleRequiresPreview ? "Open read-only preview" : "Load sample plan"}
                 </button>
                 {sampleError && <p role="alert" style={{ color: "var(--c-danger)", fontSize: 13, lineHeight: 1.5 }}>{sampleError}</p>}
                 <div style={{ fontFamily: "var(--f-body)", fontSize: 12.5, color: "var(--ink-muted)", marginTop: 11, lineHeight: 1.6 }}>

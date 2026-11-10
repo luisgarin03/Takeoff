@@ -12,7 +12,7 @@ export default function ProjectDataHeader({ metadata, onSave }) {
     setErrors(checked.errors);
     if (checked.valid) { onSave(checked.value); setSaved(true); }
   }}>
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "end", gap: 14 }}>
+    <div className="project-data-fields">
       <label style={{ flex: "2 1 260px", display: "grid", gap: 7 }}>Project name<input value={draft.name} required onChange={(e) => change("name", e.target.value)} aria-invalid={!!errors.name} /></label>
       <label style={{ flex: "1 1 160px", display: "grid", gap: 7 }}>Submission / due date<input type="date" value={draft.submissionDate} onChange={(e) => change("submissionDate", e.target.value)} aria-invalid={!!errors.submissionDate} /></label>
       <label style={{ flex: "1 1 150px", display: "grid", gap: 7 }}>Status<select value={draft.status} onChange={(e) => change("status", e.target.value)}>{PROJECT_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>

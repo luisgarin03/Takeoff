@@ -17,6 +17,7 @@
 .estimating-toolbar :focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
 .estimating-toolbar-account { margin-left: auto; display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 0; }
 .estimating-toolbar-account button { min-height: 44px; max-width: 160px; }
+:root .estimating-toolbar-account .membership-action { max-width: none; width: max-content; white-space: nowrap; }
 .takeoff-header-zoom {
   display: inline-flex;
   align-items: center;
@@ -408,3 +409,30 @@ textarea.condition-name-input { display: block; resize: none; overflow: hidden; 
   transform: rotate(0deg);
 }
 .tool-menu-popover .recent-projects[open] > summary::before { transform: rotate(90deg); }
+
+@media (max-width: 1200px) {
+  :root .estimating-toolbar-header:not([data-single-row]) {
+    width: max-content;
+    min-width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, max-content);
+    justify-content: center;
+    row-gap: 8px;
+  }
+  :root .estimating-toolbar-header > .estimating-toolbar-logo {
+    max-width: none;
+    white-space: nowrap;
+  }
+  :root .estimating-toolbar-header > .estimating-toolbar-sheet-navigation {
+    flex: 0 1 auto;
+  }
+  .estimating-toolbar-header:not([data-single-row]) > .estimating-toolbar-account {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: center;
+    margin-left: 0;
+  }
+  :root .estimating-toolbar-account > * {
+    flex-shrink: 0;
+  }
+}

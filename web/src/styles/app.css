@@ -325,7 +325,7 @@ select {
 
 .toolbar-visibility-toggle {
   position: absolute;
-  top: 10px;
+  top: calc(10px + env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   /* This control is a sibling of .glass-toolbar-stack (rather than a child
@@ -1101,11 +1101,11 @@ select {
   }
 
   .canvas-zoom-rail {
-    left: 10px !important;
+    left: calc(10px + env(safe-area-inset-left, 0px)) !important;
   }
 
   .canvas-panel-rail {
-    right: 10px !important;
+    right: calc(10px + env(safe-area-inset-right, 0px)) !important;
   }
 }
 
@@ -1690,7 +1690,7 @@ select {
   .glass-toolbar-primary .toolbar-spacer { flex: 1 1 0 !important; min-width: 0 !important; }
   .toolbar-sheet-tools { min-width: 0; max-width: 100%; }
   .canvas-zoom-rail, .canvas-panel-rail {
-    max-height: max(44px, calc(100dvh - var(--workspace-toolbar-height, 0px) - 28px));
+    max-height: max(44px, calc(100dvh - var(--workspace-toolbar-height, 0px) - 28px - env(safe-area-inset-bottom, 0px)));
     overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
   }
   .canvas-zoom-rail > *, .canvas-panel-rail > * { flex-shrink: 0; }

@@ -2330,8 +2330,11 @@ export default function TakeoffCanvas() {
   }, [discardPdfDocument, refreshSheets, reconcileAfterRemoval]);
   // open dropped/picked files of any kind: PDFs, images, and .zip plan sets all
   // get turned into PDF sheets (in-browser) by ingestFiles, then stashed locally
-  async function handleFiles(fileList) {
-    if (!explore && denyReadOnlyEdit()) return false;
+  async function handleFiles(fileList, { reportFailure = false } = {}) {
+    if (!explore && denyReadOnlyEdit()) {
+      if (reportFailure) throw new Error(readOnlyMessage || "This workspace is read-only.");
+      return false;
+    }
     const incoming = Array.from(fileList || []);
     if (!incoming.length) return;
     if (incoming.some((file) => /\.otk$/i.test(file.name))) {
@@ -2380,6 +2383,7 @@ export default function TakeoffCanvas() {
       }
       if (excluded.length) setPdfImportReport({ imported: accepted.length, excluded });
       if (!accepted.length) {
+        if (reportFailure && excluded.length) throw new Error(excluded[0].reason);
         setCommitMsg(excluded.length
           ? `Nothing to open — ${excluded.length} file${excluded.length === 1 ? "" : "s"} excluded.`
           : `No supported files found. Drop a PDF, an image, or a .zip plan set.`);
@@ -10154,7 +10158,7 @@ export default function TakeoffCanvas() {
               Space presses still bubble so a pan can start on top of the stack,
               and dblclick is stopped so rapid zoom clicks can't finishShape() */}
           <div className="canvas-zoom-rail" onPointerDown={(e) => { if (e.button === 0 && !spaceRef.current) e.stopPropagation(); }} onDoubleClick={(e) => e.stopPropagation()}
-            style={{ position: "absolute", left: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6 }}>
+            style={{ position: "absolute", left: "calc(14px + env(safe-area-inset-left, 0px))", bottom: `calc(${trackpadVisible ? trackpadHeight + 16 : 14}px + env(safe-area-inset-bottom, 0px))`, display: "flex", flexDirection: "column", gap: 6 }}>
             {panelBtn(toggleFullscreen, isFullscreen ? "fullscreenExit" : "fullscreen", isFullscreen ? "Exit fullscreen" : "Enter fullscreen", isFullscreen, null, { "aria-label": isFullscreen ? "Exit fullscreen" : "Enter fullscreen", "aria-pressed": isFullscreen })}
             {sheets.length > 0 && <div style={{ display: "flex" }}>
               {panelBtn(() => findOpen ? closeFind() : openFind(), "search", "Find and mark text in all loaded plans (Ctrl+F)", findOpen, null, { "aria-label": "Find text in all loaded plans", "aria-expanded": findOpen })}
@@ -10183,12 +10187,12 @@ export default function TakeoffCanvas() {
             {segBtn("select", "select", "Select (V) — pick a takeoff, drag points", false, true)}
             {segBtn("text-select", "textSelect", "Select text (Shift+T) — drag PDF text to copy; drag a box on scanned sheets to extract it", false, true)}
             {[["+", 1.25], ["−", 0.8]].map(([lbl, f]) => (
-              <button key={lbl} onClick={() => { const r = containerRef.current.getBoundingClientRect(); zoomAround(r.width / 2, r.height / 2, f); }}
+              <button className="canvas-zoom-action" key={lbl} onClick={() => { const r = containerRef.current.getBoundingClientRect(); zoomAround(r.width / 2, r.height / 2, f); }}
                 style={{ width: 34, height: 34, borderRadius: 0, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", fontSize: 18, fontWeight: 700 }}>{lbl}</button>
             ))}
-            <button onClick={() => stage.w && fitToView(stage.w, stage.h)} title="Fit" style={{ width: 34, height: 34, borderRadius: 0, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", fontSize: 12 }}>fit</button>
-            <button onClick={() => setDarkMode((d) => !d)} title={darkMode ? "Sheet back to positive print" : "Invert sheet — negative print (affects marked-set export)"}
-              style={{ width: 34, height: 34, borderRadius: 0, border: `1px solid ${darkMode ? "var(--cobalt)" : "var(--ink-faint)"}`, background: darkMode ? "var(--cobalt)" : "var(--paper-bright)", color: darkMode ? "var(--paper-bright)" : "var(--ink)", cursor: "pointer", fontSize: 13 }}>
+            <button className="canvas-zoom-action" onClick={() => stage.w && fitToView(stage.w, stage.h)} title="Fit" style={{ width: 34, height: 34, borderRadius: 0, border: "1px solid var(--ink-faint)", background: "var(--paper-bright)", cursor: "pointer", fontSize: 12 }}>fit</button>
+            <button className="canvas-zoom-action" aria-pressed={darkMode} onClick={() => setDarkMode((d) => !d)} title={darkMode ? "Sheet back to positive print" : "Invert sheet — negative print (affects marked-set export)"}
+              style={{ width: 34, height: 34, borderRadius: 0, border: `1px solid ${darkMode ? "var(--ink-muted)" : "var(--ink-faint)"}`, background: darkMode ? "var(--paper-shadow)" : "var(--paper-bright)", cursor: "pointer", fontSize: 13 }}>
               {darkMode ? "☀" : "☾"}</button>
           </div>
         </div>
@@ -10295,7 +10299,7 @@ export default function TakeoffCanvas() {
         {view === "canvas" && sheets.length > 0 && <div className="canvas-panel-rail" onClickCapture={(e) => {
           const drawer = e.target.closest("[data-drawer]")?.dataset.drawer;
           if (drawer) setFrontDrawer(drawer);
-        }} style={{ position: "absolute", right: 14, bottom: trackpadVisible ? trackpadHeight + 16 : 14, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
+        }} style={{ position: "absolute", right: "calc(14px + env(safe-area-inset-right, 0px))", bottom: `calc(${trackpadVisible ? trackpadHeight + 16 : 14}px + env(safe-area-inset-bottom, 0px))`, display: "flex", flexDirection: "column", gap: 6, zIndex: 8 }}>
           {panelBtn(importCurrentFileToWhiteboard, "importWhiteboard", whiteboardImportBusy ? "Importing…" : "Import to Whiteboard", false, null, { "aria-label": "Import to Whiteboard", disabled: !focusPanel?.file || whiteboardImportBusy || whiteboardBusy || !!loadError })}
           {panelBtn(() => setWhiteboardOpen(true), "rectTool", "Open whiteboard", whiteboardOpen, null, { "aria-label": "Whiteboard", disabled: !hydrated.current || !!loadError })}
           {panelBtn(() => setFenceCalculatorOpen(true), "calculator", "Fence Material Calculator — import the active takeoff's LF or count", fenceCalculatorOpen, null, { "aria-label": "Fence Material Calculator", disabled: !hydrated.current || !!loadError })}
@@ -10357,7 +10361,7 @@ export default function TakeoffCanvas() {
         {themeSettingsOpen && <ThemeSettings theme={theme} toggleTheme={toggleTheme} onClose={() => setThemeSettingsOpen(false)} onMenuDepth={onMenuDepth} />}
         {settingsOpen && <TrackpadSettings
           visible={trackpadVisible} width={trackpadWidth} height={trackpadHeight} opacity={trackpadOpacity}
-          bottom={trackpadVisible ? trackpadHeight + 14 : 14}
+          bottom={`calc(${trackpadVisible ? trackpadHeight + 14 : 14}px + env(safe-area-inset-bottom, 0px))`}
           onVisibleChange={(visible) => { setTrackpadVisible(visible); trackpadPaintRef.current = ""; if (!visible) hideCrosshair(); }}
           onWidthChange={setTrackpadWidth} onHeightChange={setTrackpadHeight} onOpacityChange={setTrackpadOpacity}
           onClose={() => setSettingsOpen(false)}
@@ -10444,6 +10448,7 @@ export default function TakeoffCanvas() {
           signedIn={!!cloudAccount.user}
           onSignIn={openSignInPage}
           previewOnly={explore}
+          sampleRequiresPreview={readOnly && !explore}
           levels={sheetLevels}
           onAssignLevel={(keys, label) => { if (denyReadOnlyEdit()) return; setSheetLevels((m) => {
             const next = { ...m };
