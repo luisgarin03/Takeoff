@@ -11,16 +11,16 @@ export function stripeReturn(value, origins) {
  url.searchParams.delete('stripe_session'); url.searchParams.delete('stripe_checkout'); url.hash = '';
  return url;
 }
-export function stripeRecord(userId, subscription, customer) {
+export function stripeRecord(userId, subscription, customer, live = false, priceIds = {}) {
  const item = subscription.items?.data?.[0], price = item?.price;
- const plan = Object.entries(STRIPE_PLANS).find(([, p]) => price?.currency === 'usd' && price.unit_amount === p.amount && price.recurring?.interval === p.interval && (price.recurring.interval_count || 1) === 1);
- if (subscription.livemode !== false || !plan || subscription.metadata?.otk_user_id !== userId || subscription.customer !== customer || subscription.metadata?.otk_plan_id !== plan[0]) throw new BillingError('OTK_BILLING_OWNERSHIP', 403);
+ const plan = Object.entries(STRIPE_PLANS).find(([id, p]) => (!live || price?.id === priceIds[id]) && price?.currency === 'usd' && price.unit_amount === p.amount && price.recurring?.interval === p.interval && (price.recurring.interval_count || 1) === 1);
+ if (subscription.livemode !== live || !plan || subscription.metadata?.otk_user_id !== userId || subscription.customer !== customer || subscription.metadata?.otk_plan_id !== plan[0]) throw new BillingError('OTK_BILLING_OWNERSHIP', 403);
  const end = item?.current_period_end || subscription.current_period_end;
  const status = subscription.status === 'trialing' ? 'trialing' : subscription.status === 'active' ? (subscription.cancel_at_period_end ? 'canceled' : 'active') : subscription.status === 'past_due' ? 'billing_issue' : subscription.status === 'canceled' ? 'expired' : 'inactive';
  if (!Number.isFinite(end)) throw new BillingError('OTK_BILLING_PERIOD', 502);
- return { user_id: userId, provider: 'stripe', plan_id: plan[0], status, product_id: price.id || '', store: 'stripe', entitlement_id: 'estimating_pro', revenuecat_customer_id: customer, subscription_id: subscription.id, current_period_end: new Date(end * 1000).toISOString(), will_renew: ['active','trialing'].includes(subscription.status) && !subscription.cancel_at_period_end, environment: 'sandbox', updated_at: new Date().toISOString() };
+ return { user_id: userId, provider: 'stripe', plan_id: plan[0], status, product_id: price.id || '', store: 'stripe', entitlement_id: 'estimating_pro', revenuecat_customer_id: customer, subscription_id: subscription.id, current_period_end: new Date(end * 1000).toISOString(), will_renew: ['active','trialing'].includes(subscription.status) && !subscription.cancel_at_period_end, environment: live ? 'production' : 'sandbox', updated_at: new Date().toISOString() };
 }
-export function createStripeBilling({ stripe, store, origins, namespace }) {
+export function createStripeBilling({ stripe, store, origins, namespace, live = false, priceIds = {} }) {
  async function customer(user) {
   const saved = await store.customer(user.id);
   if (saved) return saved.customer_id;
@@ -30,18 +30,19 @@ export function createStripeBilling({ stripe, store, origins, namespace }) {
  async function refresh(userId, customerId) {
   const existing = await store.subscription(userId);
   // Sandbox testing must never replace a real paid entitlement.
-  if (existing?.environment === 'production') throw new BillingError('OTK_BILLING_LIVE_ACCOUNT', 409);
+  if (existing?.environment === 'production' && (!live || existing.provider !== 'stripe')) throw new BillingError('OTK_BILLING_LIVE_ACCOUNT', 409);
   const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 100 });
-  const candidates = subscriptions.data.filter((s) => s.metadata?.otk_user_id === userId && s.metadata?.otk_plan_id in STRIPE_PLANS);
+  const candidates = subscriptions.data.filter((s) => s.metadata?.otk_user_id === userId && Object.hasOwn(STRIPE_PLANS, s.metadata?.otk_plan_id));
   const rank = (s) => ['active','trialing','past_due'].includes(s.status) ? 1 : 0;
   candidates.sort((a,b) => rank(b)-rank(a) || b.created-a.created);
-  if (!candidates.length) return existing || null;
-  const row = stripeRecord(userId,candidates[0],customerId);
+  if (!candidates.length) return live && existing?.environment === 'sandbox' ? null : existing || null;
+  const row = stripeRecord(userId,candidates[0],customerId,live,priceIds);
   await store.saveSubscription(row); return row;
  }
  return {
   async checkout(user, planId, returnUrl) {
-   const plan = STRIPE_PLANS[planId]; if (!plan) throw new BillingError('OTK_BILLING_PLAN');
+   if (!Object.hasOwn(STRIPE_PLANS, planId)) throw new BillingError('OTK_BILLING_PLAN');
+   const plan = STRIPE_PLANS[planId];
    const destination = stripeReturn(returnUrl,origins);
    const customerId = await customer(user);
    const current = await refresh(user.id,customerId);
@@ -50,27 +51,27 @@ export function createStripeBilling({ stripe, store, origins, namespace }) {
    success.searchParams.set('stripe_checkout','success'); cancel.searchParams.set('stripe_checkout','canceled');
    const session = await stripe.checkout.sessions.create({ mode: 'subscription', customer: customerId, client_reference_id: user.id,
     success_url: `${success.href}&stripe_session={CHECKOUT_SESSION_ID}`, cancel_url: cancel.href,
-    line_items: [{ price_data: { currency: 'usd', unit_amount: plan.amount, recurring: { interval: plan.interval }, product_data: { name: 'Estimating Pro' } }, quantity: 1 }],
+    line_items: [live ? { price: priceIds[planId], quantity: 1 } : { price_data: { currency: 'usd', unit_amount: plan.amount, recurring: { interval: plan.interval }, product_data: { name: 'Estimating Pro' } }, quantity: 1 }],
     subscription_data: { metadata: { otk_user_id: user.id, otk_plan_id: planId } }, metadata: { otk_user_id: user.id, otk_plan_id: planId },
    }, { idempotencyKey: `${namespace}:checkout:v2:${user.id}:${planId}:${Math.floor(Date.now()/300000)}` });
-   if (session.livemode !== false || !session.url?.startsWith('https://checkout.stripe.com/')) throw new BillingError('OTK_BILLING_TEST_ONLY',503);
-   return { url: session.url, testMode: true };
+   if (session.livemode !== live || !session.url?.startsWith('https://checkout.stripe.com/')) throw new BillingError('OTK_BILLING_MODE',503);
+   return { url: session.url, testMode: !live };
   },
-  async refresh(user) { const saved = await store.customer(user.id); return saved ? refresh(user.id,saved.customer_id) : store.subscription(user.id); },
+  async refresh(user) { const saved = await store.customer(user.id); return saved ? refresh(user.id,saved.customer_id) : (live ? null : store.subscription(user.id)); },
   async portal(user,returnUrl) {
    const destination = stripeReturn(returnUrl,origins), saved = await store.customer(user.id);
    if (!saved) throw new BillingError('OTK_BILLING_CUSTOMER',404);
    const result = await stripe.billingPortal.sessions.create({ customer: saved.customer_id, return_url: destination.href });
-   return { url: result.url, testMode: true };
+   return { url: result.url, testMode: !live };
   },
   async webhook(event) {
-   if (event.livemode !== false) throw new BillingError('OTK_BILLING_TEST_ONLY',400);
+   if (event.livemode !== live) throw new BillingError('OTK_BILLING_MODE',400);
    if (!['checkout.session.completed','customer.subscription.created','customer.subscription.updated','customer.subscription.deleted','invoice.paid','invoice.payment_failed'].includes(event.type)) return;
    const object = event.data.object, customerId = typeof object.customer === 'string' ? object.customer : object.customer?.id;
    const saved = customerId ? await store.userForCustomer(customerId) : null;
    if (!saved) return;
    await refresh(saved.user_id,customerId);
-   await store.saveEvent({ id: event.id, user_id: saved.user_id, event_type: event.type, environment: 'sandbox' });
+   await store.saveEvent({ id: event.id, user_id: saved.user_id, event_type: event.type, environment: live ? 'production' : 'sandbox' });
   },
  };
 }

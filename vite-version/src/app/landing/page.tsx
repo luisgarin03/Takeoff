@@ -4,6 +4,7 @@ import { Ecosystem } from "@/components/ecosystem"
 import React from "react"
 import { LandingNavbar } from "./components/navbar"
 import { HeroSection } from "./components/hero-section"
+import { PlatformsSection } from "./components/platforms-section"
 import { LogoCarousel } from "./components/logo-carousel"
 import { StatsSection } from "./components/stats-section"
 import { FeaturesSection } from "./components/features-section"
@@ -36,6 +37,7 @@ export function LandingPageContent({preview=false}:{preview?:boolean}) {
       <main>
         <HeroSection />
         <Ecosystem />
+        <PlatformsSection />
         {isVisible("logos") && <LogoCarousel />}
         {isVisible("stats") && <StatsSection />}
         {isVisible("about") && <AboutSection />}
