@@ -2,6 +2,7 @@
 
 ## Unreleased — October 30 checkpoint
 
+- Added a **Chain-Link Materials Calculator** directly below **Estimate Document** in the Whiteboard Add menu. It totals a supplier-style material breakdown from entered fence runs, gates, spacing, and construction details; quantities remain editable, additional supplier-specific rows can be added, and the list can be downloaded as CSV.
 - Added current-page totals to the Chain-Link Fence Post Calculator, aggregating fence length, sections, corner/terminal posts, line posts, total posts, and manual markers across attached fence lines on the focused page, with a warning for lines missing a valid scale.
 - Importing the focused plan page to Whiteboard now bookmarks that source page after the import succeeds.
 - Added a separate Property Map Takeoff page with U.S. Census address lookup, USGS aerial imagery, distance/area/count measurements, browser-local persistence, CSV export, and a Google Maps reference link for the searched address.

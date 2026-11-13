@@ -1,6 +1,7 @@
 import { useFitToolbar } from "../lib/useFitToolbar.js";
 import EstimateDocumentEditor from './EstimateDocumentEditor.jsx';
 import SupplierList from './SupplierList.jsx';
+import ChainLinkMaterialsCalculator from './ChainLinkMaterialsCalculator.jsx';
 import { newEstimateDocument, estimateDocumentPdf } from '../lib/estimateDocument.js';
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -266,6 +267,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
   const [sowPreview, setSowPreview] = useState(null);
   const [estimateEditor, setEstimateEditor] = useState(null);
   const [supplierListOpen, setSupplierListOpen] = useState(false);
+  const [chainLinkMaterialsOpen, setChainLinkMaterialsOpen] = useState(false);
   const [imageCrop, setImageCrop] = useState(null);
   const imageCropRef = useRef(imageCrop); imageCropRef.current = imageCrop;
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -887,6 +889,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
             { label: "Take photo", icon: "camera", onSelect: () => cameraInput.current?.click() },
             { label: "Note", icon: "textNote", disabled: board.items.length >= 2000, onSelect: () => addNote() },
             { label: "Estimate Document", icon: "plus", onSelect: () => setEstimateEditor({ data: newEstimateDocument() }) },
+            { label: "Chain-Link Materials Calculator", icon: "calculator", onSelect: () => setChainLinkMaterialsOpen(true) },
             { label: "Supplier list", icon: "document", onSelect: () => setSupplierListOpen(true) },
             { label: "SOW panel", icon: "plus", onSelect: () => commit(addWhiteboardSowPanel(boardRef.current)) },
           ]} />
@@ -936,6 +939,7 @@ export default function Whiteboard({ board, onChange, onClose: onClosed, onSave,
       {!board.items.length && !drawingCount && <div className="wb-empty"><Icon name="document" size={36} /><strong>No notes yet</strong><span>Paste text, images or supported files, or add them manually.</span><button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => input.current.click()} disabled={busy || readOnly}><Icon name="plus" size={16} />Add PDFs or images</button></div>}
       {estimateEditor && <EstimateDocumentEditor initial={estimateEditor.data} onSave={saveEstimateDocument} onClose={() => setEstimateEditor(null)} />}
       {supplierListOpen && <SupplierList readOnly={readOnly} onClose={() => setSupplierListOpen(false)} />}
+      {chainLinkMaterialsOpen && <ChainLinkMaterialsCalculator onClose={() => setChainLinkMaterialsOpen(false)} />}
       {board.items.map((saved) => {
         const item = preview?.id === saved.id ? { ...saved, ...preview } : saved;
         const asset = assets.get(item.assetId);
