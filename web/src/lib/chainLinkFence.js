@@ -30,6 +30,12 @@ export function sanitizeChainLinkFence(record) {
     });
   }
   markers.sort((a, b) => a.path_t - b.path_t);
+  const sharedPosts = {};
+  if (record.shared_posts && typeof record.shared_posts === "object" && !Array.isArray(record.shared_posts)) {
+    for (const [postId, sharedId] of Object.entries(record.shared_posts)) {
+      if (typeof postId === "string" && postId && typeof sharedId === "string" && sharedId) sharedPosts[postId] = sharedId;
+    }
+  }
   return {
     id: typeof record.id === "string" && record.id ? record.id : `fence-${crypto.randomUUID()}`,
     shape_id: shapeId,
@@ -43,6 +49,7 @@ export function sanitizeChainLinkFence(record) {
     show_post_counts: record.show_post_counts !== false,
     closed: !!record.closed,
     markers,
+    shared_posts: sharedPosts,
   };
 }
 
@@ -67,7 +74,7 @@ export function createChainLinkFence(shape, idFactory = () => `fence-${crypto.ra
     condition_id: shape.condition_id, max_spacing_ft: DEFAULT_CHAIN_LINK_SPACING_FT,
     marker_size: DEFAULT_CHAIN_LINK_MARKER_SIZE, show_corner_posts: true,
     show_line_posts: true, show_section_lengths: false, show_post_counts: true,
-    closed: false, markers: [],
+    closed: false, markers: [], shared_posts: {},
   });
 }
 
@@ -150,15 +157,86 @@ export function calculateChainLinkFence(fence, points, unitsPerPx) {
       linePosts.push({ id: `${section.id}-post-${n}`, sectionIndex: index, path_t: pathT, point: pointAtPathT(metrics, pathT) });
     }
   }
-  const corners = stops.map((marker) => ({ ...marker, point: pointAtPathT(metrics, marker.path_t) }));
+  const corners = stops.map((marker) => {
+    const directions = clean.closed ? 2 : marker.endpoint ? 1 : 2;
+    const type = directions <= 1 ? "terminal" : directions === 2 ? "corner" : "threeway";
+    return { ...marker, directions, type, shared_post_id: clean.shared_posts[marker.id] || "", point: pointAtPathT(metrics, marker.path_t) };
+  });
   const linePostCount = sections.reduce((sum, section) => sum + section.intermediate, 0);
+  const terminalPostCount = corners.filter((post) => post.type === "terminal").length;
+  const cornerPostCount = corners.filter((post) => post.type === "corner").length;
   return {
     valid: true, metrics, corners, linePosts, sections,
     totalLengthFt: metrics.total * upp,
-    cornerPostCount: corners.length,
+    terminalPostCount, actualCornerPostCount: cornerPostCount, cornerPostCount: corners.length, threeWayPostCount: 0,
     linePostCount,
     totalPostCount: corners.length + linePostCount,
   };
+}
+
+const localPostIds = (fence) => fence.closed
+  ? [`${fence.id}-loop`, ...(fence.markers || []).map((marker) => marker.id)]
+  : [`${fence.id}-start`, ...(fence.markers || []).map((marker) => marker.id), `${fence.id}-end`];
+
+export function mergeChainLinkFencePosts(records, source, target, idFactory = () => `shared-post-${crypto.randomUUID()}`) {
+  if (!source?.fenceId || !source?.postId || !target?.fenceId || !target?.postId) return records;
+  if (source.fenceId === target.fenceId) return records;
+  const sourceFence = records.find((fence) => fence.id === source.fenceId);
+  const targetFence = records.find((fence) => fence.id === target.fenceId);
+  if (!sourceFence || !targetFence || !localPostIds(sourceFence).includes(source.postId) || !localPostIds(targetFence).includes(target.postId)) return records;
+  const groupA = sourceFence.shared_posts?.[source.postId] || "";
+  const groupB = targetFence.shared_posts?.[target.postId] || "";
+  const sharedId = groupA || groupB || idFactory();
+  const absorbed = new Set([groupA, groupB].filter(Boolean));
+  return records.map((fence) => {
+    const sharedPosts = Object.fromEntries(Object.entries(fence.shared_posts || {}).map(([postId, groupId]) => [postId, absorbed.has(groupId) ? sharedId : groupId]));
+    if (fence.id === source.fenceId) sharedPosts[source.postId] = sharedId;
+    if (fence.id === target.fenceId) sharedPosts[target.postId] = sharedId;
+    return { ...fence, shared_posts: sharedPosts };
+  });
+}
+
+export function summarizeChainLinkFencePosts(entries = []) {
+  const groups = new Map();
+  let linePostCount = 0;
+  for (const { fence, calculation } of entries) {
+    if (!fence || !calculation?.valid) continue;
+    linePostCount += calculation.linePostCount;
+    for (const post of calculation.corners) {
+      const key = fence.shared_posts?.[post.id] || `${fence.id}:${post.id}`;
+      const group = groups.get(key) || { directions: 0, references: [] };
+      group.directions += post.directions;
+      group.references.push({ fenceId: fence.id, postId: post.id });
+      groups.set(key, group);
+    }
+  }
+  const byFence = {};
+  let terminalPostCount = 0, cornerPostCount = 0, threeWayPostCount = 0, multiWayPostCount = 0;
+  const typesByPost = {};
+  for (const group of groups.values()) {
+    const type = group.directions <= 1 ? "terminal" : group.directions === 2 ? "corner" : group.directions === 3 ? "threeway" : "multiway";
+    if (type === "terminal") terminalPostCount += 1;
+    else if (type === "corner") cornerPostCount += 1;
+    else if (type === "threeway") threeWayPostCount += 1;
+    else multiWayPostCount += 1;
+    for (const reference of group.references) {
+      typesByPost[`${reference.fenceId}:${reference.postId}`] = type;
+      const local = byFence[reference.fenceId] || { terminalPostCount: 0, cornerPostCount: 0, threeWayPostCount: 0, multiWayPostCount: 0, linePostCount: 0, totalPostCount: 0 };
+      if (type === "terminal") local.terminalPostCount += 1;
+      else if (type === "corner") local.cornerPostCount += 1;
+      else if (type === "threeway") local.threeWayPostCount += 1;
+      else local.multiWayPostCount += 1;
+      byFence[reference.fenceId] = local;
+    }
+  }
+  for (const { fence, calculation } of entries) {
+    if (!fence || !calculation?.valid) continue;
+    const local = byFence[fence.id] || { terminalPostCount: 0, cornerPostCount: 0, threeWayPostCount: 0, multiWayPostCount: 0 };
+    local.linePostCount = calculation.linePostCount;
+    local.totalPostCount = local.terminalPostCount + local.cornerPostCount + local.threeWayPostCount + local.multiWayPostCount + local.linePostCount;
+    byFence[fence.id] = local;
+  }
+  return { terminalPostCount, cornerPostCount, threeWayPostCount, multiWayPostCount, linePostCount, totalPostCount: terminalPostCount + cornerPostCount + threeWayPostCount + multiWayPostCount + linePostCount, sharedPostCount: [...groups.values()].filter((group) => group.references.length > 1).length, typesByPost, byFence };
 }
 
 // Report/export companion for sheets that are not currently rendered. Marker
@@ -179,8 +257,9 @@ export function calculateChainLinkFenceFromLength(fence, totalLengthFt) {
     return { id: `${clean.id}-section-${index + 1}`, index, start, end, wraps, lengthFt, spans, intermediate: Math.max(0, spans - 1), actualSpacingFt: lengthFt / spans };
   });
   const linePostCount = sections.reduce((sum, section) => sum + section.intermediate, 0);
-  const cornerPostCount = stops.length;
-  return { valid: true, sections, totalLengthFt: total, cornerPostCount, linePostCount, totalPostCount: cornerPostCount + linePostCount };
+  const terminalPostCount = clean.closed ? 0 : 2;
+  const cornerPostCount = stops.length - terminalPostCount;
+  return { valid: true, sections, totalLengthFt: total, terminalPostCount, actualCornerPostCount: cornerPostCount, cornerPostCount: stops.length, threeWayPostCount: 0, linePostCount, totalPostCount: stops.length + linePostCount };
 }
 
 export function insertFenceMarker(fence, pathT, idFactory = () => `post-${crypto.randomUUID()}`, minimumFraction = 0.002) {

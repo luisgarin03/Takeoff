@@ -15,9 +15,9 @@ const input = { border: "1px solid var(--ink-faint)", background: "var(--paper-b
 const number = (value, digits = 1) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits });
 
 export default function ChainLinkFencePanel({
-  units = "imperial", fence, calculation, selectedMarkerId, addMode, canAttach, attachCount = 0,
+  units = "imperial", fence, calculation, selectedMarkerId, selectedPostType, addMode, mergeMode = false, canAttach, attachCount = 0,
   pageLabel = "Current page", pageSummaries = [],
-  onCreate, onAddMode, onPatch, onSelectMarker, onDeleteMarker, onDeleteFence,
+  onCreate, onAddMode, onPatch, onDeleteMarker, onDeleteFence, onStartMerge, onCancelMerge,
   onUndo, onRedo, canUndo, canRedo, onClose,
 }) {
   const metric = units === "metric";
@@ -53,10 +53,13 @@ export default function ChainLinkFencePanel({
                 {[
                   ["Fence", `${number(metric ? summary.totalLengthFt * M_PER_FT : summary.totalLengthFt)} ${metric ? "m" : "LF"}`],
                   ["Sections", summary.sections],
-                  ["Corner / terminal", summary.cornerPostCount],
+                  ["Terminal posts", summary.terminalPostCount],
+                  ["Corner posts", summary.cornerPostCount],
+                  ["Three-way posts", summary.threeWayPostCount],
+                  ...(summary.multiWayPostCount ? [["Four-way or more", summary.multiWayPostCount]] : []),
                   ["Line posts", summary.linePostCount],
                   ["Total posts", summary.totalPostCount],
-                  ["Manual markers", summary.manualMarkerCount],
+                  ["Shared posts counted once", summary.sharedPostCount || 0],
                 ].map(([name, value]) => <div key={name} style={{ border: "1px solid var(--ink-faint)", padding: "6px 7px", background: "var(--paper-bright)" }}><div style={{ fontSize: 9.5, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--ink-muted)" }}>{name}</div><strong style={{ fontFamily: "var(--f-mono)", fontSize: 12.5 }}>{value}</strong></div>)}
               </div>
               {summary.needsScale > 0 && <div role="status" style={{ fontSize: 10.5, color: "var(--c-danger)" }}>{summary.needsScale} attached fence {summary.needsScale === 1 ? "needs" : "need"} a valid scale; its calculated quantities are excluded. Saved manual markers remain counted.</div>}
@@ -85,7 +88,9 @@ export default function ChainLinkFencePanel({
               {[
                 ["Fence", `${number(metric ? calculation?.totalLengthFt * M_PER_FT : calculation?.totalLengthFt)} ${metric ? "m" : "LF"}`],
                 ["Sections", calculation?.sections?.length || 0],
-                ["Corner / terminal", calculation?.cornerPostCount || 0],
+                ["Terminal posts", calculation?.terminalPostCount || 0],
+                ["Corner posts", calculation?.actualCornerPostCount || 0],
+                ["Three-way posts", calculation?.threeWayPostCount || 0],
                 ["Line posts", calculation?.linePostCount || 0],
                 ["Total posts", calculation?.totalPostCount || 0],
                 ["Manual markers", fence.markers.length],
@@ -106,10 +111,13 @@ export default function ChainLinkFencePanel({
               ].map(([key, text]) => <label key={key} style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="checkbox" checked={!!fence[key]} onChange={(event) => onPatch({ [key]: event.target.checked }, "display")} />{text}</label>)}
               <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Adds a closing section back to the starting post"><input type="checkbox" checked={!!fence.closed} onChange={(event) => onPatch({ closed: event.target.checked }, "closed-loop")} />Closed loop</label>
             </div>
-            {selectedMarkerId && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 8, border: "1px solid var(--cobalt)" }}>
-              <span style={{ flex: 1, fontSize: 12 }}>Selected manual post</span>
-              <button type="button" onClick={() => onSelectMarker(selectedMarkerId, { type: fence.markers.find((m) => m.id === selectedMarkerId)?.type === "terminal" ? "corner" : "terminal" })} style={button}>Toggle type</button>
-              <button type="button" onClick={onDeleteMarker} style={{ ...button, color: "var(--c-danger)" }}>Delete</button>
+            {selectedMarkerId && <div style={{ display: "grid", gap: 7, padding: 8, border: "1px solid var(--cobalt)" }}>
+              <div style={{ fontSize: 12, fontWeight: 650 }}>Selected post · {(selectedPostType || calculation?.corners?.find((post) => post.id === selectedMarkerId)?.type || "post").replace("threeway", "three-way").replace("multiway", "four-way or more")}</div>
+              {mergeMode
+                ? <div role="status" style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>Click another post square on the drawing to share one physical post. Press Escape to cancel.</div>
+                : <button type="button" onClick={onStartMerge} style={button}>Share post with another markup</button>}
+              {mergeMode && <button type="button" onClick={onCancelMerge} style={button}>Cancel sharing</button>}
+              {fence.markers.some((marker) => marker.id === selectedMarkerId) && <button type="button" onClick={onDeleteMarker} style={{ ...button, color: "var(--c-danger)" }}>Delete manual post</button>}
             </div>}
             {!!calculation?.sections?.length && <div>
               <strong style={{ display: "block", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>Sections</strong>
@@ -121,7 +129,7 @@ export default function ChainLinkFencePanel({
                 </div>)}
               </div>
             </div>}
-            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.45, color: "var(--ink-muted)" }}>Square posts are section endpoints. Circular posts are derived automatically with no span longer than the maximum spacing. Drag a selected square along the fence to reposition it.</p>
+            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.45, color: "var(--ink-muted)" }}>End posts are terminals; posts joining two directions are corners. Shared posts join markup lines and count once. Numbered squares show three-way or larger intersections. Circular line posts are spaced automatically. Drag a manual square to reposition it.</p>
           </>
         )}
       </div>

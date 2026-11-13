@@ -5,11 +5,13 @@ import {
   calculateChainLinkFenceFromLength,
   createChainLinkFence,
   insertFenceMarker,
+  mergeChainLinkFencePosts,
   pathMetrics,
   pointAtPathT,
   projectPointToPath,
   removeFenceMarker,
   sanitizeChainLinkFences,
+  summarizeChainLinkFencePosts,
   updateFenceMarker,
 } from "../src/lib/chainLinkFence.js";
 
@@ -87,6 +89,30 @@ test("closed loops count the physical start/end post once", () => {
   assert.equal(result.sections.length, 1);
   assert.equal(result.linePostCount, 3);
   assert.equal(result.totalPostCount, 4);
+});
+
+test("open fence endpoints are terminals and interior posts are corners", () => {
+  const record = insertFenceMarker(fence(), .5, () => "corner-a");
+  const result = calculateChainLinkFence(record, [[0, 0], [100, 0]], 1);
+  assert.equal(result.terminalPostCount, 2);
+  assert.equal(result.actualCornerPostCount, 1);
+  assert.equal(result.corners.find((post) => post.id === "corner-a")?.directions, 2);
+});
+
+test("posts shared across three markup directions count once as a three-way post", () => {
+  const secondShape = { ...shape, id: "line-2" };
+  const thirdShape = { ...shape, id: "line-3" };
+  const records = [fence(), createChainLinkFence(secondShape, () => "fence-2"), createChainLinkFence(thirdShape, () => "fence-3")].filter(Boolean) as Array<NonNullable<ReturnType<typeof createChainLinkFence>>>;
+  let linked = mergeChainLinkFencePosts(records, { fenceId: "fence-1", postId: "fence-1-start" }, { fenceId: "fence-2", postId: "fence-2-start" }, () => "shared-a");
+  linked = mergeChainLinkFencePosts(linked, { fenceId: "fence-1", postId: "fence-1-start" }, { fenceId: "fence-3", postId: "fence-3-start" }, () => "shared-b");
+  assert.equal(linked[0].shared_posts["fence-1-start"], linked[1].shared_posts["fence-2-start"]);
+  assert.equal(linked[0].shared_posts["fence-1-start"], linked[2].shared_posts["fence-3-start"]);
+  const entries = linked.map((item: NonNullable<ReturnType<typeof createChainLinkFence>>) => ({ fence: item, calculation: calculateChainLinkFence(item, [[0, 0], [100, 0]], 1) }));
+  const summary = summarizeChainLinkFencePosts(entries);
+  assert.equal(summary.terminalPostCount, 3);
+  assert.equal(summary.threeWayPostCount, 1);
+  assert.equal(summary.totalPostCount, 31);
+  assert.equal(summary.sharedPostCount, 1);
 });
 
 test("persistence sanitizer keeps one valid calculator per linear shape", () => {
