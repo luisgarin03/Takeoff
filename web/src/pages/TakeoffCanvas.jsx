@@ -7439,22 +7439,41 @@ export default function TakeoffCanvas() {
   const activeChainFence = chainLinkFences.find((fence) => fence.id === selectedChainFenceId)
     || linkedFenceForShape(selectedId) || null;
   const activeChainCalculation = activeChainFence ? chainCalculation(activeChainFence) : null;
-  const currentPageChainFences = focusPanel?.key ? chainLinkFences.filter((fence) => fence.sheet_id === focusPanel.key) : [];
-  const currentPageChainSummary = currentPageChainFences.reduce((summary, fence) => {
+  const currentPageLinearShapes = new Map(shapes.filter((shape) => shape.sheet_id === focusPanel?.key && shape.measure_role === "linear").map((shape) => [shape.id, shape]));
+  const currentPageChainFences = focusPanel?.key ? chainLinkFences.flatMap((fence) => {
+    const sourceShape = currentPageLinearShapes.get(fence.shape_id);
+    return sourceShape ? [{ ...fence, sheet_id: sourceShape.sheet_id, condition_id: sourceShape.condition_id }] : [];
+  }) : [];
+  const currentPageChainSummaries = [...currentPageChainFences.reduce((groups, fence) => {
+    const conditionId = fence.condition_id || "unassigned";
+    const condition = condById[conditionId];
+    const summary = groups.get(conditionId) || {
+      conditionId,
+      conditionName: condition?.finish_tag || condition?.name || "Unassigned condition",
+      conditionColor: condition?.color || "#1f3fc7",
+      fenceCount: 0,
+      needsScale: 0,
+      totalLengthFt: 0,
+      sections: 0,
+      cornerPostCount: 0,
+      linePostCount: 0,
+      totalPostCount: 0,
+      manualMarkerCount: 0,
+    };
     summary.fenceCount += 1;
     summary.manualMarkerCount += fence.markers?.length || 0;
     const result = chainCalculation(fence);
-    if (!result.valid) {
-      summary.needsScale += 1;
-      return summary;
+    if (!result.valid) summary.needsScale += 1;
+    else {
+      summary.totalLengthFt += result.totalLengthFt;
+      summary.sections += result.sections.length;
+      summary.cornerPostCount += result.cornerPostCount;
+      summary.linePostCount += result.linePostCount;
+      summary.totalPostCount += result.totalPostCount;
     }
-    summary.totalLengthFt += result.totalLengthFt;
-    summary.sections += result.sections.length;
-    summary.cornerPostCount += result.cornerPostCount;
-    summary.linePostCount += result.linePostCount;
-    summary.totalPostCount += result.totalPostCount;
-    return summary;
-  }, { fenceCount: 0, needsScale: 0, totalLengthFt: 0, sections: 0, cornerPostCount: 0, linePostCount: 0, totalPostCount: 0, manualMarkerCount: 0 });
+    groups.set(conditionId, summary);
+    return groups;
+  }, new Map()).values()];
   const fenceAttachConditionId = shapes.find((item) => item.id === selectedId && item.measure_role === "linear")?.condition_id || activeCond;
   const fenceAttachShapes = shapes.filter((item) => item.condition_id === fenceAttachConditionId && item.measure_role === "linear");
   const createChainLinkForSelected = () => {
@@ -10355,7 +10374,7 @@ export default function TakeoffCanvas() {
 
         {chainLinkOpen && <ChainLinkFencePanel
           units={units} selectedShape={selShape} fence={activeChainFence} calculation={activeChainCalculation}
-          pageLabel={focusPanel?.key ? tabLabel(focusPanel.key) : "Current page"} pageSummary={currentPageChainSummary}
+          pageLabel={focusPanel?.key ? tabLabel(focusPanel.key) : "Current page"} pageSummaries={currentPageChainSummaries}
           canAttach={fenceAttachShapes.length > 0} attachCount={fenceAttachShapes.length}
           selectedMarkerId={selectedChainMarkerId} addMode={chainPostAddMode}
           onCreate={createChainLinkForSelected}
