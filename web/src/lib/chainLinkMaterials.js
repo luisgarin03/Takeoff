@@ -33,8 +33,14 @@ export const CHAIN_LINK_MATERIAL_DEFAULTS = Object.freeze({
   tensionBandsPerFittingPost: "5",
   braceBandsPerFittingPost: "2",
   tieSpacingInches: "24",
-  bagsPerLinePost: "1",
-  bagsPerFittingPost: "2",
+  lineHoleDiameter: "12",
+  lineHoleDepth: "30",
+  fittingHoleDiameter: "12",
+  fittingHoleDepth: "36",
+  gateHoleDiameter: "18",
+  gateHoleDepth: "42",
+  concreteBagYield: "0.6",
+  concreteWastePercent: "10",
   barbedWireStrands: "0",
   barbedWireRollLength: "1000",
   tensionWireRows: "2",
@@ -86,7 +92,13 @@ export function calculateChainLinkMaterials(values = {}, runLengths = []) {
   };
   const tieSpacing = positive(v.tieSpacingInches);
   const fenceTies = tieSpacing > 0 ? roundUp((totalFenceLength * 12) / tieSpacing) : 0;
-  const concreteBags = linePosts * positive(v.bagsPerLinePost) + fittingPosts * positive(v.bagsPerFittingPost);
+  const holeVolume = (diameterInches, depthInches) => Math.PI * (positive(diameterInches) / 24) ** 2 * (positive(depthInches) / 12);
+  const lineConcreteVolume = linePosts * holeVolume(v.lineHoleDiameter, v.lineHoleDepth);
+  const fittingConcreteVolume = (endPosts + cornerPosts) * holeVolume(v.fittingHoleDiameter, v.fittingHoleDepth);
+  const gateConcreteVolume = gatePosts * holeVolume(v.gateHoleDiameter, v.gateHoleDepth);
+  const concreteVolume = (lineConcreteVolume + fittingConcreteVolume + gateConcreteVolume) * (1 + Math.min(100, positive(v.concreteWastePercent)) / 100);
+  const concreteBagYield = positive(v.concreteBagYield);
+  const concreteBags = concreteBagYield > 0 ? roundUp(concreteVolume / concreteBagYield) : 0;
   const barbArms = barbStrands > 0 ? linePosts + endPosts + cornerPosts : 0;
   const hogRings = roundUp(totalFenceLength * positive(v.hogRingsPerFoot));
   const rows = [
@@ -103,7 +115,7 @@ export function calculateChainLinkMaterials(values = {}, runLengths = []) {
     { id: "brace-bands", dimension: `${v.topRailDiameter || "—"} inch rail`, material: "Brace bands", quantity: fittingAccessories.braceBands, unit: "pieces", note: `${positive(v.braceBandsPerFittingPost)} per end, corner, and gate post.` },
     { id: "tension-bars", dimension: `${v.fenceHeight || "—"} foot fence`, material: "Tension bars", quantity: fittingAccessories.tensionBars, unit: "pieces", note: "One per end, corner, and gate post." },
     { id: "fence-ties", dimension: `Every ${positive(v.tieSpacingInches)} inches`, material: "Fence ties", quantity: fenceTies, unit: "pieces", note: "Calculated along the total fence length." },
-    { id: "concrete", dimension: "Line post and fitting post holes", material: "Concrete bags", quantity: quantity(concreteBags), unit: "bags", note: `${positive(v.bagsPerLinePost)} bags per line post and ${positive(v.bagsPerFittingPost)} bags per end, corner, and gate post.` },
+    { id: "concrete", dimension: `80-pound bags; ${quantity(concreteBagYield, 3)} cubic feet per bag`, material: "Concrete mix for post holes", quantity: concreteBags, unit: "bags", note: `${quantity(concreteVolume)} cubic feet including ${positive(v.concreteWastePercent)} percent extra. Hole volume is calculated from diameter, depth, and the number of line, fitting, and gate posts.` },
     { id: "gates", dimension: "As specified in the project", material: "Chain-link gates", quantity: gates, unit: "pieces", note: "Gate dimensions and frame materials can be listed as additional materials below." },
     { id: "gate-hinges", dimension: `${positive(v.hingesPerGate)} per gate`, material: "Gate hinges", quantity: gateHinges, unit: "pieces", note: "Based on the hinge quantity entered per gate." },
     { id: "gate-latches", dimension: "One per gate", material: "Gate latches", quantity: gateLatches, unit: "pieces", note: "Based on the latch quantity entered per gate." },
@@ -113,5 +125,5 @@ export function calculateChainLinkMaterials(values = {}, runLengths = []) {
     { id: "tension-wire", dimension: `${roundUp(positive(v.tensionWireRows))} wire row${roundUp(positive(v.tensionWireRows)) === 1 ? "" : "s"}`, material: "Tension wire coils", quantity: quantity(tensionWireLength), unit: "linear feet", note: "Calculated from total fence length, wire rows, and waste." },
     { id: "hog-rings", dimension: `${positive(v.hogRingsPerFoot)} per linear foot`, material: "Hog rings", quantity: hogRings, unit: "pieces", note: "Adjust the rings-per-foot rate to match the installation detail." },
   ];
-  return { totalFenceLength: quantity(totalFenceLength), linePosts, endPosts, cornerPosts, gatePosts, runs: runs.length, rows };
+  return { totalFenceLength: quantity(totalFenceLength), linePosts, endPosts, cornerPosts, gatePosts, runs: runs.length, concrete: { linePosts: quantity(lineConcreteVolume), fittingPosts: quantity(fittingConcreteVolume), gatePosts: quantity(gateConcreteVolume), totalCubicFeet: quantity(concreteVolume), bags: concreteBags }, rows };
 }

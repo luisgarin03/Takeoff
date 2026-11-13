@@ -31,6 +31,17 @@ test("manual end-post quantity replaces the per-run estimate", () => {
   assert.match(result.rows.find((row) => row.id === "end-posts")?.note || "", /entered by the user/);
 });
 
+test("post concrete uses cylindrical hole diameter, depth, post count, bag yield, and extra allowance", () => {
+  const result = calculateChainLinkMaterials({ linePostSpacing: "10" }, ["100"]);
+  assert.equal(result.linePosts, 9);
+  assert.equal(result.endPosts, 2);
+  assert.equal(result.concrete.linePosts, 17.67);
+  assert.equal(result.concrete.fittingPosts, 4.71);
+  assert.equal(result.concrete.totalCubicFeet, 24.62);
+  assert.equal(result.concrete.bags, 42);
+  assert.equal(result.rows.find((row) => row.id === "concrete")?.quantity, 42);
+});
+
 test("supplier material list exports as a paginated landscape PDF", async () => {
   const rows = Array.from({ length: 35 }, (_, index) => ({
     material: `Fence material ${index + 1}`,
