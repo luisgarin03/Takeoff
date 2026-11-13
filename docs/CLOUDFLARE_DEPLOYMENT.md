@@ -1,6 +1,6 @@
 ## Cloudflare deployment
 
-The OpenTakeoff app is served by the `takeoff` Cloudflare Worker at `https://app.estimating.studio`. Worker configuration is in `web/wrangler.jsonc`; the Cloudflare Workers Builds project uses `luisgarin03/Takeoff`, root directory `web`, build command `npm run build`, and deploy command `npx wrangler deploy --assets ./dist --compatibility-date 2026-10-22`.
+The OpenTakeoff app is served by the `takeoff` Cloudflare Worker at `https://app.estimating.studio`. Worker configuration is in `web/wrangler.jsonc`; it sets the Worker name, account, route, assets directory, and compatibility date. In Cloudflare Workers Builds, use `luisgarin03/Takeoff`, root directory `web`, build command `npm run build`, and deploy command `npx wrangler deploy --assets ./dist`. Wrangler reads the compatibility date from `web/wrangler.jsonc`, so local and Cloudflare builds use the same setting.
 
 ### Shared office/home source
 

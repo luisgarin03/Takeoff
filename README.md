@@ -38,7 +38,7 @@ The **Project** menu creates named projects with an optional submission date and
 
 **Property Map Takeoff:** open **Project → Property Map Takeoff** to locate a U.S. address, view USGS aerial imagery, and measure distance, area, and counts. Measurements save in this browser and can be exported as CSV. **View in Google Maps** opens the same address in Google Maps as a separate reference view; measurements in OpenTakeoff use USGS imagery.
 
-**Linear Fence Calculator:** choose a condition and open the fence-post button on the canvas rail, then choose **Chain-Link Fence** or **Ornamental Fence**. The calculator attaches in one step to every completed Linear takeoff in that condition, skipping lines already attached. Chain-link retains its terminal/corner-marker and maximum-spacing post workflow unchanged. Ornamental fence is a separate attachment that lays out posts from 6 ft or 8 ft standard panels; **+ Post** places a special-area post anywhere on the sheet as a diamond in the condition color, which can be selected and deleted independently. Its default **This page** view totals the focused sheet; **All added pages** aggregates every attached line into total panels, posts, panel stock, and cut-panel waste. A per-run offcut list follows the same scope and shows each reusable leftover length and final cut. Neither calculator changes source lines or measured LF.
+**Linear Fence Calculator:** choose a condition and open the fence-post button on the canvas rail, then choose **Chain-Link Fence** or **Ornamental Fence**. The calculator attaches in one step to every completed Linear takeoff in that condition, skipping lines already attached. The Chain-Link panel includes live current-page totals summed across all attached fence lines on the focused page: fence length, sections, corner/terminal posts, line posts, total posts, and manual markers. It flags attached lines whose scale still needs to be set. Ornamental fence is a separate attachment that lays out posts from 6 ft or 8 ft standard panels; **+ Post** places a special-area post anywhere on the sheet as a diamond in the condition color, which can be selected and deleted independently. Its default **This page** view totals the focused sheet; **All added pages** aggregates every attached line into total panels, posts, panel stock, and cut-panel waste. A per-run offcut list follows the same scope and shows each reusable leftover length and final cut. Neither calculator changes source lines or measured LF.
 
 Each condition can also choose **No mark** (the default), repeating **circle** markers, or repeating **X** markers for its Linear takeoffs. The optional markers make same-color conditions distinguishable on the canvas and exported marked PDFs without changing geometry, calibration, or LF totals.
 
@@ -208,6 +208,8 @@ The sheet selector and previous/next controls sit in the top header immediately 
 
 The Sheets tab strip shows bookmarked pages when any are available, including automatic markup bookmarks, in plan order. With no bookmarks it shows open sheets. The overflow menu retains access to other open pages; bookmarking is separate from closing a tab.
 
+Importing the focused plan page to Whiteboard automatically bookmarks the source page after the import succeeds, so it remains easy to find in the bookmarked pages list.
+
 Plan set PDF headers show the filename in normal text with a page count. A separate **Erase** button on the right removes the PDF using the existing removal confirmation and affected-page preview.
 
 Conditions opens as a centered panel over an undimmed canvas, retaining Takeoffs, Library, Materials, and Columns. Close with ×, Escape, or outside the panel; the canvas no longer shrinks when it opens. Panel tab/filter state survives reopening.
@@ -336,7 +338,7 @@ This checkout deploys the OpenTakeoff app to Cloudflare Workers.
 - Cloudflare Worker: `takeoff`
 - Cloudflare build root: `web`
 - Build command: `npm run build`
-- Deploy command: `npx wrangler deploy --assets ./dist --compatibility-date 2026-10-22`
+- Deploy command: `npx wrangler deploy --assets ./dist` (reads compatibility date and Worker settings from `web/wrangler.jsonc`)
 
 Use one PC at a time. Before editing on either machine, check `git status --short --branch`, switch to `production/cloudflare-app`, and run `git pull --ff-only`. Commit and push completed work to that branch before starting on the other PC. The other PC then pulls the branch with `--ff-only`; do not cherry-pick or edit divergent copies of the same files at the same time.
 

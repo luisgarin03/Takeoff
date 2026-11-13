@@ -426,6 +426,8 @@ Choose **+ Add corner post**, then click directly on the selected line. The squa
 
 Each pair of square posts is its own section. The tool calculates `spans = ceil(section length ÷ maximum spacing)`, then places `spans − 1` circular line posts at equal cumulative-path intervals. The default maximum is **10 ft**; metric projects display and accept meters while storing the same internal feet. A 35 ft section therefore becomes four 8.75 ft spans with three line posts. The panel can show/hide squares, circles, section lengths, and post counts, and can resize the screen-constant markers. Use **Closed loop** only when the measured polyline returns to its starting point so the physical start/end post is counted once.
 
+At the top of the calculator, **Current page totals** adds the fence length, sections, corner/terminal posts, line posts, total posts, and manual markers for every chain-link calculator attached to the focused page. The totals update when you change pages or edit a fence. A warning identifies any attached fence excluded because it needs a valid scale. Length uses the project's selected units.
+
 Linked post records autosave with local/cloud projects, revisions, and `.otk` files. The Report includes fence LF, section count, corner/terminal posts, line posts, total posts, maximum spacing, and per-section detail. Page, marked-set, and Whiteboard-import PDFs burn the visible square/circular post overlay into the exported page; the post graphics never become measurement shapes or inflate condition totals.
 
 ### Import from schedule
@@ -1100,7 +1102,7 @@ Use **Find** (`Ctrl+F`) for literal terms across loaded plans. Selectable PDF te
 
 Use Whiteboard to arrange reference pages, attachments, notes, drawings, and Scope of Work panels for presentation. It is separate from the calibrated takeoff canvas; moving or resizing a board item does not change takeoff quantities.
 
-1. Add files or use **Sheets → Import to Whiteboard** for the focused plan page.
+1. Add files or use **Sheets → Import to Whiteboard** for the focused plan page. After a successful import, its source page is automatically bookmarked and appears in the bookmarked pages list.
 2. Add a note or **SOW panel**. Enter headings and scope line items; use the row controls to reorder, duplicate, color, or remove entries.
 3. Set the SOW title and logo, resize the panel, and confirm that all text fits. Multiple SOW panels can be arranged independently.
 4. Place arrows and rectangles to explain the scope. Crop images non-destructively when you need a detail.

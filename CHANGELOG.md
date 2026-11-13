@@ -2,6 +2,8 @@
 
 ## Unreleased — October 30 checkpoint
 
+- Added current-page totals to the Chain-Link Fence Post Calculator, aggregating fence length, sections, corner/terminal posts, line posts, total posts, and manual markers across attached fence lines on the focused page, with a warning for lines missing a valid scale.
+- Importing the focused plan page to Whiteboard now bookmarks that source page after the import succeeds.
 - Added a separate Property Map Takeoff page with U.S. Census address lookup, USGS aerial imagery, distance/area/count measurements, browser-local persistence, CSV export, and a Google Maps reference link for the searched address.
 - The Find panel can now be dragged by its header and stays within the visible screen area.
 - Moving an arrowed callout or text note now moves its note-side anchor while keeping the arrow tip fixed to the plan target; the leader resizes with the note and the move remains undoable.

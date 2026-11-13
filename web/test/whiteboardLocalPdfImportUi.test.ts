@@ -30,6 +30,6 @@ test("Takeoff imports finish their toast and can run while Whiteboard remains op
   assert.match(source, /return \{ addedFiles: assets\.length, addedItems: items\.length, errors \}/);
   assert.match(source, /onInitialFilesHandled\?\.\(result\)/);
   assert.match(source, /\}, \[initialFiles\]\)/);
-  assert.match(canvasSource, /if \(result\?\.addedFiles > 0\) setCommitMsg\(`Imported \$\{importedName\} to the whiteboard\.`\)/);
+  assert.match(canvasSource, /if \(result\?\.addedFiles > 0\) \{[\s\S]*?setSheetBookmarks\(\(current\) => current\.includes\(sourceSheetKey\) \? current : \[\.\.\.current, sourceSheetKey\]\);[\s\S]*?setCommitMsg\(`Imported \$\{importedName\} to the whiteboard and bookmarked its source page\.`\);/);
   assert.match(canvasSource, /else setCommitMsg\(`Couldn't import \$\{importedName\} to the whiteboard/);
 });

@@ -5811,7 +5811,7 @@ export default function TakeoffCanvas() {
       }
       const markedName = `${tabLabel(sheet.key)} - marked page.pdf`;
       const file = new File([bytes], markedName, { type: "application/pdf" });
-      setWhiteboardImportRequest({ id: crypto.randomUUID(), files: [file] });
+      setWhiteboardImportRequest({ id: crypto.randomUUID(), files: [file], sourceSheetKey: sheet.key });
       setWhiteboardOpen(true);
       setCommitMsg(`Importing ${markedName} to the whiteboard…`);
     } catch (e) {
@@ -7439,6 +7439,22 @@ export default function TakeoffCanvas() {
   const activeChainFence = chainLinkFences.find((fence) => fence.id === selectedChainFenceId)
     || linkedFenceForShape(selectedId) || null;
   const activeChainCalculation = activeChainFence ? chainCalculation(activeChainFence) : null;
+  const currentPageChainFences = focusPanel?.key ? chainLinkFences.filter((fence) => fence.sheet_id === focusPanel.key) : [];
+  const currentPageChainSummary = currentPageChainFences.reduce((summary, fence) => {
+    summary.fenceCount += 1;
+    summary.manualMarkerCount += fence.markers?.length || 0;
+    const result = chainCalculation(fence);
+    if (!result.valid) {
+      summary.needsScale += 1;
+      return summary;
+    }
+    summary.totalLengthFt += result.totalLengthFt;
+    summary.sections += result.sections.length;
+    summary.cornerPostCount += result.cornerPostCount;
+    summary.linePostCount += result.linePostCount;
+    summary.totalPostCount += result.totalPostCount;
+    return summary;
+  }, { fenceCount: 0, needsScale: 0, totalLengthFt: 0, sections: 0, cornerPostCount: 0, linePostCount: 0, totalPostCount: 0, manualMarkerCount: 0 });
   const fenceAttachConditionId = shapes.find((item) => item.id === selectedId && item.measure_role === "linear")?.condition_id || activeCond;
   const fenceAttachShapes = shapes.filter((item) => item.condition_id === fenceAttachConditionId && item.measure_role === "linear");
   const createChainLinkForSelected = () => {
@@ -8433,8 +8449,12 @@ export default function TakeoffCanvas() {
         onSave={() => saveProjectFile(false)} onBusyChange={setWhiteboardBusy} projectName={projectName} saveState={saveState}
         initialFiles={whiteboardImportRequest?.files} onInitialFilesHandled={(result) => {
           const importedName = whiteboardImportRequest?.files?.[0]?.name || "plan";
+          const sourceSheetKey = whiteboardImportRequest?.sourceSheetKey;
           setWhiteboardImportRequest(null);
-          if (result?.addedFiles > 0) setCommitMsg(`Imported ${importedName} to the whiteboard.`);
+          if (result?.addedFiles > 0) {
+            if (sourceSheetKey) setSheetBookmarks((current) => current.includes(sourceSheetKey) ? current : [...current, sourceSheetKey]);
+            setCommitMsg(`Imported ${importedName} to the whiteboard and bookmarked its source page.`);
+          }
           else setCommitMsg(`Couldn't import ${importedName} to the whiteboard${result?.errors?.[0] ? `: ${result.errors[0]}` : "."}`);
         }} />}
       {fenceCalculatorOpen && <FenceCalculatorPanel
@@ -10335,6 +10355,7 @@ export default function TakeoffCanvas() {
 
         {chainLinkOpen && <ChainLinkFencePanel
           units={units} selectedShape={selShape} fence={activeChainFence} calculation={activeChainCalculation}
+          pageLabel={focusPanel?.key ? tabLabel(focusPanel.key) : "Current page"} pageSummary={currentPageChainSummary}
           canAttach={fenceAttachShapes.length > 0} attachCount={fenceAttachShapes.length}
           selectedMarkerId={selectedChainMarkerId} addMode={chainPostAddMode}
           onCreate={createChainLinkForSelected}

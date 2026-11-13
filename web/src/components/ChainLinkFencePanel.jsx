@@ -16,6 +16,7 @@ const number = (value, digits = 1) => Number(value || 0).toLocaleString(undefine
 
 export default function ChainLinkFencePanel({
   units = "imperial", fence, calculation, selectedMarkerId, addMode, canAttach, attachCount = 0,
+  pageLabel = "Current page", pageSummary,
   onCreate, onAddMode, onPatch, onSelectMarker, onDeleteMarker, onDeleteFence,
   onUndo, onRedo, canUndo, canRedo, onClose,
 }) {
@@ -36,6 +37,25 @@ export default function ChainLinkFencePanel({
         <button type="button" onClick={onClose} title="Close" style={{ ...button, padding: 5 }}><Icon name="close" size={14} /></button>
       </header>
       <div style={{ padding: 12, display: "grid", gap: 12 }}>
+        <section aria-label={`${pageLabel} chain-link fence totals`} style={{ display: "grid", gap: 8, padding: 9, border: "1px solid var(--cobalt)", background: "var(--paper-cream)" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+            <strong style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".07em" }}>Current page totals</strong>
+            <span style={{ fontSize: 10.5, color: "var(--ink-muted)", textAlign: "right" }}>{pageLabel}</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
+            {[
+              ["Fence", `${number(metric ? pageSummary?.totalLengthFt * M_PER_FT : pageSummary?.totalLengthFt)} ${metric ? "m" : "LF"}`],
+              ["Sections", pageSummary?.sections || 0],
+              ["Corner / terminal", pageSummary?.cornerPostCount || 0],
+              ["Line posts", pageSummary?.linePostCount || 0],
+              ["Total posts", pageSummary?.totalPostCount || 0],
+              ["Manual markers", pageSummary?.manualMarkerCount || 0],
+            ].map(([name, value]) => <div key={name} style={{ border: "1px solid var(--ink-faint)", padding: "6px 7px", background: "var(--paper-bright)" }}><div style={{ fontSize: 9.5, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--ink-muted)" }}>{name}</div><strong style={{ fontFamily: "var(--f-mono)", fontSize: 12.5 }}>{value}</strong></div>)}
+          </div>
+          {pageSummary?.needsScale > 0
+            ? <div role="status" style={{ fontSize: 10.5, color: "var(--c-danger)" }}>{pageSummary.needsScale} attached fence {pageSummary.needsScale === 1 ? "needs" : "need"} a valid scale; its calculated quantities are excluded. Saved manual markers remain counted.</div>
+            : pageSummary?.fenceCount === 0 && <div style={{ fontSize: 10.5, color: "var(--ink-muted)" }}>No chain-link post calculators are attached to this page.</div>}
+        </section>
         {!fence ? (
           <>
             <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-muted)" }}>
