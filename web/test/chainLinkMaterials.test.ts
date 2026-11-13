@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { calculateChainLinkMaterials } from "../src/lib/chainLinkMaterials.js";
+import { createChainLinkMaterialsPdf } from "../src/lib/chainLinkMaterialsPdf.js";
 
 test("chain-link material estimate totals runs and estimates line and end posts", () => {
   const result = calculateChainLinkMaterials({ linePostSpacing: "10", wastePercent: "0" }, ["100", "50"]);
@@ -28,4 +29,20 @@ test("manual end-post quantity replaces the per-run estimate", () => {
   const result = calculateChainLinkMaterials({ manualEndPosts: "7", wastePercent: "0" }, ["30", "40"]);
   assert.equal(result.endPosts, 7);
   assert.match(result.rows.find((row) => row.id === "end-posts")?.note || "", /entered by the user/);
+});
+
+test("supplier material list exports as a paginated landscape PDF", async () => {
+  const rows = Array.from({ length: 35 }, (_, index) => ({
+    material: `Fence material ${index + 1}`,
+    dimension: "Six feet high, two inch mesh opening",
+    quantity: index + 1,
+    unit: "pieces",
+    note: "Calculated quantity with project-specific supplier notes and installation details.",
+  }));
+  const bytes = await createChainLinkMaterialsPdf({ values: { project: "Sample Project", material: "Chain-link fence", finish: "Black" }, totalFenceLength: 420, rows });
+  assert.equal(new TextDecoder().decode(bytes.slice(0, 5)), "%PDF-");
+  const { PDFDocument } = await import("pdf-lib");
+  const pdf = await PDFDocument.load(bytes);
+  assert.ok(pdf.getPageCount() > 1);
+  assert.deepEqual(pdf.getPage(0).getSize(), { width: 792, height: 612 });
 });

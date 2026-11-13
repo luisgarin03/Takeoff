@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../brand/icons.jsx";
 import { calculateChainLinkMaterials, CHAIN_LINK_MATERIAL_DEFAULTS } from "../lib/chainLinkMaterials.js";
+import { createChainLinkMaterialsPdf } from "../lib/chainLinkMaterialsPdf.js";
 import "../styles/chainLinkMaterials.css";
 
 const numericFields = [
@@ -21,8 +22,6 @@ const numericFields = [
   ["tensionWireRows", "Tension-wire rows"], ["hogRingsPerFoot", "Hog rings per linear foot"],
 ];
 
-function csvCell(value) { return `"${String(value ?? "").replaceAll('"', '""')}"`; }
-
 export default function ChainLinkMaterialsCalculator({ onClose }) {
   const [values, setValues] = useState(CHAIN_LINK_MATERIAL_DEFAULTS);
   const [runs, setRuns] = useState([""]);
@@ -30,23 +29,27 @@ export default function ChainLinkMaterialsCalculator({ onClose }) {
   const [extras, setExtras] = useState([]);
   const [extraDraft, setExtraDraft] = useState({ material: "", dimension: "", quantity: "", unit: "pieces", note: "" });
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
   const result = useMemo(() => calculateChainLinkMaterials(values, runs), [values, runs]);
   const rows = [...result.rows.map((row) => ({ ...row, quantity: overrides[row.id] ?? row.quantity })), ...extras];
   const update = (key, value) => setValues((current) => ({ ...current, [key]: value }));
 
-  function downloadCsv() {
-    const lines = [
-      ["Project", values.project], ["Material", values.material], ["Finish", values.finish], ["Total fence length (linear feet)", result.totalFenceLength], [],
-      ["Material", "Dimensions", "Quantity", "Unit", "Calculation notes"],
-      ...rows.map((row) => [row.material, row.dimension, row.quantity, row.unit, row.note]),
-    ];
-    const csv = lines.map((line) => line.map(csvCell).join(",")).join("\r\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${(values.project || "chain-link-materials").replace(/[^a-z0-9-]+/gi, "-")}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  async function downloadPdf() {
+    setExporting(true);
+    setError("");
+    try {
+      const bytes = await createChainLinkMaterialsPdf({ values, totalFenceLength: result.totalFenceLength, rows });
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${(values.project || "chain-link-materials").replace(/[^a-z0-9-]+/gi, "-")}.pdf`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setError("The supplier PDF could not be created. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   function addExtra(event) {
@@ -90,7 +93,7 @@ export default function ChainLinkMaterialsCalculator({ onClose }) {
         </div><button className="chain-material-secondary" type="submit">+ Add material row</button>{error && <p className="chain-material-error" role="alert">{error}</p>}</form>
         <p className="chain-material-disclaimer">Post layout, gate hardware, concrete, tie spacing, and package sizes vary by job and supplier. Review the notes and adjust quantities before ordering.</p>
       </div>
-      <footer className="chain-material-footer"><span>{rows.length} materials · {result.totalFenceLength.toLocaleString()} linear feet</span><div><button type="button" className="chain-material-secondary" onClick={downloadCsv}>Download supplier list</button><button type="button" className="chain-material-primary" onClick={onClose}>Done</button></div></footer>
+      <footer className="chain-material-footer"><span>{rows.length} materials · {result.totalFenceLength.toLocaleString()} linear feet</span><div><button type="button" className="chain-material-secondary" disabled={exporting} onClick={downloadPdf}>{exporting ? "Creating PDF…" : "Download supplier list PDF"}</button><button type="button" className="chain-material-primary" onClick={onClose}>Done</button></div></footer>
     </section>
   </div>, document.body);
 }
