@@ -17,7 +17,7 @@ const number = (value, digits = 1) => Number(value || 0).toLocaleString(undefine
 export default function ChainLinkFencePanel({
   units = "imperial", fence, calculation, selectedMarkerId, selectedPostType, addMode, mergeMode = false, canAttach, attachCount = 0,
   pageLabel = "Current page", pageSummaries = [],
-  onCreate, onAddMode, onPatch, onDeleteMarker, onDeleteFence, onStartMerge, onCancelMerge,
+  onCreate, onAddMode, onPatch, onChangePostType, onDeleteMarker, onDeleteFence, onStartMerge, onCancelMerge,
   onUndo, onRedo, canUndo, canRedo, onClose,
 }) {
   const metric = units === "metric";
@@ -77,11 +77,11 @@ export default function ChainLinkFencePanel({
           </>
         ) : (
           <>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={onAddMode} style={{ ...button, flex: 1, background: addMode ? "var(--cobalt)" : "transparent", color: addMode ? "white" : "var(--ink)" }}>
-                {addMode ? "Click line to add post…" : "+ Add corner post"}
-              </button>
-              <button type="button" onClick={onDeleteFence} title="Remove this calculator; the measured line is kept" style={{ ...button, color: "var(--c-danger)" }}>Remove</button>
+            <div style={{ display: "grid", gap: 6 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>{[{ type: "corner", label: "+ Corner" }, { type: "terminal", label: "+ Terminal" }, { type: "threeway", label: "+ 3-way" }].map(({ type, label: text }) => <button key={type} type="button" onClick={() => onAddMode(type)} style={{ ...button, padding: "7px 4px", background: addMode === type ? "var(--cobalt)" : "transparent", color: addMode === type ? "white" : "var(--ink)" }}>
+                {addMode === type ? `Place ${type === "threeway" ? "3-way" : type}…` : text}
+              </button>)}</div>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}><button type="button" onClick={onDeleteFence} title="Remove this calculator; the measured line is kept" style={{ ...button, color: "var(--c-danger)" }}>Remove</button></div>
             </div>
             {!calculation?.valid && <div role="alert" style={{ padding: 9, border: "1px solid var(--c-danger)", color: "var(--c-danger)", fontSize: 12 }}>Set a valid PDF scale before calculating post spacing.</div>}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>
@@ -106,13 +106,16 @@ export default function ChainLinkFencePanel({
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: 12 }}>
               {[
-                ["show_corner_posts", "Corner posts"], ["show_line_posts", "Line posts"],
+                ["show_corner_posts", "Post markers"], ["show_line_posts", "Line posts"],
                 ["show_section_lengths", "Section lengths"], ["show_post_counts", "Post counts"],
               ].map(([key, text]) => <label key={key} style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="checkbox" checked={!!fence[key]} onChange={(event) => onPatch({ [key]: event.target.checked }, "display")} />{text}</label>)}
               <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Adds a closing section back to the starting post"><input type="checkbox" checked={!!fence.closed} onChange={(event) => onPatch({ closed: event.target.checked }, "closed-loop")} />Closed loop</label>
             </div>
             {selectedMarkerId && <div style={{ display: "grid", gap: 7, padding: 8, border: "1px solid var(--cobalt)" }}>
               <div style={{ fontSize: 12, fontWeight: 650 }}>Selected post · {(selectedPostType || calculation?.corners?.find((post) => post.id === selectedMarkerId)?.type || "post").replace("threeway", "three-way").replace("multiway", "four-way or more")}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 5 }}>
+                {[{ type: "terminal", label: "Terminal" }, { type: "corner", label: "Corner" }, { type: "threeway", label: "3-way" }].map(({ type, label: text }) => <button key={type} type="button" aria-pressed={selectedPostType === type} onClick={() => onChangePostType(selectedMarkerId, type)} style={{ ...button, padding: "6px 3px", background: selectedPostType === type ? "var(--cobalt)" : "transparent", color: selectedPostType === type ? "white" : "var(--ink)" }}>{text}</button>)}
+              </div>
               {mergeMode
                 ? <div role="status" style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>Click another post square on the drawing to share one physical post. Press Escape to cancel.</div>
                 : <button type="button" onClick={onStartMerge} style={button}>Share post with another markup</button>}
@@ -129,7 +132,7 @@ export default function ChainLinkFencePanel({
                 </div>)}
               </div>
             </div>}
-            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.45, color: "var(--ink-muted)" }}>End posts are terminals; posts joining two directions are corners. Shared posts join markup lines and count once. Numbered squares show three-way or larger intersections. Circular line posts are spaced automatically. Drag a manual square to reposition it.</p>
+            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.45, color: "var(--ink-muted)" }}>Choose a post type above, then click the fence line to place it. Select a post to change its type or drag it along the line. Shared posts join markup lines and count once. Line posts are spaced automatically.</p>
           </>
         )}
       </div>

@@ -72,7 +72,7 @@ import FenceCalculatorPanel from "../features/fenceCalculator/components/FenceCa
 import ChainLinkFencePanel from "../components/ChainLinkFencePanel.jsx";
 import OrnamentalFencePanel from "../components/OrnamentalFencePanel.jsx";
 import LinearFenceChooser from "../components/LinearFenceChooser.jsx";
-import { calculateChainLinkFence, createChainLinkFence, insertFenceMarker, mergeChainLinkFencePosts, pathMetrics, pointAtPathT, projectPointToPath, removeFenceMarker, sanitizeChainLinkFences, summarizeChainLinkFencePosts, updateFenceMarker } from "../lib/chainLinkFence.js";
+import { calculateChainLinkFence, createChainLinkFence, insertFenceMarker, mergeChainLinkFencePosts, pathMetrics, pointAtPathT, projectPointToPath, removeFenceMarker, sanitizeChainLinkFences, summarizeChainLinkFencePosts, updateChainLinkFencePostType, updateFenceMarker } from "../lib/chainLinkFence.js";
 import { calculateOrnamentalFence, createOrnamentalFence, insertOrnamentalPost, removeOrnamentalPost, sanitizeOrnamentalFences } from "../lib/ornamentalFence.js";
 import { calculationToConditionMaterials, emptyFenceCalculatorProject, fenceCalculatorProjectHasContent, getCalculatorDefinition, sanitizeFenceCalculatorProject } from "../features/fenceCalculator/index.ts";
 import ReportPanel from "../components/ReportPanel.jsx";
@@ -899,7 +899,7 @@ export default function TakeoffCanvas() {
   const [selectedChainFenceId, setSelectedChainFenceId] = useState(null);
   const [selectedChainMarkerId, setSelectedChainMarkerId] = useState(null);
   const [chainPostMergeSource, setChainPostMergeSource] = useState(null);
-  const [chainPostAddMode, setChainPostAddMode] = useState(false);
+  const [chainPostAddMode, setChainPostAddMode] = useState(null);
   const chainUndoRef = useRef([]);
   const chainRedoRef = useRef([]);
   const chainMarkerDragRef = useRef(null);
@@ -2569,7 +2569,7 @@ export default function TakeoffCanvas() {
     setChainLinkFences(sanitizeChainLinkFences(a.chain_link_fences, a.shapes || []));
     setOrnamentalFences(sanitizeOrnamentalFences(a.ornamental_fences, a.shapes || []));
     setSelectedOrnamentalFenceId(null); setOrnamentalOpen(false); setLinearFenceChooserOpen(false);
-    setSelectedChainFenceId(null); setSelectedChainMarkerId(null); setChainPostAddMode(false); setChainLinkOpen(false);
+    setSelectedChainFenceId(null); setSelectedChainMarkerId(null); setChainPostAddMode(null); setChainPostMergeSource(null); setChainLinkOpen(false);
     chainUndoRef.current = []; chainRedoRef.current = []; setChainHistoryEpoch((value) => value + 1);
     // normalize hydrated markups: legacy workspaces may hold markups with no id
     // (pre-dating the id field) — seed a stable id + default rfi_id so the new
@@ -3981,7 +3981,7 @@ export default function TakeoffCanvas() {
         // tool's points, on-screen or hidden
         else if (tool === "calibrate") { setCalib((c) => c.slice(0, -1)); }
         else if (tool === "check") { setCheck((c) => c.slice(0, -1)); }
-      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (shapeContinuation) { cancelShapeContinuation(); } else if (ornamentalPostAddMode) { setOrnamentalPostAddMode(false); setTool("select"); } else if (chainPostMergeSource) { setChainPostMergeSource(null); } else if (chainPostAddMode) { setChainPostAddMode(false); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
+      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (shapeContinuation) { cancelShapeContinuation(); } else if (ornamentalPostAddMode) { setOrnamentalPostAddMode(false); setTool("select"); } else if (chainPostMergeSource) { setChainPostMergeSource(null); } else if (chainPostAddMode) { setChainPostAddMode(null); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
       // ⌘Z: the drawing context wins — mid-trace it still pops the last placed
       // point (with or without ⇧, matching the old behavior byte-for-byte);
       // only with no trace in progress does the command stack engage
@@ -7504,9 +7504,9 @@ export default function TakeoffCanvas() {
     if (!activeChainFence) return;
     replaceChainFences(chainLinkFences.map((fence) => fence.id === activeChainFence.id ? { ...fence, ...patch } : fence));
   };
-  const patchSelectedChainMarker = (markerId, patch) => {
+  const changeSelectedChainPostType = (postId, type) => {
     if (!activeChainFence) return;
-    replaceChainFences(chainLinkFences.map((fence) => fence.id === activeChainFence.id ? updateFenceMarker(fence, markerId, patch) : fence));
+    replaceChainFences(chainLinkFences.map((fence) => fence.id === activeChainFence.id ? updateChainLinkFencePostType(fence, postId, type) : fence));
   };
   const mergeSelectedChainPost = (targetFence, targetPostId) => {
     if (!chainPostMergeSource || !targetFence || !targetPostId) return;
@@ -7524,7 +7524,7 @@ export default function TakeoffCanvas() {
   const deleteActiveChainFence = () => {
     if (!activeChainFence) return;
     replaceChainFences(chainLinkFences.filter((fence) => fence.id !== activeChainFence.id));
-    setSelectedChainFenceId(null); setSelectedChainMarkerId(null); setChainPostAddMode(false); setTool("select");
+    setSelectedChainFenceId(null); setSelectedChainMarkerId(null); setChainPostAddMode(null); setTool("select");
   };
   const addChainMarkerAt = (stagePoint) => {
     if (!activeChainFence) return;
@@ -7533,7 +7533,7 @@ export default function TakeoffCanvas() {
     const metrics = pathMetrics(chainShapePoints(shapes.find((shape) => shape.id === activeChainFence.shape_id), sp), activeChainFence.closed);
     const hit = projectPointToPath(metrics, [stagePoint[0] - sp.xOffset, stagePoint[1]]);
     if (!hit || hit.distance > 18 / tfRef.current.scale) { setCommitMsg("Click directly on the selected fence line to add a post."); return; }
-    const updated = insertFenceMarker(activeChainFence, hit.path_t, () => uid("post"), Math.max(.001, (8 / tfRef.current.scale) / Math.max(metrics.total, 1)));
+    const updated = insertFenceMarker(activeChainFence, hit.path_t, () => uid("post"), Math.max(.001, (8 / tfRef.current.scale) / Math.max(metrics.total, 1)), chainPostAddMode || "corner");
     if (updated.markers.length === activeChainFence.markers.length) { setCommitMsg("A terminal or corner post already exists there."); return; }
     const marker = updated.markers.find((item) => !activeChainFence.markers.some((old) => old.id === item.id));
     replaceChainFences(chainLinkFences.map((fence) => fence.id === updated.id ? updated : fence));
@@ -9667,9 +9667,14 @@ export default function TakeoffCanvas() {
                             onPointerCancel={!marker.endpoint ? endChainMarkerDrag : undefined}>
                             <rect x={-14 / z} y={-14 / z} width={28 / z} height={28 / z} fill="transparent" />
                             {selected && <rect x={-r - 3 / z} y={-r - 3 / z} width={2 * r + 6 / z} height={2 * r + 6 / z} fill="none" stroke="#1f3fc7" strokeWidth={1.5 / z} />}
-                            <rect x={-r} y={-r} width={2 * r} height={2 * r} fill={postType === "terminal" ? color : "#fff"} stroke={color} strokeWidth={2 / z} />
-                            {postType === "threeway" && <text x="0" y={3 / z} textAnchor="middle" fontSize={8 / z} fontWeight="800" fill={color} style={{ pointerEvents: "none" }}>3</text>}
-                            {postType === "multiway" && <text x="0" y={3 / z} textAnchor="middle" fontSize={8 / z} fontWeight="800" fill={color} style={{ pointerEvents: "none" }}>4+</text>}
+                            {postType === "terminal"
+                              ? <circle r={r * .88} fill={color} stroke="#fff" strokeWidth={1.5 / z} />
+                              : postType === "corner"
+                                ? <rect x={-r * .72} y={-r * .72} width={r * 1.44} height={r * 1.44} transform="rotate(45)" fill="#fff" stroke={color} strokeWidth={2 / z} />
+                                : postType === "threeway"
+                                  ? <polygon points={`0,${-r} ${r * .9},${r * .72} ${-r * .9},${r * .72}`} fill="#fff" stroke={color} strokeWidth={2 / z} strokeLinejoin="round" />
+                                  : <polygon points={`0,${-r} ${r * .85},${-r / 2} ${r * .85},${r / 2} 0,${r} ${-r * .85},${r / 2} ${-r * .85},${-r / 2}`} fill="#fff" stroke={color} strokeWidth={2 / z} />}
+                            {postType === "multiway" && <text x="0" y={3 / z} textAnchor="middle" fontSize={7 / z} fontWeight="800" fill={color} style={{ pointerEvents: "none" }}>4+</text>}
                           </g>;
                         })}
                       </g>;
@@ -10408,17 +10413,17 @@ export default function TakeoffCanvas() {
           canAttach={fenceAttachShapes.length > 0} attachCount={fenceAttachShapes.length}
           selectedMarkerId={selectedChainMarkerId} selectedPostType={selectedChainMarkerId ? currentPagePostSummary.typesByPost[`${activeChainFence?.id}:${selectedChainMarkerId}`] : null} addMode={chainPostAddMode}
           mergeMode={!!chainPostMergeSource}
-          onStartMerge={() => { if (activeChainFence && selectedChainMarkerId) { setChainPostAddMode(false); setTool("select"); setChainPostMergeSource({ fenceId: activeChainFence.id, postId: selectedChainMarkerId }); } }}
+          onStartMerge={() => { if (activeChainFence && selectedChainMarkerId) { setChainPostAddMode(null); setTool("select"); setChainPostMergeSource({ fenceId: activeChainFence.id, postId: selectedChainMarkerId }); } }}
           onCancelMerge={() => setChainPostMergeSource(null)}
           onCreate={createChainLinkForSelected}
-          onAddMode={() => { const next = !chainPostAddMode; setChainPostAddMode(next); setTool(next ? "chain-post" : "select"); }}
+          onAddMode={(type) => { const next = chainPostAddMode === type ? null : type; setChainPostAddMode(next); setChainPostMergeSource(null); setTool(next ? "chain-post" : "select"); }}
           onPatch={patchActiveChainFence}
-          onSelectMarker={patchSelectedChainMarker}
+          onChangePostType={changeSelectedChainPostType}
           onDeleteMarker={deleteSelectedChainMarker}
           onDeleteFence={deleteActiveChainFence}
           onUndo={undoChainLink} onRedo={redoChainLink}
           canUndo={chainUndoRef.current.length > 0} canRedo={chainRedoRef.current.length > 0}
-          onClose={() => { setChainLinkOpen(false); setChainPostAddMode(false); setChainPostMergeSource(null); setSelectedChainMarkerId(null); if (tool === "chain-post") setTool("select"); }} />}
+          onClose={() => { setChainLinkOpen(false); setChainPostAddMode(null); setChainPostMergeSource(null); setSelectedChainMarkerId(null); if (tool === "chain-post") setTool("select"); }} />}
 
         {ornamentalOpen && <OrnamentalFencePanel
           units={units} selectedShape={selShape} fence={activeOrnamentalFence} calculation={activeOrnamentalCalculation}

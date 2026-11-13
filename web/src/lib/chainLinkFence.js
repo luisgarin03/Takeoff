@@ -10,6 +10,7 @@ const EPS = 1e-6;
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const clamp01 = (value) => Math.max(0, Math.min(1, finite(value)));
+const POST_TYPES = new Set(["terminal", "corner", "threeway"]);
 
 export function sanitizeChainLinkFence(record) {
   if (!record || typeof record !== "object" || Array.isArray(record)) return null;
@@ -26,7 +27,8 @@ export function sanitizeChainLinkFence(record) {
     markers.push({
       id: typeof marker.id === "string" && marker.id ? marker.id : `post-${crypto.randomUUID()}`,
       path_t: pathT,
-      type: marker.type === "terminal" ? "terminal" : "corner",
+      type: POST_TYPES.has(marker.type) ? marker.type : "corner",
+      type_override: marker.type_override === true || marker.type === "terminal",
     });
   }
   markers.sort((a, b) => a.path_t - b.path_t);
@@ -35,6 +37,10 @@ export function sanitizeChainLinkFence(record) {
     for (const [postId, sharedId] of Object.entries(record.shared_posts)) {
       if (typeof postId === "string" && postId && typeof sharedId === "string" && sharedId) sharedPosts[postId] = sharedId;
     }
+  }
+  const postTypes = {};
+  if (record.post_types && typeof record.post_types === "object" && !Array.isArray(record.post_types)) {
+    for (const [postId, type] of Object.entries(record.post_types)) if (postId && POST_TYPES.has(type)) postTypes[postId] = type;
   }
   return {
     id: typeof record.id === "string" && record.id ? record.id : `fence-${crypto.randomUUID()}`,
@@ -50,6 +56,7 @@ export function sanitizeChainLinkFence(record) {
     closed: !!record.closed,
     markers,
     shared_posts: sharedPosts,
+    post_types: postTypes,
   };
 }
 
@@ -74,7 +81,7 @@ export function createChainLinkFence(shape, idFactory = () => `fence-${crypto.ra
     condition_id: shape.condition_id, max_spacing_ft: DEFAULT_CHAIN_LINK_SPACING_FT,
     marker_size: DEFAULT_CHAIN_LINK_MARKER_SIZE, show_corner_posts: true,
     show_line_posts: true, show_section_lengths: false, show_post_counts: true,
-    closed: false, markers: [], shared_posts: {},
+    closed: false, markers: [], shared_posts: {}, post_types: {},
   });
 }
 
@@ -159,8 +166,9 @@ export function calculateChainLinkFence(fence, points, unitsPerPx) {
   }
   const corners = stops.map((marker) => {
     const directions = clean.closed ? 2 : marker.endpoint ? 1 : 2;
-    const type = directions <= 1 ? "terminal" : directions === 2 ? "corner" : "threeway";
-    return { ...marker, directions, type, shared_post_id: clean.shared_posts[marker.id] || "", point: pointAtPathT(metrics, marker.path_t) };
+    const automaticType = directions <= 1 ? "terminal" : directions === 2 ? "corner" : "threeway";
+    const override = marker.endpoint ? clean.post_types[marker.id] : marker.type_override ? marker.type : "";
+    return { ...marker, directions, type: override || automaticType, type_override: !!override, shared_post_id: clean.shared_posts[marker.id] || "", point: pointAtPathT(metrics, marker.path_t) };
   });
   const linePostCount = sections.reduce((sum, section) => sum + section.intermediate, 0);
   const terminalPostCount = corners.filter((post) => post.type === "terminal").length;
@@ -204,8 +212,9 @@ export function summarizeChainLinkFencePosts(entries = []) {
     linePostCount += calculation.linePostCount;
     for (const post of calculation.corners) {
       const key = fence.shared_posts?.[post.id] || `${fence.id}:${post.id}`;
-      const group = groups.get(key) || { directions: 0, references: [] };
+      const group = groups.get(key) || { directions: 0, references: [], overrideType: "" };
       group.directions += post.directions;
+      if (post.type_override) group.overrideType = post.type;
       group.references.push({ fenceId: fence.id, postId: post.id });
       groups.set(key, group);
     }
@@ -214,7 +223,7 @@ export function summarizeChainLinkFencePosts(entries = []) {
   let terminalPostCount = 0, cornerPostCount = 0, threeWayPostCount = 0, multiWayPostCount = 0;
   const typesByPost = {};
   for (const group of groups.values()) {
-    const type = group.directions <= 1 ? "terminal" : group.directions === 2 ? "corner" : group.directions === 3 ? "threeway" : "multiway";
+    const type = group.overrideType || (group.directions <= 1 ? "terminal" : group.directions === 2 ? "corner" : group.directions === 3 ? "threeway" : "multiway");
     if (type === "terminal") terminalPostCount += 1;
     else if (type === "corner") cornerPostCount += 1;
     else if (type === "threeway") threeWayPostCount += 1;
@@ -262,12 +271,19 @@ export function calculateChainLinkFenceFromLength(fence, totalLengthFt) {
   return { valid: true, sections, totalLengthFt: total, terminalPostCount, actualCornerPostCount: cornerPostCount, cornerPostCount: stops.length, threeWayPostCount: 0, linePostCount, totalPostCount: stops.length + linePostCount };
 }
 
-export function insertFenceMarker(fence, pathT, idFactory = () => `post-${crypto.randomUUID()}`, minimumFraction = 0.002) {
+export function insertFenceMarker(fence, pathT, idFactory = () => `post-${crypto.randomUUID()}`, minimumFraction = 0.002, type = "corner") {
   const clean = sanitizeChainLinkFence(fence);
   if (!clean) return fence;
   const t = clamp01(pathT);
   if ((!clean.closed && (t <= minimumFraction || t >= 1 - minimumFraction)) || clean.markers.some((marker) => Math.abs(marker.path_t - t) < minimumFraction)) return clean;
-  return { ...clean, markers: [...clean.markers, { id: idFactory(), path_t: t, type: "corner" }].sort((a, b) => a.path_t - b.path_t) };
+  return { ...clean, markers: [...clean.markers, { id: idFactory(), path_t: t, type: POST_TYPES.has(type) ? type : "corner", type_override: true }].sort((a, b) => a.path_t - b.path_t) };
+}
+
+export function updateChainLinkFencePostType(fence, postId, type) {
+  const clean = sanitizeChainLinkFence(fence);
+  if (!clean || !POST_TYPES.has(type) || !localPostIds(clean).includes(postId)) return fence;
+  if (clean.markers.some((marker) => marker.id === postId)) return { ...clean, markers: clean.markers.map((marker) => marker.id === postId ? { ...marker, type, type_override: true } : marker) };
+  return { ...clean, post_types: { ...clean.post_types, [postId]: type } };
 }
 
 export function updateFenceMarker(fence, markerId, patch) {

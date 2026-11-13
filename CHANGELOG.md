@@ -6,6 +6,7 @@
 - Added per-post-type concrete hole inputs for diameter and depth, cubic-foot totals, bag-yield conversion, and an adjustable extra allowance. The calculator follows the diameter/depth/quantity approach of the referenced concrete calculator.
 - Added current-page totals to the Chain-Link Fence Post Calculator, aggregating fence length, sections, corner/terminal posts, line posts, total posts, and manual markers across attached fence lines on the focused page, with a warning for lines missing a valid scale.
 - Chain-link post totals now separate terminal, corner, three-way, and larger intersections. Select a square post and share it with another markup to count one physical post once, even when several fence lines meet there; undo and redo preserve shared-post groups.
+- Added distinct circle, diamond, and triangle symbols for terminal, corner, and three-way posts. The calculator now has separate placement buttons for each type, and selecting a placed post lets the user change its type.
 - Importing the focused plan page to Whiteboard now bookmarks that source page after the import succeeds.
 - Added a separate Property Map Takeoff page with U.S. Census address lookup, USGS aerial imagery, distance/area/count measurements, browser-local persistence, CSV export, and a Google Maps reference link for the searched address.
 - The Find panel can now be dragged by its header and stays within the visible screen area.

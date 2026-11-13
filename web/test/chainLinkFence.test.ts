@@ -12,6 +12,7 @@ import {
   removeFenceMarker,
   sanitizeChainLinkFences,
   summarizeChainLinkFencePosts,
+  updateChainLinkFencePostType,
   updateFenceMarker,
 } from "../src/lib/chainLinkFence.js";
 
@@ -97,6 +98,15 @@ test("open fence endpoints are terminals and interior posts are corners", () => 
   assert.equal(result.terminalPostCount, 2);
   assert.equal(result.actualCornerPostCount, 1);
   assert.equal(result.corners.find((post) => post.id === "corner-a")?.directions, 2);
+});
+
+test("users can place, persist, and change a manual post type or endpoint type", () => {
+  const threeWay = insertFenceMarker(fence(), .5, () => "post-3", .002, "threeway");
+  assert.equal(calculateChainLinkFence(threeWay, [[0, 0], [100, 0]], 1).corners.find((post) => post.id === "post-3")?.type, "threeway");
+  const changed = updateChainLinkFencePostType(threeWay, "post-3", "terminal");
+  assert.equal(calculateChainLinkFence(changed, [[0, 0], [100, 0]], 1).corners.find((post) => post.id === "post-3")?.type, "terminal");
+  const endpointChanged = updateChainLinkFencePostType(changed, "fence-1-start", "threeway");
+  assert.equal(calculateChainLinkFence(endpointChanged, [[0, 0], [100, 0]], 1).corners.find((post) => post.endpoint)?.type, "threeway");
 });
 
 test("posts shared across three markup directions count once as a three-way post", () => {
