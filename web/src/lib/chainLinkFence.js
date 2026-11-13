@@ -186,24 +186,6 @@ const localPostIds = (fence) => fence.closed
   ? [`${fence.id}-loop`, ...(fence.markers || []).map((marker) => marker.id)]
   : [`${fence.id}-start`, ...(fence.markers || []).map((marker) => marker.id), `${fence.id}-end`];
 
-export function mergeChainLinkFencePosts(records, source, target, idFactory = () => `shared-post-${crypto.randomUUID()}`) {
-  if (!source?.fenceId || !source?.postId || !target?.fenceId || !target?.postId) return records;
-  if (source.fenceId === target.fenceId) return records;
-  const sourceFence = records.find((fence) => fence.id === source.fenceId);
-  const targetFence = records.find((fence) => fence.id === target.fenceId);
-  if (!sourceFence || !targetFence || !localPostIds(sourceFence).includes(source.postId) || !localPostIds(targetFence).includes(target.postId)) return records;
-  const groupA = sourceFence.shared_posts?.[source.postId] || "";
-  const groupB = targetFence.shared_posts?.[target.postId] || "";
-  const sharedId = groupA || groupB || idFactory();
-  const absorbed = new Set([groupA, groupB].filter(Boolean));
-  return records.map((fence) => {
-    const sharedPosts = Object.fromEntries(Object.entries(fence.shared_posts || {}).map(([postId, groupId]) => [postId, absorbed.has(groupId) ? sharedId : groupId]));
-    if (fence.id === source.fenceId) sharedPosts[source.postId] = sharedId;
-    if (fence.id === target.fenceId) sharedPosts[target.postId] = sharedId;
-    return { ...fence, shared_posts: sharedPosts };
-  });
-}
-
 export function summarizeChainLinkFencePosts(entries = []) {
   const groups = new Map();
   let linePostCount = 0;
@@ -245,7 +227,7 @@ export function summarizeChainLinkFencePosts(entries = []) {
     local.totalPostCount = local.terminalPostCount + local.cornerPostCount + local.threeWayPostCount + local.multiWayPostCount + local.linePostCount;
     byFence[fence.id] = local;
   }
-  return { terminalPostCount, cornerPostCount, threeWayPostCount, multiWayPostCount, linePostCount, totalPostCount: terminalPostCount + cornerPostCount + threeWayPostCount + multiWayPostCount + linePostCount, sharedPostCount: [...groups.values()].filter((group) => group.references.length > 1).length, typesByPost, byFence };
+  return { terminalPostCount, cornerPostCount, threeWayPostCount, multiWayPostCount, linePostCount, totalPostCount: terminalPostCount + cornerPostCount + threeWayPostCount + multiWayPostCount + linePostCount, typesByPost, byFence };
 }
 
 // Report/export companion for sheets that are not currently rendered. Marker

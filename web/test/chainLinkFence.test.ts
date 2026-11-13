@@ -5,7 +5,6 @@ import {
   calculateChainLinkFenceFromLength,
   createChainLinkFence,
   insertFenceMarker,
-  mergeChainLinkFencePosts,
   pathMetrics,
   pointAtPathT,
   projectPointToPath,
@@ -109,20 +108,16 @@ test("users can place, persist, and change a manual post type or endpoint type",
   assert.equal(calculateChainLinkFence(endpointChanged, [[0, 0], [100, 0]], 1).corners.find((post) => post.endpoint)?.type, "threeway");
 });
 
-test("posts shared across three markup directions count once as a three-way post", () => {
+test("an extruded three-way junction counts as one shared post", () => {
   const secondShape = { ...shape, id: "line-2" };
   const thirdShape = { ...shape, id: "line-3" };
   const records = [fence(), createChainLinkFence(secondShape, () => "fence-2"), createChainLinkFence(thirdShape, () => "fence-3")].filter(Boolean) as Array<NonNullable<ReturnType<typeof createChainLinkFence>>>;
-  let linked = mergeChainLinkFencePosts(records, { fenceId: "fence-1", postId: "fence-1-start" }, { fenceId: "fence-2", postId: "fence-2-start" }, () => "shared-a");
-  linked = mergeChainLinkFencePosts(linked, { fenceId: "fence-1", postId: "fence-1-start" }, { fenceId: "fence-3", postId: "fence-3-start" }, () => "shared-b");
-  assert.equal(linked[0].shared_posts["fence-1-start"], linked[1].shared_posts["fence-2-start"]);
-  assert.equal(linked[0].shared_posts["fence-1-start"], linked[2].shared_posts["fence-3-start"]);
+  const linked = records.map((item) => ({ ...item, shared_posts: { [`${item.id}-start`]: "junction-1" } }));
   const entries = linked.map((item: NonNullable<ReturnType<typeof createChainLinkFence>>) => ({ fence: item, calculation: calculateChainLinkFence(item, [[0, 0], [100, 0]], 1) }));
   const summary = summarizeChainLinkFencePosts(entries);
   assert.equal(summary.terminalPostCount, 3);
   assert.equal(summary.threeWayPostCount, 1);
   assert.equal(summary.totalPostCount, 31);
-  assert.equal(summary.sharedPostCount, 1);
 });
 
 test("persistence sanitizer keeps one valid calculator per linear shape", () => {

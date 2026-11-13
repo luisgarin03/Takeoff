@@ -15,9 +15,9 @@ const input = { border: "1px solid var(--ink-faint)", background: "var(--paper-b
 const number = (value, digits = 1) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits });
 
 export default function ChainLinkFencePanel({
-  units = "imperial", fence, calculation, selectedMarkerId, selectedPostType, addMode, mergeMode = false, canAttach, attachCount = 0,
+  units = "imperial", fence, calculation, selectedMarkerId, selectedPostType, addMode, extrudeMode = false, canAttach, attachCount = 0,
   pageLabel = "Current page", pageSummaries = [],
-  onCreate, onAddMode, onPatch, onChangePostType, onDeleteMarker, onDeleteFence, onStartMerge, onCancelMerge,
+  onCreate, onAddMode, onPatch, onChangePostType, onDeleteMarker, onDeleteFence, onExtrude,
   onUndo, onRedo, canUndo, canRedo, onClose,
 }) {
   const metric = units === "metric";
@@ -59,7 +59,6 @@ export default function ChainLinkFencePanel({
                   ...(summary.multiWayPostCount ? [["Four-way or more", summary.multiWayPostCount]] : []),
                   ["Line posts", summary.linePostCount],
                   ["Total posts", summary.totalPostCount],
-                  ["Shared posts counted once", summary.sharedPostCount || 0],
                 ].map(([name, value]) => <div key={name} style={{ border: "1px solid var(--ink-faint)", padding: "6px 7px", background: "var(--paper-bright)" }}><div style={{ fontSize: 9.5, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--ink-muted)" }}>{name}</div><strong style={{ fontFamily: "var(--f-mono)", fontSize: 12.5 }}>{value}</strong></div>)}
               </div>
               {summary.needsScale > 0 && <div role="status" style={{ fontSize: 10.5, color: "var(--c-danger)" }}>{summary.needsScale} attached fence {summary.needsScale === 1 ? "needs" : "need"} a valid scale; its calculated quantities are excluded. Saved manual markers remain counted.</div>}
@@ -83,6 +82,7 @@ export default function ChainLinkFencePanel({
               </button>)}</div>
               <div style={{ display: "flex", justifyContent: "flex-end" }}><button type="button" onClick={onDeleteFence} title="Remove this calculator; the measured line is kept" style={{ ...button, color: "var(--c-danger)" }}>Remove</button></div>
             </div>
+            <button type="button" onClick={onExtrude} style={{ ...button, background: extrudeMode ? "var(--cobalt)" : "transparent", color: extrudeMode ? "white" : "var(--ink)" }}>{extrudeMode ? "Click a point on the line…" : "＋ Extrude from line"}</button>
             {!calculation?.valid && <div role="alert" style={{ padding: 9, border: "1px solid var(--c-danger)", color: "var(--c-danger)", fontSize: 12 }}>Set a valid PDF scale before calculating post spacing.</div>}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>
               {[
@@ -116,10 +116,6 @@ export default function ChainLinkFencePanel({
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 5 }}>
                 {[{ type: "terminal", label: "Terminal" }, { type: "corner", label: "Corner" }, { type: "threeway", label: "3-way" }].map(({ type, label: text }) => <button key={type} type="button" aria-pressed={selectedPostType === type} onClick={() => onChangePostType(selectedMarkerId, type)} style={{ ...button, padding: "6px 3px", background: selectedPostType === type ? "var(--cobalt)" : "transparent", color: selectedPostType === type ? "white" : "var(--ink)" }}>{text}</button>)}
               </div>
-              {mergeMode
-                ? <div role="status" style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>Click another post square on the drawing to share one physical post. Press Escape to cancel.</div>
-                : <button type="button" onClick={onStartMerge} style={button}>Share post with another markup</button>}
-              {mergeMode && <button type="button" onClick={onCancelMerge} style={button}>Cancel sharing</button>}
               {fence.markers.some((marker) => marker.id === selectedMarkerId) && <button type="button" onClick={onDeleteMarker} style={{ ...button, color: "var(--c-danger)" }}>Delete manual post</button>}
             </div>}
             {!!calculation?.sections?.length && <div>
@@ -132,7 +128,7 @@ export default function ChainLinkFencePanel({
                 </div>)}
               </div>
             </div>}
-            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.45, color: "var(--ink-muted)" }}>Choose a post type above, then click the fence line to place it. Select a post to change its type or drag it along the line. Shared posts join markup lines and count once. Line posts are spaced automatically.</p>
+            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.45, color: "var(--ink-muted)" }}>Choose a post type above, then click the fence line to place it. Select a post to change its type or drag it along the line. Extrude starts a connected linear branch from any point on this fence. Line posts are spaced automatically.</p>
           </>
         )}
       </div>

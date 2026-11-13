@@ -72,7 +72,7 @@ import FenceCalculatorPanel from "../features/fenceCalculator/components/FenceCa
 import ChainLinkFencePanel from "../components/ChainLinkFencePanel.jsx";
 import OrnamentalFencePanel from "../components/OrnamentalFencePanel.jsx";
 import LinearFenceChooser from "../components/LinearFenceChooser.jsx";
-import { calculateChainLinkFence, createChainLinkFence, insertFenceMarker, mergeChainLinkFencePosts, pathMetrics, pointAtPathT, projectPointToPath, removeFenceMarker, sanitizeChainLinkFences, summarizeChainLinkFencePosts, updateChainLinkFencePostType, updateFenceMarker } from "../lib/chainLinkFence.js";
+import { calculateChainLinkFence, createChainLinkFence, insertFenceMarker, pathMetrics, pointAtPathT, projectPointToPath, removeFenceMarker, sanitizeChainLinkFences, summarizeChainLinkFencePosts, updateChainLinkFencePostType, updateFenceMarker } from "../lib/chainLinkFence.js";
 import { calculateOrnamentalFence, createOrnamentalFence, insertOrnamentalPost, removeOrnamentalPost, sanitizeOrnamentalFences } from "../lib/ornamentalFence.js";
 import { calculationToConditionMaterials, emptyFenceCalculatorProject, fenceCalculatorProjectHasContent, getCalculatorDefinition, sanitizeFenceCalculatorProject } from "../features/fenceCalculator/index.ts";
 import ReportPanel from "../components/ReportPanel.jsx";
@@ -898,7 +898,7 @@ export default function TakeoffCanvas() {
   const [ornamentalPostAddMode, setOrnamentalPostAddMode] = useState(false);
   const [selectedChainFenceId, setSelectedChainFenceId] = useState(null);
   const [selectedChainMarkerId, setSelectedChainMarkerId] = useState(null);
-  const [chainPostMergeSource, setChainPostMergeSource] = useState(null);
+  const [chainExtrudeSession, setChainExtrudeSession] = useState(null);
   const [chainPostAddMode, setChainPostAddMode] = useState(null);
   const chainUndoRef = useRef([]);
   const chainRedoRef = useRef([]);
@@ -2569,7 +2569,7 @@ export default function TakeoffCanvas() {
     setChainLinkFences(sanitizeChainLinkFences(a.chain_link_fences, a.shapes || []));
     setOrnamentalFences(sanitizeOrnamentalFences(a.ornamental_fences, a.shapes || []));
     setSelectedOrnamentalFenceId(null); setOrnamentalOpen(false); setLinearFenceChooserOpen(false);
-    setSelectedChainFenceId(null); setSelectedChainMarkerId(null); setChainPostAddMode(null); setChainPostMergeSource(null); setChainLinkOpen(false);
+    setSelectedChainFenceId(null); setSelectedChainMarkerId(null); setChainPostAddMode(null); setChainExtrudeSession(null); setChainLinkOpen(false);
     chainUndoRef.current = []; chainRedoRef.current = []; setChainHistoryEpoch((value) => value + 1);
     // normalize hydrated markups: legacy workspaces may hold markups with no id
     // (pre-dating the id field) — seed a stable id + default rfi_id so the new
@@ -3981,7 +3981,7 @@ export default function TakeoffCanvas() {
         // tool's points, on-screen or hidden
         else if (tool === "calibrate") { setCalib((c) => c.slice(0, -1)); }
         else if (tool === "check") { setCheck((c) => c.slice(0, -1)); }
-      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (shapeContinuation) { cancelShapeContinuation(); } else if (ornamentalPostAddMode) { setOrnamentalPostAddMode(false); setTool("select"); } else if (chainPostMergeSource) { setChainPostMergeSource(null); } else if (chainPostAddMode) { setChainPostAddMode(null); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
+      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (shapeContinuation) { cancelShapeContinuation(); } else if (chainExtrudeSession) { setChainExtrudeSession(null); setPoly([]); setTool("select"); setCommitMsg("Fence extension cancelled."); } else if (ornamentalPostAddMode) { setOrnamentalPostAddMode(false); setTool("select"); } else if (chainPostAddMode) { setChainPostAddMode(null); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
       // ⌘Z: the drawing context wins — mid-trace it still pops the last placed
       // point (with or without ⇧, matching the old behavior byte-for-byte);
       // only with no trace in progress does the command stack engage
@@ -4000,7 +4000,7 @@ export default function TakeoffCanvas() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tool, selectedId, selVert, selectedMarkupId, selectedChainMarkerId, chainPostMergeSource, textLeaderMarkupId, ornamentalPostAddMode, chainPostAddMode, chainLinkOpen, chainHistoryEpoch, chainLinkFences, showMarkups, poly, proposal, ocSel, shapes, sheetKey, groupSig, scales, focusKey, shapeContinuation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tool, selectedId, selVert, selectedMarkupId, selectedChainMarkerId, chainExtrudeSession, textLeaderMarkupId, ornamentalPostAddMode, chainPostAddMode, chainLinkOpen, chainHistoryEpoch, chainLinkFences, showMarkups, poly, proposal, ocSel, shapes, sheetKey, groupSig, scales, focusKey, shapeContinuation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The typed "drawing says" value belongs to ONE completed two-point check.
   // The moment the measurement is no longer complete — third-click restart,
@@ -4173,6 +4173,8 @@ export default function TakeoffCanvas() {
     if (scaleGuide) setScaleGuide(null);
     if (textLeaderMarkupId) placeTextLeader(p);
     else if (tool === "chain-post") addChainMarkerAt(p);
+    else if (tool === "chain-extrude-anchor") beginChainExtrude(p);
+    else if (tool === "chain-extrude") setPoly((points) => [...points, p]);
     else if (tool === "ornamental-post") addOrnamentalPostAt(p);
     else if (tool === "calibrate") setCalib((c) => (c.length >= 2 ? [p] : [...c, p]));
     else if (tool === "check") setCheck((c) => (c.length >= 2 ? [p] : [...c, p]));
@@ -6236,6 +6238,7 @@ export default function TakeoffCanvas() {
   }
 
   function finishShape() {
+    if (chainExtrudeSession?.phase === "drawing") { finishChainExtrude(); return; }
     if (shapeContinuation && finishShapeContinuation()) return;
     if (tool === "zone") {
       // ephemeral: classify, show, never save. Belongs to the panel of its first point.
@@ -7416,6 +7419,13 @@ export default function TakeoffCanvas() {
     const previous = chainUndoRef.current.at(-1);
     if (!previous) return;
     chainUndoRef.current = chainUndoRef.current.slice(0, -1);
+    if (previous.kind === "extrude") {
+      chainRedoRef.current = [...chainRedoRef.current.slice(-99), previous];
+      setChainLinkFences(cloneChainFences(previous.before));
+      undoShapeCommand();
+      setSelectedChainFenceId(null); setSelectedChainMarkerId(null); setChainHistoryEpoch((value) => value + 1);
+      return;
+    }
     chainRedoRef.current = [...chainRedoRef.current.slice(-99), cloneChainFences(chainLinkFences)];
     setChainLinkFences(previous); setSelectedChainMarkerId(null); setChainHistoryEpoch((value) => value + 1);
   };
@@ -7424,6 +7434,13 @@ export default function TakeoffCanvas() {
     const next = chainRedoRef.current.at(-1);
     if (!next) return;
     chainRedoRef.current = chainRedoRef.current.slice(0, -1);
+    if (next.kind === "extrude") {
+      chainUndoRef.current = [...chainUndoRef.current.slice(-99), next];
+      setChainLinkFences(cloneChainFences(next.after));
+      redoShapeCommand();
+      setChainHistoryEpoch((value) => value + 1);
+      return;
+    }
     chainUndoRef.current = [...chainUndoRef.current.slice(-99), cloneChainFences(chainLinkFences)];
     setChainLinkFences(next); setSelectedChainMarkerId(null); setChainHistoryEpoch((value) => value + 1);
   };
@@ -7486,7 +7503,6 @@ export default function TakeoffCanvas() {
     summary.multiWayPostCount = posts.multiWayPostCount;
     summary.linePostCount = posts.linePostCount;
     summary.totalPostCount = posts.totalPostCount;
-    summary.sharedPostCount = posts.sharedPostCount;
   }
   const fenceAttachConditionId = shapes.find((item) => item.id === selectedId && item.measure_role === "linear")?.condition_id || activeCond;
   const fenceAttachShapes = shapes.filter((item) => item.condition_id === fenceAttachConditionId && item.measure_role === "linear");
@@ -7507,14 +7523,6 @@ export default function TakeoffCanvas() {
   const changeSelectedChainPostType = (postId, type) => {
     if (!activeChainFence) return;
     replaceChainFences(chainLinkFences.map((fence) => fence.id === activeChainFence.id ? updateChainLinkFencePostType(fence, postId, type) : fence));
-  };
-  const mergeSelectedChainPost = (targetFence, targetPostId) => {
-    if (!chainPostMergeSource || !targetFence || !targetPostId) return;
-    const next = mergeChainLinkFencePosts(chainLinkFences, chainPostMergeSource, { fenceId: targetFence.id, postId: targetPostId }, () => uid("shared-post"));
-    if (next !== chainLinkFences) replaceChainFences(next);
-    setChainPostMergeSource(null);
-    setSelectedChainFenceId(targetFence.id); setSelectedChainMarkerId(targetPostId);
-    setCommitMsg("Fence posts now share one count.");
   };
   const deleteSelectedChainMarker = () => {
     if (!activeChainFence || !selectedChainMarkerId) return;
@@ -7538,6 +7546,66 @@ export default function TakeoffCanvas() {
     const marker = updated.markers.find((item) => !activeChainFence.markers.some((old) => old.id === item.id));
     replaceChainFences(chainLinkFences.map((fence) => fence.id === updated.id ? updated : fence));
     setSelectedChainMarkerId(marker?.id || null);
+  };
+  const beginChainExtrude = (stagePoint) => {
+    const request = chainExtrudeSession;
+    const fence = chainLinkFences.find((item) => item.id === request?.fenceId);
+    const shape = shapes.find((item) => item.id === fence?.shape_id);
+    const sp = panelByKey(shape?.sheet_id);
+    if (!fence || !shape || !sp?.img?.w) return;
+    const metrics = pathMetrics(chainShapePoints(shape, sp), fence.closed);
+    const hit = projectPointToPath(metrics, [stagePoint[0] - sp.xOffset, stagePoint[1]]);
+    if (!hit || hit.distance > 18 / tfRef.current.scale) { setCommitMsg("Click directly on the selected linear fence to start the extension."); return; }
+    const endpointId = !fence.closed && hit.path_t <= .001 ? `${fence.id}-start` : !fence.closed && hit.path_t >= .999 ? `${fence.id}-end` : null;
+    const closePost = calculateChainLinkFence(fence, chainShapePoints(shape, sp), uppFor(shape.sheet_id)).corners.find((post) => Math.abs(post.path_t - hit.path_t) * metrics.total <= Math.max(8 / tfRef.current.scale, 1));
+    const sourcePostId = endpointId || closePost?.id || null;
+    let sourcePostType = fence.closed || (!endpointId && !sourcePostId) ? "threeway" : endpointId ? "corner" : "threeway";
+    let sourceFence = fence;
+    let postId = sourcePostId;
+    if (!postId) {
+      sourceFence = insertFenceMarker(fence, hit.path_t, () => uid("post"), Math.max(.001, (8 / tfRef.current.scale) / Math.max(metrics.total, 1)), "corner");
+      const marker = sourceFence.markers.find((item) => !fence.markers.some((old) => old.id === item.id));
+      if (!marker) { setCommitMsg("Could not create a junction post at that location."); return; }
+      postId = marker.id;
+      sourceFence = { ...sourceFence, markers: sourceFence.markers.map((item) => item.id === postId ? { ...item, type: "corner", type_override: false } : item) };
+      sourcePostType = "threeway";
+    }
+    const groupId = fence.shared_posts?.[postId] || uid("junction");
+    const updatedSourceFence = {
+      ...sourceFence,
+      shared_posts: { ...(sourceFence.shared_posts || {}), [postId]: groupId },
+      ...(sourceFence.markers.some((item) => item.id === postId) ? { markers: sourceFence.markers.map((item) => item.id === postId ? { ...item, type: "corner", type_override: false } : item) } : {}),
+      ...(!sourceFence.markers.some((item) => item.id === postId) ? { post_types: { ...(sourceFence.post_types || {}), ...(sourcePostType === "corner" ? { [postId]: "corner" } : {}) } } : {}),
+    };
+    const junction = pointAtPathT(metrics, hit.path_t);
+    const anchor = [junction[0] + sp.xOffset, junction[1]];
+    setChainExtrudeSession({ phase: "drawing", fenceId: fence.id, sourceShapeId: shape.id, sharedId: groupId, sourceFenceAfter: updatedSourceFence, sheetId: shape.sheet_id, conditionId: shape.condition_id });
+    setPoly([anchor]); setTool("chain-extrude");
+    setCommitMsg("Click one or more points for the connected extension, then press Enter to finish.");
+  };
+  const finishChainExtrude = () => {
+    const session = chainExtrudeSession;
+    if (!session || poly.length < 2) { setCommitMsg("Click at least one new point to finish the extension."); return; }
+    if (denyReadOnlyEdit()) return;
+    const sp = panelByKey(session.sheetId);
+    const sourceFence = chainLinkFences.find((item) => item.id === session.fenceId);
+    if (!sp?.img?.w || !sourceFence || poly.some((point) => panelAt(point[0]).key !== session.sheetId)) { setCommitMsg("Keep the extension on the same plan page as its source fence."); return; }
+    const verts_norm = poly.map(([x, y]) => [(x - sp.xOffset) / sp.img.w, y / sp.img.h]);
+    const lengthFt = openLen(poly) * uppFor(session.sheetId);
+    const thickness = Number(condById[session.conditionId]?.thickness_in) || 0;
+    const branchShape = { id: uid("shp"), sheet_id: session.sheetId, condition_id: session.conditionId, measure_role: "linear", verts_norm, computed: { perimeter_lf: +lengthFt.toFixed(2), area_sf: thickness > 0 ? +((lengthFt * thickness) / 12).toFixed(2) : 0 }, origin: { method: "manual" }, extruded_from: session.sourceShapeId, connected_junction_id: session.sharedId };
+    const branchFence = createChainLinkFence(branchShape, () => uid("clf"));
+    if (!branchFence) return;
+    const sourceFenceAfter = { ...session.sourceFenceAfter };
+    const nextFences = chainLinkFences.map((item) => item.id === sourceFenceAfter.id ? sourceFenceAfter : item).concat({ ...branchFence, max_spacing_ft: sourceFence.max_spacing_ft, marker_size: sourceFence.marker_size, shared_posts: { [branchFence.id + "-start"]: session.sharedId } });
+    const before = cloneChainFences(chainLinkFences), after = cloneChainFences(nextFences);
+    chainUndoRef.current = [...chainUndoRef.current.slice(-99), { kind: "extrude", before, after, shapeId: branchShape.id }];
+    chainRedoRef.current = [];
+    setChainLinkFences(nextFences); setChainHistoryEpoch((value) => value + 1);
+    dispatchShape({ type: "add", shapes: [branchShape] }, { documentMeasurement: true });
+    setSelectedChainFenceId(branchFence.id); setSelectedChainMarkerId(`${branchFence.id}-end`);
+    setChainExtrudeSession(null); setPoly([]); setTool("select"); selectShape(branchShape.id);
+    setCommitMsg("Connected fence extension added. Undo will remove the extension and its junction together.");
   };
   const startChainMarkerDrag = (event, fence, marker) => {
     event.preventDefault(); event.stopPropagation();
@@ -7574,7 +7642,8 @@ export default function TakeoffCanvas() {
   };
   const handleChainPostPointerDown = (event, fence, post) => {
     event.preventDefault(); event.stopPropagation();
-    if (chainPostMergeSource) { mergeSelectedChainPost(fence, post.id); return; }
+    if (chainExtrudeSession?.phase === "anchor") { beginChainExtrude(toImage(event.clientX, event.clientY)); return; }
+    if (chainExtrudeSession?.phase === "drawing") { setPoly((points) => [...points, toImage(event.clientX, event.clientY)]); return; }
     selectShape(fence.shape_id); setSelectedChainFenceId(fence.id); setSelectedChainMarkerId(post.id);
     if (!post.endpoint) startChainMarkerDrag(event, fence, post);
   };
@@ -7696,7 +7765,7 @@ export default function TakeoffCanvas() {
   };
   const measureActive = MEASURE_TOOLS.some((t) => t.id === tool);
   const faceTool = MEASURE_TOOLS.find((t) => t.id === (measureActive ? tool : lastMeasureRef.current)) || MEASURE_TOOLS[0];
-  const finishOk = ((tool === "area" || tool === "deduct") && poly.length >= 3) || (tool === "zone" && poly.length >= 3 && !zoneTraceCross) || ((tool === "linear" || tool === "surface" || tool === "curve") && poly.length >= 2);
+  const finishOk = ((tool === "area" || tool === "deduct") && poly.length >= 3) || (tool === "zone" && poly.length >= 3 && !zoneTraceCross) || ((tool === "linear" || tool === "surface" || tool === "curve" || tool === "chain-extrude") && poly.length >= 2);
 
   // Toolbar and canvas rail share the exact action objects and availability gates.
   const measureMenuItems = MEASURE_TOOLS.map((t) => ({ id: t.id, icon: t.icon, label: t.label, shortcut: t.shortcut, active: tool === t.id, onSelect: () => setTool(t.id) }));
@@ -9660,7 +9729,7 @@ export default function TakeoffCanvas() {
                           const r = (selected ? size * 1.25 : size);
                           const postType = currentPagePostSummary.typesByPost[`${fence.id}:${marker.id}`] || marker.type;
                           return <g key={marker.id} transform={`translate(${marker.point[0]},${marker.point[1]})`}
-                            style={{ pointerEvents: chainLinkOpen ? "auto" : "none", cursor: chainPostMergeSource ? "copy" : !marker.endpoint ? "grab" : "pointer" }}
+                            style={{ pointerEvents: chainLinkOpen ? "auto" : "none", cursor: !marker.endpoint ? "grab" : "pointer" }}
                             onPointerDown={chainLinkOpen ? (event) => handleChainPostPointerDown(event, fence, marker) : undefined}
                             onPointerMove={!marker.endpoint ? moveChainMarkerDrag : undefined}
                             onPointerUp={!marker.endpoint ? endChainMarkerDrag : undefined}
@@ -10412,18 +10481,17 @@ export default function TakeoffCanvas() {
           pageLabel={focusPanel?.key ? tabLabel(focusPanel.key) : "Current page"} pageSummaries={currentPageChainSummaries}
           canAttach={fenceAttachShapes.length > 0} attachCount={fenceAttachShapes.length}
           selectedMarkerId={selectedChainMarkerId} selectedPostType={selectedChainMarkerId ? currentPagePostSummary.typesByPost[`${activeChainFence?.id}:${selectedChainMarkerId}`] : null} addMode={chainPostAddMode}
-          mergeMode={!!chainPostMergeSource}
-          onStartMerge={() => { if (activeChainFence && selectedChainMarkerId) { setChainPostAddMode(null); setTool("select"); setChainPostMergeSource({ fenceId: activeChainFence.id, postId: selectedChainMarkerId }); } }}
-          onCancelMerge={() => setChainPostMergeSource(null)}
+          extrudeMode={chainExtrudeSession?.fenceId === activeChainFence?.id}
+          onExtrude={() => { if (!activeChainFence) return; const next = chainExtrudeSession?.fenceId === activeChainFence.id ? null : { phase: "anchor", fenceId: activeChainFence.id }; setChainExtrudeSession(next); setPoly([]); setChainPostAddMode(null); setTool(next ? "chain-extrude-anchor" : "select"); }}
           onCreate={createChainLinkForSelected}
-          onAddMode={(type) => { const next = chainPostAddMode === type ? null : type; setChainPostAddMode(next); setChainPostMergeSource(null); setTool(next ? "chain-post" : "select"); }}
+          onAddMode={(type) => { const next = chainPostAddMode === type ? null : type; setChainPostAddMode(next); setChainExtrudeSession(null); setTool(next ? "chain-post" : "select"); }}
           onPatch={patchActiveChainFence}
           onChangePostType={changeSelectedChainPostType}
           onDeleteMarker={deleteSelectedChainMarker}
           onDeleteFence={deleteActiveChainFence}
           onUndo={undoChainLink} onRedo={redoChainLink}
           canUndo={chainUndoRef.current.length > 0} canRedo={chainRedoRef.current.length > 0}
-          onClose={() => { setChainLinkOpen(false); setChainPostAddMode(null); setChainPostMergeSource(null); setSelectedChainMarkerId(null); if (tool === "chain-post") setTool("select"); }} />}
+          onClose={() => { setChainLinkOpen(false); setChainPostAddMode(null); setChainExtrudeSession(null); setSelectedChainMarkerId(null); if (tool === "chain-post" || tool.startsWith("chain-extrude")) setTool("select"); }} />}
 
         {ornamentalOpen && <OrnamentalFencePanel
           units={units} selectedShape={selShape} fence={activeOrnamentalFence} calculation={activeOrnamentalCalculation}
