@@ -57,7 +57,12 @@ export default function ChainLinkMaterialsCalculator({ onClose }) {
     setError("");
   }
 
-  return createPortal(<div className="chain-material-shade" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+  return createPortal(<div className="chain-material-shade"
+    onPointerDown={(event) => event.stopPropagation()}
+    onPointerMove={(event) => event.stopPropagation()}
+    onPointerUp={(event) => event.stopPropagation()}
+    onClick={(event) => event.stopPropagation()}
+    onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="chain-material-dialog" role="dialog" aria-modal="true" aria-labelledby="chain-material-title" onKeyDown={(event) => { event.stopPropagation(); if (event.key === "Escape") onClose(); }}>
       <header className="chain-material-header"><div><span className="chain-material-eyebrow">WHITEBOARD · SUPPLIER ORDER</span><h1 id="chain-material-title">Chain-Link Materials Calculator</h1><p>Enter each straight fence run. Quantities update automatically and can be adjusted for your supplier.</p></div><button type="button" aria-label="Close calculator" onClick={onClose}><Icon name="close" size={18} /></button></header>
       <div className="chain-material-body">
