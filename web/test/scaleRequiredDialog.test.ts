@@ -5,7 +5,7 @@ import test from "node:test";
 const canvas = readFileSync(new URL("../src/pages/TakeoffCanvas.jsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 test("scale-dependent tools open the centered scale picker on their first unscaled click", () => {
-  assert.match(canvas, /\["oneclick", "area", "rect", "linear", "curve", "surface", "deduct", "deduct-rect"\]\.includes\(tool\) && !uppFor\(fp\.key\)[\s\S]{0,120}promptForScale\(fp\.key\)/);
+  assert.match(canvas, /\["oneclick", "area", "rect", "linear", "polyline", "curve", "surface", "deduct", "deduct-rect"\]\.includes\(tool\) && !uppFor\(fp\.key\)[\s\S]{0,120}promptForScale\(fp\.key\)/);
   assert.doesNotMatch(canvas, /\["oneclick"[^\]]*"count"/);
   assert.doesNotMatch(canvas, /\["oneclick"[^\]]*"highlighter"/);
   assert.match(canvas, /role="dialog" aria-modal="true" aria-labelledby="scale-required-title"/);

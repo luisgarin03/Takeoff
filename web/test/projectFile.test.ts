@@ -23,6 +23,11 @@ const payload = () => ({
     activeCalculatorId: "board-on-board",
     valuesByCalculator: { "board-on-board": { fenceLength: 128, postSpacing: 8 } },
   },
+  fence_3d: {
+    version: 1, display: { mode: "split", camera: "orthographic" },
+    runs: { s1: { type: "chain-link", spec: { height: 8, spacing: 9 }, gates: [{ id: "g1", width: 4 }], posts: [] } },
+    rules: { hinges: 2 }, overrides: { totalPosts: 19 },
+  },
 });
 
 async function fixture() {

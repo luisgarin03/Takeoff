@@ -1,0 +1,133 @@
+.fence3d {
+  --fence-border: var(--workspace-border, var(--ink-faint, #c7cdd6));
+  --fence-paper: var(--workspace-surface, var(--paper-bright, #fff));
+  --fence-muted: var(--workspace-muted, #f4f5f7);
+  color: var(--workspace-foreground, var(--ink, #202733));
+  background: var(--fence-paper);
+  position: relative;
+  z-index: 9;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 250px);
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--fence-border);
+  font-size: 12px;
+}
+.fence3d-header {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px 7px;
+  border-bottom: 1px solid var(--fence-border);
+}
+.fence3d-header-main { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.fence3d-header-main strong { flex: 0 0 auto; font-size: 14px; }
+.fence3d-sheet-label { min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--workspace-muted-foreground, var(--ink-muted, #687386)); font: 11px var(--f-mono, monospace); }
+.fence3d-toolbar, .fence3d-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.fence3d button, .fence3d input:not([type="checkbox"]), .fence3d select {
+  font: inherit;
+  color: inherit;
+  background: var(--fence-paper);
+  border: 1px solid var(--fence-border);
+  border-radius: 4px;
+  min-height: 27px;
+  padding: 4px 6px;
+}
+.fence3d button { cursor: pointer; }
+.fence3d button:hover { border-color: var(--cobalt, #1f3fc7); }
+.fence3d button[aria-pressed="true"] { background: var(--cobalt, #1f3fc7); color: var(--accent-contrast, white); }
+.fence3d button:disabled { opacity: .42; cursor: default; }
+.fence3d-view { position: relative; min-height: 0; min-width: 0; background: #e8edf2; color: #24324a; }
+.fence3d-viewport-legend { position: absolute; top: 8px; right: 8px; z-index: 5; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 5px; width: min(280px, calc(100% - 16px)); max-height: min(58%, 430px); overflow: hidden; padding: 7px; border: 1px solid var(--fence-border); border-radius: 5px; background: var(--fence-paper); color: var(--workspace-foreground, var(--ink, #202733)); box-shadow: 0 2px 10px #0004; }
+.fence3d-viewport-legend-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 27px; }
+.fence3d-viewport-legend-header strong { font-size: 12px; }
+.fence3d-viewport-legend-header button, .fence3d-viewport-legend-reopen { display: grid; place-items: center; width: 27px; min-width: 27px; min-height: 27px; padding: 3px !important; }
+.fence3d-viewport-legend ul { display: grid; gap: 2px; min-height: 0; overflow: auto; list-style: none; margin: 0; padding: 0; }
+.fence3d-viewport-legend li { display: grid; grid-template-columns: 11px minmax(0, 1fr) auto; align-items: center; gap: 5px; min-width: 0; padding: 4px 2px; border-top: 1px solid var(--fence-border); }
+.fence3d-viewport-legend .fence3d-map-swatch { width: 10px; height: 10px; }
+.fence3d-viewport-legend-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fence3d-viewport-legend output { white-space: nowrap; font: 10px var(--f-mono, monospace); text-align: right; }
+.fence3d-viewport-legend > p { margin: 2px 0; color: var(--workspace-muted-foreground, var(--ink-muted, #687386)); }
+.fence3d-viewport-legend-reopen { position: absolute; top: 8px; right: 8px; z-index: 5; border-radius: 4px !important; background: var(--fence-paper) !important; box-shadow: 0 2px 8px #0004; }
+.fence3d-split-resizer { position: relative; z-index: 12; display: flex; flex: 0 0 9px; align-items: center; justify-content: center; min-width: 9px; padding: 0; border: 0; background: var(--workspace-muted, #f4f5f7); cursor: col-resize; touch-action: none; user-select: none; }
+.fence3d-split-resizer::before { content: ""; width: 3px; height: 42px; border-radius: 3px; background: var(--workspace-secondary, #a1a1aa); transition: height 120ms ease, background 120ms ease; }
+.fence3d-split-resizer:hover::before, .fence3d-split-resizer:active::before { height: 60px; background: var(--cobalt, #1f3fc7); }
+.fence3d-split-resizer:focus-visible { outline: 2px solid var(--cobalt, #1f3fc7); outline-offset: -2px; }
+.fence3d-renderer { position: absolute; inset: 0; overflow: hidden; }
+.fence3d-renderer canvas { display: block; touch-action: none; }
+.fence3d-camera { position: static; display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-height: 38px; padding: 5px 6px; border: 1px solid var(--fence-border); border-radius: 5px; background: var(--fence-muted); color: var(--ink); }
+.fence3d-camera label { background: var(--fence-paper); border-radius: 4px; padding-left: 5px; }
+.fence3d-camera select { margin-left: 4px; }
+.fence3d-camera .fence3d-fly-speed { display: inline-flex; align-items: center; gap: 5px; min-height: 27px; padding: 0 6px; color: var(--ink); font-size: 11px; }
+.fence3d-camera .fence3d-fly-speed input[type="range"] { width: 84px; min-height: 20px; margin: 0; padding: 0; accent-color: var(--cobalt, #1f3fc7); cursor: pointer; }
+.fence3d-fly-speed output { min-width: 22px; font: 600 11px var(--f-mono, monospace); text-align: right; }
+.fence3d-labels { position: absolute; inset: 0; z-index: 1; isolation: isolate; pointer-events: none; }
+.fence3d-markup-delete { pointer-events: auto; display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0 !important; border: 1px solid #fff !important; border-radius: 50% !important; background: #b03a26 !important; color: #fff !important; box-shadow: 0 1px 5px #0008; font: 700 19px/1 var(--f-sans, sans-serif) !important; cursor: pointer; }
+.fence3d-markup-delete:hover { background: #852a1c !important; }
+.fence3d-label { white-space: nowrap; color: #1c2e4b; background: #fffef6; border: 1px solid #bac4d1; border-radius: 3px; padding: 1px 4px; font: 11px var(--f-mono, monospace); }
+.fence3d-label.corner { color: #254cc2; font-weight: 700; }
+.fence3d-label.edge { color: #7047b8; border-color: #9b83c8; font-weight: 700; }
+.fence3d-measure-label { white-space: nowrap; color: #563394; background: #fffef6; border: 1px solid #8062b8; border-radius: 3px; padding: 2px 5px; box-shadow: 0 1px 4px #0004; font: 11px var(--f-mono, monospace); font-weight: 700; }
+.fence3d-measure-label.is-selected, .fence3d-note-label.is-selected { outline: 2px solid #b03a26; outline-offset: 1px; }
+.fence3d-measure-status { position: absolute; right: 8px; bottom: 8px; z-index: 3; max-width: min(420px, calc(100% - 24px)); margin: 0; padding: 5px 8px; border: 1px solid #8062b8; border-radius: 4px; background: #fffef6f2; color: #563394; line-height: 1.3; pointer-events: none; }
+.fence3d-annotation-status { position: absolute; left: 8px; bottom: 8px; z-index: 3; max-width: min(420px, calc(100% - 24px)); margin: 0; padding: 5px 8px; border: 1px solid #d88855; border-radius: 4px; background: #fff8eff2; color: #793f24; line-height: 1.3; pointer-events: none; }
+.fence3d-note-editor { position: absolute; top: 48px; right: 8px; z-index: 4; display: grid; gap: 7px; width: min(280px, calc(100% - 16px)); padding: 9px; border: 1px solid var(--fence-border); border-radius: 5px; background: var(--fence-paper); box-shadow: 0 3px 12px #0003; }
+.fence3d-note-editor label { display: grid; gap: 4px; }
+.fence3d-note-editor textarea { min-width: 0; resize: vertical; font: inherit; color: inherit; background: var(--fence-paper); border: 1px solid var(--fence-border); border-radius: 4px; padding: 6px; }
+.fence3d-note-editor > div { display: flex; justify-content: flex-end; gap: 5px; }
+.fence3d-note-label { max-width: 240px; white-space: pre-wrap; overflow-wrap: anywhere; color: #653919; background: #fff8e8; border: 1px solid #d88855; border-radius: 3px; padding: 3px 6px; box-shadow: 0 1px 4px #0004; font: 11px var(--f-sans, sans-serif); }
+.fence3d-map-label { --fence-map-color: #333; width: max-content; max-width: min(220px, calc(100vw - 90px)); white-space: normal; overflow-wrap: anywhere; line-height: 1.25; color: #202733; background: #fffffff2; border: 1px solid var(--fence-map-color); border-left: 4px solid var(--fence-map-color); border-radius: 3px; padding: 3px 5px; box-shadow: 0 1px 4px #0004; font: 10px var(--f-mono, monospace); }
+.fence3d-grid-key { position: absolute; left: 8px; bottom: 8px; pointer-events: none; background: #fffffff0; padding: 4px 6px; border-radius: 4px; }
+.fence3d-empty { position: absolute; inset: 45% 12px auto; margin: auto; max-width: 230px; text-align: center; padding: 9px; background: #fffef9; border: 1px solid #bac4d1; border-radius: 5px; color: #253653; }
+.fence3d-plan-status { position: absolute; right: 8px; bottom: 32px; margin: 0; padding: 4px 6px; border-radius: 4px; background: #fffef9; color: #253653; pointer-events: none; }
+.fence3d-settings { overflow: auto; min-width: 0; border-left: 1px solid var(--fence-border); }
+.fence3d-settings-toggle { position: sticky; top: 0; z-index: 2; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 7px; min-height: 34px !important; padding: 5px 8px !important; border: 0 !important; border-bottom: 1px solid var(--fence-border) !important; border-radius: 0 !important; background: var(--fence-paper) !important; font-weight: 650 !important; text-align: left; }
+.fence3d-settings-arrow { font-size: 19px; line-height: 1; }
+.fence3d-settings-content { min-width: 0; }
+.fence3d-settings.is-collapsed { overflow: hidden; }
+.fence3d-settings.is-collapsed .fence3d-settings-toggle { position: static; height: 100%; min-height: 100% !important; flex-direction: column; justify-content: flex-start; padding: 9px 4px !important; border-bottom: 0 !important; }
+.fence3d-settings-tab-label { writing-mode: vertical-rl; }
+.fence3d.settings-collapsed { grid-template-columns: minmax(0, 1fr) 38px; }
+.fence3d-source, .fence3d-fields, .fence3d-edit { display: grid; gap: 7px; padding: 9px; }
+.fence3d-source label, .fence3d-fields label:not(.fence3d-check) { display: grid; gap: 3px; min-width: 0; }
+.fence3d select, .fence3d input { max-width: 100%; min-width: 0; }
+.fence3d details { border-top: 1px solid var(--fence-border); }
+.fence3d summary { cursor: pointer; padding: 8px 9px; font-weight: 650; }
+.fence3d-edit { border: 1px solid var(--fence-border); border-radius: 4px; }
+.fence3d-total { display: grid; gap: 2px; background: var(--fence-muted); padding: 8px; }
+.fence3d-total strong { font-size: 19px; font-family: var(--f-mono, monospace); }
+.fence3d-issues, .fence3d-note { background: var(--fence-muted); padding: 6px; margin: 0; line-height: 1.4; }
+.fence3d-issues ul { padding: 0 0 0 17px; margin: 0; }
+.fence3d-issues li { margin-bottom: 5px; }
+.fence3d-check { display: flex; align-items: center; gap: 6px; }
+.fence3d-quantity { display: grid; grid-template-columns: 1fr auto; column-gap: 7px; row-gap: 5px; margin: 0; }
+.fence3d-quantity dd { margin: 0; text-align: right; font-family: var(--f-mono, monospace); }
+.fence3d-quantity small { display: block; font-size: 10px; }
+.fence3d-map-measure { display: flex; align-items: center; gap: 5px; }
+.fence3d-map-measure span { margin-right: auto; }
+.fence3d-map-measure button { min-width: 38px; padding: 3px 7px !important; }
+.fence3d-map-measure button[aria-pressed="true"] { border-color: var(--cobalt, #1f3fc7) !important; background: color-mix(in srgb, var(--cobalt, #1f3fc7) 12%, var(--fence-paper)) !important; }
+.fence3d-map-legend { display: grid; gap: 4px; max-height: min(42vh, 360px); overflow: auto; list-style: none; padding: 0; margin: 0; }
+.fence3d-map-legend li { display: grid; grid-template-columns: 12px minmax(0, 1fr) 24px; grid-template-rows: auto auto; align-items: start; gap: 2px 6px; padding: 4px; border-bottom: 1px solid var(--fence-border); }
+.fence3d-map-swatch { width: 11px; height: 11px; border: 1px solid #0004; border-radius: 2px; }
+.fence3d-map-name { grid-column: 2; min-width: 0; line-height: 1.25; overflow-wrap: anywhere; }
+.fence3d-map-visibility { grid-column: 3; grid-row: 1; display: grid; place-items: center; width: 24px; min-width: 24px; min-height: 24px; padding: 2px !important; }
+.fence3d-map-visibility[aria-pressed="false"] { opacity: .55; }
+.fence3d-map-legend output { grid-column: 2; grid-row: 2; min-width: 0; font: 10px var(--f-mono, monospace); text-align: left; overflow-wrap: anywhere; line-height: 1.25; }
+.fence3d-annotation-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 5px 0; border-bottom: 1px solid var(--fence-border); }
+.fence3d-annotation-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1050px) {
+  .fence3d { grid-template-columns: 1fr; grid-template-rows: auto minmax(160px, 1fr) minmax(115px, .65fr); }
+  .fence3d-settings { border-left: 0; border-top: 1px solid var(--fence-border); }
+  .fence3d.settings-collapsed { grid-template-columns: minmax(0, 1fr) 38px; grid-template-rows: auto minmax(0, 1fr); }
+  .fence3d.settings-collapsed .fence3d-view { grid-column: 1; grid-row: 2; }
+  .fence3d.settings-collapsed .fence3d-settings { grid-column: 2; grid-row: 2; border-top: 0; border-left: 1px solid var(--fence-border); }
+}
+@media (max-width: 650px) {
+  .fence3d-header-main { flex-wrap: wrap; }
+  .fence3d-sheet-label { display: none; }
+  .fence3d-camera { gap: 4px; }
+}

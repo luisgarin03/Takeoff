@@ -1,7 +1,9 @@
+import { flattenCurve } from "./curve.js";
+
 // Independent chain-link post layout engine. Fence records reference an
 // existing linear takeoff by id; they never alter the measurement shape or its
-// quantity. Only manual corner/terminal markers are persisted. Intermediate
-// posts and section totals are derived from the current source geometry.
+// quantity. Shared Polyline junction anchors persist; post types and spacing
+// derive from connected source geometry.
 
 export const DEFAULT_CHAIN_LINK_SPACING_FT = 10;
 export const MIN_CHAIN_LINK_SPACING_FT = 0.25;
@@ -10,7 +12,13 @@ const EPS = 1e-6;
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const clamp01 = (value) => Math.max(0, Math.min(1, finite(value)));
-const POST_TYPES = new Set(["terminal", "corner", "threeway"]);
+
+function cornerAngle(a, b, c) {
+  const product = Math.hypot(a[0] - b[0], a[1] - b[1]) * Math.hypot(c[0] - b[0], c[1] - b[1]);
+  if (product <= EPS) return null;
+  const dot = (a[0] - b[0]) * (c[0] - b[0]) + (a[1] - b[1]) * (c[1] - b[1]);
+  return Math.acos(Math.max(-1, Math.min(1, dot / product))) * 180 / Math.PI;
+}
 
 export function sanitizeChainLinkFence(record) {
   if (!record || typeof record !== "object" || Array.isArray(record)) return null;
@@ -27,8 +35,6 @@ export function sanitizeChainLinkFence(record) {
     markers.push({
       id: typeof marker.id === "string" && marker.id ? marker.id : `post-${crypto.randomUUID()}`,
       path_t: pathT,
-      type: POST_TYPES.has(marker.type) ? marker.type : "corner",
-      type_override: marker.type_override === true || marker.type === "terminal",
     });
   }
   markers.sort((a, b) => a.path_t - b.path_t);
@@ -37,10 +43,6 @@ export function sanitizeChainLinkFence(record) {
     for (const [postId, sharedId] of Object.entries(record.shared_posts)) {
       if (typeof postId === "string" && postId && typeof sharedId === "string" && sharedId) sharedPosts[postId] = sharedId;
     }
-  }
-  const postTypes = {};
-  if (record.post_types && typeof record.post_types === "object" && !Array.isArray(record.post_types)) {
-    for (const [postId, type] of Object.entries(record.post_types)) if (postId && POST_TYPES.has(type)) postTypes[postId] = type;
   }
   return {
     id: typeof record.id === "string" && record.id ? record.id : `fence-${crypto.randomUUID()}`,
@@ -56,7 +58,6 @@ export function sanitizeChainLinkFence(record) {
     closed: !!record.closed,
     markers,
     shared_posts: sharedPosts,
-    post_types: postTypes,
   };
 }
 
@@ -74,6 +75,24 @@ export function sanitizeChainLinkFences(value, shapes = []) {
   return out;
 }
 
+// Keep saved junction anchors, which connect Polyline branches, while dropping
+// independent manual-post markers and legacy post-type overrides.
+export function removeManualChainLinkPostData(value, shapes) {
+  const records = Array.isArray(shapes)
+    ? sanitizeChainLinkFences(value, shapes)
+    : (Array.isArray(value) ? value.map(sanitizeChainLinkFence).filter(Boolean) : []);
+  return records.map((fence) => {
+    const markers = fence.markers.filter((marker) => fence.shared_posts[marker.id])
+      .map(({ id, path_t }) => ({ id, path_t }));
+    const postIds = new Set([
+      ...(fence.closed ? [`${fence.id}-loop`] : [`${fence.id}-start`, `${fence.id}-end`]),
+      ...markers.map((marker) => marker.id),
+    ]);
+    const shared_posts = Object.fromEntries(Object.entries(fence.shared_posts).filter(([postId]) => postIds.has(postId)));
+    return { ...fence, markers, shared_posts };
+  });
+}
+
 export function createChainLinkFence(shape, idFactory = () => `fence-${crypto.randomUUID()}`) {
   if (!shape || shape.measure_role !== "linear") return null;
   return sanitizeChainLinkFence({
@@ -81,7 +100,7 @@ export function createChainLinkFence(shape, idFactory = () => `fence-${crypto.ra
     condition_id: shape.condition_id, max_spacing_ft: DEFAULT_CHAIN_LINK_SPACING_FT,
     marker_size: DEFAULT_CHAIN_LINK_MARKER_SIZE, show_corner_posts: true,
     show_line_posts: true, show_section_lengths: false, show_post_counts: true,
-    closed: false, markers: [], shared_posts: {}, post_types: {},
+    closed: false, markers: [], shared_posts: {},
   });
 }
 
@@ -123,6 +142,69 @@ export function projectPointToPath(metrics, point) {
   return best;
 }
 
+function unitDirection(from, to) {
+  const dx = to[0] - from[0], dy = to[1] - from[1];
+  const length = Math.hypot(dx, dy);
+  return length > EPS ? [dx / length, dy / length] : null;
+}
+
+function directionsAtPath(metrics, pathT, closed = false) {
+  if (!metrics?.segments?.length || metrics.total <= EPS) return [];
+  let distance = clamp01(pathT) * metrics.total;
+  if (closed && distance >= metrics.total - EPS) distance = 0;
+  const arms = [];
+  for (const segment of metrics.segments) {
+    const end = segment.start + segment.length;
+    if (distance > segment.start + EPS && distance < end - EPS) {
+      return [unitDirection(segment.a, segment.b), unitDirection(segment.b, segment.a)].filter(Boolean);
+    }
+    if (Math.abs(distance - segment.start) <= EPS) arms.push(unitDirection(segment.a, segment.b));
+    if (Math.abs(distance - end) <= EPS) arms.push(unitDirection(segment.b, segment.a));
+  }
+  if (closed && distance <= EPS) {
+    const last = metrics.segments.at(-1);
+    arms.push(unitDirection(last.b, last.a));
+  }
+  return arms.filter(Boolean);
+}
+
+function automaticPostType(arms, fallbackDirections = arms.length) {
+  const count = Math.max(0, Number(fallbackDirections) || 0);
+  if (count <= 1) return "terminal";
+  if (count === 2) {
+    const [a, b] = arms;
+    return a && b && a[0] * b[0] + a[1] * b[1] <= -0.999 ? "line" : "corner";
+  }
+  if (count === 3) return "threeway";
+  if (count === 4) return "fourway";
+  return "multiway";
+}
+
+export function classifyChainLinkPathPost(metrics, pathT, closed = false) {
+  const arms = directionsAtPath(metrics, pathT, closed);
+  const directions = arms.length || (closed ? 2 : pathT <= EPS || pathT >= 1 - EPS ? 1 : 2);
+  return { arms, directions, type: automaticPostType(arms, directions) };
+}
+
+export function snapChainLinkPathPosition(metrics, point, tolerance) {
+  const projected = projectPointToPath(metrics, point);
+  if (!projected) return null;
+  let bestVertex = null;
+  let travelled = 0;
+  const vertices = metrics.segments.map((segment) => {
+    const vertex = { point: segment.a, path_t: travelled / metrics.total };
+    travelled += segment.length;
+    return vertex;
+  });
+  const last = metrics.segments.at(-1);
+  if (last) vertices.push({ point: last.b, path_t: 1 });
+  for (const vertex of vertices) {
+    const distance = Math.hypot(point[0] - vertex.point[0], point[1] - vertex.point[1]);
+    if (distance <= tolerance && (!bestVertex || distance < bestVertex.distance)) bestVertex = { ...vertex, distance };
+  }
+  return bestVertex || projected;
+}
+
 function openStops(fence) {
   return [
     { id: `${fence.id}-start`, path_t: 0, type: "terminal", endpoint: true },
@@ -138,12 +220,24 @@ function closedStops(fence) {
   ].sort((a, b) => a.path_t - b.path_t);
 }
 
-export function calculateChainLinkFence(fence, points, unitsPerPx) {
+export function calculateChainLinkFence(fence, points, unitsPerPx, curved = false) {
   const clean = sanitizeChainLinkFence(fence);
   const upp = finite(unitsPerPx);
   const metrics = pathMetrics(points, clean?.closed);
   if (!clean || metrics.total <= EPS || upp <= 0) return { valid: false, metrics, corners: [], linePosts: [], sections: [], totalLengthFt: 0, cornerPostCount: 0, linePostCount: 0, totalPostCount: 0 };
   const stops = clean.closed ? closedStops(clean) : openStops(clean);
+  if (!curved) {
+    let walked = 0;
+    for (let index = 1; index < metrics.points.length - 1; index++) {
+      walked += metrics.segments[index - 1]?.length || 0;
+      const angle = cornerAngle(metrics.points[index - 1], metrics.points[index], metrics.points[index + 1]);
+      if (angle == null || angle >= 179.999) continue;
+      const pathT = walked / metrics.total;
+      if (stops.some((stop) => Math.abs(stop.path_t - pathT) <= EPS)) continue;
+      stops.push({ id: `${clean.id}-corner-${index}`, path_t: pathT, type: "corner", automatic: true });
+    }
+  }
+  stops.sort((a, b) => a.path_t - b.path_t);
   const sections = [];
   const linePosts = [];
   const pairs = clean.closed
@@ -165,20 +259,24 @@ export function calculateChainLinkFence(fence, points, unitsPerPx) {
     }
   }
   const corners = stops.map((marker) => {
-    const directions = clean.closed ? 2 : marker.endpoint ? 1 : 2;
-    const automaticType = directions <= 1 ? "terminal" : directions === 2 ? "corner" : "threeway";
-    const override = marker.endpoint ? clean.post_types[marker.id] : marker.type_override ? marker.type : "";
-    return { ...marker, directions, type: override || automaticType, type_override: !!override, shared_post_id: clean.shared_posts[marker.id] || "", point: pointAtPathT(metrics, marker.path_t) };
+    const classification = classifyChainLinkPathPost(metrics, marker.path_t, clean.closed);
+    return { ...marker, ...classification, shared_post_id: clean.shared_posts[marker.id] || "", point: pointAtPathT(metrics, marker.path_t) };
   });
-  const linePostCount = sections.reduce((sum, section) => sum + section.intermediate, 0);
+  const automaticLinePostCount = sections.reduce((sum, section) => sum + section.intermediate, 0);
+  const junctionLinePostCount = corners.filter((post) => post.type === "line").length;
+  const linePostCount = automaticLinePostCount + junctionLinePostCount;
   const terminalPostCount = corners.filter((post) => post.type === "terminal").length;
   const cornerPostCount = corners.filter((post) => post.type === "corner").length;
+  const threeWayPostCount = corners.filter((post) => post.type === "threeway").length;
+  const fourWayPostCount = corners.filter((post) => post.type === "fourway").length;
+  const multiWayPostCount = corners.filter((post) => post.type === "multiway").length;
   return {
     valid: true, metrics, corners, linePosts, sections,
     totalLengthFt: metrics.total * upp,
-    terminalPostCount, actualCornerPostCount: cornerPostCount, cornerPostCount: corners.length, threeWayPostCount: 0,
+    terminalPostCount, actualCornerPostCount: cornerPostCount, cornerPostCount: corners.length, threeWayPostCount, fourWayPostCount, multiWayPostCount,
+    automaticLinePostCount, junctionLinePostCount,
     linePostCount,
-    totalPostCount: corners.length + linePostCount,
+    totalPostCount: terminalPostCount + cornerPostCount + threeWayPostCount + fourWayPostCount + multiWayPostCount + linePostCount,
   };
 }
 
@@ -191,43 +289,47 @@ export function summarizeChainLinkFencePosts(entries = []) {
   let linePostCount = 0;
   for (const { fence, calculation } of entries) {
     if (!fence || !calculation?.valid) continue;
-    linePostCount += calculation.linePostCount;
+    linePostCount += calculation.automaticLinePostCount ?? calculation.linePostCount;
     for (const post of calculation.corners) {
       const key = fence.shared_posts?.[post.id] || `${fence.id}:${post.id}`;
-      const group = groups.get(key) || { directions: 0, references: [], overrideType: "" };
+      const group = groups.get(key) || { arms: [], directions: 0, references: [] };
       group.directions += post.directions;
-      if (post.type_override) group.overrideType = post.type;
+      group.arms.push(...(post.arms || []));
       group.references.push({ fenceId: fence.id, postId: post.id });
       groups.set(key, group);
     }
   }
   const byFence = {};
-  let terminalPostCount = 0, cornerPostCount = 0, threeWayPostCount = 0, multiWayPostCount = 0;
+  let terminalPostCount = 0, cornerPostCount = 0, threeWayPostCount = 0, fourWayPostCount = 0, multiWayPostCount = 0;
   const typesByPost = {};
   for (const group of groups.values()) {
-    const type = group.overrideType || (group.directions <= 1 ? "terminal" : group.directions === 2 ? "corner" : group.directions === 3 ? "threeway" : "multiway");
+    const type = automaticPostType(group.arms, group.directions);
     if (type === "terminal") terminalPostCount += 1;
     else if (type === "corner") cornerPostCount += 1;
     else if (type === "threeway") threeWayPostCount += 1;
-    else multiWayPostCount += 1;
+    else if (type === "fourway") fourWayPostCount += 1;
+    else if (type === "multiway") multiWayPostCount += 1;
+    else linePostCount += 1;
     for (const reference of group.references) {
       typesByPost[`${reference.fenceId}:${reference.postId}`] = type;
-      const local = byFence[reference.fenceId] || { terminalPostCount: 0, cornerPostCount: 0, threeWayPostCount: 0, multiWayPostCount: 0, linePostCount: 0, totalPostCount: 0 };
+      const local = byFence[reference.fenceId] || { terminalPostCount: 0, cornerPostCount: 0, threeWayPostCount: 0, fourWayPostCount: 0, multiWayPostCount: 0, linePostCount: 0, totalPostCount: 0 };
       if (type === "terminal") local.terminalPostCount += 1;
       else if (type === "corner") local.cornerPostCount += 1;
       else if (type === "threeway") local.threeWayPostCount += 1;
-      else local.multiWayPostCount += 1;
+      else if (type === "fourway") local.fourWayPostCount += 1;
+      else if (type === "multiway") local.multiWayPostCount += 1;
+      else local.linePostCount += 1;
       byFence[reference.fenceId] = local;
     }
   }
   for (const { fence, calculation } of entries) {
     if (!fence || !calculation?.valid) continue;
-    const local = byFence[fence.id] || { terminalPostCount: 0, cornerPostCount: 0, threeWayPostCount: 0, multiWayPostCount: 0 };
-    local.linePostCount = calculation.linePostCount;
-    local.totalPostCount = local.terminalPostCount + local.cornerPostCount + local.threeWayPostCount + local.multiWayPostCount + local.linePostCount;
+    const local = byFence[fence.id] || { terminalPostCount: 0, cornerPostCount: 0, threeWayPostCount: 0, fourWayPostCount: 0, multiWayPostCount: 0, linePostCount: 0 };
+    local.linePostCount += calculation.automaticLinePostCount ?? calculation.linePostCount;
+    local.totalPostCount = local.terminalPostCount + local.cornerPostCount + local.threeWayPostCount + local.fourWayPostCount + local.multiWayPostCount + local.linePostCount;
     byFence[fence.id] = local;
   }
-  return { terminalPostCount, cornerPostCount, threeWayPostCount, multiWayPostCount, linePostCount, totalPostCount: terminalPostCount + cornerPostCount + threeWayPostCount + multiWayPostCount + linePostCount, typesByPost, byFence };
+  return { terminalPostCount, cornerPostCount, threeWayPostCount, fourWayPostCount, multiWayPostCount, linePostCount, totalPostCount: terminalPostCount + cornerPostCount + threeWayPostCount + fourWayPostCount + multiWayPostCount + linePostCount, typesByPost, byFence };
 }
 
 // Report/export companion for sheets that are not currently rendered. Marker
@@ -253,25 +355,99 @@ export function calculateChainLinkFenceFromLength(fence, totalLengthFt) {
   return { valid: true, sections, totalLengthFt: total, terminalPostCount, actualCornerPostCount: cornerPostCount, cornerPostCount: stops.length, threeWayPostCount: 0, linePostCount, totalPostCount: stops.length + linePostCount };
 }
 
-export function insertFenceMarker(fence, pathT, idFactory = () => `post-${crypto.randomUUID()}`, minimumFraction = 0.002, type = "corner") {
+export function insertFenceMarker(fence, pathT, idFactory = () => `post-${crypto.randomUUID()}`, minimumFraction = 0.002) {
   const clean = sanitizeChainLinkFence(fence);
   if (!clean) return fence;
   const t = clamp01(pathT);
   if ((!clean.closed && (t <= minimumFraction || t >= 1 - minimumFraction)) || clean.markers.some((marker) => Math.abs(marker.path_t - t) < minimumFraction)) return clean;
-  return { ...clean, markers: [...clean.markers, { id: idFactory(), path_t: t, type: POST_TYPES.has(type) ? type : "corner", type_override: true }].sort((a, b) => a.path_t - b.path_t) };
+  return { ...clean, markers: [...clean.markers, { id: idFactory(), path_t: t }].sort((a, b) => a.path_t - b.path_t) };
 }
 
-export function updateChainLinkFencePostType(fence, postId, type) {
-  const clean = sanitizeChainLinkFence(fence);
-  if (!clean || !POST_TYPES.has(type) || !localPostIds(clean).includes(postId)) return fence;
-  if (clean.markers.some((marker) => marker.id === postId)) return { ...clean, markers: clean.markers.map((marker) => marker.id === postId ? { ...marker, type, type_override: true } : marker) };
-  return { ...clean, post_types: { ...clean.post_types, [postId]: type } };
+export function connectChainLinkBranch(fence, branch, { pathT, postId }, createPostId, createJunctionId) {
+  let source = fence;
+  if (!localPostIds(fence).includes(postId)) {
+    if (!fence.closed && pathT <= EPS) postId = `${fence.id}-start`;
+    else if (!fence.closed && pathT >= 1 - EPS) postId = `${fence.id}-end`;
+    else if (fence.closed && (pathT <= EPS || pathT >= 1 - EPS)) postId = `${fence.id}-loop`;
+    else {
+      const existing = fence.markers.find((marker) => Math.abs(marker.path_t - pathT) <= EPS);
+      postId = existing?.id || createPostId();
+      if (!existing) {
+        source = insertFenceMarker(fence, pathT, () => postId, EPS);
+      }
+    }
+  }
+  if (!localPostIds(source).includes(postId)) return null;
+  const sharedId = source.shared_posts[postId] || createJunctionId();
+  return [
+    { ...source, shared_posts: { ...source.shared_posts, [postId]: sharedId } },
+    { ...branch, max_spacing_ft: source.max_spacing_ft, marker_size: source.marker_size,
+      shared_posts: { ...branch.shared_posts, [`${branch.id}-start`]: sharedId } },
+  ];
 }
 
-export function updateFenceMarker(fence, markerId, patch) {
-  const clean = sanitizeChainLinkFence(fence);
-  if (!clean) return fence;
-  return sanitizeChainLinkFence({ ...clean, markers: clean.markers.map((marker) => marker.id === markerId ? { ...marker, ...patch } : marker) });
+function junctionPath(points, curved, closed) {
+  const controlIndices = [];
+  const path = curved ? flattenCurve(points, { controlIndices }) : points.slice();
+  if (!curved) points.forEach((_, index) => controlIndices.push(index));
+  if (closed && Math.hypot(path[0][0] - path.at(-1)[0], path[0][1] - path.at(-1)[1]) > EPS) path.push(path[0]);
+  const distances = [0];
+  for (let index = 1; index < path.length; index++) {
+    distances.push(distances.at(-1) + Math.hypot(path[index][0] - path[index - 1][0], path[index][1] - path[index - 1][1]));
+  }
+  return { controlDistances: controlIndices.map((index) => distances[index]), total: distances.at(-1), metrics: pathMetrics(path) };
+}
+
+// Saved fences locate their stops by distance along the run. Materialize the
+// shared stops as control points for this gesture so moving one can't slide the
+// other junctions along the line as the measured length changes.
+export function prepareChainLinkJunction(fence, points, curved = false) {
+  if (points.length < 2) return null;
+  const path = junctionPath(points, curved, fence.closed);
+  if (path.total <= EPS) return null;
+  const controls = points.map((point, index) => ({ point, distance: path.controlDistances[index] }));
+  const stops = (fence.closed ? closedStops(fence) : openStops(fence)).filter((stop) => fence.shared_posts[stop.id]);
+  const bindings = stops.map((stop) => {
+    const distance = stop.path_t * path.total;
+    let control = controls.find((item) => Math.abs(item.distance - distance) <= EPS);
+    if (!control) {
+      control = { distance, point: pointAtPathT(path.metrics, stop.path_t) };
+      controls.push(control);
+    }
+    return { stop, control };
+  });
+  controls.sort((a, b) => a.distance - b.distance);
+  // If a junction lies on the implicit closing edge, make that edge part of
+  // the edited path. A repeated closing point moves with the opening point.
+  if (fence.closed && controls.at(-1).distance > path.controlDistances.at(-1)) {
+    controls.push({ point: points[0], distance: path.total });
+  }
+  const vertices = controls.map(({ point }) => point);
+  const closedAtStart = Math.hypot(vertices[0][0] - vertices.at(-1)[0], vertices[0][1] - vertices.at(-1)[1]) <= EPS;
+  return { vertices, curved, fence, closedAtStart, bindings: bindings.map(({ stop, control }) => ({
+    postId: stop.id, index: controls.indexOf(control), junctionId: fence.shared_posts[stop.id],
+  })) };
+}
+
+export function moveChainLinkJunction(run, junctionId, point) {
+  const indices = new Set(run.bindings.filter((binding) => binding.junctionId === junctionId).map((binding) => binding.index));
+  if (run.closedAtStart && indices.has(0)) indices.add(run.vertices.length - 1);
+  const points = run.vertices.map((vertex, index) => indices.has(index) ? point : vertex);
+  // Avoid collapsing a junction onto a neighboring control point, which could
+  // otherwise turn two posts into the same stop or drop an interior stop.
+  for (const index of indices) {
+    for (const neighbor of [index - 1, index + 1]) {
+      if (points[neighbor] && Math.hypot(point[0] - points[neighbor][0], point[1] - points[neighbor][1]) <= EPS) return null;
+    }
+  }
+  const { controlDistances, total } = junctionPath(points, run.curved, run.fence.closed);
+  if (total <= EPS) return null;
+  const fractions = new Map(run.bindings.map(({ postId, index }) => [postId, controlDistances[index] / total]));
+  const markers = run.fence.markers.map((marker) => fractions.has(marker.id) ? { ...marker, path_t: fractions.get(marker.id) } : marker);
+  if (markers.some((marker, index) =>
+    marker.path_t <= EPS || marker.path_t >= 1 - EPS
+    || markers.slice(0, index).some((other) => Math.abs(other.path_t - marker.path_t) <= EPS))) return null;
+  return { points, fence: { ...run.fence, markers: markers.sort((a, b) => a.path_t - b.path_t) } };
 }
 
 export function removeFenceMarker(fence, markerId) {

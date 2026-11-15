@@ -27,7 +27,11 @@ function crPoint(p0, p1, p2, p3, t) {
 export function flattenCurve(pts, opts = {}) {
   const maxPts = opts.maxPts || 220;
   const n = (pts || []).length;
-  if (n < 3) return (pts || []).map((p) => [p[0], p[1]]);
+  if (opts.controlIndices && n) opts.controlIndices.push(0);
+  if (n < 3) {
+    if (opts.controlIndices && n === 2) opts.controlIndices.push(1);
+    return (pts || []).map((p) => [p[0], p[1]]);
+  }
   const P = [pts[0], ...pts, pts[n - 1]];
   const want = [];
   let total = 0;
@@ -41,6 +45,7 @@ export function flattenCurve(pts, opts = {}) {
   for (let i = 1; i < P.length - 2; i++) {
     const steps = Math.max(2, Math.round(want[i - 1] * scale));
     for (let j = 1; j <= steps; j++) out.push(crPoint(P[i - 1], P[i], P[i + 1], P[i + 2], j / steps));
+    opts.controlIndices?.push(out.length - 1);
   }
   return out;
 }

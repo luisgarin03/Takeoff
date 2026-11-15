@@ -57,11 +57,58 @@ function roundTrip(shapes: any[], cmd: any) {
 // ── policy completeness ──────────────────────────────────────────────────────
 
 test("every applied command type has a PROVENANCE_POLICY row; unknown types throw", () => {
-  for (const t of ["add", "geom", "reassign", "label", "delete", "replace"]) {
+  for (const t of ["add", "geom", "geomBatch", "composite", "reassign", "label", "delete", "replace"]) {
     assert.ok(t in PROVENANCE_POLICY, `policy row missing for ${t}`);
   }
   assert.throws(() => applyShapeCommand([], { type: "resize" } as any), /PROVENANCE_POLICY/);
   assert.throws(() => applyShapeCommand([], null as any), /PROVENANCE_POLICY/);
+});
+
+test("connected geometry edits undo and redo together", () => {
+  const shapes = [manualShape(), machineShape()];
+  const edits = shapes.map((shape) => ({
+    id: shape.id, editKind: "vertex", prev: geomSnapshot(shape),
+    verts_norm: [[0.25, 0.25], ...shape.verts_norm.slice(1)],
+    computed: { perimeter_lf: 75 },
+  }));
+  const moved = roundTrip(shapes, { type: "geomBatch", edits });
+  assert.deepEqual(moved.shapes.map((shape) => shape.verts_norm[0]), [[0.25, 0.25], [0.25, 0.25]]);
+  const undone = applyShapeCommand(moved.shapes, moved.inverse);
+  const redone = applyShapeCommand(undone.shapes, undone.inverse);
+  assert.deepEqual(redone.shapes, moved.shapes);
+});
+
+test("composite polyline branch adds its segment and shared source node as one undoable command", () => {
+  const source = {
+    ...manualShape("shp-poly-root"), measure_role: "linear",
+    verts_norm: [[0.1, 0.1], [0.8, 0.1]],
+    polyline_group_id: "poly-1", polyline_node_ids: ["node-a", "node-b"],
+  };
+  const sourceAfter = {
+    ...source, verts_norm: [[0.1, 0.1], [0.45, 0.1], [0.8, 0.1]],
+    polyline_node_ids: ["node-a", "junction-1", "node-b"],
+  };
+  const branch = {
+    id: "shp-poly-branch", sheet_id: source.sheet_id, condition_id: source.condition_id,
+    measure_role: "linear", verts_norm: [[0.45, 0.1], [0.45, 0.7]],
+    polyline_group_id: source.polyline_group_id, polyline_node_ids: ["junction-1", "node-c"],
+    computed: { perimeter_lf: 60, area_sf: 0 }, origin: { method: "manual" },
+  };
+  const shapes = [source];
+  const result = roundTrip(shapes, {
+    type: "composite",
+    commands: [
+      {
+        type: "geom", id: source.id, editKind: "vertex", prev: geomSnapshot(source),
+        verts_norm: sourceAfter.verts_norm, computed: source.computed,
+        polyline_group_id: sourceAfter.polyline_group_id, polyline_node_ids: sourceAfter.polyline_node_ids,
+      },
+      { type: "add", shapes: [branch] },
+    ],
+  });
+  assert.equal(result.shapes.length, 2);
+  assert.equal(result.shapes[0].polyline_node_ids[1], result.shapes[1].polyline_node_ids[0]);
+  assert.equal(result.inverse.type, "composite");
 });
 
 // ── add ──────────────────────────────────────────────────────────────────────

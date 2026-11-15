@@ -599,7 +599,7 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
       let sourcePx = 0;
       for (let i = 1; i < points.length; i++) sourcePx += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
       const unitsPerPx = sourcePx > 0 ? (Number(source.computed?.perimeter_lf) || 0) / sourcePx : 0;
-      const layout = calculateChainLinkFence(fence, points, unitsPerPx);
+      const layout = calculateChainLinkFence(fence, points, unitsPerPx, source.curved === true);
       if (!layout.valid) continue;
       const col = rgb(...hex(condById[source.condition_id]?.color || COBALT));
       const markerPt = Math.max(3, Math.min(12, Number(fence.marker_size) || 7));

@@ -43,11 +43,18 @@ export const icons = {
   rectTool: (s) => <I size={s}><rect x="4" y="6" width="16" height="12" /><circle cx="4" cy="6" r="1.1" fill="currentColor" /><circle cx="20" cy="6" r="1.1" fill="currentColor" /><circle cx="20" cy="18" r="1.1" fill="currentColor" /><circle cx="4" cy="18" r="1.1" fill="currentColor" /></I>,
   trackpad: (s) => <I size={s}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 15 H21 M12 15 V20 M9 10 L12 7 L15 10 M12 7 V12" /></I>,
   linear: (s) => <I size={s}><path d="M3 17 L 9 9 L 15 13 L 21 5" /><circle cx="3" cy="17" r="1.1" fill="currentColor" /><circle cx="9" cy="9" r="1.1" fill="currentColor" /><circle cx="15" cy="13" r="1.1" fill="currentColor" /><circle cx="21" cy="5" r="1.1" fill="currentColor" /></I>,
+  polyline: (s) => <I size={s}><path d="M3 17 11 11 17 15 21 10 M11 11 13 4" /><circle cx="11" cy="11" r="1.5" fill="currentColor" /></I>,
   curve: (s) => <I size={s}><path d="M3 18 C 8 18, 8 6, 12.5 6 C 17 6, 17 13, 21 13" /><circle cx="3" cy="18" r="1.1" fill="currentColor" /><circle cx="12.5" cy="6" r="1.1" fill="currentColor" /><circle cx="21" cy="13" r="1.1" fill="currentColor" /></I>,
   surface: (s) => <I size={s}><line x1="3" y1="20" x2="21" y2="20" /><path d="M8 20 V 7 H 16 V 20" /><path d="M12 16.5 V 10 M12 10 L 10.2 11.8 M12 10 L 13.8 11.8" /></I>,
   count: (s) => <I size={s}><rect x="4" y="4" width="4.5" height="4.5" fill="currentColor" stroke="none" /><rect x="15" y="5.5" width="4.5" height="4.5" fill="currentColor" stroke="none" /><rect x="6.5" y="13.5" width="4.5" height="4.5" fill="currentColor" stroke="none" /><rect x="15" y="15" width="4.5" height="4.5" /></I>,
   calculator: (s) => <I size={s}><rect x="5" y="3" width="14" height="18" rx="1" /><rect x="8" y="6" width="8" height="3" /><circle cx="9" cy="13" r=".8" fill="currentColor" stroke="none" /><circle cx="12" cy="13" r=".8" fill="currentColor" stroke="none" /><circle cx="15" cy="13" r=".8" fill="currentColor" stroke="none" /><circle cx="9" cy="17" r=".8" fill="currentColor" stroke="none" /><circle cx="12" cy="17" r=".8" fill="currentColor" stroke="none" /><path d="M15 16.2 V17.8 M14.2 17 H15.8" /></I>,
   fencePosts: (s) => <I size={s}><path d="M4 19 V5 H8 V19 M16 19 V5 H20 V19 M8 9 H16 M8 15 H16" /><circle cx="12" cy="9" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="15" r="1.3" fill="currentColor" stroke="none" /></I>,
+  fence3d: (s, contrast = "var(--paper-bright)") => <svg width={s} height={s} viewBox="0 0 24 24" aria-hidden="true" style={{ color: "currentColor", overflow: "visible" }}>
+    <path d="M12 2 22 5.8 12 9.7 2 5.8Z M2 6.5 11.45 10.2V22L2 18.2Z M12.55 10.2 22 6.5V18.2L12.55 22Z" fill="currentColor" />
+    <path d="M2 5.8 12 9.7 22 5.8 M12 9.7V22" fill="none" strokeWidth=".8" style={{ stroke: contrast }} />
+    <text x="6.7" y="16.5" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="6.8" fontWeight="800" style={{ fill: contrast }}>3</text>
+    <text x="17" y="16.5" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="6.8" fontWeight="800" style={{ fill: contrast }}>D</text>
+  </svg>,
   deduct: (s) => <I size={s}><path d="M12 4 L 20 10 L 17 19 L 7 19 L 4 10 Z" /><line x1="9" y1="13" x2="15" y2="13" /></I>,
   deductRect: (s) => <I size={s}><rect x="4" y="6" width="16" height="12" /><line x1="9" y1="12" x2="15" y2="12" /></I>,
   snap: (s) => <I size={s}><path d="M7 4 V 12 a 5 5 0 0 0 10 0 V 4" /><path d="M7 4 H 10.5 M13.5 4 H 17" /><path d="M7 7.5 H 10.5 M13.5 7.5 H 17" /><circle cx="12" cy="20.6" r="0.9" fill="currentColor" /></I>,
@@ -98,7 +105,7 @@ export const icons = {
   sliders: (s) => <I size={s}><path d="M4 7 H 6.8 M11.2 7 H 20" /><path d="M4 17 H 12.8 M17.2 17 H 20" /><circle cx="9" cy="7" r="2.2" /><circle cx="15" cy="17" r="2.2" /></I>,
 };
 
-export function Icon({ name, size = 18 }) {
+export function Icon({ name, size = 18, contrast }) {
   const fn = icons[name] || icons.spec;
-  return fn(size);
+  return fn(size, contrast);
 }

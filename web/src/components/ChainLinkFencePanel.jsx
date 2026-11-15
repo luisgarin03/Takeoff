@@ -15,9 +15,9 @@ const input = { border: "1px solid var(--ink-faint)", background: "var(--paper-b
 const number = (value, digits = 1) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits });
 
 export default function ChainLinkFencePanel({
-  units = "imperial", fence, calculation, selectedMarkerId, selectedPostType, addMode, extrudeMode = false, canAttach, attachCount = 0,
+  units = "imperial", fence, calculation, postSummary, canAttach, attachCount = 0,
   pageLabel = "Current page", pageSummaries = [],
-  onCreate, onAddMode, onPatch, onChangePostType, onDeleteMarker, onDeleteFence, onExtrude,
+  onCreate, onPatch, onDeleteFence,
   onUndo, onRedo, canUndo, canRedo, onClose,
 }) {
   const metric = units === "metric";
@@ -56,12 +56,13 @@ export default function ChainLinkFencePanel({
                   ["Terminal posts", summary.terminalPostCount],
                   ["Corner posts", summary.cornerPostCount],
                   ["Three-way posts", summary.threeWayPostCount],
-                  ...(summary.multiWayPostCount ? [["Four-way or more", summary.multiWayPostCount]] : []),
+                  ["Four-way posts", summary.fourWayPostCount],
+                  ...(summary.multiWayPostCount ? [["Five-way or more", summary.multiWayPostCount]] : []),
                   ["Line posts", summary.linePostCount],
                   ["Total posts", summary.totalPostCount],
                 ].map(([name, value]) => <div key={name} style={{ border: "1px solid var(--ink-faint)", padding: "6px 7px", background: "var(--paper-bright)" }}><div style={{ fontSize: 9.5, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--ink-muted)" }}>{name}</div><strong style={{ fontFamily: "var(--f-mono)", fontSize: 12.5 }}>{value}</strong></div>)}
               </div>
-              {summary.needsScale > 0 && <div role="status" style={{ fontSize: 10.5, color: "var(--c-danger)" }}>{summary.needsScale} attached fence {summary.needsScale === 1 ? "needs" : "need"} a valid scale; its calculated quantities are excluded. Saved manual markers remain counted.</div>}
+              {summary.needsScale > 0 && <div role="status" style={{ fontSize: 10.5, color: "var(--c-danger)" }}>{summary.needsScale} attached fence {summary.needsScale === 1 ? "needs" : "need"} a valid scale; its calculated quantities are excluded.</div>}
             </div>)}
         </section>
         {!fence ? (
@@ -77,23 +78,20 @@ export default function ChainLinkFencePanel({
         ) : (
           <>
             <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>{[{ type: "corner", label: "+ Corner" }, { type: "terminal", label: "+ Terminal" }, { type: "threeway", label: "+ 3-way" }].map(({ type, label: text }) => <button key={type} type="button" onClick={() => onAddMode(type)} style={{ ...button, padding: "7px 4px", background: addMode === type ? "var(--cobalt)" : "transparent", color: addMode === type ? "white" : "var(--ink)" }}>
-                {addMode === type ? `Place ${type === "threeway" ? "3-way" : type}…` : text}
-              </button>)}</div>
               <div style={{ display: "flex", justifyContent: "flex-end" }}><button type="button" onClick={onDeleteFence} title="Remove this calculator; the measured line is kept" style={{ ...button, color: "var(--c-danger)" }}>Remove</button></div>
             </div>
-            <button type="button" onClick={onExtrude} style={{ ...button, background: extrudeMode ? "var(--cobalt)" : "transparent", color: extrudeMode ? "white" : "var(--ink)" }}>{extrudeMode ? "Click a point on the line…" : "＋ Extrude from line"}</button>
             {!calculation?.valid && <div role="alert" style={{ padding: 9, border: "1px solid var(--c-danger)", color: "var(--c-danger)", fontSize: 12 }}>Set a valid PDF scale before calculating post spacing.</div>}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>
               {[
                 ["Fence", `${number(metric ? calculation?.totalLengthFt * M_PER_FT : calculation?.totalLengthFt)} ${metric ? "m" : "LF"}`],
                 ["Sections", calculation?.sections?.length || 0],
-                ["Terminal posts", calculation?.terminalPostCount || 0],
-                ["Corner posts", calculation?.actualCornerPostCount || 0],
-                ["Three-way posts", calculation?.threeWayPostCount || 0],
-                ["Line posts", calculation?.linePostCount || 0],
-                ["Total posts", calculation?.totalPostCount || 0],
-                ["Manual markers", fence.markers.length],
+                ["Terminal posts", postSummary?.terminalPostCount ?? calculation?.terminalPostCount ?? 0],
+                ["Line posts", postSummary?.linePostCount ?? calculation?.linePostCount ?? 0],
+                ["Corner posts", postSummary?.cornerPostCount ?? calculation?.actualCornerPostCount ?? 0],
+                ["Three-way posts", postSummary?.threeWayPostCount ?? calculation?.threeWayPostCount ?? 0],
+                ["Four-way posts", postSummary?.fourWayPostCount ?? calculation?.fourWayPostCount ?? 0],
+                ...(postSummary?.multiWayPostCount || calculation?.multiWayPostCount ? [["Five-way or more", postSummary?.multiWayPostCount ?? calculation?.multiWayPostCount]] : []),
+                ["Total posts", postSummary?.totalPostCount ?? calculation?.totalPostCount ?? 0],
               ].map(([name, value]) => <div key={name} style={{ border: "1px solid var(--ink-faint)", padding: "7px 8px" }}><div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--ink-muted)" }}>{name}</div><strong style={{ fontFamily: "var(--f-mono)", fontSize: 13 }}>{value}</strong></div>)}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
@@ -111,13 +109,6 @@ export default function ChainLinkFencePanel({
               ].map(([key, text]) => <label key={key} style={{ display: "flex", alignItems: "center", gap: 6 }}><input type="checkbox" checked={!!fence[key]} onChange={(event) => onPatch({ [key]: event.target.checked }, "display")} />{text}</label>)}
               <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Adds a closing section back to the starting post"><input type="checkbox" checked={!!fence.closed} onChange={(event) => onPatch({ closed: event.target.checked }, "closed-loop")} />Closed loop</label>
             </div>
-            {selectedMarkerId && <div style={{ display: "grid", gap: 7, padding: 8, border: "1px solid var(--cobalt)" }}>
-              <div style={{ fontSize: 12, fontWeight: 650 }}>Selected post · {(selectedPostType || calculation?.corners?.find((post) => post.id === selectedMarkerId)?.type || "post").replace("threeway", "three-way").replace("multiway", "four-way or more")}</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 5 }}>
-                {[{ type: "terminal", label: "Terminal" }, { type: "corner", label: "Corner" }, { type: "threeway", label: "3-way" }].map(({ type, label: text }) => <button key={type} type="button" aria-pressed={selectedPostType === type} onClick={() => onChangePostType(selectedMarkerId, type)} style={{ ...button, padding: "6px 3px", background: selectedPostType === type ? "var(--cobalt)" : "transparent", color: selectedPostType === type ? "white" : "var(--ink)" }}>{text}</button>)}
-              </div>
-              {fence.markers.some((marker) => marker.id === selectedMarkerId) && <button type="button" onClick={onDeleteMarker} style={{ ...button, color: "var(--c-danger)" }}>Delete manual post</button>}
-            </div>}
             {!!calculation?.sections?.length && <div>
               <strong style={{ display: "block", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>Sections</strong>
               <div style={{ display: "grid", gap: 4 }}>
@@ -128,7 +119,7 @@ export default function ChainLinkFencePanel({
                 </div>)}
               </div>
             </div>}
-            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.45, color: "var(--ink-muted)" }}>Choose a post type above, then click the fence line to place it. Select a post to change its type or drag it along the line. Extrude starts a connected linear branch from any point on this fence. Line posts are spaced automatically.</p>
+            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.45, color: "var(--ink-muted)" }}>Post types come from the fence geometry: line posts are spaced automatically, bends become corners, and connected branches share one junction post. Drag a shared junction to reshape every connected run.</p>
           </>
         )}
       </div>

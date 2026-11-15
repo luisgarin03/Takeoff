@@ -2,12 +2,40 @@
 
 ## Unreleased — October 30 checkpoint
 
+- Added persistent IDs to Polyline vertices and endpoints, preserving one shared identity at connected junctions and filling missing IDs in older saved paths. Generated 3D posts, rails, gate parts, and fittings now carry unique namespaced component/instance IDs; post and fitting quantity rows count by those IDs.
+- Selecting any section of a connected Polyline now highlights and acts on the whole connected group; moving, copying, duplicating, flipping, relabeling, transferring, and deleting keep the branches together while vertex handles stay local to the clicked run.
+- Cleaned up fence edge labels in 2D and 3D: zero line-post counts are omitted, preventing `0 LINE` callouts from covering junction symbols while preserving edge lengths.
+- Fixed Polyline branches so they store shared junction nodes in the source geometry. Dragging a connected point now updates every run and its post spacing together; deleting a Polyline removes the connected group in one action. Extrusion is restricted to Polyline markups, with a clear message when a Linear measurement is used.
+- Fixed 3D post counts so independent runs that only overlap or share generated line-post coordinates remain separate; explicit shared-junction IDs are required to merge runs.
+- Added a draggable floating calculator to the canvas rail. It evaluates feet-and-inches expressions such as `10' - 4"`, formats length answers in feet and inches, and remembers its on-screen position. Powered by the open-source Apache-2.0 [mathjs](https://github.com/josdejong/mathjs) library.
+- The 45° angle lock now starts **off**; users can still enable it from the canvas toolbar when they want guided alignment.
 - Added a **Chain-Link Materials Calculator** directly below **Estimate Document** in the Whiteboard Add menu. It totals a supplier-style material breakdown from entered fence runs, gates, spacing, and construction details; quantities remain editable, additional supplier-specific rows can be added, and the list downloads as a paginated landscape PDF with project details, a formatted table, and repeated headings.
 - Added per-post-type concrete hole inputs for diameter and depth, cubic-foot totals, bag-yield conversion, and an adjustable extra allowance. The calculator follows the diameter/depth/quantity approach of the referenced concrete calculator.
-- Added current-page totals to the Chain-Link Fence Post Calculator, aggregating fence length, sections, corner/terminal posts, line posts, total posts, and manual markers across attached fence lines on the focused page, with a warning for lines missing a valid scale.
-- Chain-link post totals now separate terminal, corner, three-way, and larger intersections. Connected extensions count their shared junction once, and users can change a placed post's type.
-- Added distinct circle, diamond, and triangle symbols for terminal, corner, and three-way posts. The calculator now has separate placement buttons for each type, and selecting a placed post lets the user change its type.
-- Removed manual post sharing. Added **Extrude from line** so a user can start a connected Linear branch at any point on a fence; its junction is counted once, and undo/redo keeps the branch and its junction together.
+- Added current-page totals to the Chain-Link Fence Post Calculator, aggregating fence length, sections, corner/terminal posts, line posts, total posts, and detected shared junctions across attached fence lines on the focused page, with a warning for lines missing a valid scale.
+- Chain-link post types are now derived from connected fence geometry: straight run points are line posts, bends are corners, and shared junctions with three or four arms are 3-way or 4-way posts. Connected runs count a shared post once, with larger intersections shown as 5-way or more.
+- Removed manual post placement and post-type overrides from the chain-link calculator and 3D fence settings. Legacy standalone markers and 3D post overrides are cleared when a project loads; shared Polyline junction anchors remain connected.
+- Post markers use distinct circle, diamond, triangle, square, and multiway symbols; detected shared junctions remain draggable.
+- Added **Polyline** (`J`) to the Measure menu and removed **Extrude from line** from the Chain-Link panel. Start a run in open space or branch from a line or junction. Connected runs count one post per junction, and undo and redo keep the latest run and its post changes together.
+- Added a contextual **Extrude** button beside a selected straight Linear vertex. It starts Polyline at the vertex's exact coordinate so the next click sets the branch point.
+- Added a Plan toggle that displays the calibrated PDF sheet on the ground beneath the 3D fence.
+- Added 3D fence exports for Blender-ready GLB, OTK3D project archives, and interactive browser HTML. GLB, glTF, OTK3D, and HTML include the calibrated ground plan when Plan is enabled.
+- The 3D Fence Generator scroll now advances the perspective camera by a fixed distance per wheel movement; orthographic zoom and right-drag pan use fixed world-distance increments across view scales.
+- Added **Fly** navigation with WASD movement, mouse-look, vertical movement, a speed boost, and click-drag fallback when browsers block pointer lock.
+- Added a Fly speed slider (1×–10×, default 3×) and `-` / `=` keyboard adjustments while flying.
+- Added a separate 3D Fence **Color map** view with per-component colors, matching model callouts, and generated length, area, and count quantities.
+- Added a compact upper-right 3D viewport legend showing only nonzero component quantities with matching colors and LF or count units; an eye button hides or reopens the legend.
+- Added per-component eye controls, an LF/SF selector for fabric quantities, LF-only rail measurements, and wrapped quantity labels. Coincident connected posts now display and count once.
+- Added per-edge fence length and line-post labels, a two-point ground measurement tool with nearby vertex snapping, and last-focused-sheet restoration after refresh. Completed measurements can now be selected and deleted from the 3D canvas.
+- Added saved ground drawings and text notes to the 3D fence canvas. Select a drawing or note in the scene to reveal a red delete button beside it.
+- Added **Include markups** and **Include quantities** options to 3D exports. Markups are included in model and image exports when selected; quantities can be embedded in model metadata and displayed in browser and PNG exports.
+- Added a dedicated 3D workspace header containing the camera, navigation, markup, plan, color map, speed, and projection controls. Full 3D mode hides the 2D canvas toolbar; Split keeps it available.
+- Added a draggable vertical divider to Split view, resizing the plan and 3D preview between 25% and 75%, with keyboard arrow support.
+- Removed the close-up zoom ceiling that stopped zooming in at 64× magnification.
+- Continued scrolling at close range magnifies fence details after the perspective camera reaches its approach limit.
+- Added configurable chain-link and gate fittings to the 3D Fence Generator. Parts follow each fabric termination, rail, post, wire, and gate, and the report counts the installed fittings.
+- Added a 3D Fence Generator for calibrated takeoffs with live split-screen preview, procedural chain-link layouts, saved design settings, and model, image, and quantity exports.
+- Made the 3D fence settings sidebar collapsible to expand the model preview.
+- Shared Polyline junctions can be dragged in Select mode. Connected runs reshape together, recalculate lengths and post spacing, and undo as one edit.
 - Importing the focused plan page to Whiteboard now bookmarks that source page after the import succeeds.
 - Added a separate Property Map Takeoff page with U.S. Census address lookup, USGS aerial imagery, distance/area/count measurements, browser-local persistence, CSV export, and a Google Maps reference link for the searched address.
 - The Find panel can now be dragged by its header and stays within the visible screen area.

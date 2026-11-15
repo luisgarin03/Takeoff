@@ -55,6 +55,8 @@ import { assignShapeLabel } from "./shapeLabels.js";
 export const PROVENANCE_POLICY = {
   add: "created_at (+ id mint) per shape; restore:true stamps nothing",
   geom: "stampEdit(editKind) once, frozen from prev; restampFrom stamps nothing",
+  geomBatch: "apply one geom edit per connected shape as one undoable command",
+  composite: "apply ordered shape commands atomically; inverse applies each inverse in reverse order",
   reassign: "stampEdit('reassign') per shape; restore stamps nothing",
   label: "no stamp (documented non-edit)",
   delete: "no stamp; counted per origin.method unless noCount",
@@ -81,9 +83,10 @@ export function vertsEqual(a, b) {
   return true;
 }
 
-// The grab-time snapshot a geom command's `prev` carries: exactly the fields a
-// geom apply can touch, PRESENCE-AWARE (a shape that has never been edited has
-// no updated_at key — undo must remove the key, not leave `undefined`).
+// The grab-time snapshot a geom command's `prev` carries: exactly the geometry,
+// topology, and provenance fields a geom apply can touch, PRESENCE-AWARE (a
+// shape that has never been edited has no updated_at key — undo must remove the
+// key, not leave `undefined`).
 // verts deep-copied (the live ring mutates during preview); computed/origin by
 // reference (both are treated immutably everywhere — stampEdit copies origin,
 // recompute mints new computed objects).
@@ -97,15 +100,19 @@ export function geomSnapshot(s) {
     ...("computed" in s ? { computed: s.computed } : {}),
     ...("updated_at" in s ? { updated_at: s.updated_at } : {}),
     ...("origin" in s ? { origin: s.origin } : {}),
+    ...("polyline_group_id" in s ? { polyline_group_id: s.polyline_group_id } : {}),
+    ...("polyline_node_ids" in s ? { polyline_node_ids: [...s.polyline_node_ids] } : {}),
   };
 }
 
-// Write a snapshot's four fields back onto a shape, presence-aware.
+// Write a snapshot's fields back onto a shape, presence-aware.
 const withGeomFields = (s, snap) => {
   const out = { ...s, verts_norm: snap.verts_norm };
   if ("computed" in snap) out.computed = snap.computed; else delete out.computed;
   if ("updated_at" in snap) out.updated_at = snap.updated_at; else delete out.updated_at;
   if ("origin" in snap) out.origin = snap.origin; else delete out.origin;
+  if ("polyline_group_id" in snap) out.polyline_group_id = snap.polyline_group_id; else delete out.polyline_group_id;
+  if ("polyline_node_ids" in snap) out.polyline_node_ids = [...snap.polyline_node_ids]; else delete out.polyline_node_ids;
   return out;
 };
 
@@ -163,6 +170,8 @@ export function applyShapeCommand(shapes, cmd) {
           if (cmd.computed !== undefined) out.computed = cmd.computed;
           if ("updated_at" in cmd.restampFrom) out.updated_at = cmd.restampFrom.updated_at; else delete out.updated_at;
           if ("origin" in cmd.restampFrom) out.origin = cmd.restampFrom.origin; else delete out.origin;
+          if ("polyline_group_id" in cmd.restampFrom) out.polyline_group_id = cmd.restampFrom.polyline_group_id; else delete out.polyline_group_id;
+          if ("polyline_node_ids" in cmd.restampFrom) out.polyline_node_ids = [...cmd.restampFrom.polyline_node_ids]; else delete out.polyline_node_ids;
           inverse = geomInverse(cmd.id, cmd.editKind, geomSnapshot(s));   // redo-of-undo restores the current (stamped) state verbatim
           return out;
         }
@@ -174,11 +183,41 @@ export function applyShapeCommand(shapes, cmd) {
         const prev = cmd.prev || geomSnapshot(s);
         const stamped = stampEdit(withGeomFields(s, prev), kindFor(cmd.editKind));
         const out = { ...stamped, verts_norm: cmd.verts_norm };
+        if ("polyline_group_id" in cmd) out.polyline_group_id = cmd.polyline_group_id;
+        if ("polyline_node_ids" in cmd) out.polyline_node_ids = [...cmd.polyline_node_ids];
         if (cmd.computed !== undefined) out.computed = cmd.computed;   // move gestures omit computed — translation never re-prices
         inverse = geomInverse(cmd.id, cmd.editKind, prev);
         return out;
       });
       return { shapes: next, inverse };
+    }
+    case "geomBatch": {
+      const editsById = new Map(cmd.edits.map((edit) => [edit.id, edit]));
+      const edits = [];
+      const next = shapes.map((shape) => {
+        const edit = editsById.get(shape.id);
+        if (!edit) return shape;
+        const result = applyShapeCommand([shape], { ...edit, type: "geom" });
+        edits.push(result.inverse);
+        return result.shapes[0];
+      });
+      return { shapes: next, inverse: edits.length ? { type: "geomBatch", edits } : null };
+    }
+    case "composite": {
+      let next = shapes;
+      const inverses = [];
+      const counted = {};
+      for (const nested of cmd.commands || []) {
+        const result = applyShapeCommand(next, nested);
+        next = result.shapes;
+        if (result.inverse) inverses.unshift(result.inverse);
+        for (const [method, count] of Object.entries(result.counted || {})) counted[method] = (counted[method] || 0) + count;
+      }
+      return {
+        shapes: next,
+        inverse: inverses.length ? { type: "composite", commands: inverses } : null,
+        ...(Object.keys(counted).length ? { counted } : {}),
+      };
     }
     case "reassign": {
       if (cmd.restore) {
@@ -281,6 +320,8 @@ const geomInverse = (id, editKind, snap) => ({
   restampFrom: {
     ...("updated_at" in snap ? { updated_at: snap.updated_at } : {}),
     ...("origin" in snap ? { origin: snap.origin } : {}),
+    ...("polyline_group_id" in snap ? { polyline_group_id: snap.polyline_group_id } : {}),
+    ...("polyline_node_ids" in snap ? { polyline_node_ids: [...snap.polyline_node_ids] } : {}),
   },
 });
 
