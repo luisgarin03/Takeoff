@@ -141,7 +141,7 @@ import { MARKUP_TEXT_FONT_FAMILY, layoutBoxedMarkupText, measureCanvasMarkupText
 // module-scope helpers (autoRenderScale, invertCanvasPixels, uid, clamp,
 // isDangerMsg, instantiateTemplate, seedConditions) in lib/canvasUtil.js.
 import {
-  PANEL_GAP, MAX_CANVAS_DIM, MAX_CANVAS_AREA,
+  PANEL_GAP, MAX_CANVAS_DIM, MAX_CANVAS_AREA, MAX_PANEL_AREA,
   DETAIL_ENGAGE, DETAIL_MARGIN, SYNC_MS, GESTURE_MS, DETAIL_STALL_MS, SNAP_CELL,
   LOW_ZOOM_PREVIEW_MIN_SCALE, LOW_ZOOM_PREVIEW_MAX_SCALE, LOW_ZOOM_PREVIEW_STEP,
   LOW_ZOOM_PREVIEW_DEFAULT_SCALE, LOW_ZOOM_PREVIEW_DEBOUNCE_MS, LOW_ZOOM_ENTER, LOW_ZOOM_EXIT,
@@ -1679,9 +1679,11 @@ export default function TakeoffCanvas() {
     if (tool !== "text-select" || !key || panelTextAvailableRef.current.get(key)) return;
     const pageObject = pageObjsRef.current.get(key);
     const textLayer = panelTextLayerRefs.current.get(key);
+    const textLayerTasks = panelTextLayerTasksRef.current;
     const dims = panelImgs[key];
     if (!pageObject || !textLayer || !dims?.w || !dims?.h) return;
     let cancelled = false;
+    let layerTask = null;
     const renderOcrLayer = ({ lines = [], words = [], width = 1, height = 1 }) => {
       const runs = words.length ? words : lines;
       if (cancelled || !runs.length) return;
@@ -1711,27 +1713,55 @@ export default function TakeoffCanvas() {
       panelTextAvailableRef.current.set(key, true);
       setCommitMsg(`Selectable text is ready on ${tabLabel(key)}.`);
     };
-    const cached = panelOcrTextRef.current.get(key);
-    if (cached && typeof cached.then !== "function") {
-      renderOcrLayer(cached);
-      return () => { cancelled = true; };
-    }
-    const pending = cached || recognizePdfPageText(pageObject, { onProgress: ({ status: ocrStatus, progress }) => {
-      if (cancelled || ocrStatus !== "recognizing text") return;
-      const percent = Math.max(0, Math.min(100, Math.round((Number(progress) || 0) * 100)));
-      setCommitMsg(`Scanning flattened page for selectable text · ${percent}%`);
-    } });
-    panelOcrTextRef.current.set(key, pending);
-    pending.then((result) => {
-      panelOcrTextRef.current.set(key, result);
-      if (!result.lines.length) setCommitMsg("No readable text was found. Drag a box around text to use the extractor.");
-      renderOcrLayer(result);
-    }).catch((error) => {
-      if (panelOcrTextRef.current.get(key) === pending) panelOcrTextRef.current.delete(key);
-      if (!cancelled) setCommitMsg(`Couldn't scan this page for text: ${error?.message || error}`);
-    });
-    return () => { cancelled = true; };
-  }, [focusPanel?.key, panelImgs, tool]); // eslint-disable-line react-hooks/exhaustive-deps
+    const finishWithOcr = () => {
+      if (cancelled) return;
+      const cached = panelOcrTextRef.current.get(key);
+      if (cached && typeof cached.then !== "function") {
+        renderOcrLayer(cached);
+        return;
+      }
+      const pending = cached || recognizePdfPageText(pageObject, { onProgress: ({ status: ocrStatus, progress }) => {
+        if (cancelled || ocrStatus !== "recognizing text") return;
+        const percent = Math.max(0, Math.min(100, Math.round((Number(progress) || 0) * 100)));
+        setCommitMsg(`Scanning flattened page for selectable text · ${percent}%`);
+      } });
+      panelOcrTextRef.current.set(key, pending);
+      pending.then((result) => {
+        panelOcrTextRef.current.set(key, result);
+        if (!result.lines.length) setCommitMsg("No readable text was found. Drag a box around text to use the extractor.");
+        renderOcrLayer(result);
+      }).catch((error) => {
+        if (panelOcrTextRef.current.get(key) === pending) panelOcrTextRef.current.delete(key);
+        if (!cancelled) setCommitMsg(`Couldn't scan this page for text: ${error?.message || error}`);
+      });
+    };
+
+    (async () => {
+      try {
+        const content = await textContentForPage(key, pageObject);
+        if (cancelled) return;
+        const searchableChars = (content.items || []).reduce((sum, item) => sum + (typeof item?.str === "string" ? item.str.trim().length : 0), 0);
+        if (searchableChars >= 200) {
+          const scale = renderScalesRef.current.get(key) || RENDER_SCALE;
+          textLayer.replaceChildren();
+          textLayer.style.setProperty("--scale-factor", String(scale));
+          layerTask = new pdfjsLib.TextLayer({ textContentSource: content, container: textLayer, viewport: pageObject.getViewport({ scale }) });
+          textLayerTasks.set(key, layerTask);
+          await layerTask.render();
+          if (!cancelled) panelTextAvailableRef.current.set(key, true);
+          return;
+        }
+      } catch (error) {
+        if (cancelled || error?.name === "AbortException") return;
+      }
+      finishWithOcr();
+    })();
+    return () => {
+      cancelled = true;
+      try { layerTask?.cancel?.(); } catch { /* already complete */ }
+      if (textLayerTasks.get(key) === layerTask) textLayerTasks.delete(key);
+    };
+  }, [focusPanel?.key, panelImgs, tool, textContentForPage, setCommitMsg]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => {
     importAbortRef.current?.abort();
@@ -2884,6 +2914,10 @@ export default function TakeoffCanvas() {
     const seq = ++renderSeqRef.current;
     const stale = () => seq !== renderSeqRef.current;
     setStatus("rendering"); setErr(""); setPoly([]); setCalib([]); setPendingLen(""); setCheck([]); setCheckStated(""); setScaleGuide(null); setPrevScale(null); selectShape(null); setProposal(null); resetZone();
+    const mobileViewport = typeof window.matchMedia === "function"
+      && (window.matchMedia("(max-width: 760px)").matches || window.matchMedia("(pointer: coarse)").matches);
+    const deviceMemory = Number(navigator.deviceMemory) || 0;
+    const panelPixelBudget = mobileViewport ? (deviceMemory > 0 && deviceMemory <= 2 ? 4e6 : 8e6) : MAX_PANEL_AREA;
     cancelPreviewJobs();
     panelOcrTextRef.current.clear();
     panelTextAvailableRef.current.clear();
@@ -2911,6 +2945,11 @@ export default function TakeoffCanvas() {
     invalidateDetail();
     if (detailCanvasRef.current) detailCanvasRef.current.style.display = "none";
     (async () => {
+      // Let React paint the loading state before PDF.js allocates canvases or
+      // expands large page text layers. On slower mobile browsers the work can
+      // otherwise begin before the first loading frame reaches the screen.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (stale()) return;
       // phase A — dimensions for every panel
       const metas = [];
       for (const key of groupKeys) {
@@ -2922,7 +2961,7 @@ export default function TakeoffCanvas() {
         const base = pageObj.getViewport({ scale: 1 });   // page size in PDF points
         // base raster obeys the same budget cap: for oversized pages (image ingest
         // mints 1px=1pt pages) autoRenderScale lands below RENDER_SCALE and wins
-        const auto = autoRenderScale(base.width, base.height);
+        const auto = autoRenderScale(base.width, base.height, panelPixelBudget);
         const rs = hiResKeys.includes(key) ? auto : Math.min(RENDER_SCALE, auto);
         const viewport = pageObj.getViewport({ scale: rs });
         pageObjsRef.current.set(key, pageObj);     // kept for on-demand detail-view re-render
@@ -2958,29 +2997,9 @@ export default function TakeoffCanvas() {
         // becomes stale before the browser has idle time to make it.
         previewBaseGenerationsRef.current.set(m.key, seq);
         queuePreview(m.key, canvas, seq);
-        // Build a transparent, selectable PDF.js text layer once for this page.
-        // It lives in stage coordinates beside the bitmap, so pan and zoom are
-        // free CSS transforms rather than repeated text extraction/layout work.
-        const textLayer = panelTextLayerRefs.current.get(m.key);
-        if (textLayer) {
-          let layerTask = null;
-          try {
-            const content = await textContentForPage(m.key, m.pageObj);
-            if (stale()) return;
-            const searchableChars = (content.items || []).reduce((sum, item) => sum + (typeof item?.str === "string" ? item.str.trim().length : 0), 0);
-            panelTextAvailableRef.current.set(m.key, searchableChars >= 200);
-            textLayer.replaceChildren();
-            textLayer.style.setProperty("--scale-factor", String(m.viewport.scale));
-            layerTask = new pdfjsLib.TextLayer({ textContentSource: content, container: textLayer, viewport: m.viewport });
-            panelTextLayerTasksRef.current.set(m.key, layerTask);
-            await layerTask.render();
-          } catch (error) {
-            if (stale()) return;
-            if (error?.name !== "AbortException") textLayer.replaceChildren();
-          } finally {
-            if (panelTextLayerTasksRef.current.get(m.key) === layerTask) panelTextLayerTasksRef.current.delete(m.key);
-          }
-        }
+        // PDF text layers are large DOM trees on dense plan sheets. Build them
+        // only if the user selects PDF text; keep initial plan opening focused
+        // on the visible raster so mobile browsers can become interactive first.
         // snap-to-vector index per panel (best-effort; off until the user enables it)
         m.pageObj.getOperatorList().then((ol) => {
           if (stale()) return;
@@ -10728,7 +10747,7 @@ export default function TakeoffCanvas() {
           </div>
 
           {(status === "loading" || status === "rendering") && (
-            <LongTaskLoader active label={status === "loading" ? "Loading sheets…" : "Rendering sheet…"} variant="overlay" delay={300} />
+            <LongTaskLoader active label={status === "loading" ? "Loading plans…" : "Rendering plan…"} variant="overlay" delay={0} className="takeoff-plan-loader" />
           )}
           {(status === "empty" || status === "error") && (
             <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-muted)", fontSize: 15 }}>

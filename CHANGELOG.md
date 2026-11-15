@@ -2,6 +2,7 @@
 
 ## Unreleased — October 30 checkpoint
 
+- Improved mobile plan opening by showing the loading state immediately, yielding a frame before PDF rendering, and reducing each mobile page raster's memory budget. Dense selectable PDF text layers are now created only when text selection is requested, keeping initial plan rendering responsive.
 - Added persistent IDs to Polyline vertices and endpoints, preserving one shared identity at connected junctions and filling missing IDs in older saved paths. Generated 3D posts, rails, gate parts, and fittings now carry unique namespaced component/instance IDs; post and fitting quantity rows count by those IDs.
 - Selecting any section of a connected Polyline now highlights and acts on the whole connected group; moving, copying, duplicating, flipping, relabeling, transferring, and deleting keep the branches together while vertex handles stay local to the clicked run.
 - Cleaned up fence edge labels in 2D and 3D: zero line-post counts are omitted, preventing `0 LINE` callouts from covering junction symbols while preserving edge lengths.

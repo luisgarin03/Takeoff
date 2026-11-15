@@ -21,10 +21,11 @@ import {
 // physical caps: an oversized page (an ingested image is a 1px=1pt page, so a
 // 7920×5280 scan is a 7920pt page) must render BELOW baseline or the canvas blows
 // the budget (669MB at ×2) and Chrome's compositor degrades it to a blocky proxy.
-export const autoRenderScale = (wPt, hPt) => {
+export const autoRenderScale = (wPt, hPt, pixelBudget = MAX_PANEL_AREA) => {
   if (!(wPt > 0 && hPt > 0)) return RENDER_SCALE;
   const byDim  = Math.min(MAX_CANVAS_DIM / wPt, MAX_CANVAS_DIM / hPt);
-  const byArea = Math.sqrt(MAX_PANEL_AREA / (wPt * hPt));
+  const safePixelBudget = Number.isFinite(pixelBudget) && pixelBudget > 0 ? pixelBudget : MAX_PANEL_AREA;
+  const byArea = Math.sqrt(safePixelBudget / (wPt * hPt));
   const cap = Math.min(byDim, byArea);
   return Math.min(Math.max(RENDER_SCALE, Math.min(QUALITY_CEILING, cap)), cap);
 };
