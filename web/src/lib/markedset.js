@@ -25,6 +25,7 @@ import { pdfDashFor, boostForDark, clampWeight } from "./lineStyles.js";
 import { layoutBoxedMarkupText, MARKUP_TEXT_FONT_SIZE_PT } from "./canvasText.js";
 import { flattenCurve } from "./curve.js";
 import { calculateChainLinkFence, pointAtPathT } from "./chainLinkFence.js";
+import { fenceConditionKey, runSpec } from "../features/fence3d/settings.js";
 import { pdfExportQuality, safePdfRasterScale } from "./exportQuality.js";
 import { linearMarkerPoints, normalizeLineMarker } from "./linearMarkers.js";
 
@@ -192,7 +193,7 @@ function inverseViewportPoint(transform, x, y) {
   return [(d * tx - c * ty) / determinant, (-b * tx + a * ty) / determinant];
 }
 
-export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, markups, chainLinkFences = /** @type {object[]} */ ([]), findHighlights = /** @type {object[]} */ ([]), rfis = /** @type {object[]} */ ([]), conditions, getPage, loadPdfData = /** @type {null | ((file: string) => Promise<Uint8Array>)} */ (null), renderPage = rasterizeMarkedSetPage, company, clientInfo, credit = null, coverTitle = "Marked Set", units = "imperial", singleSheet = false, includeShapeLabels = true, quality = "balanced", preserveSourcePdf = false }) {
+export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, markups, chainLinkFences = /** @type {object[]} */ ([]), fence3dSettings = null, findHighlights = /** @type {object[]} */ ([]), rfis = /** @type {object[]} */ ([]), conditions, getPage, loadPdfData = /** @type {null | ((file: string) => Promise<Uint8Array>)} */ (null), renderPage = rasterizeMarkedSetPage, company, clientInfo, credit = null, coverTitle = "Marked Set", units = "imperial", singleSheet = false, includeShapeLabels = true, quality = "balanced", preserveSourcePdf = false }) {
   if (singleSheet && sheets.length !== 1) throw new Error("Choose one current sheet to download.");
   // display-unit edge (lib/units contract): quantities arrive as internal feet;
   // metric converts at the drawn string only — legend rows, by-sheet rows, and
@@ -594,31 +595,39 @@ export async function buildMarkedSetPdf({ projectName, dark, sheets, shapes, mar
     for (const fence of fencesBy.get(sh.key) || []) {
       const source = (shapesBy.get(sh.key) || []).find((shape) => shape.id === fence.shape_id && shape.measure_role === "linear");
       if (!source) continue;
+      const conditionConfig = fence3dSettings?.conditions?.[fenceConditionKey(sh.key, source.condition_id)];
+      const runConfig = fence3dSettings?.runs?.[source.id];
+      if ((conditionConfig?.type ?? runConfig?.type ?? "chain-link") !== "chain-link") continue;
+      const spec = runSpec(runConfig, conditionConfig?.type === "chain-link" ? conditionConfig.spec : null);
+      const display = fence3dSettings?.display || {};
+      const componentVisibility = display.componentVisibility || {};
+      const postsVisible = display.posts !== false;
       let points = (source.verts_norm || []).map(([nx, ny]) => [nx * W, ny * H]);
       if (source.curved) points = flattenCurve(points);
       let sourcePx = 0;
       for (let i = 1; i < points.length; i++) sourcePx += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
       const unitsPerPx = sourcePx > 0 ? (Number(source.computed?.perimeter_lf) || 0) / sourcePx : 0;
-      const layout = calculateChainLinkFence(fence, points, unitsPerPx, source.curved === true);
+      const layout = calculateChainLinkFence(fence, points, unitsPerPx, source.curved === true, spec.spacing, spec.strategy);
       if (!layout.valid) continue;
       const col = rgb(...hex(condById[source.condition_id]?.color || COBALT));
-      const markerPt = Math.max(3, Math.min(12, Number(fence.marker_size) || 7));
-      if (fence.show_line_posts !== false) for (const post of layout.linePosts) {
+      const markerPt = 7;
+      if (postsVisible && componentVisibility["post:line"] !== false) for (const post of layout.linePosts) {
         const [x, y] = toPage(post.point[0], post.point[1]);
         pg.drawEllipse({ x, y, xScale: markerPt * .45, yScale: markerPt * .45, color: col, borderColor: rgb(1, 1, 1), borderWidth: .7 });
       }
-      if (fence.show_corner_posts !== false) for (const marker of layout.corners) {
+      if (postsVisible) for (const marker of layout.corners) {
+        const type = marker.type === "terminal" ? "end" : marker.type;
+        if (componentVisibility[`post:${type}`] === false) continue;
         const [x, y] = toPage(marker.point[0], marker.point[1]);
         pg.drawRectangle({ x: x - markerPt / 2, y: y - markerPt / 2, width: markerPt, height: markerPt,
           color: marker.type === "terminal" ? col : rgb(1, 1, 1), borderColor: col, borderWidth: 1.1 });
       }
-      if (fence.show_section_lengths || fence.show_post_counts) for (const section of layout.sections) {
+      if (display.edgeLabels !== false) for (const section of layout.sections) {
         let t = section.start.path_t + (section.wraps ? (1 - section.start.path_t + section.end.path_t) : section.end.path_t - section.start.path_t) / 2;
         if (t >= 1) t -= 1;
         const at = pointAtPathT(layout.metrics, t);
-        const parts = [];
-        if (fence.show_section_lengths) parts.push(`${num(M ? section.lengthFt * .3048 : section.lengthFt, 2)} ${M ? "M" : "FT"}`);
-        if (fence.show_post_counts) parts.push(`${section.intermediate} LINE`);
+        const parts = [`${num(M ? section.lengthFt * .3048 : section.lengthFt, 2)} ${M ? "M" : "FT"}`];
+        if (section.intermediate > 0) parts.push(`${section.intermediate} LINE`);
         chip(parts.join(" · "), at[0], at[1] - 10 / ptScale, col);
       }
     }

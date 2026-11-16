@@ -69,13 +69,13 @@ import { addWhiteboardSowEntry, addWhiteboardSowPanel, addWhiteboardSowTitle, em
 import { conditionAutoNoteArrowEnabled, measurementCallout, measurementSowText, syncMeasurementCallouts, syncMeasurementSowBoard } from "../lib/measurementSow.js";
 import { filterVisibleConditionContent } from "../lib/conditionVisibility.js";
 import FenceCalculatorPanel from "../features/fenceCalculator/components/FenceCalculatorPanel.jsx";
-import ChainLinkFencePanel from "../components/ChainLinkFencePanel.jsx";
-import OrnamentalFencePanel from "../components/OrnamentalFencePanel.jsx";
 import { readFenceCalibration, renderFencePlan } from "../features/fence3d/calibration.js";
-import LinearFenceChooser from "../components/LinearFenceChooser.jsx";
+import { adaptFenceRuns } from "../features/fence3d/source.js";
+import { buildOrnamentalLayout } from "../features/fence3d/ornamental.js";
+import { buildGuardrailLayout } from "../features/fence3d/guardrail.js";
+import { fenceConditionKey, METERS_PER_FOOT, migrateLegacyOrnamentalFences, normalizeFence3d, runSpec } from "../features/fence3d/settings.js";
 import { calculateChainLinkFence, connectChainLinkBranch, createChainLinkFence, moveChainLinkJunction, pathMetrics, pointAtPathT, prepareChainLinkJunction, projectPointToPath, removeManualChainLinkPostData, summarizeChainLinkFencePosts } from "../lib/chainLinkFence.js";
 import { migrateLegacyPolylineGroups } from "../lib/polylineTopology.js";
-import { calculateOrnamentalFence, createOrnamentalFence, insertOrnamentalPost, removeOrnamentalPost, sanitizeOrnamentalFences } from "../lib/ornamentalFence.js";
 import { calculationToConditionMaterials, emptyFenceCalculatorProject, fenceCalculatorProjectHasContent, getCalculatorDefinition, sanitizeFenceCalculatorProject } from "../features/fenceCalculator/index.ts";
 import ReportPanel from "../components/ReportPanel.jsx";
 import RevisionsPanel from "../components/RevisionsPanel.jsx";
@@ -579,6 +579,8 @@ export default function TakeoffCanvas() {
   const [selVert, setSelVert] = useState(null);         // selected vertex index of the selected shape — Delete removes just that point
   const [shapeContinuation, setShapeContinuation] = useState(null); // { shapeId, atStart, tool, prev } — extend an existing open run in place
   const [selectedMarkupId, setSelectedMarkupId] = useState(null); // selected markup — mutually exclusive with selectedId
+  const [countGateType, setCountGateType] = useState("item");
+  const [countGateWidth, setCountGateWidth] = useState("4");
   const markupPanelRowRefs = useRef(new Map());
   useEffect(() => {
     if (leftTab !== "markup" || !selectedMarkupId) return;
@@ -813,10 +815,6 @@ export default function TakeoffCanvas() {
   const selectShape = (id) => {
     setTransferringShapeId(null);
     setSelectedId(id); setSelectedMarkupId(null); setSelectedChainMarkerId(null);
-    const fence = id ? chainLinkFences.find((item) => item.shape_id === id) : null;
-    setSelectedChainFenceId(fence?.id || null);
-    const ornamentalFence = id ? ornamentalFences.find((item) => item.shape_id === id) : null;
-    setSelectedOrnamentalFenceId(ornamentalFence?.id || null);
   };
   function polylineSelectionShapes(shape) {
     if (!shape) return [];
@@ -900,28 +898,19 @@ export default function TakeoffCanvas() {
   const [fenceCalculatorProject, setFenceCalculatorProject] = useState(emptyFenceCalculatorProject);
   const [fenceCalculatorOpen, setFenceCalculatorOpen] = useState(false);
   const [mathCalculatorOpen, setMathCalculatorOpen] = useState(false);
-  // Chain-link post calculations are independent records linked to completed
-  // linear takeoffs. They never change `shapes` or its established math.
+  // Legacy chain-link records preserve connected Polyline junction identity
+  // and 2D post symbols. All current fence configuration lives in the 3D
+  // condition settings; these records never change measured takeoff geometry.
   const [chainLinkFences, setChainLinkFences] = useState([]);
-  const [chainLinkOpen, setChainLinkOpen] = useState(false);
   const [fence3d, setFence3d] = useState(null);
+  const normalizedFence3d = useMemo(() => normalizeFence3d(fence3d), [fence3d]);
   const [fence3dMode, setFence3dMode] = useState(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const splitRatioRef = useRef(0.5);
   const splitContainerRef = useRef(null);
   const splitDragPointerRef = useRef(null);
-  const [linearFenceChooserOpen, setLinearFenceChooserOpen] = useState(false);
-  const [ornamentalFences, setOrnamentalFences] = useState([]);
-  const [ornamentalOpen, setOrnamentalOpen] = useState(false);
-  const [selectedOrnamentalFenceId, setSelectedOrnamentalFenceId] = useState(null);
-  const [selectedOrnamentalPostId, setSelectedOrnamentalPostId] = useState(null);
-  const [ornamentalPostAddMode, setOrnamentalPostAddMode] = useState(false);
-  const [selectedChainFenceId, setSelectedChainFenceId] = useState(null);
   const [selectedChainMarkerId, setSelectedChainMarkerId] = useState(null);
   const [polylineAnchor, setPolylineAnchor] = useState(null);
-  const chainUndoRef = useRef([]);
-  const chainRedoRef = useRef([]);
-  const [chainHistoryEpoch, setChainHistoryEpoch] = useState(0);
   const [clientInfo, setClientInfo] = useState({});      // per-project client/job fields for branded output; additive payload field
   const fileInputRef = useRef(null);                    // hidden <input type=file> for "Open PDF"
   const projectInputRef = useRef(null);
@@ -2599,7 +2588,7 @@ export default function TakeoffCanvas() {
     // (nothing is lost: rejected geometry records nothing by design).
     setAgentProposals([]);
     unknownProjectFieldsRef.current = preserveUnknownProjectFields(a);
-    setFence3d(a.fence_3d || null);
+    setFence3d(migrateLegacyOrnamentalFences(a.fence_3d, a.ornamental_fences, a.shapes || []));
     setFence3dMode(null);
     setProjectMetadata(normalizeProjectMetadata(a));
     if (PROJECT_UUID.test(a.project_id)) {
@@ -2637,10 +2626,7 @@ export default function TakeoffCanvas() {
     // stacks — recorded inverses from the replaced project must never fire here.
     dispatchShape({ type: "replace", shapes: sanitizeShapeLabelsOnShapes(a.shapes || []) }, { reset: true });   // strip a corrupt shape.label at hydrate (identity-preserving); other shape fields untouched
     setChainLinkFences(removeManualChainLinkPostData(a.chain_link_fences, a.shapes || []));
-    setOrnamentalFences(sanitizeOrnamentalFences(a.ornamental_fences, a.shapes || []));
-    setSelectedOrnamentalFenceId(null); setOrnamentalOpen(false); setLinearFenceChooserOpen(false);
-    setSelectedChainFenceId(null); setSelectedChainMarkerId(null); setPolylineAnchor(null); setChainLinkOpen(false);
-    chainUndoRef.current = []; chainRedoRef.current = []; setChainHistoryEpoch((value) => value + 1);
+    setSelectedChainMarkerId(null); setPolylineAnchor(null);
     // normalize hydrated markups: legacy workspaces may hold markups with no id
     // (pre-dating the id field) — seed a stable id + default rfi_id so the new
     // select / edit / delete / move / RFI-link flows (all keyed on m.id) work on them.
@@ -3268,7 +3254,7 @@ export default function TakeoffCanvas() {
     // the default — omits the key, so an old imperial project's payload is
     // byte-identical on round-trip; only a metric project carries the field.
     const metadata = touch ? withProjectEditor(touchProjectMetadata(projectMetadata), cloudAccount?.user, cloudAccount?.profileName) : projectMetadata;
-    return { ...unknownProjectFieldsRef.current, ...(fence3d ? { fence_3d: fence3d } : {}), project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(compactProject ? { compact_project: compactProject } : {}), ...(projectAssistant.persist && projectAssistant.messages.length ? { project_assistant: projectAssistant } : {}), ...(findJobs.length ? { find_jobs: findJobs } : {}), ...(whiteboardHasContent(whiteboard) ? { whiteboard } : {}), ...(fenceCalculatorProjectHasContent(fenceCalculatorProject) ? { fence_calculator: fenceCalculatorProject } : {}), ...(chainLinkFences.length ? { chain_link_fences: chainLinkFences } : {}), ...(ornamentalFences.length ? { ornamental_fences: ornamentalFences } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(fileBookmarks.length ? { file_bookmarks: fileBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
+    return { ...unknownProjectFieldsRef.current, ...(fence3d ? { fence_3d: fence3d } : {}), project_id: portableProjectId.current, project_name: metadata.name, project_metadata: metadataPayload(withProjectAuthor(metadata, cloudAccount?.user, cloudAccount?.profileName)), ...(compactProject ? { compact_project: compactProject } : {}), ...(projectAssistant.persist && projectAssistant.messages.length ? { project_assistant: projectAssistant } : {}), ...(findJobs.length ? { find_jobs: findJobs } : {}), ...(whiteboardHasContent(whiteboard) ? { whiteboard } : {}), ...(fenceCalculatorProjectHasContent(fenceCalculatorProject) ? { fence_calculator: fenceCalculatorProject } : {}), ...(chainLinkFences.length ? { chain_link_fences: chainLinkFences } : {}), ...(units === "metric" ? { units } : {}), ...(Object.values(clientInfo).some((v) => v && String(v).trim()) ? { client_info: clientInfo } : {}), sheets: Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, ...(scaleSources[sheet_id] ? { scale_source: scaleSources[sheet_id] } : {}) })), conditions, ...(conditionColumns.length ? { condition_columns: conditionColumns } : {}), ...(shapeLabels.length ? { shape_labels: shapeLabels } : {}), ...(pinned.length ? { palette: pinned } : {}), shapes, markups, rfis, sheet_group: sheetGroup, last_group: lastGroup, sheet_tabs: openTabs, ...(sheetBookmarks.length ? { sheet_bookmarks: sheetBookmarks } : {}), ...(fileBookmarks.length ? { file_bookmarks: fileBookmarks } : {}), ...(Object.keys(sheetLevels).length ? { sheet_levels: sheetLevels } : {}), ...(Object.keys(provCounters.shapes_deleted).length ? { provenance_counters: provCounters } : {}) };
   };
 
   function clearProjectFileAutosaveWakeup() {
@@ -3684,7 +3670,7 @@ export default function TakeoffCanvas() {
     // state it serializes, so listing buildPayload (a new identity each render)
     // would fire a save on every render instead of only on a real change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly, shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, findJobs, chainLinkFences, ornamentalFences, fence3d, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, fileBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard, fenceCalculatorProject, compactProject, projectAssistant]);
+  }, [readOnly, shapes, conditions, conditionColumns, shapeLabels, palette, scales, scaleSources, markups, rfis, findJobs, chainLinkFences, fence3d, provCounters, sheetGroup, sheetLevels, lastGroup, openTabs, sheetBookmarks, fileBookmarks, projectMetadata.name, projectMetadata.submissionDate, projectMetadata.status, projectMetadata.createdAt, clientInfo, units, whiteboard, fenceCalculatorProject, compactProject, projectAssistant]);
   useEffect(() => { saveStateRef.current = saveState; }, [saveState]);
 
   // Flush a pending debounced save on navigate-away (unmount), and warn before a
@@ -4050,7 +4036,7 @@ export default function TakeoffCanvas() {
       }
       if (e.key === "Backspace" || e.key === "Delete") {
         e.preventDefault();
-        if (chainLinkOpen && selectedChainMarkerId) { setSelectedChainMarkerId(null); }
+        if (selectedChainMarkerId) { setSelectedChainMarkerId(null); }
         else if (poly.length && !shapeContinuation) { setPoly((q) => q.slice(0, -1)); }
         else if (shapeContinuation && poly.length > 1) { setPoly((q) => q.slice(0, -1)); }
         else if (ocSel && proposal) { deleteSelectedOcVertex(); }
@@ -4064,7 +4050,7 @@ export default function TakeoffCanvas() {
         // tool's points, on-screen or hidden
         else if (tool === "calibrate") { setCalib((c) => c.slice(0, -1)); }
         else if (tool === "check") { setCheck((c) => c.slice(0, -1)); }
-      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (shapeContinuation) { cancelShapeContinuation(); } else if (tool === "polyline") { setPolylineAnchor(null); setPoly([]); } else if (ornamentalPostAddMode) { setOrnamentalPostAddMode(false); setTool("select"); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
+      } else if (e.key === "Escape") { if (textLeaderMarkupId) { setTextLeaderMarkupId(null); setCommitMsg("Leader arrow cancelled."); } else if (shapeContinuation) { cancelShapeContinuation(); } else if (tool === "polyline") { setPolylineAnchor(null); setPoly([]); } else if (selectedChainMarkerId) { setSelectedChainMarkerId(null); } else if (ocSel) { setOcSel(null); } else if (selVert != null) { setSelVert(null); } else { setPoly([]); setCalib([]); setCheck([]); setCheckStated(""); setScaleGuide(null); selectShape(null); setMarkupDraft(null); setProposal(null); setArmedStamp(null); setScheduleAnchor(null); resetZone(); hlRef.current = null; if (hlPathRef.current) hlPathRef.current.style.display = "none"; } }
       // ⌘Z: the drawing context wins — mid-trace it still pops the last placed
       // point (with or without ⇧, matching the old behavior byte-for-byte);
       // only with no trace in progress does the command stack engage
@@ -4073,7 +4059,6 @@ export default function TakeoffCanvas() {
         e.preventDefault();
         if (poly.length && !shapeContinuation) setPoly((q) => q.slice(0, -1));
         else if (shapeContinuation && poly.length > 1) setPoly((q) => q.slice(0, -1));
-        else if (chainLinkOpen && (chainUndoRef.current.length || chainRedoRef.current.length)) { if (e.shiftKey) redoChainLink(); else undoChainLink(); }
         else if (e.shiftKey) redoShapeCommand();
         else undoShapeCommand();
       }
@@ -4083,7 +4068,7 @@ export default function TakeoffCanvas() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tool, selectedId, selVert, selectedMarkupId, selectedChainMarkerId, polylineAnchor, textLeaderMarkupId, ornamentalPostAddMode, chainLinkOpen, chainHistoryEpoch, chainLinkFences, showMarkups, poly, proposal, ocSel, shapes, sheetKey, groupSig, scales, focusKey, shapeContinuation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tool, selectedId, selVert, selectedMarkupId, selectedChainMarkerId, polylineAnchor, textLeaderMarkupId, showMarkups, poly, proposal, ocSel, shapes, sheetKey, groupSig, scales, focusKey, shapeContinuation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The typed "drawing says" value belongs to ONE completed two-point check.
   // The moment the measurement is no longer complete — third-click restart,
@@ -4281,7 +4266,6 @@ export default function TakeoffCanvas() {
         setPoly((points) => [...points, p]);
       }
     }
-    else if (tool === "ornamental-post") addOrnamentalPostAt(p);
     else if (tool === "calibrate") setCalib((c) => (c.length >= 2 ? [p] : [...c, p]));
     else if (tool === "check") setCheck((c) => (c.length >= 2 ? [p] : [...c, p]));
     else if (tool === "oneclick") oneClickAt(p, !!(ev && ev.altKey));
@@ -5431,9 +5415,13 @@ export default function TakeoffCanvas() {
   function commitCount(p) {
     if (!activeCond) { setCommitMsg("Pick or add a condition first."); return; }
     const tp = panelAt(p[0]);
+    const width = Math.max(.5, Math.min(100, (Number(countGateWidth) || 4) / (units === "metric" ? M_PER_FT : 1)));
+    const gateType = ["single", "double", "overhead"].includes(countGateType) ? countGateType : null;
     dispatchShape({ type: "add", shapes: [{
       sheet_id: tp.key, condition_id: activeCond, measure_role: "count",
-      verts_norm: [[(p[0] - tp.xOffset) / tp.img.w, p[1] / tp.img.h]], computed: { count: 1 }, ...(activeLabel ? { label: activeLabel } : {}), origin: { method: "manual" },
+      verts_norm: [[(p[0] - tp.xOffset) / tp.img.w, p[1] / tp.img.h]], computed: { count: 1 },
+      ...(gateType ? { gate_type: gateType, gate_width_ft: width } : {}),
+      ...(activeLabel ? { label: activeLabel } : {}), origin: { method: "manual" },
     }] }, { documentMeasurement: true });
   }
 
@@ -6015,6 +6003,7 @@ export default function TakeoffCanvas() {
       setCommitMsg(`Building ${sheet.label} PDF...`);
       const { bytes, filename } = await buildMarkedSetPdf({
         projectName, dark: darkMode, units, singleSheet: true, includeShapeLabels: false, sheets: [sheet],
+        fence3dSettings: normalizedFence3d,
         shapes: conditionVisibleContent.shapes.filter((s) => s.sheet_id === sheet.key),
         markups: conditionVisibleContent.markups.filter((m) => m.sheet_id === sheet.key), chainLinkFences: conditionVisibleContent.chainLinkFences.filter((fence) => fence.sheet_id === sheet.key), findHighlights, rfis, conditions,
         getPage: async (file, pageNum) => (await docFor(file)).getPage(pageNum),
@@ -6043,6 +6032,7 @@ export default function TakeoffCanvas() {
       const findHighlights = findHighlightsForPageExport(findResults, sheet.key, true, activeFindPage?.key);
       const importOptions = {
         projectName, dark: false, units, singleSheet: true, includeShapeLabels: false, sheets: [sheet],
+        fence3dSettings: normalizedFence3d,
         shapes: conditionVisibleContent.shapes.filter((shape) => shape.sheet_id === sheet.key),
         markups: conditionVisibleContent.markups.filter((markup) => markup.sheet_id === sheet.key), chainLinkFences: conditionVisibleContent.chainLinkFences.filter((fence) => fence.sheet_id === sheet.key), findHighlights, rfis, conditions,
         getPage: async (sourceFile, pageNumber) => (await docFor(sourceFile)).getPage(pageNumber),
@@ -6092,7 +6082,7 @@ export default function TakeoffCanvas() {
       const brand = resolveBranding({ ...(await loadBrandingSelection(projectIdFromUrl())), profiles: loadProfiles().profiles });
       const { bytes, filename } = await buildMarkedSetPdf({
         projectName, clientInfo, company: brand.company, credit: brand.credit, coverTitle: brand.coverTitle,
-        dark: darkMode, units, sheets: sheetMeta, shapes: exportShapes, markups: exportMarkups, chainLinkFences: conditionVisibleContent.chainLinkFences, rfis, conditions,
+        dark: darkMode, units, sheets: sheetMeta, shapes: exportShapes, markups: exportMarkups, chainLinkFences: conditionVisibleContent.chainLinkFences, fence3dSettings: normalizedFence3d, rfis, conditions,
         getPage: async (file, pageNum) => (await docFor(file)).getPage(pageNum),
         loadPdfData: (file) => store.loadPdfData(file),
       });
@@ -6510,7 +6500,7 @@ export default function TakeoffCanvas() {
     const fenceEdit = linkedFences.length ? { before: cloneChainFences(linkedFences), after: [] } : null;
     dispatchShape({ type: "delete", ids: [...ids] }, fenceEdit ? { fenceEdit } : {});
     if (fenceEdit) applyPolylineFenceEdit(fenceEdit, "after");
-    setSelectedId(null); setSelVert(null); setSelectedChainFenceId(null); setSelectedChainMarkerId(null);
+    setSelectedId(null); setSelVert(null); setSelectedChainMarkerId(null);
   }
   function deleteSelected() { deleteSelectedShape(); }
   function reassignSelectedLabel(value) {
@@ -7027,7 +7017,7 @@ export default function TakeoffCanvas() {
       project_name: metadataAllowed ? projectName : null,
       project_metadata: metadataAllowed ? projectMetadata : null,
       client_info: metadataAllowed ? clientInfo : null,
-      units, view: whiteboardOpen ? "whiteboard" : showReport ? "report" : fenceCalculatorOpen ? "fence-calculator" : chainLinkOpen ? "chain-link-calculator" : view,
+      units, view: whiteboardOpen ? "whiteboard" : showReport ? "report" : fenceCalculatorOpen ? "fence-calculator" : view,
       active_file: focusPanel?.file || active || null,
       active_page: activeKey ? pages.find((item) => item.key === activeKey) || { key: activeKey, ...parseSheetKey(activeKey), label: tabLabel(activeKey) } : null,
       selection: selectionShape ? { type: "measurement", value: selectionShape } : selectionMarkup ? { type: "markup", value: selectionMarkup } : null,
@@ -7662,36 +7652,17 @@ export default function TakeoffCanvas() {
   const checkErrPct = checkFeet && checkStatedFeet > 0 ? ((checkFeet - checkStatedFeet) / checkStatedFeet) * 100 : null;
 
   const cloneChainFences = (records) => records.map((fence) => ({ ...fence, markers: fence.markers.map((marker) => ({ ...marker })), shared_posts: { ...(fence.shared_posts || {}) } }));
-  const replaceChainFences = (next, { record = true } = {}) => {
-    if (denyReadOnlyEdit()) return;
-    const clean = removeManualChainLinkPostData(next, shapes);
-    if (record) {
-      chainUndoRef.current = [...chainUndoRef.current.slice(-99), cloneChainFences(chainLinkFences)];
-      chainRedoRef.current = [];
-      setChainHistoryEpoch((value) => value + 1);
-    }
-    setChainLinkFences(clean);
-  };
-  const undoChainLink = () => {
-    if (denyReadOnlyEdit()) return;
-    const previous = chainUndoRef.current.at(-1);
-    if (!previous) return;
-    chainUndoRef.current = chainUndoRef.current.slice(0, -1);
-    chainRedoRef.current = [...chainRedoRef.current.slice(-99), cloneChainFences(chainLinkFences)];
-    setChainLinkFences(previous); setSelectedChainMarkerId(null); setChainHistoryEpoch((value) => value + 1);
-  };
-  const redoChainLink = () => {
-    if (denyReadOnlyEdit()) return;
-    const next = chainRedoRef.current.at(-1);
-    if (!next) return;
-    chainRedoRef.current = chainRedoRef.current.slice(0, -1);
-    chainUndoRef.current = [...chainUndoRef.current.slice(-99), cloneChainFences(chainLinkFences)];
-    setChainLinkFences(next); setSelectedChainMarkerId(null); setChainHistoryEpoch((value) => value + 1);
-  };
   const chainShapePoints = (shape, sp = panelByKey(shape?.sheet_id)) => {
     if (!shape || !sp?.img?.w || !sp?.img?.h) return [];
     const points = (shape.verts_norm || []).map(([x, y]) => [x * sp.img.w, y * sp.img.h]);
     return shape.curved ? flattenCurve(points) : points;
+  };
+  const chainFenceConfig = (fence, shape) => {
+    const conditionId = shape?.condition_id || fence?.condition_id || (shape?.id ? `shape:${shape.id}` : "");
+    const condition = normalizedFence3d.conditions[fenceConditionKey(shape?.sheet_id || fence?.sheet_id, conditionId)];
+    const run = normalizedFence3d.runs[shape?.id];
+    return { type: condition?.type ?? run?.type ?? (fence ? "chain-link" : "exclude"),
+      spec: runSpec(run, condition?.type === "chain-link" ? condition.spec : null) };
   };
   function updatePolylineFenceJunctions(beforeFences, editedShapes) {
     const editedById = new Map(editedShapes.map((shape) => [shape.id, shape]));
@@ -7721,80 +7692,50 @@ export default function TakeoffCanvas() {
   }
   const chainCalculation = (fence, sp = panelByKey(fence?.sheet_id)) => {
     const shape = shapes.find((item) => item.id === fence?.shape_id);
-    return calculateChainLinkFence(fence, chainShapePoints(shape, sp), uppFor(fence?.sheet_id), shape?.curved === true);
+    const config = chainFenceConfig(fence, shape);
+    return calculateChainLinkFence(fence, chainShapePoints(shape, sp), uppFor(fence?.sheet_id), shape?.curved === true,
+      config.spec.spacing, config.spec.strategy);
   };
-  const linkedFenceForShape = (shapeId) => chainLinkFences.find((fence) => fence.shape_id === shapeId) || null;
-  const activeChainFence = chainLinkFences.find((fence) => fence.id === selectedChainFenceId)
-    || linkedFenceForShape(selectedId) || null;
-  const activeChainCalculation = activeChainFence ? chainCalculation(activeChainFence) : null;
   const currentPageLinearShapes = new Map(shapes.filter((shape) => shape.sheet_id === focusPanel?.key && shape.measure_role === "linear").map((shape) => [shape.id, shape]));
-  const currentPageChainFences = focusPanel?.key ? chainLinkFences.flatMap((fence) => {
-    const sourceShape = currentPageLinearShapes.get(fence.shape_id);
-    return sourceShape ? [{ ...fence, sheet_id: sourceShape.sheet_id, condition_id: sourceShape.condition_id }] : [];
+  const currentPageChainFences = focusPanel?.key ? [...currentPageLinearShapes.values()].flatMap((sourceShape) => {
+    const savedTopology = chainLinkFences.find((item) => item.shape_id === sourceShape.id);
+    if (chainFenceConfig(savedTopology, sourceShape).type !== "chain-link") return [];
+    const vertices = sourceShape.verts_norm || [];
+    const first = vertices[0], last = vertices.at(-1);
+    const closed = vertices.length > 2 && first && last
+      && Math.hypot(first[0] - last[0], first[1] - last[1]) <= 1e-9;
+    const fence = savedTopology || { ...createChainLinkFence(sourceShape, () => `derived-${sourceShape.id}`), closed };
+    return fence ? [{ ...fence, sheet_id: sourceShape.sheet_id, condition_id: sourceShape.condition_id }] : [];
   }) : [];
-  const chainEntries = currentPageChainFences.map((fence) => ({ fence, calculation: chainCalculation(fence) }));
+  const chainEntries = currentPageChainFences.filter((fence) => {
+    const shape = currentPageLinearShapes.get(fence.shape_id);
+    return chainFenceConfig(fence, shape).type === "chain-link";
+  }).map((fence) => ({ fence, calculation: chainCalculation(fence) }));
   const currentPagePostSummary = summarizeChainLinkFencePosts(chainEntries);
-  const currentPageChainSummaries = [...chainEntries.reduce((groups, entry) => {
-    const { fence, calculation: result } = entry;
-    const conditionId = fence.condition_id || "unassigned";
-    const condition = condById[conditionId];
-    const summary = groups.get(conditionId) || {
-      conditionId,
-      conditionName: condition?.finish_tag || condition?.name || "Unassigned condition",
-      conditionColor: condition?.color || "#1f3fc7",
-      fenceCount: 0,
-      needsScale: 0,
-      totalLengthFt: 0,
-      sections: 0,
-      terminalPostCount: 0,
-      cornerPostCount: 0,
-      threeWayPostCount: 0,
-      fourWayPostCount: 0,
-      multiWayPostCount: 0,
-      linePostCount: 0,
-      totalPostCount: 0,
-    };
-    summary.fenceCount += 1;
-    if (!result.valid) summary.needsScale += 1;
-    else {
-      summary.totalLengthFt += result.totalLengthFt;
-      summary.sections += result.sections.length;
+  // Reuse the same calibrated source adapter and procedural panel/post layout
+  // as the 3D viewport so 2D condition labels cannot drift from generated data.
+  const fencePlanLayoutsBySheet = useMemo(() => {
+    const bySheet = Object.create(null);
+    const names = Object.fromEntries(conditions.map((condition) => [condition.id, condition.name]));
+    for (const sheetId of JSON.parse(groupSig)) {
+      const dimensions = panelImgs[sheetId];
+      const feetPerPixel = uppFor(sheetId);
+      if (!dimensions?.w || !dimensions?.h || !Number.isFinite(feetPerPixel) || feetPerPixel <= 0) continue;
+      const source = adaptFenceRuns({
+        shapes: displayedShapes,
+        fences: conditionVisibleContent.chainLinkFences,
+        sheetId,
+        calibration: { width: dimensions.w, height: dimensions.h, feetPerPixel },
+        settings: normalizedFence3d,
+        conditionNames: names,
+      });
+      bySheet[sheetId] = {
+        ornamental: buildOrnamentalLayout({ runs: source.ornamentalRuns }),
+        guardrail: buildGuardrailLayout({ runs: source.guardrailRuns }),
+      };
     }
-    groups.set(conditionId, summary);
-    return groups;
-  }, new Map()).values()];
-  for (const summary of currentPageChainSummaries) {
-    const entries = chainEntries.filter(({ fence }) => (fence.condition_id || "unassigned") === summary.conditionId && chainCalculation(fence).valid);
-    const posts = summarizeChainLinkFencePosts(entries);
-    summary.terminalPostCount = posts.terminalPostCount;
-    summary.cornerPostCount = posts.cornerPostCount;
-    summary.threeWayPostCount = posts.threeWayPostCount;
-    summary.fourWayPostCount = posts.fourWayPostCount;
-    summary.multiWayPostCount = posts.multiWayPostCount;
-    summary.linePostCount = posts.linePostCount;
-    summary.totalPostCount = posts.totalPostCount;
-  }
-  const fenceAttachConditionId = shapes.find((item) => item.id === selectedId && item.measure_role === "linear")?.condition_id || activeCond;
-  const fenceAttachShapes = shapes.filter((item) => item.condition_id === fenceAttachConditionId && item.measure_role === "linear");
-  const createChainLinkForSelected = () => {
-    if (!fenceAttachShapes.length) { setCommitMsg("Choose a condition with at least one completed Linear takeoff."); return; }
-    const attachedShapeIds = new Set(chainLinkFences.map((fence) => fence.shape_id));
-    const additions = fenceAttachShapes.filter((shape) => !attachedShapeIds.has(shape.id)).map((shape) => createChainLinkFence(shape, () => uid("clf"))).filter(Boolean);
-    const first = additions[0] || chainLinkFences.find((fence) => fenceAttachShapes.some((shape) => shape.id === fence.shape_id));
-    if (!fenceAttachShapes.every((shape) => uppFor(shape.sheet_id) > 0)) setCommitMsg("Set the scale on every affected sheet before relying on post spacing quantities.");
-    if (additions.length) replaceChainFences([...chainLinkFences, ...additions]);
-    if (first) setSelectedChainFenceId(first.id);
-    setSelectedChainMarkerId(null);
-  };
-  const patchActiveChainFence = (patch) => {
-    if (!activeChainFence) return;
-    replaceChainFences(chainLinkFences.map((fence) => fence.id === activeChainFence.id ? { ...fence, ...patch } : fence));
-  };
-  const deleteActiveChainFence = () => {
-    if (!activeChainFence) return;
-    replaceChainFences(chainLinkFences.filter((fence) => fence.id !== activeChainFence.id));
-    setSelectedChainFenceId(null); setSelectedChainMarkerId(null); setTool("select");
-  };
+    return bySheet;
+  }, [groupSig, panelImgs, scales, hiResKeys, displayedShapes, conditionVisibleContent.chainLinkFences, normalizedFence3d, conditions]);
   function findPolylineAnchor(stagePoint) {
     const sp = panelAt(stagePoint[0]);
     if (!sp?.img?.w) return null;
@@ -7878,6 +7819,7 @@ export default function TakeoffCanvas() {
       : poly.map(() => uid("plnode"));
     let sourceUpdate = null;
     let anchorNodeId = "";
+    let anchorNorm = null;
     if (source) {
       while (polylineNodeIds.length < source.verts_norm.length) polylineNodeIds.push(uid("plnode"));
       polylineNodeIds.length = source.verts_norm.length;
@@ -7885,6 +7827,7 @@ export default function TakeoffCanvas() {
       if (Number.isInteger(polylineAnchor.vertexIndex)) {
         anchorNodeId = polylineNodeIds[polylineAnchor.vertexIndex] || anchorNodeId;
         polylineNodeIds[polylineAnchor.vertexIndex] = anchorNodeId;
+        anchorNorm = [...source.verts_norm[polylineAnchor.vertexIndex]];
         if (!sourceNodesValid) {
           sourceUpdate = {
             type: "geom", id: source.id, editKind: "vertex", prev: geomSnapshot(source),
@@ -7893,10 +7836,11 @@ export default function TakeoffCanvas() {
           };
         }
       } else if (Number.isInteger(polylineAnchor.insertIndex)) {
-        const [nx, ny] = poly.map(([x, y]) => [(x - sp.xOffset) / sp.img.w, y / sp.img.h])[0];
+        const [x, y] = poly[0];
+        anchorNorm = [(x - sp.xOffset) / sp.img.w, y / sp.img.h];
         const verts_norm = [
           ...source.verts_norm.slice(0, polylineAnchor.insertIndex),
-          [nx, ny],
+          anchorNorm,
           ...source.verts_norm.slice(polylineAnchor.insertIndex),
         ];
         polylineNodeIds.splice(polylineAnchor.insertIndex, 0, anchorNodeId);
@@ -7915,6 +7859,9 @@ export default function TakeoffCanvas() {
       }
     }
     const verts_norm = poly.map(([x, y]) => [(x - sp.xOffset) / sp.img.w, y / sp.img.h]);
+    // The branch and its source must persist the same normalized coordinate;
+    // independently converting the snapped stage point can leave a tiny gap.
+    if (source && anchorNorm) verts_norm[0] = [...anchorNorm];
     const branchNodeIds = source ? [anchorNodeId, ...poly.slice(1).map(() => uid("plnode"))] : polylineNodeIds;
     const shape = {
       id: uid("shp"), sheet_id: sp.key, condition_id: conditionId, measure_role: "linear",
@@ -7939,7 +7886,6 @@ export default function TakeoffCanvas() {
     dispatchShape({ type: "composite", commands }, { documentMeasurement: true, fenceEdit });
     applyPolylineFenceEdit(fenceEdit, "after");
     setSelectedId(shape.id); setSelVert(null);
-    setSelectedChainFenceId(run.id);
     setSelectedChainMarkerId(null);
     setPolylineAnchor(null);
     setPoly([]);
@@ -7950,11 +7896,6 @@ export default function TakeoffCanvas() {
     const ids = new Set([...edit.before, ...edit.after].map((fence) => fence.id));
     const clean = removeManualChainLinkPostData(edit[side]);
     setChainLinkFences((current) => current.filter((fence) => !ids.has(fence.id)).concat(clean));
-    // Panel history stores whole fence lists. Discard snapshots from before
-    // this geometry edit so a post undo cannot orphan a run or its junction.
-    chainUndoRef.current = [];
-    chainRedoRef.current = [];
-    setChainHistoryEpoch((value) => value + 1);
   }
 
   function startChainJunctionDrag(event, fence, post) {
@@ -8034,94 +7975,8 @@ export default function TakeoffCanvas() {
   const handleChainPostPointerDown = (event, fence, post) => {
     if (event.button !== 0 || spaceRef.current || (post.shared_post_id && tool === "pan")) return;
     event.preventDefault(); event.stopPropagation();
-    selectShape(fence.shape_id); setSelectedChainFenceId(fence.id); setSelectedChainMarkerId(post.id);
+    selectShape(fence.shape_id); setSelectedChainMarkerId(post.id);
     if (post.shared_post_id) startChainJunctionDrag(event, fence, post);
-  };
-
-  const linkedOrnamentalFenceForShape = (shapeId) => ornamentalFences.find((fence) => fence.shape_id === shapeId) || null;
-  const activeOrnamentalFence = ornamentalFences.find((fence) => fence.id === selectedOrnamentalFenceId)
-    || linkedOrnamentalFenceForShape(selectedId) || null;
-  const activeOrnamentalCalculation = activeOrnamentalFence ? calculateOrnamentalFence(
-    activeOrnamentalFence,
-    chainShapePoints(shapes.find((shape) => shape.id === activeOrnamentalFence.shape_id), panelByKey(activeOrnamentalFence.sheet_id)),
-    uppFor(activeOrnamentalFence.sheet_id),
-  ) : null;
-  const ornamentalConditionSummary = useMemo(() => {
-    const conditionId = activeOrnamentalFence?.condition_id || fenceAttachConditionId;
-    const rows = ornamentalFences.flatMap((fence) => {
-      const shape = shapes.find((item) => item.id === fence.shape_id);
-      if (!shape || shape.condition_id !== conditionId) return [];
-      const calculation = calculateOrnamentalFence(fence, chainShapePoints(shape, panelByKey(fence.sheet_id)), uppFor(fence.sheet_id));
-      return [{ fence, shape, calculation }];
-    });
-    const summarize = (scopedRows) => {
-      const validRows = scopedRows.filter((row) => row.calculation.valid);
-      return ({
-      lineCount: validRows.length,
-      invalidScaleCount: scopedRows.length - validRows.length,
-      totalLengthFt: validRows.reduce((sum, row) => sum + row.calculation.totalLengthFt, 0),
-      panelCount: validRows.reduce((sum, row) => sum + row.calculation.panelCount, 0),
-      postCount: validRows.reduce((sum, row) => sum + row.calculation.postCount, 0),
-      orderedPanelLf: validRows.reduce((sum, row) => sum + row.calculation.orderedPanelLf, 0),
-      cutWasteLf: validRows.reduce((sum, row) => sum + row.calculation.cutWasteLf, 0),
-      wasteItems: validRows.flatMap(({ fence, shape, calculation }) => calculation.sections.map((section) => ({
-        id: `${fence.id}-${section.id}`,
-        shapeId: shape.id,
-        sheetId: shape.sheet_id,
-        run: section.index + 1,
-        measuredFt: section.lengthFt,
-        panelWidthFt: section.panelWidthFt,
-        panels: section.panels,
-        finalCutFt: section.finalPanelWidthFt,
-        wasteFt: section.cutWasteLf,
-      }))).filter((item) => item.wasteFt > 1e-6),
-    });
-    };
-    const currentSheetId = focusPanel?.key || sheetKey;
-    return { page: summarize(rows.filter((row) => row.shape.sheet_id === currentSheetId)), all: summarize(rows), currentSheetId };
-  }, [activeOrnamentalFence, fenceAttachConditionId, ornamentalFences, shapes, panels, scales, focusPanel?.key, sheetKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const replaceOrnamentalFences = (next) => {
-    if (denyReadOnlyEdit()) return;
-    setOrnamentalFences(sanitizeOrnamentalFences(next, shapes));
-  };
-  const createOrnamentalForSelected = () => {
-    if (!fenceAttachShapes.length) { setCommitMsg("Choose a condition with at least one completed Linear takeoff."); return; }
-    const attachedShapeIds = new Set(ornamentalFences.map((fence) => fence.shape_id));
-    const additions = fenceAttachShapes.filter((shape) => !attachedShapeIds.has(shape.id)).map((shape) => createOrnamentalFence(shape, () => uid("orn"))).filter(Boolean);
-    const first = additions[0] || ornamentalFences.find((fence) => fenceAttachShapes.some((shape) => shape.id === fence.shape_id));
-    if (!fenceAttachShapes.every((shape) => uppFor(shape.sheet_id) > 0)) setCommitMsg("Set the scale on every affected sheet before relying on ornamental panel quantities.");
-    if (additions.length) replaceOrnamentalFences([...ornamentalFences, ...additions]);
-    if (first) setSelectedOrnamentalFenceId(first.id);
-  };
-  const patchActiveOrnamentalFence = (patch) => {
-    if (!activeOrnamentalFence) return;
-    const conditionShapeIds = new Set(shapes.filter((shape) => shape.condition_id === activeOrnamentalFence.condition_id && shape.measure_role === "linear").map((shape) => shape.id));
-    replaceOrnamentalFences(ornamentalFences.map((fence) => conditionShapeIds.has(fence.shape_id) ? { ...fence, ...patch } : fence));
-  };
-  const deleteActiveOrnamentalFence = () => {
-    if (!activeOrnamentalFence) return;
-    const conditionShapeIds = new Set(shapes.filter((shape) => shape.condition_id === activeOrnamentalFence.condition_id && shape.measure_role === "linear").map((shape) => shape.id));
-    replaceOrnamentalFences(ornamentalFences.filter((fence) => !conditionShapeIds.has(fence.shape_id)));
-    setSelectedOrnamentalFenceId(null);
-  };
-  const addOrnamentalPostAt = (stagePoint) => {
-    const panel = panelAt(stagePoint[0]);
-    if (!panel?.img?.w || !panel?.img?.h) return;
-    const conditionId = activeOrnamentalFence?.condition_id || fenceAttachConditionId;
-    const candidates = ornamentalFences.filter((fence) => fence.sheet_id === panel.key && fence.condition_id === conditionId);
-    const target = candidates.find((fence) => fence.id === selectedOrnamentalFenceId) || candidates[0];
-    if (!target) { setCommitMsg("This sheet has no ornamental fence attachment for the selected condition."); return; }
-    const pointNorm = [(stagePoint[0] - panel.xOffset) / panel.img.w, stagePoint[1] / panel.img.h];
-    const updated = insertOrnamentalPost(target, pointNorm, () => uid("orn-post"));
-    replaceOrnamentalFences(ornamentalFences.map((fence) => fence.id === updated.id ? updated : fence));
-    setSelectedOrnamentalFenceId(updated.id);
-    setSelectedOrnamentalPostId(updated.manual_posts.at(-1)?.id || null);
-  };
-  const deleteSelectedOrnamentalPost = () => {
-    if (!selectedOrnamentalPostId) return;
-    replaceOrnamentalFences(ornamentalFences.map((fence) => removeOrnamentalPost(fence, selectedOrnamentalPostId)));
-    setSelectedOrnamentalPostId(null);
-    setCommitMsg("Added ornamental post removed.");
   };
 
   const markupCount = markups.filter((m) => panelKeySet.has(m.sheet_id)).length;
@@ -8553,9 +8408,11 @@ export default function TakeoffCanvas() {
         const selectedMarkup = markups.find((markup) => markup.id === selectedMarkupId);
         const linkedShape = selectedMarkup?.measurement_shape_id ? shapes.find((shape) => shape.id === selectedMarkup.measurement_shape_id) : null;
         if (linkedShape?.condition_id === id) setSelectedMarkupId(null);
-        const selectedFence = chainLinkFences.find((fence) => fence.id === selectedChainFenceId);
-        const fenceShape = selectedFence ? shapes.find((shape) => shape.id === selectedFence.shape_id) : null;
-        if (fenceShape?.condition_id === id) { setSelectedChainFenceId(null); setSelectedChainMarkerId(null); }
+        if (selectedChainMarkerId) {
+          const markerFence = chainLinkFences.find((fence) => fence.markers.some((marker) => marker.id === selectedChainMarkerId));
+          const markerShape = markerFence ? shapes.find((shape) => shape.id === markerFence.shape_id) : null;
+          if (markerShape?.condition_id === id) setSelectedChainMarkerId(null);
+        }
       }
     },
     onAddCondition: addCondition, onDeleteCondition: deleteCondition,
@@ -8936,6 +8793,7 @@ export default function TakeoffCanvas() {
         }}
         buildPdf={(pages, settings, progress, cancelled) => buildPrintDocument(pages, settings, async (sheet, options) => {
           const result = await buildMarkedSetPdf({ projectName, dark: false, units, singleSheet: true, sheets: [sheet],
+            fence3dSettings: normalizedFence3d,
             shapes: options.takeoffs ? conditionVisibleContent.shapes.filter((s) => s.sheet_id === sheet.key) : [],
             markups: options.markups ? conditionVisibleContent.markups.filter((m) => m.sheet_id === sheet.key) : [],
             chainLinkFences: options.takeoffs ? conditionVisibleContent.chainLinkFences.filter((f) => f.sheet_id === sheet.key) : [],
@@ -9090,7 +8948,7 @@ export default function TakeoffCanvas() {
         {readOnly && <div className="toolbar-readonly-status">
           <StartTrialButton />
           {licenseAccess.reason !== "trial_available" && <strong title={readOnlyMessage}>Read-only</strong>}
-          <span hidden={licenseAccess.reason === "trial_available"} className="toolbar-license-message" role="status" title={licenseAccess.message || readOnlyMessage}>{licenseAccess.reason === "another_device" ? "License in use on another session" : licenseAccess.reason === "server" ? "License check unavailable" : licenseAccess.reason === "offline" ? "Reconnect to edit" : licenseAccess.reason === "trial_expired" ? "Your trial has ended" : licenseAccess.reason === "subscription" ? "No active subscription" : "View-only workspace"}</span>
+          <span hidden={licenseAccess.reason === "trial_available"} className="toolbar-license-message" role="status" title={licenseAccess.message || readOnlyMessage}>{licenseAccess.reason === "another_device" ? "License in use on another session" : licenseAccess.reason === "server" ? (/saved sign-in/i.test(licenseAccess.message || "") ? "Sign in again to verify license" : "License check unavailable") : licenseAccess.reason === "offline" ? "Reconnect to edit" : licenseAccess.reason === "trial_expired" ? "Your trial has ended" : licenseAccess.reason === "subscription" ? "No active subscription" : "View-only workspace"}</span>
           {cloudAccount.user && licenseAccess.reason !== "trial_available" && <button type="button" title={licenseAccess.reason === "another_device" ? "Move the editing license to this session" : "Retry license check"} onClick={() => licenseAccess.reason === "another_device" ? licenseAccess.useHere?.() : licenseAccess.retry?.()}>{licenseAccess.reason === "another_device" ? "Use here" : "Retry"}</button>}
           {(!cloudAccount.user || ["subscription", "trial_expired"].includes(licenseAccess.reason)) && <button type="button" onClick={() => cloudAccount.user ? setCloudView("membership") : openSignInPage()}>{cloudAccount.user ? "Subscription" : "Sign in"}</button>}
         </div>}
@@ -9111,7 +8969,6 @@ export default function TakeoffCanvas() {
             aria-label={action === "undo" ? "Undo" : "Redo"} title={action === "undo" ? "Undo (Ctrl+Z)" : "Redo (Ctrl+Shift+Z)"}
             onClick={(event) => {
               if (poly.length) { if (action === "undo") setPoly((points) => points.slice(0, -1)); }
-              else if (chainLinkOpen && (chainUndoRef.current.length || chainRedoRef.current.length)) { if (action === "undo") undoChainLink(); else redoChainLink(); }
               else if (action === "undo") undoShapeCommand(); else redoShapeCommand();
               if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) event.currentTarget.animate([
                 { color: "var(--cobalt)", filter: "drop-shadow(0 0 5px var(--cobalt))" },
@@ -9292,6 +9149,29 @@ export default function TakeoffCanvas() {
           aria-label="Live takeoff summary"
           style={{ "--takeoff-readout-accent": activeColor }}>
           <div className="takeoff-toolbar-readout-heading">{tool === "zone" ? "Zone check" : aCond ? <ConditionIdentityFields cond={aCond} onUpdateCond={updateCond} afterWaste={<div className="condition-appearance-toolbar condition-card-appearance"><ConditionAppearanceEditor cond={aCond} onUpdateCond={updateCond} onSetCondParam={setCondParam} onAssignAttr={assignAttr} conditionColumns={conditionColumns} layout="row" /></div>} /> : "No condition"}</div>
+          {tool === "count" && <div className="takeoff-toolbar-readout-live" style={{ gridColumn: "1 / -1", display: "flex", alignItems: "end", flexWrap: "wrap", gap: 8 }}>
+            <label style={{ display: "grid", gap: 3, fontSize: 10, color: "var(--ink-muted)" }}>Count placement
+              <select value={countGateType} onChange={(event) => {
+                const type = event.target.value;
+                setCountGateType(type);
+                if (type === "single") setCountGateWidth("4");
+                else if (type === "double") setCountGateWidth("8");
+                else if (type === "overhead") setCountGateWidth("12");
+              }} style={{ minWidth: 174, padding: "5px 7px", color: "var(--ink)", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }}>
+                <option value="item">Standard count</option>
+                <option value="single">Single swing gate</option>
+                <option value="double">Double swing gate</option>
+                <option value="overhead">Top-rolling slide gate</option>
+              </select>
+            </label>
+            {countGateType !== "item" && <label style={{ display: "grid", gap: 3, fontSize: 10, color: "var(--ink-muted)" }}>Opening width ({units === "metric" ? "m" : "ft"})
+              <input type="number" min={units === "metric" ? "0.15" : "0.5"} max={units === "metric" ? "30.48" : "100"} step={units === "metric" ? "0.1" : "0.5"}
+                value={units === "metric" ? (Number(countGateWidth) * M_PER_FT).toFixed(2) : countGateWidth}
+                onChange={(event) => setCountGateWidth(units === "metric" ? String(Number(event.target.value) / M_PER_FT) : event.target.value)}
+                style={{ width: 106, padding: "5px 7px", color: "var(--ink)", background: "var(--paper-bright)", border: "1px solid var(--ink-faint)" }} />
+            </label>}
+            <span className="takeoff-toolbar-readout-hint">Choose a gate, then click its location on a straight edge of the matching Chain-link or Ornamental condition. The opening centers on the mark.</span>
+          </div>}
           <div className="takeoff-toolbar-readout-live">
             {tool === "oneclick" && proposal?.regions.length ? (() => {
               const pos = proposal.regions.filter((r) => r.kind === "pos");
@@ -10124,6 +10004,15 @@ export default function TakeoffCanvas() {
                       const pDash = `${4 / z} ${3 / z}`;
                       if (s.measure_role === "count") {
                         const [cx, cy] = pts[0], r = 7 / z;
+                        if (["single", "double", "overhead"].includes(s.gate_type)) {
+                          const mark = s.gate_type === "single" ? "S" : s.gate_type === "double" ? "D" : "R";
+                          const title = s.gate_type === "single" ? "Single swing gate" : s.gate_type === "double" ? "Double swing gate" : "Top-rolling slide gate";
+                          return <g key={s.id}>
+                            <title>{title} · {Number(s.gate_width_ft || 0).toFixed(1)} ft opening</title>
+                            <rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} rx={2 / z} fill="#303f9f" stroke={sel ? "#1f3fc7" : "#fff"} strokeWidth={(sel ? 3 : 1.5) / z} />
+                            <text x={cx} y={cy + 3 / z} textAnchor="middle" fontSize={8 / z} fontWeight="800" fill="#fff" style={{ pointerEvents: "none" }}>{mark}</text>
+                          </g>;
+                        }
                         return <rect key={s.id} x={cx - r} y={cy - r} width={r * 2} height={r * 2} rx={2 / z} fill={col + (pending ? "55" : "cc")} stroke={sel ? "#1f3fc7" : "#fff"} strokeWidth={(sel ? 3 : 1.5) / z} strokeDasharray={pending ? `${3 / z} ${2.5 / z}` : undefined} />;
                       }
                       if (s.measure_role === "surface_area") {
@@ -10150,91 +10039,165 @@ export default function TakeoffCanvas() {
                         stroke={ded ? "#b03a26" : (sel ? "#1f3fc7" : col)} strokeOpacity={pending ? 0.9 : undefined} strokeWidth={sw}
                         strokeDasharray={pending ? pDash : ded ? `${6 / z} ${4 / z}` : dashArrayFor(cond?.line_style || "solid", z)} />;
                     })}
+                    {/* Ornamental labels and post symbols use the exact panels
+                        and posts generated for the 3D model. */}
+                    {(() => {
+                      const layout = fencePlanLayoutsBySheet[p.key]?.ornamental;
+                      if (!layout) return null;
+                      const display = normalizedFence3d.display;
+                      const metersPerPixel = uppFor(p.key) * M_PER_FT;
+                      const toPage = ([x, y]) => [x / metersPerPixel + p.img.w / 2, y / metersPerPixel + p.img.h / 2];
+                      const showLabels = display.edgeLabels !== false;
+                      const showPosts = display.posts !== false;
+                      const componentVisibility = display.componentVisibility || {};
+                      const conditionIsVisible = (run) => display.conditionVisibility?.[run.conditionScopeId] !== false
+                        && normalizedFence3d.conditions[run.conditionScopeId]?.visible !== false;
+                      const visibleRuns = layout.runs.filter(conditionIsVisible);
+                      const edgeLabel = (key, a, b, lengthM, panelCount, color) => {
+                        const start = toPage(a), end = toPage(b);
+                        const dx = end[0] - start[0], dy = end[1] - start[1];
+                        const length = Math.hypot(dx, dy) || 1;
+                        const x = (start[0] + end[0]) / 2 - dy / length * 11 / tf.scale;
+                        const y = (start[1] + end[1]) / 2 + dx / length * 11 / tf.scale - 3 / tf.scale;
+                        return <text key={key} x={x} y={y} textAnchor="middle" fontSize={10 / tf.scale} fontWeight="700"
+                          fill={color} stroke="#fff" strokeWidth={3 / tf.scale} paintOrder="stroke" style={{ pointerEvents: "none" }}>
+                          {num(lengthM / METERS_PER_FOOT, 2)} LF · {panelCount} {panelCount === 1 ? "PANEL" : "PANELS"}
+                        </text>;
+                      };
+                      return <g>
+                        {showLabels && visibleRuns.flatMap((run) => {
+                          const color = condById[run.conditionId]?.color || "#1f3fc7";
+                          const sourceShape = pShapes.find((shape) => shape.id === run.id);
+                          if (sourceShape?.curved) {
+                            const station = run.length / 2;
+                            const segment = run.segments.find((item) => station <= item.start + item.length + 1e-8) || run.segments.at(-1);
+                            if (!segment) return [];
+                            const t = Math.max(0, Math.min(1, (station - segment.start) / Math.max(segment.length, 1e-9)));
+                            const middle = [segment.a[0] + (segment.b[0] - segment.a[0]) * t, segment.a[1] + (segment.b[1] - segment.a[1]) * t];
+                            return [edgeLabel(`${run.id}:ornamental-label`, middle, middle, run.length, run.panels.length, color)];
+                          }
+                          const panelCounts = new Map();
+                          for (const panel of run.panels) panelCounts.set(panel.segmentId, (panelCounts.get(panel.segmentId) || 0) + 1);
+                          return run.segments.map((segment, index) => edgeLabel(`${run.id}:ornamental-label:${index}`,
+                            segment.a, segment.b, segment.length, panelCounts.get(segment.id) || 0, color));
+                        })}
+                        {showPosts && layout.posts.map((post) => {
+                          if (!conditionIsVisible(post)) return null;
+                          const degree = post.incidents?.length || 0;
+                          const type = degree === 3 ? "threeway" : degree === 4 ? "fourway"
+                            : post.type === "end" ? "end" : post.type === "panel" ? "line"
+                              : post.type === "corner" ? "corner" : null;
+                          const category = type === "corner" ? "corner" : type === "line" ? "panel"
+                            : type === "end" ? "end" : type ? "junction" : null;
+                          if (!type || componentVisibility[`post:${category}`] === false) return null;
+                          const [x, y] = toPage(post.point);
+                          const radius = 6 / tf.scale;
+                          const color = condById[post.conditionId]?.color || "#1f3fc7";
+                          const endDirection = post.incidents?.[0]?.direction || [1, 0];
+                          const endRotation = Math.atan2(endDirection[1], endDirection[0]) * 180 / Math.PI;
+                          return <g key={post.id} transform={`translate(${x},${y})`} style={{ pointerEvents: "none" }}>
+                            {type === "end" ? <g transform={`rotate(${endRotation})`}>
+                              <path d={`M 0 ${-radius * 1.1} V ${radius * 1.1}`} fill="none" stroke="#fff" strokeWidth={6 / tf.scale} strokeLinecap="round" />
+                              <path d={`M 0 ${-radius * 1.1} V ${radius * 1.1}`} fill="none" stroke={color} strokeWidth={3.5 / tf.scale} strokeLinecap="round" />
+                            </g>
+                              : type === "line" ? <circle r={radius * .8} fill="#fff" stroke={color} strokeWidth={2 / tf.scale} />
+                                : type === "corner" ? <circle r={radius * .85} fill="#fff" stroke={color} strokeWidth={2 / tf.scale} />
+                              : type === "threeway" ? <polygon points={`0,${-radius} ${radius * .9},${radius * .72} ${-radius * .9},${radius * .72}`} fill="#fff" stroke={color} strokeWidth={2 / tf.scale} strokeLinejoin="round" />
+                                : <rect x={-radius * .72} y={-radius * .72} width={radius * 1.44} height={radius * 1.44} fill="#fff" stroke={color} strokeWidth={2 / tf.scale} />}
+                          </g>;
+                        })}
+                      </g>;
+                    })()}
+                    {/* Guardrail terminal marks match the generated open-route
+                        ends and stay perpendicular to each route tangent. */}
+                    {(() => {
+                      const layout = fencePlanLayoutsBySheet[p.key]?.guardrail;
+                      if (!layout) return null;
+                      const display = normalizedFence3d.display;
+                      const metersPerPixel = uppFor(p.key) * M_PER_FT;
+                      return <g>
+                        {layout.routes.filter((route) => display.conditionVisibility?.[route.conditionScopeId] !== false)
+                          .flatMap((route) => route.terminals.map((terminal) => {
+                            const [x, y] = [terminal.point[0] / metersPerPixel + p.img.w / 2,
+                              terminal.point[1] / metersPerPixel + p.img.h / 2];
+                            const angle = Math.atan2(terminal.tangent[1], terminal.tangent[0]) * 180 / Math.PI;
+                            const radius = 7 / tf.scale;
+                            return <g key={terminal.id} transform={`translate(${x},${y}) rotate(${angle})`} style={{ pointerEvents: "none" }}>
+                              <path d={`M 0 ${-radius} V ${radius}`} fill="none" stroke="#fff" strokeWidth={6 / tf.scale} strokeLinecap="round" />
+                              <path d={`M 0 ${-radius} V ${radius}`} fill="none" stroke="#f0c43c" strokeWidth={3.5 / tf.scale} strokeLinecap="round" />
+                            </g>;
+                          }))}
+                      </g>;
+                    })()}
                     {/* Chain-link posts are generated from path bends, saved shared
                         junctions, endpoints, and calibrated line-post spacing. */}
-                    {conditionVisibleContent.chainLinkFences.filter((fence) => fence.sheet_id === p.key).map((fence) => {
+                    {currentPageChainFences.filter((fence) => fence.sheet_id === p.key).map((fence) => {
                       const shape = pShapes.find((item) => item.id === fence.shape_id);
                       if (!shape) return null;
-                      const calculation = calculateChainLinkFence(fence, chainShapePoints(shape, p), uppFor(p.key), shape.curved === true);
+                      const config = chainFenceConfig(fence, shape);
+                      if (config.type !== "chain-link") return null;
+                      const calculation = calculateChainLinkFence(fence, chainShapePoints(shape, p), uppFor(p.key), shape.curved === true,
+                        config.spec.spacing, config.spec.strategy);
                       if (!calculation.valid) return null;
                       const color = condById[shape.condition_id]?.color || "#1f3fc7";
-                      const z = tf.scale, size = fence.marker_size / z;
+                      const z = tf.scale, size = 7 / z;
+                      const componentVisibility = normalizedFence3d.display.componentVisibility || {};
+                      const postsVisible = normalizedFence3d.display.posts !== false;
+                      const postVisible = (type) => postsVisible && componentVisibility[`post:${type}`] !== false;
                       return <g key={fence.id}>
-                        {fence.show_line_posts && calculation.linePosts.map((post) => <circle key={post.id} cx={post.point[0]} cy={post.point[1]} r={Math.max(2.5, fence.marker_size * .55) / z} fill={color} stroke="#fff" strokeWidth={1.25 / z} style={{ pointerEvents: "none" }} />)}
-                        {(fence.show_section_lengths || fence.show_post_counts) && calculation.sections.map((section) => {
+                        {postVisible("line") && calculation.linePosts.map((post) => <circle key={post.id} cx={post.point[0]} cy={post.point[1]} r={Math.max(2.5, 7 * .55) / z} fill={color} stroke="#fff" strokeWidth={1.25 / z} style={{ pointerEvents: "none" }} />)}
+                        {normalizedFence3d.display.edgeLabels && calculation.sections.map((section) => {
                           let t = section.start.path_t + (section.wraps ? (1 - section.start.path_t + section.end.path_t) : section.end.path_t - section.start.path_t) / 2;
                           if (t >= 1) t -= 1;
                           const at = pointAtPathT(calculation.metrics, t);
-                          const length = units === "metric" ? `${num(section.lengthFt * M_PER_FT, 2)} M` : `${num(section.lengthFt, 2)} FT`;
-                          const value = [
-                            fence.show_section_lengths ? length : "",
-                            fence.show_post_counts && section.intermediate > 0 ? `${section.intermediate} LINE` : "",
-                          ].filter(Boolean).join(" · ");
+                          const length = `${num(section.lengthFt, 2)} LF`;
+                          const value = `${length} · ${section.intermediate} LINE ${section.intermediate === 1 ? "POST" : "POSTS"}`;
                           if (!value) return null;
                           return <text key={`${section.id}-length`} x={at[0]} y={at[1] - 9 / z} textAnchor="middle" fontSize={10 / z} fontWeight="700" fill={color} stroke="#fff" strokeWidth={3 / z} paintOrder="stroke" style={{ pointerEvents: "none" }}>{value}</text>;
                         })}
                         {calculation.corners.map((marker) => {
                           const junction = marker.shared_post_id;
-                          if (!fence.show_corner_posts && !(junction && tool === "select")) return null;
                           if (junction && drawnJunctions.has(junction)) return null;
                           if (junction) drawnJunctions.add(junction);
-                          const interactive = junction ? tool === "select" || (chainLinkOpen && tool !== "polyline" && tool !== "pan") : chainLinkOpen && tool !== "polyline";
+                          const interactive = junction && tool === "select";
                           const selected = marker.id === selectedChainMarkerId;
                           const r = (selected ? size * 1.25 : size);
+                          const terminalArm = marker.arms?.[0] || [1, 0];
+                          const terminalRotation = Math.atan2(terminalArm[1], terminalArm[0]) * 180 / Math.PI;
                           const postType = currentPagePostSummary.typesByPost[`${fence.id}:${marker.id}`] || marker.type;
+                          const visibilityType = postType === "terminal" ? "end" : postType;
+                          if (!postVisible(visibilityType) && !(junction && tool === "select")) return null;
+                          const postTypeLabel = postType === "terminal" ? "End post"
+                            : postType === "line" ? "Line post"
+                              : postType === "corner" ? "Corner post"
+                                : postType === "threeway" ? "3-way post"
+                                  : postType === "fourway" ? "4-way post"
+                                    : postType === "multiway" ? "5-way+ post" : "Fence post";
                           return <g key={marker.id} transform={`translate(${marker.point[0]},${marker.point[1]})`}
                             role={junction ? "img" : undefined}
-                            aria-label={junction ? "Shared fence junction" : undefined}
+                            aria-label={postTypeLabel}
                             style={{ pointerEvents: interactive ? "auto" : "none", cursor: junction ? "grab" : "pointer" }}
                             onPointerDown={interactive ? (event) => handleChainPostPointerDown(event, fence, marker) : undefined}
                           >
-                            {junction && <title>Drag to move the shared junction</title>}
+                            <title>{junction ? `Drag to move the shared ${postTypeLabel.toLowerCase()}` : postTypeLabel}</title>
                             <rect x={-14 / z} y={-14 / z} width={28 / z} height={28 / z} fill="transparent" />
                             {selected && <rect x={-r - 3 / z} y={-r - 3 / z} width={2 * r + 6 / z} height={2 * r + 6 / z} fill="none" stroke="#1f3fc7" strokeWidth={1.5 / z} />}
                             {postType === "terminal"
-                              ? <circle r={r * .88} fill={color} stroke="#fff" strokeWidth={1.5 / z} />
+                              ? <g transform={`rotate(${terminalRotation})`}>
+                                <path d={`M 0 ${-r * 1.1} V ${r * 1.1}`} fill="none" stroke="#fff" strokeWidth={6 / z} strokeLinecap="round" />
+                                <path d={`M 0 ${-r * 1.1} V ${r * 1.1}`} fill="none" stroke={color} strokeWidth={3.5 / z} strokeLinecap="round" />
+                              </g>
                               : postType === "line"
                                 ? <circle r={r * .8} fill="#fff" stroke={color} strokeWidth={2 / z} />
                                 : postType === "corner"
-                                  ? <rect x={-r * .72} y={-r * .72} width={r * 1.44} height={r * 1.44} transform="rotate(45)" fill="#fff" stroke={color} strokeWidth={2 / z} />
+                                  ? <circle r={r * .88} fill={color} stroke="#fff" strokeWidth={1.5 / z} />
                                   : postType === "threeway"
                                     ? <polygon points={`0,${-r} ${r * .9},${r * .72} ${-r * .9},${r * .72}`} fill="#fff" stroke={color} strokeWidth={2 / z} strokeLinejoin="round" />
                                     : postType === "fourway"
-                                      ? <g><rect x={-r * .72} y={-r * .72} width={r * 1.44} height={r * 1.44} fill="#fff" stroke={color} strokeWidth={2 / z} /><path d={`M ${-r * .5} 0 H ${r * .5} M 0 ${-r * .5} V ${r * .5}`} fill="none" stroke={color} strokeWidth={1.5 / z} /></g>
+                                      ? <rect x={-r * .72} y={-r * .72} width={r * 1.44} height={r * 1.44} fill="#fff" stroke={color} strokeWidth={2 / z} />
                                       : <polygon points={`0,${-r} ${r * .85},${-r / 2} ${r * .85},${r / 2} 0,${r} ${-r * .85},${r / 2} ${-r * .85},${-r / 2}`} fill="#fff" stroke={color} strokeWidth={2 / z} />}
                             {postType === "multiway" && <text x="0" y={3 / z} textAnchor="middle" fontSize={7 / z} fontWeight="800" fill={color} style={{ pointerEvents: "none" }}>5+</text>}
                           </g>;
-                        })}
-                      </g>;
-                    })}
-                    {/* Ornamental fence calculators are independent linked overlays.
-                        Their panel widths and posts never alter the source LF. */}
-                    {ornamentalFences.filter((fence) => fence.sheet_id === p.key).map((fence) => {
-                      const shape = pShapes.find((item) => item.id === fence.shape_id);
-                      if (!shape) return null;
-                      const calculation = calculateOrnamentalFence(fence, chainShapePoints(shape, p), uppFor(p.key));
-                      if (!calculation.valid) return null;
-                      const color = condById[shape.condition_id]?.color || "#1f3fc7";
-                      const z = tf.scale, size = fence.marker_size / z;
-                      return <g key={fence.id}>
-                        {fence.show_posts && calculation.posts.map((post) => <path key={post.id} d={`M ${post.point[0]} ${post.point[1] - size} L ${post.point[0] + size} ${post.point[1]} L ${post.point[0]} ${post.point[1] + size} L ${post.point[0] - size} ${post.point[1]} Z`} fill={color} stroke="#fff" strokeWidth={1.25 / z} style={{ pointerEvents: "none" }} />)}
-                        {fence.show_posts && calculation.manualPosts.map((post) => {
-                          const selected = post.id === selectedOrnamentalPostId;
-                          const markerSize = Math.max(size, 7 / z);
-                          const point = post.point_norm ? [post.point_norm[0] * p.img.w, post.point_norm[1] * p.img.h] : post.point;
-                          return <g key={post.id} transform={`translate(${point[0]},${point[1]})`}
-                            style={{ pointerEvents: ornamentalOpen && tool !== "polyline" ? "auto" : "none", cursor: ornamentalOpen ? "pointer" : undefined }}
-                            onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); setSelectedOrnamentalFenceId(fence.id); setSelectedOrnamentalPostId(post.id); setOrnamentalPostAddMode(false); if (tool === "ornamental-post") setTool("select"); }}>
-                            <circle r={15 / z} fill="transparent" />
-                            {selected && <circle r={markerSize + 4 / z} fill="none" stroke="#1f3fc7" strokeWidth={2 / z} />}
-                            <path d={`M 0 ${-markerSize} L ${markerSize} 0 L 0 ${markerSize} L ${-markerSize} 0 Z`} fill={color} stroke="#fff" strokeWidth={2 / z} />
-                          </g>;
-                        })}
-                        {(fence.show_panel_lengths || fence.show_post_counts) && calculation.sections.map((section) => {
-                          const at = [(section.a[0] + section.b[0]) / 2, (section.a[1] + section.b[1]) / 2];
-                          const panelWidth = units === "metric" ? `${num(section.panelWidthFt * M_PER_FT, 2)} M PANEL` : `${num(section.panelWidthFt, 2)} FT PANEL`;
-                          const value = [fence.show_panel_lengths ? panelWidth : "", fence.show_post_counts ? `${section.panels} PANELS` : ""].filter(Boolean).join(" · ");
-                          return <text key={`${section.id}-label`} x={at[0]} y={at[1] - 9 / z} textAnchor="middle" fontSize={10 / z} fontWeight="700" fill={color} stroke="#fff" strokeWidth={3 / z} paintOrder="stroke" style={{ pointerEvents: "none" }}>{value}</text>;
                         })}
                       </g>;
                     })}
@@ -10914,7 +10877,6 @@ export default function TakeoffCanvas() {
           {panelBtn(() => setFenceCalculatorOpen(true), "fenceCalculator", "Fence Material Calculator — import the active takeoff's LF or count", fenceCalculatorOpen, null, { "aria-label": "Fence Material Calculator", disabled: !hydrated.current || !!loadError })}
           {panelBtn(() => setMathCalculatorOpen((open) => !open), "calculator", "Floating feet-and-inches calculator", mathCalculatorOpen, null, { "aria-label": "Calculator", "aria-pressed": mathCalculatorOpen })}
           {panelBtn(() => setFence3dMode((mode) => mode ? null : fence3d?.display?.mode === "3d" ? "3d" : "split"), "fence3d", "3D Fence Generator", !!fence3dMode, null, { "aria-label": "3D Fence Generator", disabled: !hydrated.current || !!loadError })}
-          {panelBtn(() => setLinearFenceChooserOpen(true), "fencePosts", "Linear Fence Calculator — choose Chain-Link or Ornamental Fence", chainLinkOpen || ornamentalOpen || linearFenceChooserOpen, chainLinkFences.length + ornamentalFences.length, { "aria-label": "Linear Fence Calculator", disabled: !hydrated.current || !!loadError })}
           {panelBtn(() => {
             if (!trackpadStartedRef.current) { trackpadStartedRef.current = true; setTrackpadVisible(true); }
             setSettingsOpen((v) => !v); trackpadPaintRef.current = "";
@@ -10932,37 +10894,6 @@ export default function TakeoffCanvas() {
             <Icon name="palette" size={18} />
           </button>
         </div>}
-
-        {linearFenceChooserOpen && <LinearFenceChooser onClose={() => setLinearFenceChooserOpen(false)} onChoose={(kind) => {
-          setLinearFenceChooserOpen(false);
-          if (kind === "chain-link") {
-            setOrnamentalOpen(false); setChainLinkOpen(true);
-            const fence = linkedFenceForShape(selectedId); if (fence) setSelectedChainFenceId(fence.id);
-          } else {
-            setChainLinkOpen(false); setOrnamentalOpen(true);
-            const fence = linkedOrnamentalFenceForShape(selectedId); if (fence) setSelectedOrnamentalFenceId(fence.id);
-          }
-        }} />}
-
-        {chainLinkOpen && <ChainLinkFencePanel
-          units={units} selectedShape={selShape} fence={activeChainFence} calculation={activeChainCalculation}
-          postSummary={activeChainFence ? currentPagePostSummary.byFence[activeChainFence.id] : null}
-          pageLabel={focusPanel?.key ? tabLabel(focusPanel.key) : "Current page"} pageSummaries={currentPageChainSummaries}
-          canAttach={fenceAttachShapes.length > 0} attachCount={fenceAttachShapes.length}
-          onCreate={createChainLinkForSelected}
-          onPatch={patchActiveChainFence}
-          onDeleteFence={deleteActiveChainFence}
-          onUndo={undoChainLink} onRedo={redoChainLink}
-          canUndo={chainUndoRef.current.length > 0} canRedo={chainRedoRef.current.length > 0}
-          onClose={() => { setChainLinkOpen(false); setSelectedChainMarkerId(null); }} />}
-
-        {ornamentalOpen && <OrnamentalFencePanel
-          units={units} selectedShape={selShape} fence={activeOrnamentalFence} calculation={activeOrnamentalCalculation}
-          canAttach={fenceAttachShapes.length > 0} attachCount={fenceAttachShapes.length}
-          conditionSummary={ornamentalConditionSummary} sheetLabel={tabLabel}
-          addMode={ornamentalPostAddMode} selectedManualPostId={selectedOrnamentalPostId} onAddMode={() => { const next = !ornamentalPostAddMode; setOrnamentalPostAddMode(next); setSelectedOrnamentalPostId(null); setTool(next ? "ornamental-post" : "select"); }} onDeleteManualPost={deleteSelectedOrnamentalPost}
-          onCreate={createOrnamentalForSelected} onPatch={patchActiveOrnamentalFence} onDeleteFence={deleteActiveOrnamentalFence}
-          onClose={() => { setOrnamentalOpen(false); setOrnamentalPostAddMode(false); setSelectedOrnamentalPostId(null); if (tool === "ornamental-post") setTool("select"); }} />}
 
        </div>
 
@@ -11045,7 +10976,7 @@ export default function TakeoffCanvas() {
 
         {fence3dMode && view === "canvas" && !whiteboardOpen && <div style={{ display: "flex", flex: fence3dMode === "split" ? "var(--split-right) 1 0%" : "1 1 0%", minWidth: 0, minHeight: 0, paddingTop: fence3dMode === "3d" ? 0 : toolbarOverlayTop }}>
         <React.Suspense fallback={<p role="status">Opening 3D Fence Generator…</p>}>
-          <FenceWorkspace key={portableProjectId.current} shapes={shapes} fences={chainLinkFences} ornamental={ornamentalFences} conditions={conditions}
+          <FenceWorkspace key={portableProjectId.current} shapes={shapes} fences={chainLinkFences} conditions={conditions}
             sheets={[...new Set([focusPanel?.key, ...shapes.filter((shape) => shape.measure_role === "linear").map((shape) => shape.sheet_id)].filter(Boolean))]}
             activeSheet={focusPanel?.key} selectedId={selectedId} units={units} value={fence3d}
             onChange={(value) => { if (!readOnly) setFence3d(value); }}
@@ -11125,7 +11056,7 @@ export default function TakeoffCanvas() {
         <ReportPanel
           projectName={projectName} onProjectName={(name) => { if (!denyReadOnlyEdit()) setProjectName(name); }}
           clientInfo={clientInfo} onClientInfo={(next) => { if (!denyReadOnlyEdit()) setClientInfo(next); }} units={units}
-          conditions={conditions} shapes={shapes} markups={markups} rfis={rfis} chainLinkFences={chainLinkFences}
+          conditions={conditions} shapes={shapes} markups={markups} rfis={rfis}
           conditionColumns={conditionColumns} shapeLabels={shapeLabels}
           scaleInfo={Object.entries(scales).map(([sheet_id, units_per_px]) => ({ sheet_id, units_per_px, scale_source: scaleSources[sheet_id] || "unknown" }))}
           provenanceCounters={provCounters}

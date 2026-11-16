@@ -141,8 +141,6 @@ export const PROJECT_ASSISTANT_TOOL_DEFS = [
   read("find_missing_unit_costs", "List report materials without a unit cost."),
   read("get_fence_calculator_configuration", "Read the saved Fence Material Calculator inputs."),
   read("get_fence_calculator_results", "Read results already produced by the existing Fence Material Calculator."),
-  read("get_chain_link_post_configuration", "Read saved chain-link post calculator inputs."),
-  read("get_chain_link_post_results", "Read saved chain-link post calculator records and derived results already stored by the app."),
   read("list_rfis", "List project RFIs."),
   read("get_rfi", "Read one RFI.", ID_SCHEMA),
   read("find_unresolved_rfis", "List RFIs not marked resolved or closed."),
@@ -347,8 +345,6 @@ export async function executeProjectAssistantTool(ctx, name, args = {}) {
     case "find_missing_unit_costs": result = { materials: (snapshot.material_totals || []).filter((item) => !Number.isFinite(Number(item.unit_cost))) }; break;
     case "get_fence_calculator_configuration": result = snapshot.fence_calculator || {}; break;
     case "get_fence_calculator_results": result = snapshot.fence_calculator || {}; break;
-    case "get_chain_link_post_configuration": result = { fences: snapshot.chain_link_fences || [] }; break;
-    case "get_chain_link_post_results": result = { fences: snapshot.chain_link_fences || [] }; break;
     case "list_rfis": result = { rfis: snapshot.rfis.filter((item) => !item.sheet_id || allowedSheet(ctx, item.sheet_id)) }; break;
     case "get_rfi": result = { rfi: snapshot.rfis.find((item) => item.id === args.id && (!item.sheet_id || allowedSheet(ctx, item.sheet_id))) || null }; break;
     case "find_unresolved_rfis": result = { rfis: snapshot.rfis.filter((item) => !["resolved", "closed"].includes(String(item.status || "").toLowerCase()) && (!item.sheet_id || allowedSheet(ctx, item.sheet_id))) }; break;

@@ -237,7 +237,10 @@ Deno.serve(async (req: Request) => {
     }
     return json({ subscription: await refresh(data.user.id) });
   } catch (error) {
-    console.error("otk-billing request failed", { name: error instanceof Error ? error.name : "Error" });
+    const failure = error as { code?: unknown; message?: unknown };
+    const code = typeof failure?.code === "string" && /^[A-Z0-9_]+$/.test(failure.code) ? failure.code : "";
+    const message = typeof failure?.message === "string" ? failure.message.slice(0, 300) : "";
+    console.error("otk-billing request failed", { name: error instanceof Error ? error.name : "Error", code, message });
     return json({ code: "OTK_BILLING_FAILED" }, 502);
   }
 });

@@ -68,7 +68,8 @@ function makeParts(namespace = "fence") {
     },
     finish(parent, shapeId) {
       for (const { kind, color, geometry, mapCategory, matrices, instanceIds, componentIds } of buckets.values()) {
-        const material = new T.MeshStandardMaterial({ color, metalness: kind === "footings" ? 0 : .6, roughness: kind === "footings" ? .9 : .36 });
+        const isConcrete = kind === "footings" || kind === "foundations";
+        const material = new T.MeshStandardMaterial({ color, metalness: isConcrete ? 0 : .6, roughness: isConcrete ? .9 : .36 });
         let meshGeometry;
         switch (geometry) {
           case "box": meshGeometry = new T.BoxGeometry(1, 1, 1); break;
@@ -265,7 +266,8 @@ export function createFenceScene(layout) {
   for (const run of layout.runs) {
     const target = new T.Group();
     target.name = run.label;
-    target.userData = { shapeId: run.id, component_id: `fence-run:${run.id}` };
+    target.userData = { shapeId: run.id, conditionId: run.conditionId, conditionScopeId: run.conditionScopeId,
+      component_id: `fence-run:${run.id}` };
     const spec = run.spec;
     const parts = makeParts(`fence-run:${run.id}`);
     const terminals = new Map(run.posts.filter((post) => post.type !== "line" && !post.supportOnly)
@@ -285,7 +287,11 @@ export function createFenceScene(layout) {
       renderedPosts.add(postKey);
       const color = colorFor(physical.spec, physical.spec.postFinish);
       const top = physical.base + physical.height;
-      const buried = physical.spec.fittings && physical.spec.footings ? physical.spec.footingDepth * IN : 0;
+      const buried = physical.foundationDepthFt * FT;
+      const foundationDiameter = physical.foundationDiameterIn * IN;
+      parts.add("foundations", "#a09e98", modelPoint(physical.point, physical.base - buried),
+        modelPoint(physical.point, physical.base), foundationDiameter, "foundations",
+        { id: `${postKey}:foundation`, component_id: `${postKey}:foundation` });
       const railSeat = physical.type === "line" && spec.topRail && spec.fittings && (spec.loopCaps || (spec.barbedWire && spec.barbArms))
         ? frameHeight(spec, "topRail") - spec.railDiameter * IN * .6 : top;
       parts.add("posts", color, modelPoint(physical.point, physical.base - buried), modelPoint(physical.point, railSeat), physical.diameter,

@@ -45,11 +45,15 @@
 .fence3d-viewport-legend-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 27px; }
 .fence3d-viewport-legend-header strong { font-size: 12px; }
 .fence3d-viewport-legend-header button, .fence3d-viewport-legend-reopen { display: grid; place-items: center; width: 27px; min-width: 27px; min-height: 27px; padding: 3px !important; }
-.fence3d-viewport-legend ul { display: grid; gap: 2px; min-height: 0; overflow: auto; list-style: none; margin: 0; padding: 0; }
+.fence3d-viewport-legend-groups { display: grid; align-content: start; gap: 4px; min-height: 0; overflow: auto; }
+.fence3d-viewport-legend-group { min-width: 0; border-top: 1px solid var(--fence-border); }
+.fence3d-viewport-legend-group > summary, .fence3d-map-condition-group > summary { cursor: pointer; padding: 5px 3px; font-size: 11px; font-weight: 700; overflow-wrap: anywhere; }
+.fence3d-viewport-legend ul { display: grid; gap: 2px; min-height: 0; overflow: visible; list-style: none; margin: 0; padding: 0; }
 .fence3d-viewport-legend li { display: grid; grid-template-columns: 11px minmax(0, 1fr) auto; align-items: center; gap: 5px; min-width: 0; padding: 4px 2px; border-top: 1px solid var(--fence-border); }
 .fence3d-viewport-legend .fence3d-map-swatch { width: 10px; height: 10px; }
 .fence3d-viewport-legend-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fence3d-viewport-legend output { white-space: nowrap; font: 10px var(--f-mono, monospace); text-align: right; }
+.fence3d-viewport-legend output small, .fence3d-map-legend output small { display: block; color: var(--workspace-muted-foreground, var(--ink-muted, #687386)); font: 9px var(--f-sans, sans-serif); text-align: inherit; white-space: normal; }
 .fence3d-viewport-legend > p { margin: 2px 0; color: var(--workspace-muted-foreground, var(--ink-muted, #687386)); }
 .fence3d-viewport-legend-reopen { position: absolute; top: 8px; right: 8px; z-index: 5; border-radius: 4px !important; background: var(--fence-paper) !important; box-shadow: 0 2px 8px #0004; }
 .fence3d-split-resizer { position: relative; z-index: 12; display: flex; flex: 0 0 9px; align-items: center; justify-content: center; min-width: 9px; padding: 0; border: 0; background: var(--workspace-muted, #f4f5f7); cursor: col-resize; touch-action: none; user-select: none; }
@@ -110,11 +114,14 @@
 .fence3d-map-measure span { margin-right: auto; }
 .fence3d-map-measure button { min-width: 38px; padding: 3px 7px !important; }
 .fence3d-map-measure button[aria-pressed="true"] { border-color: var(--cobalt, #1f3fc7) !important; background: color-mix(in srgb, var(--cobalt, #1f3fc7) 12%, var(--fence-paper)) !important; }
-.fence3d-map-legend { display: grid; gap: 4px; max-height: min(42vh, 360px); overflow: auto; list-style: none; padding: 0; margin: 0; }
+.fence3d-map-condition-groups { display: grid; gap: 4px; max-height: min(42vh, 360px); overflow: auto; }
+.fence3d-map-condition-group { min-width: 0; border: 1px solid var(--fence-border); border-radius: 4px; }
+.fence3d-map-legend { display: grid; gap: 4px; overflow: visible; list-style: none; padding: 0; margin: 0; }
 .fence3d-map-legend li { display: grid; grid-template-columns: 12px minmax(0, 1fr) 24px; grid-template-rows: auto auto; align-items: start; gap: 2px 6px; padding: 4px; border-bottom: 1px solid var(--fence-border); }
 .fence3d-map-swatch { width: 11px; height: 11px; border: 1px solid #0004; border-radius: 2px; }
 .fence3d-map-name { grid-column: 2; min-width: 0; line-height: 1.25; overflow-wrap: anywhere; }
 .fence3d-map-visibility { grid-column: 3; grid-row: 1; display: grid; place-items: center; width: 24px; min-width: 24px; min-height: 24px; padding: 2px !important; }
+.fence3d-map-visibility-placeholder { grid-column: 3; grid-row: 1; width: 24px; min-width: 24px; min-height: 24px; }
 .fence3d-map-visibility[aria-pressed="false"] { opacity: .55; }
 .fence3d-map-legend output { grid-column: 2; grid-row: 2; min-width: 0; font: 10px var(--f-mono, monospace); text-align: left; overflow-wrap: anywhere; line-height: 1.25; }
 .fence3d-annotation-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 5px 0; border-bottom: 1px solid var(--fence-border); }

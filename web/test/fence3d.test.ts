@@ -17,7 +17,7 @@ const shape = (points: number[][], length: number, id = "fence", sheet = sheetId
   verts_norm: points.map(([x, y]) => [x / 200, y / 100]), computed: { perimeter_lf: length, area_sf: 0 },
 });
 const settings = (run: Record<string, unknown> = {}) => normalizeFence3d({ ...emptyFence3d(), runs: { fence: { ...run, type: "chain-link" } } });
-const input = (shapes: any[], config = settings(), fences: any[] = []) => ({ shapes, settings: config, sheetId, calibration, fences, ornamental: [] });
+const input = (shapes: any[], config = settings(), fences: any[] = []) => ({ shapes, settings: config, sheetId, calibration, fences });
 const generate = (shapes: any[], config = settings(), fences: any[] = []) => buildFenceLayout(adaptFenceRuns(input(shapes, config, fences)));
 const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-6, `${actual} != ${expected}`);
 

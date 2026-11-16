@@ -149,8 +149,6 @@ export function buildFenceFittings(layout) {
       const physical = sharedPosts.get(post.shared) || post;
       if (!capOwners.has(physical)) {
         capOwners.add(physical);
-        simple(run, "footings", atHeight(post.point, physical.base - spec.footingDepth * IN / 2),
-          Y, spec.footingDiameter * IN, spec.footingDepth * IN, spec.footingDiameter * IN, "cylinder");
         const pipeTop = physical.base + physical.height;
         if (physical.type === "line" && spec.topRail) {
           const railTop = frameHeight(spec, "topRail");
@@ -262,7 +260,7 @@ export function buildFenceFittings(layout) {
       const height = gate.height * FT;
       const axis = direction(gate.a, gate.b);
       const leaves = gateLeaves(gate, spec);
-      if (gate.type !== "cantilever") {
+      if (["single", "double"].includes(gate.type)) {
         for (const leaf of leaves) for (const fraction of [.2, .8]) {
           const y = bottom + height * fraction;
           const pin = atHeight(leaf.hinge, y);
@@ -276,7 +274,7 @@ export function buildFenceFittings(layout) {
           pipe("gateLatches", latch, advance(latch, leaves[0].heading, .085), .019),
         ]);
         if (gate.type === "double") add(run, "gateDropRods", [pipe("gateDropRods", atHeight(leaves[1].b, spec.elevation * FT + .015), atHeight(leaves[1].b, bottom + height * .34), .019)]);
-      } else {
+      } else if (gate.type === "cantilever") {
         const left = gate.direction === "in";
         const support = left ? gate.a : gate.b;
         const receiver = left ? gate.b : gate.a;
@@ -293,6 +291,20 @@ export function buildFenceFittings(layout) {
         }
         simple(run, "gateReceiver", atHeight(receiver, bottom + height * .54), axis, .09, .085, .06);
         simple(run, "gateStops", advance(atHeight(support, bottom + .11), axis, gate.tail * FT * (left ? -1 : 1)), axis, .1, .05, .075);
+      } else {
+        const top = bottom + height;
+        const trackA = atHeight(gate.a, top + .15);
+        const trackB = atHeight(gate.b, top + .15);
+        const width = gate.end - gate.start;
+        const inset = Math.min(.3, width / 4);
+        const pieces = [pipe("gateRollers", trackA, trackB, .04)];
+        for (const [index, offset] of [inset, width - inset].entries()) {
+          const wheel = advance(atHeight(gate.a, top + .055), axis, offset);
+          const axle = advance(wheel, normal(axis), spec.gateDiameter * IN * .6);
+          pieces.push(pipe("gateRollers", trackA.map((value, i) => value + axis[i] * offset), wheel, .028));
+          pieces.push(frame("gateRollers", axle, normal(axis), .14, .11, .055, "cylinder"));
+        }
+        add(run, "gateRollers", pieces);
       }
     }
   }

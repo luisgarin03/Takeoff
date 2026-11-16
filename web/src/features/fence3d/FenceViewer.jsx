@@ -4,6 +4,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import { createFenceScene, disposeFenceScene } from "./scene.js";
+import { createOrnamentalScene } from "./ornamentalScene.js";
+import { createGuardrailScene } from "./guardrailScene.js";
 import { FITTINGS, METERS_PER_FOOT as FT } from "./settings.js";
 import { createOtk3dArchive, createStandaloneViewer, fenceExportName } from "./export.js";
 import { FENCE_COMPONENT_COLORS } from "./colorMap.js";
@@ -16,13 +18,31 @@ const CLOSE_VIEW_METERS = .004;
 const CLOSE_DOLLY_METERS = .25;
 const WHEEL_METERS_PER_100PX = 1;
 const PAN_METERS_PER_PIXEL = .01;
+const CAMERA_LOOK_RADIANS_PER_PIXEL = .003;
 
 function createControls(camera, canvas) {
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
+  controls.enableRotate = false;
   controls.zoomToCursor = true;
   controls.minDistance = CLOSE_DOLLY_METERS;
   return controls;
+}
+
+function syncCameraLookTarget(runtime) {
+  const forward = runtime.camera.getWorldDirection(new T.Vector3());
+  const distance = Math.max(CLOSE_DOLLY_METERS, runtime.cameraTargetDistance || runtime.controls.getDistance() || 1);
+  runtime.controls.target.copy(runtime.camera.position).addScaledVector(forward, distance);
+  runtime.controls.update();
+}
+
+function turnCamera(runtime, deltaX, deltaY) {
+  const rotation = new T.Euler().setFromQuaternion(runtime.camera.quaternion, "YXZ");
+  rotation.y -= deltaX * CAMERA_LOOK_RADIANS_PER_PIXEL;
+  rotation.x = T.MathUtils.clamp(rotation.x - deltaY * CAMERA_LOOK_RADIANS_PER_PIXEL, -Math.PI / 2 + .01, Math.PI / 2 - .01);
+  runtime.camera.rotation.order = "YXZ";
+  runtime.camera.rotation.set(rotation.x, rotation.y, rotation.z, "YXZ");
+  syncCameraLookTarget(runtime);
 }
 
 function updateControlSpeeds(runtime) {
@@ -59,11 +79,8 @@ function moveCameraWithWheel(runtime, event) {
   updateControlSpeeds(runtime);
 }
 
-function frame(runtime, direction = "Iso") {
-  if (runtime.flyMode) finishFly(runtime);
+function frameBounds(runtime, bounds, direction = "Iso") {
   const { camera, controls, host } = runtime;
-  const bounds = !runtime.model?.children.length && runtime.plan
-    ? new T.Box3().setFromObject(runtime.plan) : runtime.bounds;
   const size = bounds.getSize(new T.Vector3());
   const center = bounds.getCenter(new T.Vector3());
   const radius = Math.max(size.length() / 2, .5);
@@ -71,7 +88,8 @@ function frame(runtime, direction = "Iso") {
   const aspect = width / height;
   const distance = radius / Math.sin(Math.atan(Math.tan(T.MathUtils.degToRad(20)) * Math.min(aspect, 1)));
   controls.target.copy(center);
-  camera.position.copy(center).addScaledVector(new T.Vector3(...DIRECTIONS[direction]).normalize(), distance);
+  const viewDirection = direction?.isVector3 ? direction.clone().normalize() : new T.Vector3(...DIRECTIONS[direction]).normalize();
+  camera.position.copy(center).addScaledVector(viewDirection, distance);
   camera.near = .002;
   camera.far = Math.max(200, distance * 12);
   const rotation = new T.Matrix4().lookAt(camera.position, center, camera.up);
@@ -84,10 +102,30 @@ function frame(runtime, direction = "Iso") {
   }
   const projected = viewBounds.getSize(new T.Vector3());
   runtime.orthoHeight = Math.max(projected.y, projected.x / aspect, 1) * 1.32;
+  runtime.cameraTargetDistance = distance;
   camera.zoom = 1;
   resize(runtime);
   controls.update();
   updateControlSpeeds(runtime);
+}
+
+function frame(runtime, direction = "Iso") {
+  if (runtime.flyMode) finishFly(runtime);
+  const bounds = !runtime.model?.children.length && runtime.plan
+    ? new T.Box3().setFromObject(runtime.plan) : runtime.bounds;
+  frameBounds(runtime, bounds, direction);
+}
+
+function focusSelection(runtime) {
+  if (runtime.flyMode) finishFly(runtime);
+  const markupPoints = runtime.selectedMarkup?.points;
+  const bounds = markupPoints?.length
+    ? new T.Box3().setFromPoints(markupPoints)
+    : runtime.selectionBounds;
+  if (!bounds || bounds.isEmpty()) { frame(runtime); return; }
+  const viewDirection = runtime.camera.position.clone().sub(runtime.controls.target);
+  if (viewDirection.lengthSq() < 1e-8) viewDirection.set(...DIRECTIONS.Iso);
+  frameBounds(runtime, bounds, viewDirection.normalize());
 }
 
 function resize(runtime) {
@@ -112,6 +150,7 @@ function finishFly(runtime) {
   runtime.renderer.domElement.style.cursor = "";
   runtime.controls.enabled = true;
   const forward = runtime.camera.getWorldDirection(new T.Vector3());
+  runtime.cameraTargetDistance = runtime.flyOrbitDistance || runtime.cameraTargetDistance;
   runtime.controls.target.copy(runtime.camera.position).addScaledVector(forward, runtime.flyOrbitDistance || 1);
   runtime.controls.update();
   runtime.onFlyChange?.(false);
@@ -196,6 +235,7 @@ function setCamera(runtime, mode) {
   camera.quaternion.copy(previous.quaternion);
   camera.near = previous.near; camera.far = previous.far;
   const target = runtime.controls.target.clone();
+  runtime.cameraTargetDistance = runtime.camera.position.distanceTo(target);
   runtime.controls.dispose();
   runtime.camera = camera;
   runtime.controls = createControls(camera, runtime.renderer.domElement);
@@ -503,6 +543,13 @@ function createRuntime(host, pick, onFlyChange, onFlyError, onFlySpeedChange, on
       runtime.onAnnotationStatusChange?.("");
       return;
     }
+    if (event.code === "KeyF" && !event.repeat
+      && !event.target?.closest?.("input, textarea, select, [contenteditable]")) {
+      event.preventDefault();
+      event.stopPropagation();
+      focusSelection(runtime);
+      return;
+    }
     if (!runtime.flyMode) return;
     if (event.code === "Escape" && !runtime.pointerLockAcquired) {
       event.preventDefault();
@@ -515,7 +562,7 @@ function createRuntime(host, pick, onFlyChange, onFlyError, onFlySpeedChange, on
       event.stopPropagation();
       if (event.repeat) return;
       const adjustment = event.code === "Equal" || event.code === "NumpadAdd" ? 1 : -1;
-      const nextSpeed = T.MathUtils.clamp(runtime.flySpeedMultiplier + adjustment, 1, 10);
+      const nextSpeed = T.MathUtils.clamp(runtime.flySpeedMultiplier + adjustment, 1, 50);
       if (nextSpeed !== runtime.flySpeedMultiplier) {
         runtime.flySpeedMultiplier = nextSpeed;
         runtime.onFlySpeedChange?.(nextSpeed);
@@ -555,6 +602,22 @@ function createRuntime(host, pick, onFlyChange, onFlyError, onFlySpeedChange, on
       if (point && last.distanceTo(point) > .025) {
         runtime.drawingPoints.push(point);
         updateDrawPreview(runtime);
+      }
+      return;
+    }
+    if (!runtime.flyMode && runtime.lookPointer?.pointerId === event.pointerId) {
+      const pointer = runtime.lookPointer;
+      const dx = event.clientX - pointer.x, dy = event.clientY - pointer.y;
+      if (!pointer.active && Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) > 5) {
+        pointer.active = true;
+        press = null;
+        renderer.domElement.style.cursor = "grabbing";
+      }
+      pointer.x = event.clientX;
+      pointer.y = event.clientY;
+      if (pointer.active) {
+        event.preventDefault();
+        turnCamera(runtime, dx, dy);
       }
       return;
     }
@@ -602,6 +665,11 @@ function createRuntime(host, pick, onFlyChange, onFlyError, onFlySpeedChange, on
       return;
     }
     press = event.button === 0 ? [event.clientX, event.clientY] : null;
+    if (event.button === 0 && !runtime.measureMode && !runtime.annotationMode) {
+      runtime.lookPointer = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+        x: event.clientX, y: event.clientY, active: false };
+      try { renderer.domElement.setPointerCapture(event.pointerId); } catch { /* keep looking while the pointer remains over the canvas */ }
+    }
   };
   const up = (event) => {
     if (runtime.flyMode) {
@@ -612,6 +680,15 @@ function createRuntime(host, pick, onFlyChange, onFlyError, onFlySpeedChange, on
       }
       press = null;
       return;
+    }
+    if (runtime.lookPointer?.pointerId === event.pointerId) {
+      const didLook = runtime.lookPointer.active;
+      runtime.lookPointer = null;
+      if (didLook) {
+        press = null;
+        renderer.domElement.style.cursor = "";
+        return;
+      }
     }
     if (runtime.annotationMode === "draw" && runtime.drawingPoints) {
       const points = runtime.drawingPoints.map((point) => [point.x, point.z]);
@@ -660,6 +737,12 @@ function createRuntime(host, pick, onFlyChange, onFlyError, onFlySpeedChange, on
   renderer.domElement.addEventListener("pointerdown", down);
   renderer.domElement.addEventListener("pointerup", up);
   const cancelDraw = (event) => {
+    if (runtime.lookPointer?.pointerId === event.pointerId) {
+      runtime.lookPointer = null;
+      press = null;
+      renderer.domElement.style.cursor = "";
+      return;
+    }
     if (runtime.annotationMode !== "draw" || !runtime.drawingPoints) return;
     clearDrawPreview(runtime);
     if (renderer.domElement.hasPointerCapture?.(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
@@ -724,7 +807,7 @@ function createRuntime(host, pick, onFlyChange, onFlyError, onFlySpeedChange, on
 const tmpSegment = new T.Line3();
 const tmpPoint = new T.Vector3();
 
-function updateLabels(runtime, layout, units) {
+function updateLabels(runtime, layout, ornamentalLayout, guardrailLayout, units) {
   if (runtime.labels) {
     for (const item of [...runtime.labels.children]) item.removeFromParent();
     runtime.labels.removeFromParent();
@@ -741,6 +824,7 @@ function updateLabels(runtime, layout, units) {
     labels.add(object);
   };
   for (const run of layout.runs) {
+    if (!conditionVisible(run.conditionScopeId, runtime.settings)) continue;
     const top = (run.spec.elevation + run.spec.height) * FT + .25;
     if (runtime.settings.edgeLabels) for (const [index, segment] of run.segments.entries()) {
       const end = segment.start + segment.length;
@@ -763,6 +847,27 @@ function updateLabels(runtime, layout, units) {
     }
     if (runtime.settings.spacing) for (const bay of run.spacingLabels) add(bay.point, run.spec.elevation * FT + .12, formatLength(bay.length, units), "post");
   }
+  for (const run of ornamentalLayout.runs) {
+    if (!conditionVisible(run.conditionScopeId, runtime.settings)) continue;
+    const top = run.spec.elevation_ft * FT + (run.spec.height_ft + run.spec.bottom_clearance_in / 12) * FT + .25;
+    for (const segment of run.segments) {
+      const fixedPanels = ornamentalLayout.panels.filter((panel) => panel.runId === run.id && panel.segmentId === segment.id);
+      const fixedLength = fixedPanels.reduce((sum, panel) => sum + panel.length, 0);
+      if (runtime.settings.edgeLabels && fixedLength > .1) {
+        add([(segment.a[0] + segment.b[0]) / 2, (segment.a[1] + segment.b[1]) / 2], top,
+          `${formatLength(fixedLength, units)} · ${fixedPanels.length} PANEL${fixedPanels.length === 1 ? "" : "S"}`, "edge");
+      }
+      if (runtime.settings.lengths && segment.length > .1) {
+        add([(segment.a[0] + segment.b[0]) / 2, (segment.a[1] + segment.b[1]) / 2], top + (runtime.settings.edgeLabels ? 1.15 : .22),
+          formatLength(segment.length, units), "run");
+      }
+    }
+  }
+  if (runtime.settings.edgeLabels) for (const route of guardrailLayout.routes) {
+    if (!conditionVisible(route.conditionScopeId, runtime.settings)) continue;
+    if (route.length <= .1 || !route.anchor) continue;
+    add([route.anchor[0], route.anchor[2]], route.anchor[1] + .35, formatLength(route.length, units), "edge");
+  }
 }
 
 function clearColorMapLabels(runtime) {
@@ -778,9 +883,16 @@ function componentVisible(category, display) {
   if (display.componentVisibility?.[category] === false) return false;
   if (category === "fabric" || category === "gateArea") return display.fabric;
   if (category.startsWith("post:")) return display.posts;
-  if (category === "rails" || category === "wire" || category === "barbedWire") return display.rails;
-  if (fittingKinds.has(category)) return display.fittings;
+  if (category === "foundations") return display.posts;
+  if (category === "rails" || category === "wire" || category === "barbedWire" || category === "gateFrame" || category === "guardrail") return display.rails;
+  if (category === "pickets") return display.fabric;
+  if (fittingKinds.has(category) || ["flatBrackets", "swivelBrackets", "ornamentalHinges", "ornamentalLatches",
+    "ornamentalKeepers", "ornamentalDropRods", "ornamentalCaps"].includes(category)) return display.fittings;
   return true;
+}
+
+function conditionVisible(scopeId, display) {
+  return !scopeId || display.conditionVisibility?.[scopeId] !== false;
 }
 
 function updateColorMapLabels(runtime, rows, enabled, display) {
@@ -790,7 +902,8 @@ function updateColorMapLabels(runtime, rows, enabled, display) {
   group.name = "Fence component quantity callouts";
   const span = runtime.bounds.getSize(new T.Vector3()).length();
   const spacing = Math.max(.45, Math.min(8, span * .04));
-  const active = rows.filter((row) => row.anchor && Number(row.count) > 0 && componentVisible(row.category, display));
+  const active = rows.filter((row) => row.anchor && Number(row.count) > 0 && componentVisible(row.category, display)
+    && conditionVisible(row.conditionScopeId, display));
   active.forEach((row, index) => {
     const angle = index * 2.399963229728653;
     const radius = spacing * (1 + (index % 4) * .38);
@@ -804,7 +917,7 @@ function updateColorMapLabels(runtime, rows, enabled, display) {
     const tag = document.createElement("span");
     tag.className = "fence3d-map-label";
     tag.style.setProperty("--fence-map-color", row.color);
-    tag.textContent = `${row.title} · ${row.quantity}`;
+    tag.textContent = `${row.conditionName ? `${row.conditionName} · ` : ""}${row.title} · ${row.quantity}`;
     const label = new CSS2DObject(tag);
     label.position.copy(end);
     group.add(label);
@@ -817,10 +930,12 @@ function applyDisplay(runtime, display, colorMap) {
   setCamera(runtime, display.camera);
   runtime.light.intensity = display.light;
   if (runtime.grid) runtime.grid.visible = display.grid && !runtime.plan;
-  runtime.model?.traverse((object) => {
+  const apply = (object, inheritedScope) => {
+    const scopeId = object.userData.conditionScopeId || inheritedScope;
     const { kind, mapCategory } = object.userData;
     const category = mapCategory || (kind === "fabricEdge" || kind === "wireDetail" ? "fabric" : kind);
-    if (category) object.visible = componentVisible(category, display);
+    if (kind === "condition") object.visible = conditionVisible(scopeId, display);
+    else if (category && category !== "gateLeaf") object.visible = componentVisible(category, display) && conditionVisible(scopeId, display);
     const mapColor = FENCE_COMPONENT_COLORS[category];
     if (mapColor && object.material) {
       const materials = Array.isArray(object.material) ? object.material : [object.material];
@@ -831,7 +946,9 @@ function applyDisplay(runtime, display, colorMap) {
         else if (original) material.color?.copy(original);
       }
     }
-  });
+    for (const child of object.children) apply(child, scopeId);
+  };
+  if (runtime.model) apply(runtime.model, null);
 }
 
 export const download = (bytes, filename, type) => {
@@ -969,7 +1086,7 @@ function exportRoot(current, { includeMarkups = true, includeQuantities = true, 
   if (!current?.model?.children.length) throw new Error("Generate a fence before exporting.");
   if (current.settings.plan && !current.plan) throw new Error("Wait for the ground plan to finish loading before exporting.");
   const root = new T.Group();
-  root.name = "OpenTakeoff chain-link fence";
+  root.name = "OpenTakeoff fence model";
   const model = current.model.clone(true);
   model.traverse((object) => {
     if (object.material) {
@@ -995,11 +1112,11 @@ function exportRoot(current, { includeMarkups = true, includeQuantities = true, 
 async function createGlb(current, options) {
   const { GLTFExporter } = await import("three/addons/exporters/GLTFExporter.js");
   return new GLTFExporter().parseAsync(exportRoot(current, options), {
-    binary: true, onlyVisible: true, maxTextureSize: 4096, trs: true,
+    binary: true, onlyVisible: true, maxTextureSize: options.maxTextureSize ?? 4096, trs: true,
   });
 }
 
-export default forwardRef(function FenceViewer({ layout, display, units, selectedId, onPick, sheetId, calibration, renderPlan,
+export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { runs: [], panels: [], posts: [], gates: [] }, guardrailLayout = { routes: [], totals: { length: 0 } }, display, units, selectedId, onPick, sheetId, calibration, renderPlan,
   onFlyChange, onFlyError, onFlySpeedChange, flySpeed, colorMap = false, colorMapRows = [], measureMode = false, onMeasureChange,
   annotationMode = "", annotations = { drawings: [], notes: [] }, onAnnotationModeChange, onAnnotationStatusChange, onDrawComplete, onNotePoint, onMarkupDelete }, ref) {
   const host = useRef(null);
@@ -1035,6 +1152,9 @@ export default forwardRef(function FenceViewer({ layout, display, units, selecte
       finishFly(runtime.current);
       frame(runtime.current, direction);
     },
+    focusSelected: () => {
+      if (runtime.current) focusSelection(runtime.current);
+    },
     fly: (enabled) => {
       if (!runtime.current) return;
       if (enabled) startFly(runtime.current);
@@ -1042,7 +1162,7 @@ export default forwardRef(function FenceViewer({ layout, display, units, selecte
     },
     setFlySpeed: (speed) => {
       if (!runtime.current) return;
-      runtime.current.flySpeedMultiplier = T.MathUtils.clamp(Number(speed) || 1, 1, 10);
+      runtime.current.flySpeedMultiplier = T.MathUtils.clamp(Number(speed) || 1, 1, 50);
     },
     png: async (options = {}) => {
       const current = runtime.current;
@@ -1064,7 +1184,7 @@ export default forwardRef(function FenceViewer({ layout, display, units, selecte
         if (options.includeQuantities) drawQuantitySummary(canvas, options.quantities, options.units);
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
         if (!blob) throw new Error("The screenshot could not be captured.");
-        download(blob, "chain-link-fence.png", "image/png");
+        download(blob, "opentakeoff-fence.png", "image/png");
       } finally {
         if (markupGroup) { current.scene.remove(markupGroup); disposeFenceScene(markupGroup); }
         if (current.annotationGroup) current.annotationGroup.visible = annotationVisible;
@@ -1078,16 +1198,18 @@ export default forwardRef(function FenceViewer({ layout, display, units, selecte
       if (binary) {
         const { GLTFExporter } = await import("three/addons/exporters/GLTFExporter.js");
         const result = await new GLTFExporter().parseAsync(root, { binary: true, onlyVisible: true, maxTextureSize: 4096, trs: true });
-        download(result, "chain-link-fence.glb", "model/gltf-binary");
+        download(result, "opentakeoff-fence.glb", "model/gltf-binary");
       } else {
         const { GLTFExporter } = await import("three/addons/exporters/GLTFExporter.js");
         const result = await new GLTFExporter().parseAsync(root, { binary: false, onlyVisible: true, maxTextureSize: 4096, trs: true });
-        download(JSON.stringify(result), "chain-link-fence.gltf", "model/gltf+json");
+        download(JSON.stringify(result), "opentakeoff-fence.gltf", "model/gltf+json");
       }
     },
     html: async (title, options = {}) => {
       const current = runtime.current;
-      const result = await createGlb(current, options);
+      // Phone-class GPUs have much tighter texture and memory budgets. Keep
+      // the plan legible while avoiding the 4K texture that can blank a tab.
+      const result = await createGlb(current, { ...options, maxTextureSize: Math.min(options.maxTextureSize ?? 2048, 2048) });
       const html = createStandaloneViewer(result, title, options.includeQuantities ? options.quantities : []);
       download(html, fenceExportName(title) + ".html", "text/html;charset=utf-8");
     },
@@ -1202,7 +1324,11 @@ export default forwardRef(function FenceViewer({ layout, display, units, selecte
     const hadModel = current.model?.children.length;
     if (current.model) { current.scene.remove(current.model); disposeFenceScene(current.model); }
     if (current.grid) { current.scene.remove(current.grid); disposeFenceScene(current.grid); }
-    current.model = createFenceScene(layout);
+    current.model = new T.Group();
+    current.model.name = "OpenTakeoff fence conditions";
+    if (layout.runs.length) current.model.add(createFenceScene(layout));
+    if (ornamentalLayout.runs.length) current.model.add(createOrnamentalScene(ornamentalLayout));
+    if (guardrailLayout.routes.length) current.model.add(createGuardrailScene(guardrailLayout));
     const snapPoints = new Map();
     for (const run of layout.runs) for (const [x, z] of run.points) {
       const point = new T.Vector3(x, 0, z);
@@ -1214,12 +1340,28 @@ export default forwardRef(function FenceViewer({ layout, display, units, selecte
         ground: new T.Vector3(x, 0, z), screen: new T.Vector3(x, post.base + post.height / 2, z),
       });
     }
+    for (const run of ornamentalLayout.runs) for (const [x, z] of run.points) {
+      const point = new T.Vector3(x, 0, z);
+      snapPoints.set(`${x.toFixed(6)}:${z.toFixed(6)}`, { ground: point, screen: point.clone() });
+    }
+    for (const post of ornamentalLayout.posts) {
+      const [x, z] = post.point;
+      snapPoints.set(`${x.toFixed(6)}:${z.toFixed(6)}`, {
+        ground: new T.Vector3(x, 0, z), screen: new T.Vector3(x, post.base + (post.top - post.base) / 2, z),
+      });
+    }
+    for (const route of guardrailLayout.routes) for (const point of route.points) {
+      const [x, z] = point.point;
+      snapPoints.set(`${x.toFixed(6)}:${z.toFixed(6)}`, {
+        ground: new T.Vector3(x, 0, z), screen: new T.Vector3(x, point.elevationM + .66, z),
+      });
+    }
     current.measureSnapPoints = [...snapPoints.values()];
     updateControlSpeeds(current);
     current.detail = [];
     current.model.traverse((object) => { if (object.userData.kind === "detail") current.detail.push(object); });
     current.scene.add(current.model);
-    if (layout.runs.length) current.bounds.setFromObject(current.model);
+    if (layout.runs.length || ornamentalLayout.runs.length || guardrailLayout.routes.length) current.bounds.setFromObject(current.model);
     const size = current.bounds.getSize(new T.Vector3());
     const step = units === "metric" ? 1 : 5 * FT;
     const divisions = Math.min(150, Math.max(10, Math.ceil(size.length() * 1.5 / step)));
@@ -1228,8 +1370,8 @@ export default forwardRef(function FenceViewer({ layout, display, units, selecte
     const center = current.bounds.getCenter(new T.Vector3());
     current.grid.position.set(center.x, Math.min(0, current.bounds.min.y) - .008, center.z);
     current.scene.add(current.grid);
-    if (!hadModel && layout.runs.length) frame(current);
-  }, [layout, units]);
+    if (!hadModel && (layout.runs.length || ornamentalLayout.runs.length || guardrailLayout.routes.length)) frame(current);
+  }, [layout, ornamentalLayout, guardrailLayout, units]);
 
   useEffect(() => {
     if (runtime.current) updateAnnotations(runtime.current, annotations);
@@ -1239,8 +1381,8 @@ export default forwardRef(function FenceViewer({ layout, display, units, selecte
     const current = runtime.current;
     if (!current) return;
     applyDisplay(current, display, colorMap);
-    updateLabels(current, layout, units);
-  }, [display, layout, units, colorMap]);
+    updateLabels(current, layout, ornamentalLayout, guardrailLayout, units);
+  }, [display, layout, ornamentalLayout, guardrailLayout, units, colorMap]);
 
   useEffect(() => {
     if (runtime.current) updateColorMapLabels(runtime.current, colorMapRows, colorMap, display);
@@ -1250,12 +1392,38 @@ export default forwardRef(function FenceViewer({ layout, display, units, selecte
     const current = runtime.current;
     if (!current) return;
     if (current.focus) { current.focus.removeFromParent(); disposeFenceScene(current.focus); current.focus = null; }
+    current.selectionBounds = null;
     const run = layout.runs.find((item) => item.id === selectedId);
-    if (!run) return;
-    current.focus = new T.Line(new T.BufferGeometry().setFromPoints(run.points.map(([x, z]) => new T.Vector3(x, (run.spec.elevation + run.spec.height) * FT + .12, z))),
+    const ornamentalRun = ornamentalLayout.runs.find((item) => item.id === selectedId);
+    const guardrailRoute = guardrailLayout.routes.find((item) => item.sourceRunIds.includes(selectedId));
+    const points = run?.points || ornamentalRun?.points || guardrailRoute?.points.map((point) => point.point);
+    if (!points) return;
+    const focusBounds = new T.Box3();
+    if (guardrailRoute) {
+      for (const point of guardrailRoute.points) {
+        focusBounds.expandByPoint(new T.Vector3(point.point[0], point.elevationM - .08, point.point[1]));
+        focusBounds.expandByPoint(new T.Vector3(point.point[0], point.elevationM + .84, point.point[1]));
+      }
+    } else {
+      const bottom = run ? run.spec.elevation * FT : ornamentalRun.spec.elevation_ft * FT;
+      const top = run ? (run.spec.elevation + run.spec.height) * FT
+        : (ornamentalRun.spec.elevation_ft + ornamentalRun.spec.height_ft + ornamentalRun.spec.bottom_clearance_in / 12) * FT;
+      for (const [x, z] of points) {
+        focusBounds.expandByPoint(new T.Vector3(x, bottom, z));
+        focusBounds.expandByPoint(new T.Vector3(x, top, z));
+      }
+    }
+    if (!focusBounds.isEmpty()) {
+      focusBounds.expandByScalar(.16);
+      current.selectionBounds = focusBounds;
+    }
+    const top = run ? (run.spec.elevation + run.spec.height) * FT + .12
+      : ornamentalRun ? (ornamentalRun.spec.elevation_ft + ornamentalRun.spec.height_ft + ornamentalRun.spec.bottom_clearance_in / 12) * FT + .12
+        : (guardrailRoute?.points[0]?.elevationM || 0) + .78;
+    current.focus = new T.Line(new T.BufferGeometry().setFromPoints(points.map(([x, z]) => new T.Vector3(x, top, z))),
       new T.LineBasicMaterial({ color: "#2451d4", depthTest: false }));
     current.scene.add(current.focus);
-  }, [layout, selectedId]);
+  }, [layout, ornamentalLayout, guardrailLayout, selectedId]);
 
   return <div className="fence3d-renderer" ref={host} aria-label="Interactive 3D fence preview">
     {error && <p className="fence3d-empty" role="alert">{error}</p>}

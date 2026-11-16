@@ -7,7 +7,6 @@ import { flattenCurve } from "./curve.js";
 
 export const DEFAULT_CHAIN_LINK_SPACING_FT = 10;
 export const MIN_CHAIN_LINK_SPACING_FT = 0.25;
-export const DEFAULT_CHAIN_LINK_MARKER_SIZE = 7;
 const EPS = 1e-6;
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -49,12 +48,6 @@ export function sanitizeChainLinkFence(record) {
     shape_id: shapeId,
     sheet_id: sheetId,
     condition_id: typeof record.condition_id === "string" ? record.condition_id : "",
-    max_spacing_ft: Math.max(MIN_CHAIN_LINK_SPACING_FT, finite(record.max_spacing_ft, DEFAULT_CHAIN_LINK_SPACING_FT)),
-    marker_size: Math.max(4, Math.min(16, finite(record.marker_size, DEFAULT_CHAIN_LINK_MARKER_SIZE))),
-    show_corner_posts: record.show_corner_posts !== false,
-    show_line_posts: record.show_line_posts !== false,
-    show_section_lengths: !!record.show_section_lengths,
-    show_post_counts: record.show_post_counts !== false,
     closed: !!record.closed,
     markers,
     shared_posts: sharedPosts,
@@ -97,9 +90,7 @@ export function createChainLinkFence(shape, idFactory = () => `fence-${crypto.ra
   if (!shape || shape.measure_role !== "linear") return null;
   return sanitizeChainLinkFence({
     id: idFactory(), shape_id: shape.id, sheet_id: shape.sheet_id,
-    condition_id: shape.condition_id, max_spacing_ft: DEFAULT_CHAIN_LINK_SPACING_FT,
-    marker_size: DEFAULT_CHAIN_LINK_MARKER_SIZE, show_corner_posts: true,
-    show_line_posts: true, show_section_lengths: false, show_post_counts: true,
+    condition_id: shape.condition_id,
     closed: false, markers: [], shared_posts: {},
   });
 }
@@ -186,6 +177,38 @@ export function classifyChainLinkPathPost(metrics, pathT, closed = false) {
   return { arms, directions, type: automaticPostType(arms, directions) };
 }
 
+// Extrusion records the shared Polyline node as a fence marker. Older saved
+// records can have that marker a few raster pixels away from the actual
+// vertex, which made the automatic corner and shared junction render as two
+// posts. Snap only connected markers to nearby path vertices; free-standing
+// markers remain at their intentionally placed stations.
+function alignSharedMarkersToVertices(fence, metrics, tolerancePx = 2) {
+  if (!fence?.markers?.length || !metrics?.segments?.length || metrics.total <= EPS) return fence;
+  const vertices = [];
+  let station = 0;
+  vertices.push({ path_t: 0, station });
+  for (const segment of metrics.segments) {
+    station += segment.length;
+    vertices.push({ path_t: station / metrics.total, station });
+  }
+  const markers = fence.markers.map((marker) => {
+    if (!fence.shared_posts?.[marker.id]) return marker;
+    const markerStation = marker.path_t * metrics.total;
+    let nearest = null;
+    for (const vertex of vertices) {
+      if (vertex.station <= EPS || vertex.station >= metrics.total - EPS) continue;
+      const gap = Math.abs(vertex.station - markerStation);
+      if (!nearest || gap < nearest.gap) nearest = { ...vertex, gap };
+    }
+    return nearest && nearest.gap <= tolerancePx
+      ? { ...marker, path_t: nearest.path_t }
+      : marker;
+  });
+  return markers.every((marker, index) => marker === fence.markers[index])
+    ? fence
+    : { ...fence, markers };
+}
+
 export function snapChainLinkPathPosition(metrics, point, tolerance) {
   const projected = projectPointToPath(metrics, point);
   if (!projected) return null;
@@ -220,11 +243,12 @@ function closedStops(fence) {
   ].sort((a, b) => a.path_t - b.path_t);
 }
 
-export function calculateChainLinkFence(fence, points, unitsPerPx, curved = false) {
-  const clean = sanitizeChainLinkFence(fence);
+export function calculateChainLinkFence(fence, points, unitsPerPx, curved = false, spacingFt = DEFAULT_CHAIN_LINK_SPACING_FT, strategy = "even") {
+  let clean = sanitizeChainLinkFence(fence);
   const upp = finite(unitsPerPx);
   const metrics = pathMetrics(points, clean?.closed);
   if (!clean || metrics.total <= EPS || upp <= 0) return { valid: false, metrics, corners: [], linePosts: [], sections: [], totalLengthFt: 0, cornerPostCount: 0, linePostCount: 0, totalPostCount: 0 };
+  clean = alignSharedMarkersToVertices(clean, metrics);
   const stops = clean.closed ? closedStops(clean) : openStops(clean);
   if (!curved) {
     let walked = 0;
@@ -247,13 +271,15 @@ export function calculateChainLinkFence(fence, points, unitsPerPx, curved = fals
     const [start, end, wraps] = pairs[index];
     const fraction = wraps ? (1 - start.path_t) + end.path_t : end.path_t - start.path_t;
     const lengthFt = Math.max(0, fraction * metrics.total * upp);
-    const spans = Math.max(1, Math.ceil(lengthFt / clean.max_spacing_ft));
+    const maxSpacing = Math.max(MIN_CHAIN_LINK_SPACING_FT, finite(spacingFt, DEFAULT_CHAIN_LINK_SPACING_FT));
+    const spans = Math.max(1, Math.ceil(lengthFt / maxSpacing));
     const intermediate = Math.max(0, spans - 1);
-    const actualSpacingFt = spans ? lengthFt / spans : 0;
+    const actualSpacingFt = strategy === "maximum" ? Math.min(maxSpacing, lengthFt) : spans ? lengthFt / spans : 0;
     const section = { id: `${clean.id}-section-${index + 1}`, index, start, end, wraps, lengthFt, spans, intermediate, actualSpacingFt };
     sections.push(section);
     for (let n = 1; n < spans; n++) {
-      let pathT = start.path_t + fraction * (n / spans);
+      const offset = strategy === "maximum" ? Math.min(lengthFt, maxSpacing * n) / lengthFt : n / spans;
+      let pathT = start.path_t + fraction * offset;
       if (pathT >= 1) pathT -= 1;
       linePosts.push({ id: `${section.id}-post-${n}`, sectionIndex: index, path_t: pathT, point: pointAtPathT(metrics, pathT) });
     }
@@ -335,10 +361,14 @@ export function summarizeChainLinkFencePosts(entries = []) {
 // Report/export companion for sheets that are not currently rendered. Marker
 // locations are path fractions, so counts need only the source shape's already
 // calibrated LF; no bitmap dimensions or PDF page load is required.
-export function calculateChainLinkFenceFromLength(fence, totalLengthFt) {
+export function calculateChainLinkFenceFromLength(fence, totalLengthFt, spacingFt = null, strategy = "even") {
   const clean = sanitizeChainLinkFence(fence);
   const total = Math.max(0, finite(totalLengthFt));
   if (!clean || total <= 0) return { valid: false, sections: [], totalLengthFt: 0, cornerPostCount: 0, linePostCount: 0, totalPostCount: 0 };
+  // Kept for old report integrations and saved data readers; active fence
+  // configuration no longer reads this legacy value and comes from 3D settings.
+  const maxSpacingFt = Math.max(MIN_CHAIN_LINK_SPACING_FT,
+    finite(spacingFt, finite(fence?.max_spacing_ft, DEFAULT_CHAIN_LINK_SPACING_FT)));
   const stops = clean.closed ? closedStops(clean) : openStops(clean);
   const pairs = clean.closed
     ? stops.map((start, index) => [start, stops[(index + 1) % stops.length], index === stops.length - 1])
@@ -346,8 +376,9 @@ export function calculateChainLinkFenceFromLength(fence, totalLengthFt) {
   const sections = pairs.map(([start, end, wraps], index) => {
     const fraction = wraps ? (1 - start.path_t) + end.path_t : end.path_t - start.path_t;
     const lengthFt = total * fraction;
-    const spans = Math.max(1, Math.ceil(lengthFt / clean.max_spacing_ft));
-    return { id: `${clean.id}-section-${index + 1}`, index, start, end, wraps, lengthFt, spans, intermediate: Math.max(0, spans - 1), actualSpacingFt: lengthFt / spans };
+    const spans = Math.max(1, Math.ceil(lengthFt / maxSpacingFt));
+    const actualSpacingFt = strategy === "maximum" ? Math.min(maxSpacingFt, lengthFt) : lengthFt / spans;
+    return { id: `${clean.id}-section-${index + 1}`, index, start, end, wraps, lengthFt, spans, intermediate: Math.max(0, spans - 1), actualSpacingFt };
   });
   const linePostCount = sections.reduce((sum, section) => sum + section.intermediate, 0);
   const terminalPostCount = clean.closed ? 0 : 2;
@@ -363,8 +394,18 @@ export function insertFenceMarker(fence, pathT, idFactory = () => `post-${crypto
   return { ...clean, markers: [...clean.markers, { id: idFactory(), path_t: t }].sort((a, b) => a.path_t - b.path_t) };
 }
 
-export function connectChainLinkBranch(fence, branch, { pathT, postId }, createPostId, createJunctionId) {
+export function connectChainLinkBranch(fence, branch, { pathT, postId, nodeId }, createPostId, createJunctionId) {
   let source = fence;
+  // A later extrusion from an already connected Polyline vertex should reuse
+  // its existing junction marker, upgrading that same post to 3-way/4-way.
+  if (!postId && nodeId) {
+    const existing = Object.entries(fence.shared_posts || {}).find(([id, sharedId]) =>
+      sharedId === nodeId && fence.markers.some((marker) => marker.id === id));
+    if (existing) {
+      postId = existing[0];
+      pathT = fence.markers.find((marker) => marker.id === postId)?.path_t ?? pathT;
+    }
+  }
   if (!localPostIds(fence).includes(postId)) {
     if (!fence.closed && pathT <= EPS) postId = `${fence.id}-start`;
     else if (!fence.closed && pathT >= 1 - EPS) postId = `${fence.id}-end`;
@@ -381,8 +422,7 @@ export function connectChainLinkBranch(fence, branch, { pathT, postId }, createP
   const sharedId = source.shared_posts[postId] || createJunctionId();
   return [
     { ...source, shared_posts: { ...source.shared_posts, [postId]: sharedId } },
-    { ...branch, max_spacing_ft: source.max_spacing_ft, marker_size: source.marker_size,
-      shared_posts: { ...branch.shared_posts, [`${branch.id}-start`]: sharedId } },
+    { ...branch, shared_posts: { ...branch.shared_posts, [`${branch.id}-start`]: sharedId } },
   ];
 }
 

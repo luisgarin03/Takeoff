@@ -4,6 +4,38 @@ import { createRevenueCatBillingAdapter } from './revenueCatBilling.js';
 export function stripeSubscription(row) {
  return row ? { subscriptionStatus:row.status, subscriptionPlan:row.plan_id, subscriptionProvider:row.provider, subscriptionCustomerId:row.revenuecat_customer_id, subscriptionId:row.subscription_id, subscriptionCurrentPeriodEnd:row.current_period_end, subscriptionEnvironment:row.environment, subscriptionWillRenew:row.will_renew } : null;
 }
+
+async function licenseFailureDetails(error) {
+ const response=error?.context;
+ let payload={};
+ try { if (typeof response?.clone === 'function') payload=await response.clone().json(); } catch { /* Network and non-JSON errors have no response body. */ }
+ const status=Number(response?.status)||0;
+ const candidate=String(payload?.code||error?.code||'');
+ const code=/^[A-Z][A-Z0-9_]{1,79}$/.test(candidate)?candidate:'';
+ return {status,code};
+}
+
+function licenseFailure(details) {
+ const {status,code}=details;
+ let message;
+ if (code==='OTK_AUTH'||status===401) message='This browser’s saved sign-in could not be verified. Sign out, sign in again, then retry the license check.';
+ else if (code==='OTK_ACCESS'||status===403) message='This app address is not approved for license checks. Open the official app address or contact support.';
+ else if (code==='OTK_LICENSE_DEVICE') message='The browser could not identify a secure editing session. Refresh the app and retry.';
+ else if (code==='OTK_BILLING_FAILED'||status>=500) message=`The license service returned an error${code?` (${code})`:status?` (HTTP ${status})`:''}. Retry, and contact support if it continues.`;
+ else if (status===0) message='Could not reach the license service. Check the connection and retry.';
+ else message=`The license check was rejected${code?` (${code})`:status?` (HTTP ${status})`:''}. Retry or contact support.`;
+ const failure=new Error(message);
+ failure.licenseFailureMessage=message;
+ failure.licenseFailureCode=code;
+ failure.licenseFailureStatus=status;
+ return failure;
+}
+
+export async function licenseCheckFailureMessage(error) {
+ if (typeof error?.licenseFailureMessage==='string') return error.licenseFailureMessage;
+ return licenseFailure(await licenseFailureDetails(error)).message;
+}
+
 export function createStripeBillingAdapter(client, navigate = (url) => window.location.assign(url), returnUrl = () => window.location.href) {
  if(!client)return null;
  async function invoke(action,body={}) {
@@ -41,8 +73,19 @@ export function createStripeBillingAdapter(client, navigate = (url) => window.lo
   async claimLicenseSession(_user,device){
    // A free account's trial must not depend on Stripe being configured.
    try { await invoke('refresh'); } catch { /* Session endpoint verifies saved entitlements independently. */ }
-   const {data,error}=await client.functions.invoke('otk-billing',{body:{action:'session',device_id:device.deviceId,device_name:device.deviceName,take_over:device.takeOver===true}});
-   if(error)throw error;
+   const request=()=>client.functions.invoke('otk-billing',{body:{action:'session',device_id:device.deviceId,device_name:device.deviceName,take_over:device.takeOver===true}});
+   let {data,error}=await request();
+   if(error){
+    const details=await licenseFailureDetails(error);
+    if(details.status===401||details.code==='OTK_AUTH'){
+     const refreshed=await client.auth.refreshSession();
+     if(!refreshed.error&&refreshed.data?.session)({data,error}=await request());
+     else throw licenseFailure({status:401,code:'OTK_AUTH'});
+    }
+    if(error)throw licenseFailure(await licenseFailureDetails(error));
+   }
+   if(data?.code)throw licenseFailure({status:0,code:String(data.code)});
+   if(!data?.session)throw licenseFailure({status:0,code:'OTK_BILLING_RESPONSE'});
    return {subscription:stripeSubscription(data.subscription),session:{granted:data.session?.granted===true,reason:data.session?.reason || '',activeDeviceName:data.session?.active_device_name || '',leaseExpiresAt:data.session?.lease_expires_at}};
   },
  };

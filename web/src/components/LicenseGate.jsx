@@ -3,7 +3,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { BrandText } from "../brand/marks.jsx";
 import { useCloud } from "../lib/supabase/CloudContext.jsx";
 import { waitForLatestLogin } from "../lib/supabase/auth.js";
-import { createAppBillingAdapter } from "../lib/stripeBilling.js";
+import { createAppBillingAdapter, licenseCheckFailureMessage } from "../lib/stripeBilling.js";
 import { createBillingService } from "../lib/subscriptions.js";
 import { licenseRequired, resolveLicenseAccess, sandboxLicensesAllowed } from "../lib/license.js";
 import { currentLicenseDevice, LICENSE_HEARTBEAT_MS } from "../lib/licenseSession.js";
@@ -36,9 +36,10 @@ export default function LicenseGate({ children }) {
     waitForLatestLogin(cloud.client).then(() => service.claimLicenseSession(cloud.user, { ...device, takeOver: requestedTransfer })).then((result) => {
       window.clearTimeout(timeout);
       if (live) setState({ userId: cloud.user.id, loading: false, record: result.subscription, session: result.session, error: "" });
-    }).catch(() => {
+    }).catch(async (failure) => {
       window.clearTimeout(timeout);
-      if (live) setState((value) => ({ ...value, userId: cloud.user.id, loading: false, session: null, error: "The license server could not be reached. Retry the license check to enable editing." }));
+      const message = await licenseCheckFailureMessage(failure);
+      if (live) setState((value) => ({ ...value, userId: cloud.user.id, loading: false, session: null, error: message }));
     });
     return () => { live = false; window.clearTimeout(timeout); };
   }, [required, cloud.user?.id, cloud.client, cloud.offline, service, device, refresh]);

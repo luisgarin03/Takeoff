@@ -2,7 +2,7 @@ import { METERS_PER_FOOT as FT, METERS_PER_INCH as IN, FRAME_COMPONENTS } from "
 import { distance, interpolate } from "./source.js";
 
 const EPS = 1e-6;
-const PRIORITY = { line: 0, end: 1, pull: 2, corner: 3, junction: 4, gate: 5 };
+const PRIORITY = { line: 0, end: 1, pull: 2, corner: 3, junction: 4, threeway: 4, fourway: 4, multiway: 4, gate: 5 };
 const MAX_AUTO_POSTS = 20000;
 
 const near = (a, b) => Math.abs(a - b) < EPS;
@@ -11,7 +11,9 @@ const pointOn = (segment, offset) => interpolate(segment.a, segment.b, offset / 
 const dimensions = (post, spec) => ({
   ...post, spec, base: spec.elevation * FT,
   height: Math.max(spec.postHeight * FT, spec.height * FT + (spec.clearance + spec.extension) * IN, post.gateTop || 0),
+  fenceHeightFt: Math.max(spec.height, spec.postHeight || 0, (post.gateTop || 0) / FT),
   diameter: (post.type === "line" ? spec.lineDiameter : post.type === "gate" ? spec.gateDiameter : spec.terminalDiameter) * IN,
+  foundationDepthFt: spec.foundationDepthFt, foundationDiameterIn: spec.foundationDiameterIn,
 });
 
 function gateLayout(run, issues) {
@@ -139,12 +141,17 @@ export function buildFenceLayout(source) {
   const runs = source.runs.map((run) => layOutRun(run, issues));
   const posts = [];
   const shared = new Map();
-  const ambiguous = new Set();
+  const ambiguous = new Map();
   for (const post of runs.flatMap((run) => run.posts)) {
     if (!post.shared) continue;
     const first = shared.get(post.shared);
     if (!first) shared.set(post.shared, post);
-    else if (!samePoint(first.point, post.point) || !near(first.base, post.base)) ambiguous.add(post.shared);
+    else if (!samePoint(first.point, post.point) || !near(first.base, post.base)) {
+      const mismatch = ambiguous.get(post.shared) || { position: 0, elevation: 0 };
+      mismatch.position = Math.max(mismatch.position, distance(first.point, post.point));
+      mismatch.elevation = Math.max(mismatch.elevation, Math.abs(first.base - post.base));
+      ambiguous.set(post.shared, mismatch);
+    }
   }
 
   // Only an explicit junction identity connects separate runs. Geometric
@@ -153,8 +160,8 @@ export function buildFenceLayout(source) {
   // auto-spaced line posts.
   shared.clear();
   const totals = { measured: 0, path: 0, opening: 0, fabric: 0, area: 0, gateArea: 0,
-    line: 0, end: 0, corner: 0, junction: 0, pull: 0, gate: 0, totalPosts: 0,
-    rail: 0, wire: 0, single: 0, double: 0, cantilever: 0 };
+    line: 0, end: 0, corner: 0, junction: 0, threeway: 0, fourway: 0, multiway: 0, pull: 0, gate: 0, totalPosts: 0,
+    rail: 0, wire: 0, single: 0, double: 0, cantilever: 0, overhead: 0 };
   for (const run of runs) {
     totals.measured += Number.isFinite(run.measured) ? run.measured * FT : 0;
     totals.path += run.length;
@@ -171,7 +178,12 @@ export function buildFenceLayout(source) {
     for (const post of run.posts) {
       if (!post.shared) { posts.push(post); continue; }
       if (ambiguous.has(post.shared)) {
-        issues.push(`${run.label}: shared post positions or elevations disagree. The runs are displayed separately.`);
+        const mismatch = ambiguous.get(post.shared);
+        const details = [
+          mismatch.position > EPS ? `plan positions differ by ${(mismatch.position / FT).toFixed(2)} ft` : "",
+          mismatch.elevation > EPS ? `base elevations differ by ${(mismatch.elevation / FT).toFixed(2)} ft` : "",
+        ].filter(Boolean).join("; ");
+        issues.push(`${run.label}: connected post ${details}. The runs are displayed separately.`);
         posts.push({ ...post, shared: undefined, component_id: `fence-component:post:${run.id}:${post.id}` });
         continue;
       }
@@ -183,9 +195,12 @@ export function buildFenceLayout(source) {
       }
       const first = posts[match.index];
       match.directions += post.directions || 2;
-      const type = first.type === "gate" || post.type === "gate" ? "gate" : match.directions > 2 ? "junction" : "corner";
+      const type = first.type === "gate" || post.type === "gate" ? "gate"
+        : match.directions >= 5 ? "multiway" : match.directions === 4 ? "fourway"
+          : match.directions === 3 ? "threeway" : "corner";
       posts[match.index] = { ...first, id: first.id, component_id: first.component_id, type,
-        diameter: Math.max(first.diameter, post.diameter, first.spec.terminalDiameter * IN, post.spec.terminalDiameter * IN), height: Math.max(first.height, post.height) };
+        diameter: Math.max(first.diameter, post.diameter, first.spec.terminalDiameter * IN, post.spec.terminalDiameter * IN),
+        height: Math.max(first.height, post.height), fenceHeightFt: Math.max(first.fenceHeightFt || 0, post.fenceHeightFt || 0) };
     }
   }
   const countedPostIds = new Map();
@@ -195,6 +210,8 @@ export function buildFenceLayout(source) {
     countedPostIds.set(post.type, ids);
   }
   for (const [type, ids] of countedPostIds) totals[type] = ids.size;
+  // Keep the old aggregate for compatibility with existing material summaries.
+  totals.junction = totals.threeway + totals.fourway + totals.multiway;
   totals.totalPosts = new Set(posts.map((post) => post.component_id)).size;
   return { runs, posts, totals, issues: [...new Set(issues)] };
 }
