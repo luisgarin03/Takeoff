@@ -2,11 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import FenceViewer, { download } from "./FenceViewer.jsx";
 import { adaptFenceRuns } from "./source.js";
 import { buildFenceLayout } from "./layout.js";
-import { FITTINGS, FRAME_COMPONENTS, fenceConditionKey, METERS_PER_FOOT as FT, METERS_PER_INCH as IN, normalizeFence3d, normalizeFoundationSettings, normalizeOrnamentalSpec, ORNAMENTAL_SPEC, recommendedFoundation, runSpec, WIRE_GAUGES } from "./settings.js";
+import { FITTINGS, FRAME_COMPONENTS, fenceConditionKey, METERS_PER_FOOT as FT, METERS_PER_INCH as IN, normalizeFence3d, normalizeFoundationSettings, normalizeOrnamentalSpec, ORNAMENTAL_SPEC, normalizeWoodSpec, WOOD_SPEC, recommendedFoundation, runSpec, WIRE_GAUGES } from "./settings.js";
 import { buildFenceFittings } from "./fittings.js";
-import { buildColorMapRows, buildOrnamentalColorMapRows, buildGuardrailColorMapRows, buildFoundationColorMapRow, foundationVolumeCubicYards, combineColorMapRows } from "./colorMap.js";
+import { FENCE_COMPONENT_COLORS, buildColorMapRows, buildOrnamentalColorMapRows, buildGuardrailColorMapRows, buildFoundationColorMapRow, foundationVolumeCubicYards, combineColorMapRows } from "./colorMap.js";
 import { buildOrnamentalLayout } from "./ornamental.js";
 import { buildGuardrailLayout } from "./guardrail.js";
+import { buildWoodLayout, buildWoodColorMapRows, woodMaterialRows } from "./wood.js";
 import "./fence3d.css";
 
 const DISPLAY_CONTROLS = [["fabric", "Fabric"], ["posts", "Posts"], ["rails", "Rails and wires"], ["fittings", "Fittings"], ["corners", "Corner markers"], ["lengths", "Run lengths"], ["angles", "Corner angles"], ["spacing", "Post spacing"], ["grid", "Grid"]];
@@ -248,11 +249,94 @@ function OrnamentalSettings({ run, gateRun, updateSpec, updateRun, units }) {
   </>;
 }
 
+function WoodSettings({ run, gateRun, updateSpec, updateRun, units }) {
+  if (!run?.spec) return null;
+  const spec = run.spec;
+  const metric = units === "metric";
+  const field = (name, label, kind, minimum = 0) => {
+    const factor = metric ? (kind === "ft" ? FT : IN * 1000) : 1;
+    const unit = kind === "ft" ? (metric ? "m" : "ft") : (metric ? "mm" : "in");
+    return <NumberField key={name} label={`${label} (${unit})`} value={+(spec[name] * factor).toFixed(4)}
+      minimum={minimum * factor} update={(value) => updateSpec(name, value / factor)} />;
+  };
+  const gates = gateRun?.configuredGates || [];
+  const addGate = (type) => {
+    const index = gateRun?.gateSegments.findIndex((segment) => segment.length >= (type === "double" ? 8 : 4) * FT) ?? -1;
+    if (index < 0) return;
+    const segment = gateRun.gateSegments[index];
+    const width = Math.min(type === "double" ? 8 : 4, segment.length / FT);
+    updateRun({ gates: [...gates, { id: crypto.randomUUID(), type, segment: index + 1,
+      start: Math.max(0, (segment.length / FT - width) / 2), width, height: spec.height_ft,
+      clearance: 0, startOpenDegrees: 0, endOpenDegrees: 0, hingeSide: "start" }] });
+  };
+  const lengthFactor = metric ? FT : 1;
+  const lengthUnit = metric ? "m" : "ft";
+  return <>
+    <Section label="Wood fence dimensions" open>
+      {field("height_ft", "Fence height", "ft", 1)}
+      {field("bottom_clearance_in", "Bottom clearance", "in")}
+      {field("elevation_ft", "Base elevation", "ft", -1000)}
+      {field("max_bay_span_ft", "Maximum bay span", "ft", 1)}
+      <Options label="Bay spacing" value={spec.spacing_strategy}
+        choices={[["balanced", "Balanced bays"], ["maximum", "Shorter last bay"]]}
+        update={(value) => updateSpec("spacing_strategy", value)} />
+      <Options label="Backer rails per bay" value={spec.rails} choices={[[2, "2 rails"], [3, "3 rails"]]}
+        update={(value) => updateSpec("rails", Number(value))} />
+      {field("post_size_in", "Line post size", "in", 1)}
+      {field("terminal_post_size_in", "End and corner post size", "in", 1)}
+      {field("gate_post_size_in", "Gate post size", "in", 1)}
+      {field("rail_width_in", "Rail face width", "in", .5)}
+      {field("rail_depth_in", "Rail depth", "in", .5)}
+      {field("picket_width_in", "Picket width", "in", .5)}
+      {field("picket_gap_in", "Picket gap", "in")}
+      <label>Wood finish<input type="color" value={spec.finish_color} onChange={(event) => updateSpec("finish_color", event.target.value)} /></label>
+    </Section>
+    <Section label="Wood components">
+      <Toggle label="Top cap board" value={spec.cap_board} update={(value) => updateSpec("cap_board", value)} />
+      <Toggle label="Bottom kickboard" value={spec.kickboard} update={(value) => updateSpec("kickboard", value)} />
+      <Toggle label="Count and model fasteners" value={spec.fasteners} update={(value) => updateSpec("fasteners", value)} />
+      <Toggle label="Concrete post footings" value={spec.footings} update={(value) => updateSpec("footings", value)} />
+      <Toggle label="Gravel beds" value={spec.gravel_beds} update={(value) => updateSpec("gravel_beds", value)} />
+      {spec.gravel_beds && field("gravel_depth_in", "Gravel bed depth", "in")}
+    </Section>
+    <FoundationSettings spec={spec} heightFt={spec.height_ft} type="wood" units={units} onUpdate={updateSpec} />
+    <Section label={`Single and double swing gates (${gates.length})`}>
+      <div className="fence3d-toolbar">
+        <button disabled={!gateRun?.gateSegments.length} onClick={() => addGate("single")}>Add single swing gate</button>
+        <button disabled={!gateRun?.gateSegments.length} onClick={() => addGate("double")}>Add double swing gate</button>
+      </div>
+      {gates.map((gate, index) => {
+        const patch = (values) => updateRun({ gates: updateItem(gates, gate.id, values) });
+        const number = (name, label, minimum = 0) => <NumberField label={`${label} (${lengthUnit})`}
+          value={+(gate[name] * lengthFactor).toFixed(3)} minimum={minimum * lengthFactor}
+          update={(value) => patch({ [name]: value / lengthFactor })} />;
+        const swing = (name, label) => <NumberField label={`${label} (°)`} value={gate[name] || 0}
+          minimum={-120} update={(value) => patch({ [name]: value })} />;
+        return <div className="fence3d-edit" key={gate.id}>
+          <strong>Wood gate {index + 1}</strong>
+          <Options label="Gate type" value={gate.type} choices={[["single", "Single swing"], ["double", "Double swing"]]}
+            update={(type) => patch({ type })} />
+          <Options label="Source edge" value={String(gate.segment)} choices={gateRun.gateSegments.map((segment, i) =>
+            [String(i + 1), `${i + 1} · ${(metric ? segment.length : segment.length / FT).toFixed(2)} ${lengthUnit}`])}
+            update={(value) => patch({ segment: Number(value) })} />
+          {number("start", "Position from edge start")}{number("width", "Opening width", 1)}
+          {number("height", "Gate height", 1)}
+          <Options label="Hinge side" value={gate.hingeSide || "start"} choices={[["start", "Opening start"], ["end", "Opening end"]]}
+            update={(hingeSide) => patch({ hingeSide })} />
+          {gate.type === "single" ? swing(gate.hingeSide === "end" ? "endOpenDegrees" : "startOpenDegrees", "Leaf swing")
+            : <>{swing("startOpenDegrees", "Start leaf swing")}{swing("endOpenDegrees", "End leaf swing")}</>}
+          <button onClick={() => updateRun({ gates: gates.filter((item) => item.id !== gate.id) })}>Remove gate</button>
+        </div>;
+      })}
+    </Section>
+  </>;
+}
+
 const length = (n, units) => `${(units === "metric" ? n : n / FT).toFixed(2)} ${units === "metric" ? "m" : "ft"}`;
 const area = (n, units) => `${(units === "metric" ? n : n / (FT * FT)).toFixed(2)} ${units === "metric" ? "m²" : "ft²"}`;
 const csvCell = (value) => `"${String(value).replaceAll('"', '""')}"`;
 
-function foundationElements(layout, ornamentalLayout, guardrailLayout) {
+function foundationElements(layout, ornamentalLayout, guardrailLayout, woodLayout) {
   return [
     ...layout.posts.map((post) => ({ ...post, base: post.base, foundationDepthFt: post.foundationDepthFt,
       foundationDiameterIn: post.foundationDiameterIn })),
@@ -261,10 +345,12 @@ function foundationElements(layout, ornamentalLayout, guardrailLayout) {
     ...guardrailLayout.routes.flatMap((route) => route.supports.map((support) => ({ ...support,
       base: support.point[1], foundationDepthFt: support.foundationDepthFt,
       foundationDiameterIn: support.foundationDiameterIn }))),
+    ...woodLayout.posts.filter((post) => post.footing).map((post) => ({ ...post, base: post.base,
+      foundationDepthFt: post.foundationDepthFt, foundationDiameterIn: post.foundationDiameterIn })),
   ];
 }
 
-function quantities(layout, data, units, ornamentalLayout, guardrailLayout, foundations) {
+function quantities(layout, data, units, ornamentalLayout, guardrailLayout, foundations, woodLayout) {
   const t = layout.totals;
   const rows = [
     ["measured", "Saved takeoff length", length(t.measured, units)], ["path", "Calibrated fence path", length(t.path, units)],
@@ -303,7 +389,9 @@ function quantities(layout, data, units, ornamentalLayout, guardrailLayout, foun
     ["ornamental-caps", "Ornamental post caps", ornamental.caps],
   );
   if (guardrailLayout.routes.length) rows.push(["guardrail", "Guardrail", `${(guardrailLayout.totals.length / FT).toFixed(2)} LF`]);
-  const concreteYards = foundationVolumeCubicYards(foundations);
+  if (woodLayout.runs.length) rows.push(...woodMaterialRows(woodLayout));
+  const woodFoundationIds = new Set(woodLayout.posts.filter((post) => post.footing).map((post) => post.id));
+  const concreteYards = foundationVolumeCubicYards(foundations.filter((post) => !woodFoundationIds.has(post.id)));
   if (concreteYards > 0) rows.push(["foundations", "Concrete foundations", `${concreteYards.toFixed(2)} yd³`]);
   return rows;
 }
@@ -379,7 +467,8 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
       ? conditionConfig.spec : runSpec(config);
     if (type === "guardrail") next.spec = normalizeFoundationSettings(
       conditionConfig?.type === "guardrail" ? conditionConfig.spec : null, 6, "guardrail");
-    if (["wood", "vinyl", "exclude"].includes(type)) delete next.spec;
+    if (type === "wood") next.spec = normalizeWoodSpec(conditionConfig?.type === "wood" ? conditionConfig.spec : WOOD_SPEC);
+    if (["vinyl", "exclude"].includes(type)) delete next.spec;
     updateCondition(next);
   };
   const updateDisplay = (key, value) => save({ ...data, display: { ...data.display, [key]: value } });
@@ -408,15 +497,19 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
     return { ...base, fittings: buildFenceFittings(base) };
   }, [source.runs, source.issues]);
   const ornamentalLayout = useMemo(() => buildOrnamentalLayout({ runs: source.ornamentalRuns, issues: source.issues }), [source.ornamentalRuns, source.issues]);
+  const woodLayout = useMemo(() => buildWoodLayout({ runs: source.woodRuns, issues: source.issues }), [source.woodRuns, source.issues]);
   const guardrailLayout = useMemo(() => buildGuardrailLayout({ runs: source.guardrailRuns }), [source.guardrailRuns]);
-  const foundations = useMemo(() => foundationElements(layout, ornamentalLayout, guardrailLayout),
-    [layout, ornamentalLayout, guardrailLayout]);
+  const foundations = useMemo(() => foundationElements(layout, ornamentalLayout, guardrailLayout, woodLayout),
+    [layout, ornamentalLayout, guardrailLayout, woodLayout]);
   const run = layout.runs.find((item) => item.id === selected?.id);
   const ornamentalRun = ornamentalLayout.runs.find((item) => item.id === selected?.id);
+  const woodRun = woodLayout.runs.find((item) => item.id === selected?.id);
   const editingRun = run && { ...run, configuredGates: config?.gates || [] };
   const editingOrnamentalRun = ornamentalRun && { ...ornamentalRun, configuredGates: config?.gates || [] };
+  const editingWoodRun = woodRun && { ...woodRun, configuredGates: config?.gates || [] };
   const pick = useCallback((id) => { setSelection(id); onSelectSource(id); }, [onSelectSource]);
-  const output = quantities(layout, data, units, ornamentalLayout, guardrailLayout, foundations);
+  const output = quantities(layout, data, units, ornamentalLayout, guardrailLayout, foundations, woodLayout);
+  const geometryIssues = [...new Set([...layout.issues, ...ornamentalLayout.issues, ...woodLayout.issues])];
   const exportQuantities = output.map(([id, title, generated]) => ({ id, title, generated, manual: data.overrides[id] ?? null }));
   const activeFenceConditions = useMemo(() => {
     const groups = new Map();
@@ -425,7 +518,7 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
       const key = fenceConditionKey(page, conditionId);
       const type = data.conditions[key]?.type || data.runs[shape.id]?.type
         || (fenceById.has(shape.id) ? "chain-link" : null);
-      if (!["chain-link", "ornamental", "guardrail"].includes(type)) continue;
+      if (!["chain-link", "ornamental", "wood", "guardrail"].includes(type)) continue;
       groups.set(key, groups.get(key) || { id: conditionId, key, type,
         name: conditionNames[conditionId] || shape.label || conditionId });
     }
@@ -438,21 +531,24 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
   const conditionComponentGroups = useMemo(() => activeFenceConditions.map((condition) => {
     const chainRuns = source.runs.filter((item) => item.conditionScopeId === condition.key);
     const ornamentalRuns = source.ornamentalRuns.filter((item) => item.conditionScopeId === condition.key);
+    const woodRuns = source.woodRuns.filter((item) => item.conditionScopeId === condition.key);
     const guardrailRuns = source.guardrailRuns.filter((item) => item.conditionScopeId === condition.key);
     const chainBase = buildFenceLayout({ runs: chainRuns, issues: [] });
     const chainLayout = { ...chainBase, fittings: buildFenceFittings(chainBase) };
     const conditionOrnamentalLayout = buildOrnamentalLayout({ runs: ornamentalRuns, issues: [] });
+    const conditionWoodLayout = buildWoodLayout({ runs: woodRuns, issues: [] });
     const conditionGuardrailLayout = buildGuardrailLayout({ runs: guardrailRuns });
-    const foundationRow = buildFoundationColorMapRow(foundationElements(chainLayout, conditionOrnamentalLayout, conditionGuardrailLayout));
+    const foundationRow = buildFoundationColorMapRow(foundationElements(chainLayout, conditionOrnamentalLayout, conditionGuardrailLayout, conditionWoodLayout));
     const rows = [...combineColorMapRows(units,
       chainRuns.length ? buildColorMapRows(chainLayout, units, data.display.fabricMeasure) : [],
       ornamentalRuns.length ? buildOrnamentalColorMapRows(conditionOrnamentalLayout, units) : [],
+      woodRuns.length ? buildWoodColorMapRows(conditionWoodLayout) : [],
       guardrailRuns.length ? buildGuardrailColorMapRows(conditionGuardrailLayout) : [],
     ), ...(foundationRow ? [foundationRow] : [])].map((row) => ({ ...row, id: `${condition.key}:${row.id}`, conditionKey: condition.key,
       conditionScopeId: condition.key, conditionName: condition.name }));
     const gateCounts = [
-      ["gateTypeSingle", "Single swing gates", chainLayout.totals.single + conditionOrnamentalLayout.totals.singleGates],
-      ["gateTypeDouble", "Double swing gates", chainLayout.totals.double + conditionOrnamentalLayout.totals.doubleGates],
+      ["gateTypeSingle", "Single swing gates", chainLayout.totals.single + conditionOrnamentalLayout.totals.singleGates + conditionWoodLayout.totals.singleGates],
+      ["gateTypeDouble", "Double swing gates", chainLayout.totals.double + conditionOrnamentalLayout.totals.doubleGates + conditionWoodLayout.totals.doubleGates],
       ["gateTypeOverhead", "Top-rolling gates", chainLayout.totals.overhead + conditionOrnamentalLayout.totals.topRollingGates],
       ["gateTypeCantilever", "Cantilever slide gates", chainLayout.totals.cantilever],
     ].filter(([, , count]) => count > 0).map(([category, title, count]) => ({
@@ -461,7 +557,7 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
       conditionScopeId: condition.key, conditionName: condition.name,
     }));
     return { ...condition, rows: [...rows, ...gateCounts] };
-  }), [activeFenceConditions, source.runs, source.ornamentalRuns, source.guardrailRuns, units, data.display.fabricMeasure]);
+  }), [activeFenceConditions, source.runs, source.ornamentalRuns, source.woodRuns, source.guardrailRuns, units, data.display.fabricMeasure]);
   const colorRows = useMemo(() => conditionComponentGroups.flatMap((group) => group.rows), [conditionComponentGroups]);
   const viewportLegendGroups = useMemo(() => conditionComponentGroups.map((group) => ({
     ...group, rows: group.rows.filter((row) => Number(row.count) > 0),
@@ -564,7 +660,7 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
       </div>
     </header>
     <div className="fence3d-view">
-      <FenceViewer ref={viewer} layout={layout} ornamentalLayout={ornamentalLayout} guardrailLayout={guardrailLayout} display={data.display} units={units} selectedId={selected?.id} onPick={pick}
+      <FenceViewer ref={viewer} layout={layout} ornamentalLayout={ornamentalLayout} woodLayout={woodLayout} guardrailLayout={guardrailLayout} display={data.display} units={units} selectedId={selected?.id} onPick={pick}
         sheetId={page} calibration={calibration} renderPlan={renderPlan} onFlyChange={setFlyMode} onFlyError={setStatus}
         onFlySpeedChange={setFlySpeed} flySpeed={flySpeed} colorMap={colorMap} colorMapRows={colorRows}
         measureMode={measureMode} onMeasureChange={setMeasureStatus} annotationMode={annotationMode} annotations={annotations}
@@ -596,7 +692,7 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
           onChange={(event) => setNoteDraft((current) => ({ ...current, text: event.target.value }))} /></label>
         <div><button type="submit" disabled={!noteDraft.text.trim()}>Add note</button><button type="button" onClick={() => setNoteDraft(null)}>Cancel</button></div>
       </form>}
-      {!layout.runs.length && !ornamentalLayout.runs.length && !guardrailLayout.routes.length && pageCalibration && !(data.display.plan && calibration) && <p className="fence3d-empty">{candidates.length ? "Choose a run and assign it Chain-link, Ornamental, or Guardrail. A calibrated sheet is required." : "Draw a Linear or Polyline takeoff on this sheet to generate a fence."}</p>}
+      {!layout.runs.length && !ornamentalLayout.runs.length && !woodLayout.runs.length && !guardrailLayout.routes.length && pageCalibration && !(data.display.plan && calibration) && <p className="fence3d-empty">{candidates.length ? "Choose a run and assign it Chain-link, Ornamental, Wood, or Guardrail. A calibrated sheet is required." : "Draw a Linear or Polyline takeoff on this sheet to generate a fence."}</p>}
       {!pageCalibration && <p className="fence3d-empty" role="status">Reading sheet calibration…</p>}
       <span className="fence3d-grid-key">{flyMode ? "WASD move · Mouse look or drag · Space/C up/down · Shift boost · −/= speed · Esc exit" : (units === "metric" ? "Meters" : "Feet") + " · Drag to look · Right-drag to pan · Scroll to move forward/back"}</span>
     </div>
@@ -617,14 +713,14 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
           shape.id, `${shape.label || `${conditionNames[shape.condition_id] || "Run"} ${i + 1}`} · ${length((shape.computed?.perimeter_lf || 0) * FT, units)}`,
         ])]} update={(id) => { if (id) pick(id); else setSelection(""); }} />
         {selected && <Options label="Fence type · applies to this condition on this sheet" value={effectiveType} choices={TYPES} update={setFenceType} />}
-        {selected && ["wood", "vinyl"].includes(effectiveType) && <p className="fence3d-note">This fence type is not available in the 3D generator yet. Choose Chain-link, Ornamental, or Guardrail to generate it.</p>}
+        {selected && effectiveType === "vinyl" && <p className="fence3d-note">Vinyl fence generation is not available yet.</p>}
         <div className="fence3d-toolbar">
           <button disabled={!designHistory.undo.length} onClick={() => history("undo")}>Undo design</button>
           <button disabled={!designHistory.redo.length} onClick={() => history("redo")}>Redo design</button>
         </div>
-        <output className="fence3d-total"><small>Total fence path</small><strong>{length(layout.totals.path + ornamentalLayout.totals.path + guardrailLayout.totals.length, units)}</strong></output>
-      {[...new Set([...layout.issues, ...ornamentalLayout.issues])].length > 0 && <details className="fence3d-issues"><summary>Geometry checks · {[...new Set([...layout.issues, ...ornamentalLayout.issues])].length} {[...new Set([...layout.issues, ...ornamentalLayout.issues])].length === 1 ? "issue" : "issues"}</summary>
-          <ul>{[...new Set([...layout.issues, ...ornamentalLayout.issues])].map((issue) => <li key={issue}>{issue}</li>)}</ul>
+        <output className="fence3d-total"><small>Total fence path</small><strong>{length(layout.totals.path + ornamentalLayout.totals.path + woodLayout.totals.path + guardrailLayout.totals.length, units)}</strong></output>
+      {geometryIssues.length > 0 && <details className="fence3d-issues"><summary>Geometry checks · {geometryIssues.length} {geometryIssues.length === 1 ? "issue" : "issues"}</summary>
+          <ul>{geometryIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
         </details>}
       </div>
       {activeFenceConditions.length > 0 && <Section label={`Fence condition visibility · ${activeFenceConditions.length}`}>
@@ -656,6 +752,17 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
           updateCondition({ type: "ornamental", spec: normalizeOrnamentalSpec(next) });
         }}
         updateRun={updateRun} units={units} />}
+      {effectiveType === "wood" && <WoodSettings run={editingWoodRun && { ...editingWoodRun,
+        spec: normalizeWoodSpec(conditionConfig?.spec || woodRun?.spec || WOOD_SPEC) }} gateRun={editingWoodRun}
+        updateSpec={(name, val) => {
+          const patch = typeof name === "object" ? name : { [name]: val };
+          const current = normalizeWoodSpec(conditionConfig?.spec || woodRun?.spec || WOOD_SPEC);
+          const next = { ...current, ...patch };
+          if (Object.hasOwn(patch, "height_ft") && current.foundationAuto !== false && !Object.hasOwn(patch, "foundationAuto")) {
+            Object.assign(next, recommendedFoundation(patch.height_ft, "wood"));
+          }
+          updateCondition({ type: "wood", spec: normalizeWoodSpec(next) });
+        }} updateRun={updateRun} units={units} />}
       {effectiveType === "guardrail" && <FoundationSettings type="guardrail" heightFt={6} units={units}
         spec={conditionConfig?.type === "guardrail" ? conditionConfig.spec : null}
         onUpdate={(patch) => updateCondition({ type: "guardrail", spec: normalizeFoundationSettings({
@@ -679,7 +786,7 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
             <ul className="fence3d-map-legend">{group.rows.map((row) => <li key={row.id}>
               <span className="fence3d-map-swatch" style={{ backgroundColor: row.color }} aria-hidden="true" />
               <span className="fence3d-map-name">{row.title}</span>
-              {row.category === "ornamentalPanels" || row.summaryOnly ? <span className="fence3d-map-visibility-placeholder" aria-hidden="true" /> : <button className="fence3d-map-visibility" type="button" aria-pressed={componentVisibility[row.category] !== false}
+              {row.category === "ornamentalPanels" || row.summaryOnly || ["wood:fixed", "wood:gateOpenings", "wood:panels", "wood:singleGates", "wood:doubleGates"].includes(row.category) ? <span className="fence3d-map-visibility-placeholder" aria-hidden="true" /> : <button className="fence3d-map-visibility" type="button" aria-pressed={componentVisibility[row.category] !== false}
                 aria-label={`${componentVisibility[row.category] === false ? "Show" : "Hide"} ${row.title}`}
                 title={`${componentVisibility[row.category] === false ? "Show" : "Hide"} ${row.title}`}
                 onClick={() => updateComponentVisibility(row.category, componentVisibility[row.category] === false)}>
@@ -722,7 +829,7 @@ export default function FenceWorkspace({ shapes, fences, conditions, sheets, act
         <Toggle label="Include quantities" value={includeExportQuantities} update={setIncludeExportQuantities} />
         <p className="fence3d-note">Markups include saved ground drawings, notes, and the current measurement. Quantities are added to model metadata and the browser or PNG view. Quantities CSV always exports the quantity table.</p>
         <div className="fence3d-toolbar">
-          {["glb", "gltf", "otk3d", "html", "png", "csv"].map((kind) => <button key={kind} disabled={exporting || !(layout.runs.length || ornamentalLayout.runs.length)} onClick={() => exportFile(kind)} title={{
+          {["glb", "gltf", "otk3d", "html", "png", "csv"].map((kind) => <button key={kind} disabled={exporting || !(layout.runs.length || ornamentalLayout.runs.length || woodLayout.runs.length || guardrailLayout.routes.length)} onClick={() => exportFile(kind)} title={{
             glb: "Download a Blender-ready GLB model",
             gltf: "Download a glTF model",
             otk3d: "Download an OpenTakeoff 3D project archive",

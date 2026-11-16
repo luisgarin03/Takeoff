@@ -6,6 +6,7 @@ import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer
 import { createFenceScene, disposeFenceScene } from "./scene.js";
 import { createOrnamentalScene } from "./ornamentalScene.js";
 import { createGuardrailScene } from "./guardrailScene.js";
+import { createWoodScene } from "./woodScene.js";
 import { FITTINGS, METERS_PER_FOOT as FT } from "./settings.js";
 import { createOtk3dArchive, createStandaloneViewer, fenceExportName } from "./export.js";
 import { FENCE_COMPONENT_COLORS } from "./colorMap.js";
@@ -807,7 +808,7 @@ function createRuntime(host, pick, onFlyChange, onFlyError, onFlySpeedChange, on
 const tmpSegment = new T.Line3();
 const tmpPoint = new T.Vector3();
 
-function updateLabels(runtime, layout, ornamentalLayout, guardrailLayout, units) {
+function updateLabels(runtime, layout, ornamentalLayout, woodLayout, guardrailLayout, units) {
   if (runtime.labels) {
     for (const item of [...runtime.labels.children]) item.removeFromParent();
     runtime.labels.removeFromParent();
@@ -863,6 +864,22 @@ function updateLabels(runtime, layout, ornamentalLayout, guardrailLayout, units)
       }
     }
   }
+  for (const run of woodLayout.runs) {
+    if (!conditionVisible(run.conditionScopeId, runtime.settings)) continue;
+    const top = run.spec.elevation_ft * FT + (run.spec.height_ft + run.spec.bottom_clearance_in / 12) * FT + .25;
+    for (const segment of run.segments) {
+      const panels = woodLayout.panels.filter((panel) => panel.runId === run.id && panel.segmentId === segment.id);
+      const fixedLength = panels.reduce((sum, panel) => sum + panel.length, 0);
+      if (runtime.settings.edgeLabels && fixedLength > .1) {
+        add([(segment.a[0] + segment.b[0]) / 2, (segment.a[1] + segment.b[1]) / 2], top,
+          `${formatLength(fixedLength, units)} · ${panels.length} BAY${panels.length === 1 ? "" : "S"}`, "edge");
+      }
+      if (runtime.settings.lengths && segment.length > .1) {
+        add([(segment.a[0] + segment.b[0]) / 2, (segment.a[1] + segment.b[1]) / 2], top + (runtime.settings.edgeLabels ? 1.15 : .22),
+          formatLength(segment.length, units), "run");
+      }
+    }
+  }
   if (runtime.settings.edgeLabels) for (const route of guardrailLayout.routes) {
     if (!conditionVisible(route.conditionScopeId, runtime.settings)) continue;
     if (route.length <= .1 || !route.anchor) continue;
@@ -886,6 +903,10 @@ function componentVisible(category, display) {
   if (category === "foundations") return display.posts;
   if (category === "rails" || category === "wire" || category === "barbedWire" || category === "gateFrame" || category === "guardrail") return display.rails;
   if (category === "pickets") return display.fabric;
+  if (category.startsWith("wood:post:") || category === "wood:postCaps" || category === "wood:foundations" || category === "foundations") return display.posts;
+  if (category === "wood:pickets" || category === "wood:panels") return display.fabric;
+  if (["wood:rails", "wood:capBoards", "wood:kickboards"].includes(category)) return display.rails;
+  if (category.startsWith("wood:")) return display.fittings;
   if (fittingKinds.has(category) || ["flatBrackets", "swivelBrackets", "ornamentalHinges", "ornamentalLatches",
     "ornamentalKeepers", "ornamentalDropRods", "ornamentalCaps"].includes(category)) return display.fittings;
   return true;
@@ -1116,7 +1137,7 @@ async function createGlb(current, options) {
   });
 }
 
-export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { runs: [], panels: [], posts: [], gates: [] }, guardrailLayout = { routes: [], totals: { length: 0 } }, display, units, selectedId, onPick, sheetId, calibration, renderPlan,
+export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { runs: [], panels: [], posts: [], gates: [] }, woodLayout = { runs: [], panels: [], posts: [], gates: [] }, guardrailLayout = { routes: [], totals: { length: 0 } }, display, units, selectedId, onPick, sheetId, calibration, renderPlan,
   onFlyChange, onFlyError, onFlySpeedChange, flySpeed, colorMap = false, colorMapRows = [], measureMode = false, onMeasureChange,
   annotationMode = "", annotations = { drawings: [], notes: [] }, onAnnotationModeChange, onAnnotationStatusChange, onDrawComplete, onNotePoint, onMarkupDelete }, ref) {
   const host = useRef(null);
@@ -1328,6 +1349,7 @@ export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { ru
     current.model.name = "OpenTakeoff fence conditions";
     if (layout.runs.length) current.model.add(createFenceScene(layout));
     if (ornamentalLayout.runs.length) current.model.add(createOrnamentalScene(ornamentalLayout));
+    if (woodLayout.runs.length) current.model.add(createWoodScene(woodLayout));
     if (guardrailLayout.routes.length) current.model.add(createGuardrailScene(guardrailLayout));
     const snapPoints = new Map();
     for (const run of layout.runs) for (const [x, z] of run.points) {
@@ -1350,6 +1372,16 @@ export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { ru
         ground: new T.Vector3(x, 0, z), screen: new T.Vector3(x, post.base + (post.top - post.base) / 2, z),
       });
     }
+    for (const run of woodLayout.runs) for (const [x, z] of run.points) {
+      const point = new T.Vector3(x, 0, z);
+      snapPoints.set(`${x.toFixed(6)}:${z.toFixed(6)}`, { ground: point, screen: point.clone() });
+    }
+    for (const post of woodLayout.posts) {
+      const [x, z] = post.point;
+      snapPoints.set(`${x.toFixed(6)}:${z.toFixed(6)}`, {
+        ground: new T.Vector3(x, 0, z), screen: new T.Vector3(x, (post.base + post.top) / 2, z),
+      });
+    }
     for (const route of guardrailLayout.routes) for (const point of route.points) {
       const [x, z] = point.point;
       snapPoints.set(`${x.toFixed(6)}:${z.toFixed(6)}`, {
@@ -1361,7 +1393,7 @@ export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { ru
     current.detail = [];
     current.model.traverse((object) => { if (object.userData.kind === "detail") current.detail.push(object); });
     current.scene.add(current.model);
-    if (layout.runs.length || ornamentalLayout.runs.length || guardrailLayout.routes.length) current.bounds.setFromObject(current.model);
+    if (layout.runs.length || ornamentalLayout.runs.length || woodLayout.runs.length || guardrailLayout.routes.length) current.bounds.setFromObject(current.model);
     const size = current.bounds.getSize(new T.Vector3());
     const step = units === "metric" ? 1 : 5 * FT;
     const divisions = Math.min(150, Math.max(10, Math.ceil(size.length() * 1.5 / step)));
@@ -1370,8 +1402,8 @@ export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { ru
     const center = current.bounds.getCenter(new T.Vector3());
     current.grid.position.set(center.x, Math.min(0, current.bounds.min.y) - .008, center.z);
     current.scene.add(current.grid);
-    if (!hadModel && (layout.runs.length || ornamentalLayout.runs.length || guardrailLayout.routes.length)) frame(current);
-  }, [layout, ornamentalLayout, guardrailLayout, units]);
+    if (!hadModel && (layout.runs.length || ornamentalLayout.runs.length || woodLayout.runs.length || guardrailLayout.routes.length)) frame(current);
+  }, [layout, ornamentalLayout, woodLayout, guardrailLayout, units]);
 
   useEffect(() => {
     if (runtime.current) updateAnnotations(runtime.current, annotations);
@@ -1381,8 +1413,8 @@ export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { ru
     const current = runtime.current;
     if (!current) return;
     applyDisplay(current, display, colorMap);
-    updateLabels(current, layout, ornamentalLayout, guardrailLayout, units);
-  }, [display, layout, ornamentalLayout, guardrailLayout, units, colorMap]);
+    updateLabels(current, layout, ornamentalLayout, woodLayout, guardrailLayout, units);
+  }, [display, layout, ornamentalLayout, woodLayout, guardrailLayout, units, colorMap]);
 
   useEffect(() => {
     if (runtime.current) updateColorMapLabels(runtime.current, colorMapRows, colorMap, display);
@@ -1395,8 +1427,9 @@ export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { ru
     current.selectionBounds = null;
     const run = layout.runs.find((item) => item.id === selectedId);
     const ornamentalRun = ornamentalLayout.runs.find((item) => item.id === selectedId);
+    const woodRun = woodLayout.runs.find((item) => item.id === selectedId);
     const guardrailRoute = guardrailLayout.routes.find((item) => item.sourceRunIds.includes(selectedId));
-    const points = run?.points || ornamentalRun?.points || guardrailRoute?.points.map((point) => point.point);
+    const points = run?.points || ornamentalRun?.points || woodRun?.points || guardrailRoute?.points.map((point) => point.point);
     if (!points) return;
     const focusBounds = new T.Box3();
     if (guardrailRoute) {
@@ -1405,9 +1438,10 @@ export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { ru
         focusBounds.expandByPoint(new T.Vector3(point.point[0], point.elevationM + .84, point.point[1]));
       }
     } else {
-      const bottom = run ? run.spec.elevation * FT : ornamentalRun.spec.elevation_ft * FT;
+      const bottom = run ? run.spec.elevation * FT : (ornamentalRun?.spec.elevation_ft ?? woodRun?.spec.elevation_ft) * FT;
       const top = run ? (run.spec.elevation + run.spec.height) * FT
-        : (ornamentalRun.spec.elevation_ft + ornamentalRun.spec.height_ft + ornamentalRun.spec.bottom_clearance_in / 12) * FT;
+        : ((ornamentalRun?.spec.elevation_ft ?? woodRun?.spec.elevation_ft) + (ornamentalRun?.spec.height_ft ?? woodRun?.spec.height_ft)
+          + (ornamentalRun?.spec.bottom_clearance_in ?? woodRun?.spec.bottom_clearance_in) / 12) * FT;
       for (const [x, z] of points) {
         focusBounds.expandByPoint(new T.Vector3(x, bottom, z));
         focusBounds.expandByPoint(new T.Vector3(x, top, z));
@@ -1419,11 +1453,12 @@ export default forwardRef(function FenceViewer({ layout, ornamentalLayout = { ru
     }
     const top = run ? (run.spec.elevation + run.spec.height) * FT + .12
       : ornamentalRun ? (ornamentalRun.spec.elevation_ft + ornamentalRun.spec.height_ft + ornamentalRun.spec.bottom_clearance_in / 12) * FT + .12
-        : (guardrailRoute?.points[0]?.elevationM || 0) + .78;
+        : woodRun ? (woodRun.spec.elevation_ft + woodRun.spec.height_ft + woodRun.spec.bottom_clearance_in / 12) * FT + .12
+          : (guardrailRoute?.points[0]?.elevationM || 0) + .78;
     current.focus = new T.Line(new T.BufferGeometry().setFromPoints(points.map(([x, z]) => new T.Vector3(x, top, z))),
       new T.LineBasicMaterial({ color: "#2451d4", depthTest: false }));
     current.scene.add(current.focus);
-  }, [layout, ornamentalLayout, guardrailLayout, selectedId]);
+  }, [layout, ornamentalLayout, woodLayout, guardrailLayout, selectedId]);
 
   return <div className="fence3d-renderer" ref={host} aria-label="Interactive 3D fence preview">
     {error && <p className="fence3d-empty" role="alert">{error}</p>}

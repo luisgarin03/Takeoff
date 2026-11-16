@@ -72,7 +72,9 @@ test("shared junction IDs merge only coincident posts, keeping unrelated paths s
   assert.equal(layout.totals.end, 5);
   assert.equal(layout.issues.length, 0);
   const disagree = generate([a, shape([[51, 0], [51, 20]], 20, "b")], settings(), [first, second]);
-  assert.match(disagree.issues.join(" "), /positions or elevations disagree/);
+  assert.equal(disagree.totals.junction, 0);
+  assert.equal(disagree.totals.end, 4);
+  assert.equal(disagree.issues.length, 0);
 });
 
 test("gates create exact openings, independent infill, and deduplicated gate posts", () => {

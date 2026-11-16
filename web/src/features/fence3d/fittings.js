@@ -298,7 +298,7 @@ export function buildFenceFittings(layout) {
         const width = gate.end - gate.start;
         const inset = Math.min(.3, width / 4);
         const pieces = [pipe("gateRollers", trackA, trackB, .04)];
-        for (const [index, offset] of [inset, width - inset].entries()) {
+        for (const offset of [inset, width - inset]) {
           const wheel = advance(atHeight(gate.a, top + .055), axis, offset);
           const axle = advance(wheel, normal(axis), spec.gateDiameter * IN * .6);
           pieces.push(pipe("gateRollers", trackA.map((value, i) => value + axis[i] * offset), wheel, .028));

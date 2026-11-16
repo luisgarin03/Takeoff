@@ -34,7 +34,7 @@ test("20 ft straight W-beam uses 6 ft stations, adds its endpoint, and reports p
   assert.equal(route.terminals.length, 2);
   const row = buildGuardrailColorMapRows(layout)[0];
   assert.equal(row.title, "Guardrail");
-  assert.equal(row.quantity, "20.00 ft LF");
+  assert.equal(row.quantity, "20.00 LF");
   const scene = createGuardrailScene(layout);
   const components: any[] = [];
   scene.traverse((object: any) => { if (object.userData.component_id) components.push(object); });

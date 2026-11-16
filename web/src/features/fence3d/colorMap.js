@@ -1,5 +1,6 @@
 import { FITTINGS, FRAME_COMPONENTS, METERS_PER_FOOT as FT, METERS_PER_INCH as IN } from "./settings.js";
 import { braceSegments } from "./layout.js";
+import { WOOD_COMPONENT_COLORS } from "./wood.js";
 
 export const FENCE_COMPONENT_COLORS = Object.freeze({
   fabric: "#15191f", gateArea: "#5c677d", rails: "#e63946", wire: "#00a6a6", barbedWire: "#d000a5",
@@ -18,6 +19,7 @@ export const FENCE_COMPONENT_COLORS = Object.freeze({
   ornamentalPanels: "#8f6ac8",
   ornamentalHinges: "#2a9d8f", ornamentalLatches: "#8338ec", ornamentalKeepers: "#6d597a",
   ornamentalDropRods: "#fb5607", ornamentalCaps: "#8d99ae",
+  ...WOOD_COMPONENT_COLORS,
 });
 
 const componentLabels = new Map([
@@ -40,7 +42,7 @@ const formatArea = (value, units) => `${(units === "metric" ? value : value / (F
 const formatCount = (value) => Number(value || 0).toLocaleString();
 const formatVolume = (value) => `${Number(value || 0).toFixed(2)} yd³`;
 const formatRowLength = (row, value, units) => row.category === "fabric" || row.category === "rails" || row.category === "guardrail"
-  ? formatLinearFeet(value) : formatLength(value, units);
+  || row.category.startsWith("wood:") ? formatLinearFeet(value) : formatLength(value, units);
 
 function midpoint(run, y) {
   const span = [...(run?.spans || [])].sort((a, b) => b.length - a.length)[0];

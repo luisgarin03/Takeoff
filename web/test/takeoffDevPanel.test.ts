@@ -26,7 +26,7 @@ test("experimental controls live in the floating developer panel", () => {
 
 test("AI and Revisions no longer occupy the canvas rail", () => {
   const railStart = source.indexOf('className="canvas-panel-rail"');
-  const railEnd = source.indexOf("{chainLinkOpen", railStart);
+  const railEnd = source.indexOf('aria-label="Theme settings"', railStart);
   const rail = source.slice(railStart, railEnd);
 
   assert.ok(railStart >= 0 && railEnd > railStart);

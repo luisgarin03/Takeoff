@@ -1,6 +1,6 @@
 import { flattenCurve } from "../../lib/curve.js";
 import { classifyChainLinkPathPost, pathMetrics, pointAtPathT } from "../../lib/chainLinkFence.js";
-import { fenceConditionKey, METERS_PER_FOOT, normalizeFoundationSettings, normalizeOrnamentalSpec, runSpec } from "./settings.js";
+import { fenceConditionKey, METERS_PER_FOOT, normalizeFoundationSettings, normalizeOrnamentalSpec, normalizeWoodSpec, runSpec } from "./settings.js";
 
 const EPS = 1e-7;
 export const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -13,6 +13,7 @@ export function adaptFenceRuns({ shapes, fences, sheetId, calibration, settings,
   const issues = [];
   const runs = [];
   const ornamentalRuns = [];
+  const woodRuns = [];
   const guardrailRuns = [];
   const attached = new Map(fences.map((fence) => [fence.shape_id, fence]));
   const center = calibration ? [calibration.width / 2, calibration.height / 2] : [0, 0];
@@ -36,7 +37,7 @@ export function adaptFenceRuns({ shapes, fences, sheetId, calibration, settings,
     const conditionScopeId = fenceConditionKey(sheetId, conditionId);
     const conditionConfig = settings.conditions?.[conditionScopeId];
     const type = conditionConfig?.type ?? designation?.type ?? (fence ? "chain-link" : null);
-    if (type !== "chain-link" && type !== "ornamental" && type !== "guardrail") continue;
+    if (type !== "chain-link" && type !== "ornamental" && type !== "wood" && type !== "guardrail") continue;
     const label = shape.label || conditionNames[shape.condition_id] || shape.id;
     if (!calibration || ![calibration.width, calibration.height, calibration.feetPerPixel].every(finitePositive)) {
       issues.push(`${label} needs a calibrated PDF page.`);
@@ -159,7 +160,8 @@ export function adaptFenceRuns({ shapes, fences, sheetId, calibration, settings,
       const nextIndex = vertexIndex + 1;
       const startPointId = pointIds[vertexIndex];
       const endPointId = pointIds[nextIndex];
-      return { ...segment, id: `${shape.id}:segment:${startPointId}:${endPointId}:${index}` };
+      return { ...segment, index, startPointId, endPointId,
+        id: `${shape.id}:segment:${startPointId}:${endPointId}:${index}` };
     });
     const gateSegments = shape.curved ? [] : segments;
     if (closed && metrics.total - sourceLength > EPS) {
@@ -201,6 +203,8 @@ export function adaptFenceRuns({ shapes, fences, sheetId, calibration, settings,
         gates: designation?.gates || [], conditionId, conditionScopeId,
         conditionName: conditionNames[conditionId] || label,
       });
+    } else if (type === "wood") {
+      woodRuns.push({ ...run, spec: normalizeWoodSpec(conditionConfig?.type === "wood" ? conditionConfig.spec : designation?.spec) });
     } else {
       const elevationFt = Number.isFinite(shape.elevation_ft) ? shape.elevation_ft
         : Number.isFinite(shape.base_elevation_ft) ? shape.base_elevation_ft : 0;
@@ -245,7 +249,7 @@ export function adaptFenceRuns({ shapes, fences, sheetId, calibration, settings,
     const center = [calibration.width / 2, calibration.height / 2];
     const toMeters = ([x, y]) => [(x - center[0]) * calibration.feetPerPixel * METERS_PER_FOOT,
       (y - center[1]) * calibration.feetPerPixel * METERS_PER_FOOT];
-    const targetRuns = [...runs, ...ornamentalRuns];
+    const targetRuns = [...runs, ...ornamentalRuns, ...woodRuns];
     for (const count of gateCounts) {
       const conditionId = count.condition_id || `shape:${count.id}`;
       const conditionScopeId = fenceConditionKey(sheetId, conditionId);
@@ -256,6 +260,7 @@ export function adaptFenceRuns({ shapes, fences, sheetId, calibration, settings,
       let nearest = null;
       for (const run of targetRuns) {
         if (run.conditionScopeId !== conditionScopeId) continue;
+        if (run.type === "wood" && !["single", "double"].includes(count.gate_type)) continue;
         for (const [index, segment] of run.gateSegments.entries()) {
           if (segment.length + EPS < width) continue;
           const dx = segment.b[0] - segment.a[0], dy = segment.b[1] - segment.a[1];
@@ -268,7 +273,7 @@ export function adaptFenceRuns({ shapes, fences, sheetId, calibration, settings,
         }
       }
       if (!nearest || nearest.gap > 8 * METERS_PER_FOOT) {
-        issues.push(`${count.label || "Gate count"}: place the Count mark on a straight Chain-link or Ornamental fence edge with room for its opening.`);
+        issues.push(`${count.label || "Gate count"}: place the Count mark on a straight Chain-link, Ornamental, or Wood fence edge with room for its opening.`);
         continue;
       }
       const run = nearest.run;
@@ -282,7 +287,7 @@ export function adaptFenceRuns({ shapes, fences, sheetId, calibration, settings,
       run.gates = [...run.gates, gate];
     }
   }
-  return { runs, ornamentalRuns, guardrailRuns, issues };
+  return { runs, ornamentalRuns, woodRuns, guardrailRuns, issues };
 }
 
 export function cornerAngle(a, b, c) {

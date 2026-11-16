@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Procedural Wood fence
+
+- Added a condition-scoped procedural Wood privacy-fence generator with persisted 6 ft height and 8 ft bay defaults, configurable boards, pickets, rails, posts, finish, footings, gravel, fasteners, and installed quantities.
+- Generated stable Wood component IDs, balanced bays, shared square posts at connected orthogonal corners and junctions, and independent single/double swing-gate leaves with compression braces and hardware. Gate openings are excluded from fixed fence boards and LF; double gates include a drop rod and ground receiver.
+- Added Wood to the existing shared 3D scene, condition visibility and quantity panels, material quantities, exports, and Count-tool gate placement. Geometry checks surface unsupported angled connections.
+
 ## Unreleased — October 30 checkpoint
 
 - Chain-link rail rows now show total LF plus the equivalent count of 21 ft rail units (rail LF ÷ 21); Ornamental and Guardrail rows are unchanged.

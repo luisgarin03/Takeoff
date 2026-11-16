@@ -130,15 +130,15 @@ test("branches from the middle of a run reuse one junction with four or more dir
   const runs = [shape, ...[2, 3, 4].map((n) => ({ ...shape, id: `line-${n}` }))];
   const [main, first] = connectChainLinkBranch(
     fence(), createChainLinkFence(runs[1], () => "fence-2")!,
-    { pathT: .5, postId: undefined }, () => "shared-post", () => "junction",
+    { pathT: .5, postId: undefined, nodeId: undefined }, () => "shared-post", () => "junction",
   )!;
   const [updated, second] = connectChainLinkBranch(
     main, createChainLinkFence(runs[2], () => "fence-3")!,
-    { pathT: .5, postId: "shared-post" }, () => "unused-post", () => "unused-junction",
+    { pathT: .5, postId: "shared-post", nodeId: undefined }, () => "unused-post", () => "unused-junction",
   )!;
   const [updatedFirst, third] = connectChainLinkBranch(
     first, createChainLinkFence(runs[3], () => "fence-4")!,
-    { pathT: 0, postId: "fence-2-start" }, () => "unused-post", () => "unused-junction",
+    { pathT: 0, postId: "fence-2-start", nodeId: undefined }, () => "unused-post", () => "unused-junction",
   )!;
   const restored = sanitizeChainLinkFences([updated, updatedFirst, second, third], runs);
   const paths = [[[0, 0], [100, 0]], [[50, 0], [50, -20]], [[50, 0], [50, 20]], [[50, 0], [70, 20]]];

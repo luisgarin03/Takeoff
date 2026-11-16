@@ -44,6 +44,16 @@ export const ORNAMENTAL_SPEC = Object.freeze({
   rail_depth_in: 1.5, picket_size_in: 1, max_swivel_deg: 45, finish_color: "#303834",
   foundationAuto: true, foundationDepthFt: 3, foundationDiameterIn: 18,
 });
+// Treated wood privacy fence defaults follow the Blender estimating prototype
+// (1.83 m height, 2.44 m maximum bay) expressed in the app's feet/inches units.
+export const WOOD_SPEC = Object.freeze({
+  height_ft: 6, elevation_ft: 0, bottom_clearance_in: 0, max_bay_span_ft: 8,
+  spacing_strategy: "balanced", rails: 3, post_size_in: 3.5, terminal_post_size_in: 5.5,
+  gate_post_size_in: 5.5, rail_width_in: 3.5, rail_depth_in: 1.5,
+  picket_width_in: 5.5, picket_gap_in: .5, cap_board: true, kickboard: true,
+  fasteners: true, footings: true, gravel_beds: true, gravel_depth_in: 6,
+  finish_color: "#a66b37", foundationAuto: true, foundationDepthFt: 3, foundationDiameterIn: 18,
+});
 export const DISPLAY = { fabric: true, posts: true, rails: true, fittings: true, corners: true, lengths: false, edgeLabels: true, spacing: false, angles: false, grid: true, plan: false, light: 2.6, camera: "perspective", mode: "split", fabricMeasure: "length", componentVisibility: {}, conditionVisibility: {} };
 const TYPES = ["chain-link", "ornamental", "wood", "vinyl", "guardrail"];
 const GATE_TYPES = ["single", "double", "cantilever", "overhead"];
@@ -105,9 +115,12 @@ export function normalizeFence3d(value) {
     .filter(([, visible]) => typeof visible === "boolean"));
   display.conditionVisibility = Object.fromEntries(Object.entries(object(value.display?.conditionVisibility))
     .filter(([id, visible]) => id && typeof visible === "boolean"));
-  const runs = Object.fromEntries(Object.entries(object(value.runs)).map(([id, run]) => [id, {
-    type: choices(run?.type, [...TYPES, "exclude"], "chain-link"),
-    spec: normalizeSpec(run?.spec),
+  const runs = Object.fromEntries(Object.entries(object(value.runs)).map(([id, run]) => {
+    const type = choices(run?.type, [...TYPES, "exclude"], "chain-link");
+    return [id, {
+    type,
+    spec: type === "wood" ? normalizeWoodSpec(run?.spec)
+      : type === "ornamental" ? normalizeOrnamentalSpec(run?.spec) : normalizeSpec(run?.spec),
     gates: rows(run?.gates).map((gate) => ({
       id: gate.id, type: choices(gate.type, GATE_TYPES, "single"),
       segment: Math.round(range(gate.segment, 1, 100000, 1)), start: range(gate.start, 0, 100000, 2),
@@ -119,13 +132,15 @@ export function normalizeFence3d(value) {
       finish: choices(gate.finish, ["matching", "galvanized", "vinyl"], "matching"),
       hingeSide: choices(gate.hingeSide, ["start", "end"], "start"),
     })),
-  }]));
+  }];
+  }));
   const conditions = Object.fromEntries(Object.entries(object(value.conditions)).filter(([id]) => id)
     .map(([id, config]) => {
       const condition = {};
       if (TYPES.includes(config?.type) || config?.type === "exclude") condition.type = config.type;
       if (config?.spec && typeof config.spec === "object") {
-        condition.spec = config.type === "ornamental" ? normalizeOrnamentalSpec(config.spec) : normalizeSpec(config.spec);
+        condition.spec = config.type === "ornamental" ? normalizeOrnamentalSpec(config.spec)
+          : config.type === "wood" ? normalizeWoodSpec(config.spec) : normalizeSpec(config.spec);
       }
       if (typeof config?.visible === "boolean") condition.visible = config.visible;
       return [id, condition];
@@ -187,6 +202,32 @@ export function normalizeOrnamentalSpec(spec) {
   result.rails = choices(spec?.rails, [2, 3], ORNAMENTAL_SPEC.rails);
   result.finish_color = color(spec?.finish_color, ORNAMENTAL_SPEC.finish_color);
   Object.assign(result, normalizeFoundationSettings(spec, result.height_ft, "ornamental"));
+  return result;
+}
+
+export function normalizeWoodSpec(spec) {
+  const result = { ...WOOD_SPEC };
+  for (const [name, minimum, maximum] of [
+    ["height_ft", 1, 20], ["elevation_ft", -1000, 1000], ["bottom_clearance_in", 0, 36],
+    ["max_bay_span_ft", 1, 20], ["post_size_in", 1, 12], ["terminal_post_size_in", 1, 16],
+    ["gate_post_size_in", 1, 16], ["rail_width_in", .5, 12], ["rail_depth_in", .5, 8],
+    ["picket_width_in", .5, 12], ["picket_gap_in", 0, 6], ["gravel_depth_in", 0, 36],
+  ]) result[name] = range(spec?.[name], minimum, maximum, WOOD_SPEC[name]);
+  result.rails = choices(spec?.rails, [2, 3], WOOD_SPEC.rails);
+  result.spacing_strategy = choices(spec?.spacing_strategy, ["balanced", "maximum"], WOOD_SPEC.spacing_strategy);
+  result.finish_color = color(spec?.finish_color, WOOD_SPEC.finish_color);
+  for (const name of ["cap_board", "kickboard", "fasteners", "footings", "gravel_beds"]) {
+    if (typeof spec?.[name] === "boolean") result[name] = spec[name];
+  }
+  const automatic = spec?.foundationAuto !== false;
+  const foundation = normalizeFoundationSettings({
+    foundationAuto: automatic,
+    foundationDepthFt: spec?.foundationDepthFt,
+    foundationDiameterIn: spec?.foundationDiameterIn,
+  }, result.height_ft, "wood");
+  result.foundationAuto = automatic;
+  result.foundationDepthFt = foundation.foundationDepthFt;
+  result.foundationDiameterIn = foundation.foundationDiameterIn;
   return result;
 }
 

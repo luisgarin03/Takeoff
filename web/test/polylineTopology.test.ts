@@ -6,11 +6,11 @@ const dimensions = new Map([["sheet", { width: 100, height: 100 }]]);
 
 test("legacy runs with explicit coincident shared posts migrate to one editable Polyline", () => {
   const source = {
-    id: "source", sheet_id: "sheet", measure_role: "linear",
+    id: "source", sheet_id: "sheet", condition_id: "fence", measure_role: "linear",
     verts_norm: [[0, 0], [1, 0]], computed: { perimeter_lf: 100 },
   };
   const branch = {
-    id: "branch", sheet_id: "sheet", measure_role: "linear",
+    id: "branch", sheet_id: "sheet", condition_id: "fence", measure_role: "linear",
     verts_norm: [[0.5, 0], [0.5, 1]], computed: { perimeter_lf: 100 },
   };
   const sourceFence = {

@@ -367,8 +367,9 @@ export function calculateChainLinkFenceFromLength(fence, totalLengthFt, spacingF
   if (!clean || total <= 0) return { valid: false, sections: [], totalLengthFt: 0, cornerPostCount: 0, linePostCount: 0, totalPostCount: 0 };
   // Kept for old report integrations and saved data readers; active fence
   // configuration no longer reads this legacy value and comes from 3D settings.
+  const configuredSpacing = spacingFt == null ? fence?.max_spacing_ft : spacingFt;
   const maxSpacingFt = Math.max(MIN_CHAIN_LINK_SPACING_FT,
-    finite(spacingFt, finite(fence?.max_spacing_ft, DEFAULT_CHAIN_LINK_SPACING_FT)));
+    finite(configuredSpacing, DEFAULT_CHAIN_LINK_SPACING_FT));
   const stops = clean.closed ? closedStops(clean) : openStops(clean);
   const pairs = clean.closed
     ? stops.map((start, index) => [start, stops[(index + 1) % stops.length], index === stops.length - 1])
